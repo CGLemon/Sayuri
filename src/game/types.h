@@ -5,6 +5,10 @@
 
 #define MAX_BOARD_SIZE (19)
 
+static constexpr int kDefaultBoardSize = 19;
+static constexpr float kDefaultKomi = 7.5f;
+
+
 static constexpr int kBoardSize = MAX_BOARD_SIZE;
 static constexpr int kLetterBoxSize = kBoardSize+2;
 static constexpr int kNumIntersections = kBoardSize * kBoardSize;
@@ -17,6 +21,8 @@ static constexpr int kResign = kNumVertices + 2;
 static constexpr int kMaxGTPBoardSize = 25;
 static constexpr int kMinGTPBoardSize = 2;
 
+static_assert(kDefaultBoardSize >= kBoardSize, "");
+static_assert(kDefaultBoardSize >= kMinGTPBoardSize, "");
 static_assert(kMaxGTPBoardSize >= kBoardSize, "");
 static_assert(kMinGTPBoardSize <= kBoardSize, "");
 

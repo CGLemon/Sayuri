@@ -36,10 +36,16 @@ void LogWriter::WriteString(std::string data) {
     if (filename_.empty()) {
         while (const auto line = parser.GetCommand(cnt++)) {
             buffer_.emplace_back(line->Get<std::string>());
+            if (parser.GetCount() == cnt) {
+                break;
+            }
         }
     } else {
         while (const auto line = parser.GetCommand(cnt++)) {
             file_ << line->Get<std::string>() << std::endl;
+            if (parser.GetCount() == cnt) {
+                break;
+            }
         }
     }
 }

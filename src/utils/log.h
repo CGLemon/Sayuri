@@ -20,7 +20,7 @@ private:
 
     Mutex mutex_;
 
-    std::string filename_;
+    std::string filename_{};
     std::ofstream file_;
     std::deque<std::string> buffer_;
 
@@ -50,8 +50,8 @@ private:
     int line_;
 };
 
-#define LOGGING (Utils::Logging(__FILE__, __LINE__, false))
-#define WRITING (Utils::Logging(__FILE__, __LINE__, true))
-#define ERROR (Utils::StandError(__FILE__, __LINE__))
+#define LOGGING (::Logging(__FILE__, __LINE__, false))
+#define WRITING (::Logging(__FILE__, __LINE__, true))
+#define ERROR (::StandError(__FILE__, __LINE__))
 
 #endif
