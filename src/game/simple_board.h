@@ -1,10 +1,10 @@
-#ifndef GAME_SIMPLE_BOARD_H_INCLUDE
-#define GAME_SIMPLE_BOARD_H_INCLUDE
+#pragma once
 
 #include <array>
 #include <vector>
 #include <string>
 #include <cassert>
+#include <memory>
 #include <functional>
 
 #include "game/string.h"
@@ -20,7 +20,7 @@ public:
     void SetBoardSize(int boardsize);
     void SetToMove(int color);
     void SetMoveNumber(int number);
-    void SetLastMove(int vertex);
+    void SetLastMove(int vertex); 
 
     float GetKomi() const;
     int GetMoveNumber() const;
@@ -38,6 +38,10 @@ public:
     int GetState(const int vtx) const;
     int GetState(const int x, const int y) const;
 
+
+    int GetX(const int vtx) const;
+    int GetY(const int vtx) const;
+
     // Get the vertex board.
     int GetVertex(const int x, const int y) const;
 
@@ -48,6 +52,9 @@ public:
     bool IsLegalMove(const int vertex, const int color) const;
     bool IsLegalMove(const int vertex, const int color,
                      std::function<bool(int, int)> AvoidToMove) const;
+
+    // Is the string ladder?
+    bool IsLadder(const int vtx) const;
 
     // Play the move assume the move is legal.
     void PlayMoveAssumeLegal(const int vtx, const int color);
@@ -121,9 +128,35 @@ protected:
     // The move number.
     int move_number_;
 
+    bool IsNeighbor(const int vtx, const int avtx) const;
     bool IsSimpleEye(const int vtx, const int color) const;
     bool IsSuicide(const int vtx, const int color) const;
     int CountPliberties(const int vtx) const;
+
+    // Find the liberties of string.
+    int FindStringLiberties(const int vtx, std::vector<int>& buf) const;
+
+    // Find what move can gain liberty by Capturing.
+    int FindStringLibertiesGainingCaptures(const int vtx, std::vector<int>& buf) const;
+
+    // Get the possible lowest and most liberties. 
+    std::pair<int, int> GetLadderLiberties(const int vtx, const int color) const;
+
+
+    LadderType PreySelections(const int prey_color,
+                              const int ladder_vtx,
+                              std::vector<int>& selections, bool think_ko) const;
+
+    LadderType HunterSelections(const int prey_color,
+                                const int ladder_vtx, std::vector<int>& selections) const;
+
+    LadderType PreyMove(std::shared_ptr<SimpleBoard> board,
+                        const int hunter_vtx, const int prey_color,
+                        const int ladder_vtx, size_t& ladder_nodes, bool fork) const;
+
+    LadderType HunterMove(std::shared_ptr<SimpleBoard> board,
+                          const int prey_vtx, const int prey_color,
+                          const int ladder_vtx, size_t& ladder_nodes, bool fork) const;
 
 private:
     // The Generally function compute the Zobrist hashing.
@@ -138,6 +171,7 @@ private:
     std::string GetSpcacesString(const int times) const;
     std::string GetColumnsString(const int bsize) const;
     std::string GetPrisonersString() const;
+    std::string GetHashingString() const;
 
     // About to update the board.
     void ExchangeToMove();
@@ -158,6 +192,18 @@ private:
     void UpdateZobristPass(const int new_pass, const int old_pass);
 };
 
+inline int SimpleBoard::GetX(const int vtx) const {
+    const int x = (vtx % letter_box_size_) - 1;
+    assert(x >= 0 && x < board_size_);
+    return x;
+}
+
+inline int SimpleBoard::GetY(const int vtx) const {
+    const int y = (vtx / letter_box_size_) - 1;
+    assert(y >= 0 && y < board_size_);
+    return y;
+}
+
 inline int SimpleBoard::GetVertex(const int x, const int y) const {
     assert(x >= 0 || x < board_size_);
     assert(y >= 0 || y < board_size_);
@@ -169,4 +215,3 @@ inline int SimpleBoard::GetIndex(const int x, const int y) const {
     assert(y >= 0 || y < board_size_);
     return y * board_size_ + x;
 }
-#endif

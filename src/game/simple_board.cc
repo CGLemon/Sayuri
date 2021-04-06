@@ -1,5 +1,6 @@
 #include <sstream>
 #include <queue>
+#include <algorithm>
 
 #include "game/simple_board.h"
 #include "game/symmetry.h"
@@ -136,6 +137,15 @@ std::string SimpleBoard::GetColumnsString(const int bsize) const {
     return res.str();
 }
 
+std::string SimpleBoard::GetHashingString() const {
+    auto out = std::ostringstream{};
+    out << std::hex;
+    out << "Hash: " << GetHash() << " | ";
+    out << "Ko Hash: " << GetKoHash();
+    out << std::dec << std::endl;
+    return out.str();
+}
+
 std::string SimpleBoard::GetPrisonersString() const {
     auto out = std::ostringstream{};
     out << "BLACK (X) has captured ";
@@ -188,6 +198,8 @@ std::string SimpleBoard::GetBoardString(const int last_move, bool is_sgf) const 
                   : (out << GetSpcacesString(2));
     out << GetColumnsString(boardsize);
     out << GetPrisonersString();
+    out << GetHashingString();
+
     return out.str();
 }
 
@@ -218,7 +230,6 @@ bool SimpleBoard::IsLegalMove(const int vtx, const int color,
     }
 
     return true;
-
 }
 
 void SimpleBoard::SetMoveNumber(int number) {
@@ -335,6 +346,365 @@ std::uint64_t SimpleBoard::ComputeKoHash(std::function<int(int)> transform) cons
 
 int SimpleBoard::CountPliberties(const int vtx) const {
     return (neighbours_[vtx] >> (kEmptyNeighborShift)) & kNeighborMask;
+}
+
+int SimpleBoard::FindStringLiberties(const int vtx,
+                                     std::vector<int>& buf) const {
+    auto num_found = size_t{0};
+    auto next = vtx;
+    do {
+        for(int k = 0; k < 4; ++k) {
+            const auto avtx = next + directions_[k];
+            if(GetState(avtx) == kEmpty) {
+                auto begin = std::begin(buf);
+                auto end = std::end(buf);
+                auto res = std::find(begin, end, avtx);
+                if (res == end) {
+                    buf.emplace_back(avtx);
+                    num_found++;
+                }
+            }
+        }
+        next = strings_.GetNext(next);
+    } while (next != vtx);
+
+    return num_found;
+}
+
+int SimpleBoard::FindStringLibertiesGainingCaptures(const int vtx,
+                                                    std::vector<int>& buf) const {
+    const int color = GetState(vtx);
+    const int opp = !(color);
+
+    assert(color == kBlack || color == kWhite);
+
+    auto strings_buf = std::vector<int>{};
+    int num_found = 0;
+    int next = vtx;
+
+    do {
+        for(int k = 0; k < 4; ++k) {
+            const int avtx = next + directions_[k];
+            if(GetState(avtx) == opp) {
+                const int aip = strings_.GetParent(avtx);
+                if(strings_.GetLiberty(aip) == 1) {
+                    auto begin = std::begin(strings_buf);
+                    auto end = std::end(strings_buf);
+                    auto res = std::find(begin, end, avtx);
+                    if (res == end) {
+                        num_found += FindStringLiberties(avtx, buf);
+                    } else {
+                        strings_buf.emplace_back(avtx);
+                    }
+                }
+            }
+        }
+        next = strings_.GetNext(next);
+    } while (next != vtx);
+
+    return num_found;
+}
+
+std::pair<int, int> SimpleBoard::GetLadderLiberties(const int vtx, const int color) const {
+    const int stone_libs = CountPliberties(vtx);
+    const int opp = (!color);
+
+    int num_captures = 0;                 // Number of adjacent directions in which we will capture.
+    int potential_libs_from_captures = 0; // Total number of stones we're capturing (possibly with multiplicity).
+    int num_connection_libs = 0;          // Sum over friendly groups connected to of their libs-1.
+    int max_connection_libs = stone_libs; // Max over friendly groups connected to of their libs-1.
+  
+    for (int k = 0; k < 4; ++k) {
+        const auto avtx = vtx + directions_[k];
+        const auto acolor = GetState(avtx);
+
+        if (acolor == color) {
+            const int alibs = strings_.GetLiberty(strings_.GetParent(avtx)) - 1;
+            num_connection_libs += alibs;
+
+            if(alibs > max_connection_libs) {
+                max_connection_libs = alibs; 
+            }
+        } else if (acolor == opp) {
+            const int aip = strings_.GetParent(avtx);
+            const int alibs = strings_.GetLiberty(aip);
+            if (alibs == 1) {
+                num_captures++;
+                potential_libs_from_captures += strings_.GetStone(aip);
+            }
+        }
+    }
+    const int lower_bound =
+        num_captures + max_connection_libs; 
+    const int upper_bound = 
+        stone_libs + potential_libs_from_captures + num_connection_libs;
+
+    return std::make_pair(lower_bound, upper_bound);
+}
+
+LadderType SimpleBoard::PreySelections(const int prey_color,
+                                       const int ladder_vtx,
+                                       std::vector<int>& selections, bool think_ko) const {
+    assert(selections.empty());
+
+    const int libs = strings_.GetLiberty(strings_.GetParent(ladder_vtx));
+    if (libs >= 2 || (ko_move_ != kNullVertex && think_ko)) {
+        // If we are the prey and the hunter left a simple ko point, assume we already win
+        // because we don't want to say yes on ladders that depend on kos
+        // This should also hopefully prevent any possible infinite loops - I don't know of any infinite loop
+        // that would come up in a continuous atari sequence that doesn't ever leave a simple ko point.
+
+        return LadderType::kGoodForPrey;
+    }
+
+    int num_move = FindStringLiberties(ladder_vtx, selections);
+
+    assert(libs == 1);
+    assert(num_move == libs);
+    const int move = selections[0];
+
+    num_move += FindStringLibertiesGainingCaptures(ladder_vtx, selections);
+
+    // Must be a legal move.
+    selections.erase(
+        std::remove_if(std::begin(selections), std::end(selections),
+            [&](int v) { return !IsLegalMove(v, prey_color); 
+        }),
+        std::end(selections)
+    );
+
+    num_move = selections.size();
+
+    // If there is no legal move, the ladder string die.
+    if (num_move == 0) {
+        return LadderType::kGoodForHunter; 
+    }
+
+    if (selections[0] == move) {
+        auto bound = GetLadderLiberties(move, prey_color);
+        const auto lower_bound = bound.first;
+        const auto upper_bound = bound.second;
+        if (lower_bound >= 3) {
+            return LadderType::kGoodForPrey;
+        }
+        if (num_move == 1  && upper_bound == 1) {
+            return LadderType::kGoodForHunter;
+        }
+    }
+
+    return LadderType::kGoodForNeither; // keep running
+}
+
+LadderType SimpleBoard::HunterSelections(const int prey_color,
+                                         const int ladder_vtx, std::vector<int>& selections) const {
+    assert(selections.empty());
+
+    const int libs = strings_.GetLiberty(strings_.GetParent(ladder_vtx));
+
+    if (libs >= 3) {
+        // It is not a ladder.
+        return LadderType::kGoodForPrey;
+    } else if (libs <= 1) {
+        // The ladder string will be captured next move.
+        return LadderType::kGoodForHunter;
+    }
+  
+    assert(libs == 2);
+
+    auto buf = std::vector<int>{};
+    int num_libs = FindStringLiberties(ladder_vtx, buf);
+
+    assert(num_libs == libs);
+    const int move_1 = buf[0];
+    const int move_2 = buf[1];
+    //TODO: Avoid double-ko death.
+
+    if (!IsNeighbor(move_1, move_2)) {
+        size_t size = 0;
+        const int hunter_color = (!prey_color);
+        const int libs_1 = CountPliberties(move_1); 
+        const int libs_2 = CountPliberties(move_2); 
+
+        if (libs_1 >= 3 && libs_2 >= 3) {
+            // A ladder string must be only two liberty.
+            return LadderType::kGoodForPrey;
+        } else if (libs_1 >= 3) {
+            if (IsLegalMove(move_1, hunter_color)) {
+                selections.emplace_back(move_1);
+                size++;
+            }
+        } else if (libs_2 >= 3) {
+            if (IsLegalMove(move_2, hunter_color)) {
+                selections.emplace_back(move_2);
+                size++;
+            }
+        } else {
+            if (IsLegalMove(move_1, hunter_color)) {
+                selections.emplace_back(move_1);
+                size++;
+            }
+            if (IsLegalMove(move_2, hunter_color)) {
+                selections.emplace_back(move_2);
+                size++;
+            }
+        }
+    }
+
+    if (selections.empty()) {
+        // The hunter has no atari move.
+        return LadderType::kGoodForPrey;
+    }
+
+    return LadderType::kGoodForNeither; // keep running
+}
+
+LadderType SimpleBoard::PreyMove(std::shared_ptr<SimpleBoard> board,
+                                 const int hunter_vtx, const int prey_color,
+                                 const int ladder_vtx, size_t& ladder_nodes, bool fork) const {
+
+    if ((++ladder_nodes) >= kMaxLadderNodes) {
+        // If hitting the limit, assume prey have escaped. 
+        return LadderType::kGoodForPrey;
+    }
+
+    std::shared_ptr<SimpleBoard> ladder_board;
+    if (fork) {
+        ladder_board = std::make_shared<SimpleBoard>(*board);
+    } else {
+        ladder_board = board;
+    }
+
+    if (hunter_vtx != kNullVertex) {
+        // Hunter play move first.
+        ladder_board->PlayMoveAssumeLegal(hunter_vtx, !prey_color);
+    }
+    // Search possible move(s) for prey.
+    auto selections = std::vector<int>{};
+    auto res = ladder_board->PreySelections(prey_color, ladder_vtx, selections, hunter_vtx != kNullVertex);
+
+    if (res != LadderType::kGoodForNeither) {
+        return res;
+    }
+
+    bool next_fork = true;
+    const size_t selection_size = selections.size();
+    if (selection_size == 1) {
+        // Only one move. We don't need to save the pre-board.
+        next_fork = false;
+    }
+
+    auto best = LadderType::kGoodForNeither;
+
+    for (auto i = size_t{0}; i < selection_size; ++i) {
+        const int vtx = selections[i];
+        auto next_res = HunterMove(ladder_board, vtx,
+                                   prey_color, ladder_vtx,
+                                   ladder_nodes, next_fork);
+
+        assert(next_res != LadderType::kGoodForNeither);
+
+        best = next_res;
+        if (next_res == LadderType::kGoodForPrey) {
+            break;
+        }
+    }
+
+    return best;
+}
+
+LadderType SimpleBoard::HunterMove(std::shared_ptr<SimpleBoard> board,
+                                   const int prey_vtx, const int prey_color,
+                                   const int ladder_vtx, size_t& ladder_nodes, bool fork) const {
+    if ((++ladder_nodes) >= kMaxLadderNodes) {
+        // If hitting the limit, assume prey have escaped. 
+        return LadderType::kGoodForPrey;
+    }
+
+    std::shared_ptr<SimpleBoard> ladder_board;
+    if (fork) {
+        ladder_board = std::make_shared<SimpleBoard>(*board);
+    } else {
+        ladder_board = board;
+    }
+
+    if (prey_vtx != kNullVertex) {
+        // Prey play move first.
+        ladder_board->PlayMoveAssumeLegal(prey_vtx, prey_color);
+    }
+
+    // Search possible move(s) for hunter.
+    auto selections = std::vector<int>{};
+    auto res = ladder_board->HunterSelections(prey_color, ladder_vtx, selections);
+
+    if (res != LadderType::kGoodForNeither) {
+        return res;
+    }
+  
+    bool next_fork = true;
+    const auto selection_size = selections.size();
+    if (selection_size == 1) {
+        // Only one move. We don't need to save the pre-board.
+        next_fork = false;
+    }
+
+    auto best = LadderType::kGoodForNeither;
+ 
+    for (auto i = size_t{0}; i < selection_size; ++i) {
+        const int vtx = selections[i];
+        auto next_res = PreyMove(ladder_board, vtx, 
+                                 prey_color, ladder_vtx, 
+                                 ladder_nodes, next_fork);
+
+        assert(next_res != LadderType::kGoodForNeither);
+
+        best = next_res;
+        if (next_res == LadderType::kGoodForHunter) {
+            break;
+        }
+    }
+
+    return best;
+}
+
+bool SimpleBoard::IsLadder(const int vtx) const {
+    if (vtx == kPass) {
+        return false;
+    }
+
+    const int prey_color = GetState(vtx);
+    if (prey_color == kEmpty || prey_color == kInvalid) {
+        return false;
+    }
+
+    const int libs = strings_.GetLiberty(strings_.GetParent(vtx));
+    const int ladder_vtx = vtx;
+    size_t searched_nodes = 0;
+    auto res = LadderType::kGoodForNeither;
+    if (libs == 1) {
+        auto ladder_board = std::make_shared<SimpleBoard>(*this);
+        res = PreyMove(ladder_board,
+                       kNullVertex, prey_color,
+                       ladder_vtx, searched_nodes, false);
+    } else if (libs == 2) {
+        auto ladder_board = std::make_shared<SimpleBoard>(*this);
+        res = HunterMove(ladder_board,
+                         kNullVertex, prey_color,
+                         ladder_vtx, searched_nodes, false);
+    } else if (libs >= 3) {
+        res = LadderType::kGoodForPrey;
+    }
+
+    assert(res != LadderType::kGoodForNeither);
+    return res == LadderType::kGoodForHunter;
+}
+
+bool SimpleBoard::IsNeighbor(const int vtx, const int avtx) const {
+    for (int k = 0; k < 4; ++k) {
+        if ((vtx + directions_[k]) == avtx) {
+             return true;
+        }
+    }
+    return false;
 }
 
 bool SimpleBoard::IsSimpleEye(const int vtx, const int color) const {

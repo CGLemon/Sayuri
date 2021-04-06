@@ -1,5 +1,4 @@
-#ifndef GAME_STRING_H_INCLUDE
-#define GAME_STRING_H_INCLUDE
+#pragma once
 #include <array>
 #include <string>
 
@@ -27,5 +26,3 @@ struct String {
     void AddStone(const int vtx, const int lib);
     std::string DebugString(int boardsize);
 };
-
-#endif

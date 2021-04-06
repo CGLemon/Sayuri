@@ -1,5 +1,4 @@
-#ifndef GAME_SYMMETRY_H_INCLUDE
-#define GAME_SYMMETRY_H_INCLUDE
+#pragma once
 
 #include <array>
 #include <string>
@@ -31,5 +30,3 @@ private:
 
     int board_size_{0};
 };
-
-#endif

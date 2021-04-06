@@ -1,5 +1,4 @@
-#ifndef GAME_ZOBRIST_H_INCLUDE
-#define GAME_ZOBRIST_H_INCLUDE
+#pragma once
 
 #include <array>
 
@@ -22,6 +21,3 @@ public:
 
     static void Initialize();
 };
-
-
-#endif

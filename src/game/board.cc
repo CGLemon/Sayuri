@@ -1,5 +1,7 @@
 #include "game/board.h"
 
+#include <algorithm>
+
 int Board::ComputeFinalScore(float komi) const {
     const auto black = ComputeReachColor(kBlack);
     const auto white = ComputeReachColor(kWhite);
@@ -111,4 +113,70 @@ bool Board::SetFreeHandicap(std::vector<int> movelist) {
     SetMoveNumber(0);
 
     return true;
+}
+
+std::vector<LadderType> Board::GetLadderMap() const {
+    auto res = std::vector<LadderType>(GetNumIntersections(), LadderType::kNotLadder);
+    auto ladder = std::vector<int>{};
+    auto not_ladder = std::vector<int>{};
+
+    const auto VectorFind = [](std::vector<int> &arr, int element) -> bool {
+        auto begin = std::begin(arr);
+        auto end = std::end(arr);
+        return std::find(begin, end, element) != end;
+    };
+
+    auto boardsize = GetBoardSize();
+    for (int y = 0; y < boardsize; ++y) {
+        for (int x = 0; x < boardsize; ++x) {
+            const auto idx = GetIndex(x, y);
+            const auto vtx = GetVertex(x, y);
+
+            auto first_found = false;
+            int libs = 0;
+            auto parent = strings_.GetParent(vtx);
+
+            if (VectorFind(ladder, parent)) {
+                // Found! It is a ladder.
+                libs = strings_.GetLiberty(strings_.GetParent(vtx));
+            } else if (!VectorFind(not_ladder, parent)) {
+                // Not found! Searching please.
+                if (IsLadder(vtx)) {
+                    ladder.emplace_back(parent);
+                    first_found = true; 
+                    libs = strings_.GetLiberty(strings_.GetParent(vtx));
+                } else {
+                    not_ladder.emplace_back(parent);
+                }
+            }
+
+            assert(libs == 1 || libs == 2);
+            if (libs == 1) {
+                // The ladder string is already death.
+                res[idx] = LadderType::kLadderDeath;
+            } else {
+                // The ladder string has a chance to escape.
+                res[idx] = LadderType::kLadderEscapable;
+            }
+
+            if (first_found) {
+                auto buf = std::vector<int>{};
+                auto num_move = FindStringLiberties(vtx, buf);
+                assert(num_move == libs);
+
+                for (const auto &v : buf) {
+                    const auto ax = GetX(v);
+                    const auto ay = GetY(v);
+                    const auto aidx = GetIndex(ax, ay); 
+                    if (libs == 1) {
+                        res[aidx] = LadderType::kLadderTake;
+                    } else {
+                        res[aidx] = LadderType::kLadderAtari;
+                    }
+                }
+            }
+        }
+    }
+
+    return res;
 }

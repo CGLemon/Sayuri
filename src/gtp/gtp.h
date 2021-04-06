@@ -1,5 +1,4 @@
-#ifndef GTP_GTP_H_INCLUDE
-#define GTP_GTP_H_INCLUDE
+#pragma once
 
 #include "game/game_state.h"
 #include "game/types.h"
@@ -34,5 +33,3 @@ private:
 
     std::unique_ptr<Agent> agent_{nullptr};
 };
-
-#endif

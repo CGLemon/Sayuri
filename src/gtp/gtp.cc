@@ -48,16 +48,26 @@ std::string GTP::Execute(CommandParser &parser) {
         agent_->GetState().ShowBoard();
         out << GTPSuccess("");
     } else if (const auto res = parser.Find("boardsize", 0)){
-        const auto size = agent_->GetState().GetBoardSize();
-        out << GTPSuccess(std::to_string(size));
+        auto size = agent_->GetState().GetBoardSize();
+        if (const auto input = parser.GetCommand(1)) {
+            size = input->Get<int>();
+            out << GTPSuccess("");
+        } else {
+            out << GTPFail("");
+        }
+        agent_->GetState().Reset(size, agent_->GetState().GetKomi());
     } else if (const auto res = parser.Find("clear_board", 0)){
         agent_->GetState().ClearBoard();
         out << GTPSuccess("");
     } else if (const auto res = parser.Find("komi", 0)) {
-        const auto komi = agent_->GetState().GetKomi();
-        auto komi_stream = std::ostringstream{};
-        komi_stream << std::fixed << std::setprecision(1) << komi;
-        out << GTPSuccess(komi_stream.str());
+        auto komi = agent_->GetState().GetKomi();
+        if (const auto input = parser.GetCommand(1)) {
+            komi = input->Get<float>();
+            out << GTPSuccess("");
+        } else {
+            out << GTPFail("");
+        }
+        agent_->GetState().SetKomi(komi);
     } else if (const auto res = parser.Find("play", 0)) {
         const auto end = parser.GetCount() < 3 ? parser.GetCount() : 3;
         auto cmd = std::string{};

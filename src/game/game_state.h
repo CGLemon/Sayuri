@@ -1,9 +1,9 @@
-#ifndef GAME_GAME_STATE_H_INCLUDE
-#define GAME_GAME_STATE_H_INCLUDE
+#pragma once
 
 #include <vector>
 #include <memory>
 #include <string>
+#include <cstdint>
 
 #include "game/board.h"
 
@@ -39,6 +39,8 @@ public:
     std::vector<int> GetSimpleOwnership() const;
     float GetFinalScore(float bonus = 0) const;
 
+    bool IsSuperko() const;
+
     float GetKomi() const;
     int GetHandicap() const;
     int GetMoveNumber() const;
@@ -61,6 +63,8 @@ private:
 
     std::vector<std::shared_ptr<const Board>> game_history_;
 
+    std::vector<std::uint64_t> ko_hash_history_;
+
     // The board handicap.
     int handicap_;
 
@@ -72,6 +76,3 @@ private:
 
     int winner_;
 };
-
-
-#endif

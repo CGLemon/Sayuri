@@ -1,5 +1,4 @@
-#ifndef GAME_STYPES_H_INCLUDE
-#define GAME_STYPES_H_INCLUDE
+#pragma once
 
 #include <cstdint>
 
@@ -69,6 +68,8 @@ enum RuleType {
     kJappenese,
 };
 
+static constexpr int kMaxLadderNodes = 2000;
+
 enum LadderType {
     kGoodForHunter,
     kGoodForPrey,
@@ -95,5 +96,3 @@ static constexpr int KLibertiesReset = 16384;
 #undef NBR_MASK
 #undef BLACK_EYE_MASK
 #undef WHITE_EYE_MASK
-
-#endif

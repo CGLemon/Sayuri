@@ -1,5 +1,4 @@
-#ifndef GAME_BOARD_H_INCLUDE
-#define GAME_BOARD_H_INCLUDE
+#pragma once
 
 #include <vector>
 
@@ -16,10 +15,10 @@ public:
 
     bool SetFreeHandicap(std::vector<int> movelist);
 
+    std::vector<LadderType> GetLadderMap() const;
+
 private:
     bool ValidHandicap(int handicap);
 
 
 };
-
-#endif

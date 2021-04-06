@@ -1,7 +1,6 @@
-#ifndef GTP_COMMANDS_LIST_H_INCLUDE
-#define GTP_COMMANDS_LIST_H_INCLUDE
+#pragma once
 
-static constexpr kProtocolVerion = 2;
+static constexpr auto kProtocolVerion = 2;
 
 static const std::array<std::string, 25> kCommandsList = {
     "protocol_version",    /* Part of GTP version 2 standard command */
@@ -30,5 +29,3 @@ static const std::array<std::string, 25> kCommandsList = {
     "kgs-time_settings",
     "kgs-game_over",
 };
-
-#endif

@@ -6,7 +6,9 @@
 void GameState::Reset(const int boardsize, const float komi) {
     board_.Reset(boardsize);
     SetKomi(komi);
+    ko_hash_history_.clear();
     game_history_.clear();
+    ko_hash_history_.emplace_back(GetKoHash());
     game_history_.emplace_back(std::make_shared<Board>(board_));
 
     winner_ = kUndecide;
@@ -28,8 +30,14 @@ bool GameState::PlayMove(const int vtx, const int color) {
 
     if (board_.IsLegalMove(vtx, color)) {
         board_.PlayMoveAssumeLegal(vtx, color);
+
+        // Cut off unused history.
+        ko_hash_history_.resize(GetMoveNumber());
         game_history_.resize(GetMoveNumber());
+
+        ko_hash_history_.emplace_back(GetKoHash());
         game_history_.emplace_back(std::make_shared<Board>(board_));
+
         return true;
     }
     return false;
@@ -38,7 +46,10 @@ bool GameState::PlayMove(const int vtx, const int color) {
 bool GameState::UndoMove() {
     const auto move_number = GetMoveNumber();
     if (move_number >= 1) {
+        // Cut off unused history.
+        ko_hash_history_.resize(move_number);
         game_history_.resize(move_number);
+
         board_ = *game_history_[move_number-1];
         return true;
     }
@@ -132,14 +143,10 @@ std::string GameState::GetStateString() const {
         out << "Error";
     }
     out << ", ";
-    out << "Board Size: " << GetBoardSize() << ", ";
+    out << "Move Number: " << GetMoveNumber() << ", ";
     out << "Komi: " << GetKomi() << ", ";
-    out << "Handicap: " << GetHandicap() << ", ";
-
-    out << std::hex;
-    out << "Hash: " << GetHash() << ", ";
-    out << "Ko Hash: " << GetKoHash();
-    out << std::dec;
+    out << "Board Size: " << GetBoardSize() << ", ";
+    out << "Handicap: " << GetHandicap();
 
     out << "}" << std::endl;
     return out.str();
@@ -161,6 +168,15 @@ void GameState::SetKomi(float komi) {
 
 void GameState::SetHandicap(int handicap) {
     handicap_ = handicap;
+}
+
+bool GameState::IsSuperko() const {
+    auto first = std::crbegin(ko_hash_history_);
+    auto last = std::crend(ko_hash_history_);
+
+    auto res = std::find(++first, last, GetKoHash());
+
+    return (res != last);
 }
 
 bool GameState::SetFixdHandicap(int handicap) {
