@@ -3,9 +3,9 @@ project(Sayuri)
 
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(GAME_SOURCES_DIR ${SOURCE_DIR}/game)
-set(UTILS_SOURCES_DIR ${SOURCE_DIR}/utils)
 set(GTP_SOURCES_DIR ${SOURCE_DIR}/gtp)
-
+set(NEURAL_SOURCES_DIR ${SOURCE_DIR}/neural)
+set(UTILS_SOURCES_DIR ${SOURCE_DIR}/utils)
 
 set(IncludePath "${CMAKE_CURRENT_SOURCE_DIR}/src")
 include_directories(${IncludePath})
@@ -14,17 +14,23 @@ set(BASIC_SOURCES
     ${SOURCE_DIR}/main.cc
     )
 
-set(GTP_SOURCES
-    ${GTP_SOURCES_DIR}/gtp.cc
-    )
-
 set(GAME_SOURCES
     ${GAME_SOURCES_DIR}/board.cc
     ${GAME_SOURCES_DIR}/simple_board.cc
     ${GAME_SOURCES_DIR}/game_state.cc
     ${GAME_SOURCES_DIR}/string.cc
+    ${GAME_SOURCES_DIR}/sgf.cc
     ${GAME_SOURCES_DIR}/zobrist.cc
     ${GAME_SOURCES_DIR}/symmetry.cc
+    )
+
+set(GTP_SOURCES
+    ${GTP_SOURCES_DIR}/gtp.cc
+    )
+
+set(NEURAL_SOURCES
+    ${NEURAL_SOURCES_DIR}/loader.cc
+    ${NEURAL_SOURCES_DIR}/layer_description.cc
     )
 
 set(UTILS_SOURCES
@@ -54,9 +60,10 @@ set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -DNDEBUG ${CMAKE_CXX_FLAGS}")
 set(CMAKE_EXE_LINKER_FLAGS "-flto -g")
 
 add_executable(Sayuri
-    ${GTP_SOURCES}
     ${BASIC_SOURCES}
     ${GAME_SOURCES}
+    ${GTP_SOURCES}
+    ${NEURAL_SOURCES}
     ${UTILS_SOURCES}
     )
 
