@@ -3,7 +3,6 @@ project(Sayuri)
 
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(GAME_SOURCES_DIR ${SOURCE_DIR}/game)
-set(GTP_SOURCES_DIR ${SOURCE_DIR}/gtp)
 set(NEURAL_SOURCES_DIR ${SOURCE_DIR}/neural)
 set(UTILS_SOURCES_DIR ${SOURCE_DIR}/utils)
 
@@ -22,10 +21,7 @@ set(GAME_SOURCES
     ${GAME_SOURCES_DIR}/sgf.cc
     ${GAME_SOURCES_DIR}/zobrist.cc
     ${GAME_SOURCES_DIR}/symmetry.cc
-    )
-
-set(GTP_SOURCES
-    ${GTP_SOURCES_DIR}/gtp.cc
+    ${GAME_SOURCES_DIR}/gtp.cc
     )
 
 set(NEURAL_SOURCES
@@ -62,7 +58,6 @@ set(CMAKE_EXE_LINKER_FLAGS "-flto -g")
 add_executable(Sayuri
     ${BASIC_SOURCES}
     ${GAME_SOURCES}
-    ${GTP_SOURCES}
     ${NEURAL_SOURCES}
     ${UTILS_SOURCES}
     )
