@@ -1,5 +1,5 @@
-#include "gtp/gtp.h"
-#include "gtp/commands_list.h"
+#include "game/gtp.h"
+#include "game/commands_list.h"
 #include "utils/log.h"
 
 #include <iomanip>
@@ -8,7 +8,7 @@
 #include <vector>
 #include <array>
 
-void GTP::Loop() {
+void GtpLoop::Loop() {
     while (true) {
         auto input = std::string{};
         if (std::getline(std::cin, input)) {
@@ -31,7 +31,7 @@ void GTP::Loop() {
     }
 }
 
-std::string GTP::Execute(CommandParser &parser) {
+std::string GtpLoop::Execute(CommandParser &parser) {
     if (!agent_) {
         return std::string{};
     }
@@ -153,7 +153,7 @@ std::string GTP::Execute(CommandParser &parser) {
     return out.str();
 }
 
-std::string GTP::GTPSuccess(std::string response) {
+std::string GtpLoop::GTPSuccess(std::string response) {
     auto out = std::ostringstream{};
     auto Prefix = std::string{"= "};
     auto suffix = std::string{"\n\n"};
@@ -163,7 +163,7 @@ std::string GTP::GTPSuccess(std::string response) {
     return out.str();
 }
 
-std::string GTP::GTPFail(std::string response) {
+std::string GtpLoop::GTPFail(std::string response) {
     auto out = std::ostringstream{};
     auto Prefix = std::string{"? "};
     auto suffix = std::string{"\n\n"};

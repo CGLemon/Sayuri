@@ -1,9 +1,13 @@
 #include <iostream>
+#include <memory>
+
 #include "include.h"
 
-int main(int argc, char **argv) {
-    auto gtp = GTP();
-    gtp.Loop();
+static void StartGtpLoop() {
+    auto gtploop = std::make_shared<GtpLoop>();
+}
 
+int main(int argc, char **argv) {
+    StartGtpLoop();
     return 0;
 }

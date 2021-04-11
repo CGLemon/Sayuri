@@ -8,13 +8,12 @@
 #include "game/symmetry.h"
 #include "game/zobrist.h"
 #include "game/types.h"
+#include "game/gtp.h"
 
 #include "utils/random.h"
 #include "utils/log.h"
 #include "utils/mutex.h"
 #include "utils/parser.h"
-
-#include "gtp/gtp.h"
 
 #include "neural/network_basic.h"
 #include "neural/loader.h"

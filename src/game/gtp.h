@@ -6,7 +6,7 @@
 
 #include <memory>
 
-class GTP {
+class GtpLoop {
 public:
     class Agent {
     public:
@@ -18,14 +18,17 @@ public:
         GameState main_state_;
     };
 
-    GTP() {
+    GtpLoop() {
         agent_ = std::make_unique<Agent>();
         agent_->GetState().Reset(kDefaultBoardSize, kDefaultKomi);
+        Loop();
     }
 
-    void Loop();
+    ~GtpLoop() {}
 
 private:
+    void Loop();
+
     std::string GTPSuccess(std::string);
     std::string GTPFail(std::string);
 
