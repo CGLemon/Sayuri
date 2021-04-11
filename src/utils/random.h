@@ -1,26 +1,17 @@
-#ifndef UTILS_RANDOM_H_INCLUDE
-#define UTILS_RANDOM_H_INCLUDE
+#pragma once
 
 #include <cstdint>
 #include <limits>
 #include <random>
 #include <thread>
-/*
- * The basic methods follow th below github webside.
- * https://github.com/lemire/testingRNG
- */
 
-
-/*
- * Select the different seed from different ways.
- * "kThreadSeed" is default.
- */
+// Select the different seed from different ways.
+// "kThreadSeed" is default.
 static constexpr std::uint64_t kThreadSeed = 0;
 static constexpr std::uint64_t kTimeSeed = 1;
 
-/*
- * Select the different random generator that you want.
- */
+
+// Select the different random generator that you want.
 enum RandomType {
     kSplitMix64,
     kXoroShiro128Plus
@@ -86,5 +77,3 @@ Random<T> &Random<T>::Get(const std::uint64_t seed) {
     static thread_local Random s_rng{seed};
     return s_rng;
 }
-
-#endif

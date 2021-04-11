@@ -1,5 +1,4 @@
-#ifndef UTILS_LOG_H_INCLUDE
-#define UTILS_LOG_H_INCLUDE
+#pragma once
 
 #include <sstream>
 #include <fstream>
@@ -16,6 +15,7 @@ public:
     void SetFilename(std::string filename);
 
 private:
+    static constexpr size_t kMaxBufferLines = 99999;
     void WriteString(std::string data);
 
     Mutex mutex_;
@@ -53,5 +53,3 @@ private:
 #define LOGGING (::Logging(__FILE__, __LINE__, false))
 #define WRITING (::Logging(__FILE__, __LINE__, true))
 #define ERROR (::StandError(__FILE__, __LINE__))
-
-#endif

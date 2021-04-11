@@ -1,5 +1,4 @@
-#ifndef UTILS_PARSER_H_INCLUDE
-#define UTILS_PARSER_H_INCLUDE
+#pragma once
 
 #include <string>
 #include <memory>
@@ -55,6 +54,3 @@ private:
     void Parser(std::string &input, const size_t max);
     void Parser(std::string &&input, const size_t max);
 };
-
-
-#endif

@@ -1,10 +1,14 @@
-#ifndef UTILS_MUTEX_H_INCLUDE
-#define UTILS_MUTEX_H_INCLUDE
+#pragma once
 
 #include <mutex>
 #include <atomic>
 #include <cassert>
 #include <thread>
+
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && \
+    !defined(_M_ARM64)
+#include <emmintrin.h>
+#endif
 
 class SMP {
 public:
@@ -15,67 +19,105 @@ public:
 
 private:
     std::atomic<bool> lock_;
-    std::atomic<bool>& Get() { return lock_; }
+
+    // Get the lock reference.
+    inline std::atomic<bool>& Get() { return lock_; }
 
     // Set lock state.
     void Set(bool state) {
-        lock_.store(state);
+        lock_.store(state, std::memory_order_relaxed);
     }
     friend class Mutex;
+    friend class SpinMutex;
 };
 
 class Mutex {
 public:
     class Lock {
     public:
-        Lock(Mutex& m) : exclusive_(m.Get()) {
-            lock();
-        }
-        ~Lock() {
-            // If we don't claim to hold the lock,
-            // don't bother trying to unlock in the destructor.
-            if (owns_lock_) {
-                unlock();
-            }
-        }
+        Lock(Mutex& m) : lock_(m) {}
+        ~Lock() {}
 
     private:
-        void lock() {
-            assert(!owns_lock_);
-            // Test and Test-and-Set reduces memory contention
-            // However, just trying to Test-and-Set first improves performance in almost
-            // all cases
-            while (exclusive_.exchange(true, std::memory_order_acquire)) {
-                while (exclusive_.load(std::memory_order_relaxed));
-            }
-            owns_lock_ = true;
+        std::lock_guard<Mutex> lock_;
+    };
+
+    void lock() {
+        // Test and Test-and-Set reduces memory contention
+        // However, just trying to Test-and-Set first improves performance in almost
+        // all cases
+        while (Get().exchange(true, std::memory_order_acquire)) {
+            while (Get().load(std::memory_order_relaxed));
         }
+    }
 
-        void unlock() {
-            assert(owns_lock_);
-            auto lock_held = exclusive_.exchange(false, std::memory_order_release);
+    void unlock() {
+        auto lock_held = Get().exchange(false, std::memory_order_release);
 
-            // If this fails it means we are unlocking an unlocked lock
-        #ifdef NDEBUG
-            (void)lock_held;
-        #else
-            assert(lock_held);
-        #endif
-            owns_lock_ = false;
-        }
-
-        bool owns_lock_{false};
-        std::atomic<bool> & exclusive_;
-    }; 
+        // If this fails it means we are unlocking an unlocked lock
+    #ifdef NDEBUG
+        (void)lock_held;
+    #else
+        assert(lock_held);
+    #endif
+    }
 
     Mutex() { exclusive_lock_.Set(false); }
     ~Mutex() = default;
 
-    std::atomic<bool>& Get() { return exclusive_lock_.Get(); }
 private:
+    inline std::atomic<bool>& Get() { return exclusive_lock_.Get(); }
+
     SMP exclusive_lock_;
 };
 
+// A very simple spin lock.
+class SpinMutex {
+public:
+  // std::unique_lock<SpinMutex> wrapper.
+    class Lock {
+    public:
+        Lock(SpinMutex& m) : lock_(m) {}
+        ~Lock() {}
 
+    private:
+        std::unique_lock<SpinMutex> lock_;
+    };
+
+    void lock() {
+        int spins = 0;
+        while (true) {
+            auto val = false;
+            if (Get().compare_exchange_weak(val, true, std::memory_order_acq_rel)) {
+                break;
+            }
+            ++spins;
+            // Help avoid complete resource starvation by yielding occasionally if
+            // needed.
+            if (spins % 512 == 0) {
+                std::this_thread::yield();
+            } else {
+                SpinloopPause();
+            }
+        }
+    }
+    void unlock() {
+        Get().store(false, std::memory_order_release);
+    }
+
+    SpinMutex() { exclusive_lock_.Set(false); }
+    ~SpinMutex() = default;
+
+private:
+    inline std::atomic<bool>& Get() { return exclusive_lock_.Get(); }
+
+    SMP exclusive_lock_;
+
+
+    inline void SpinloopPause() {
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && \
+    !defined(_M_ARM64)
+        _mm_pause();
 #endif
-
+    }
+};

@@ -39,6 +39,9 @@ void LogWriter::WriteString(std::string data) {
             if (parser.GetCount() == cnt) {
                 break;
             }
+            if (buffer_.size()  >= kMaxBufferLines) {
+                buffer_.pop_front();
+            }
         }
     } else {
         while (const auto line = parser.GetCommand(cnt++)) {

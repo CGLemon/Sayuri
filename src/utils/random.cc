@@ -4,10 +4,8 @@
 namespace random_utils {
 
 static inline std::uint64_t SplitMix64(std::uint64_t z) {
-    /*
-     * The detail of parameteres are from
-     * https://github.com/lemire/testingRNG/blob/master/source/splitmix64.h
-     */
+    // The detail of parameteres are from
+    // https://github.com/lemire/testingRNG/blob/master/source/splitmix64.h
 
     z += 0x9e3779b97f4a7c15;
     z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
@@ -57,10 +55,9 @@ RANDOM_INIT__(RandomType::kXoroShiro128Plus, 2);
 
 template<>
 std::uint64_t Random<RandomType::kSplitMix64>::Generate() {
-    /*
-     * The detail of parameteres are from
-     * https://github.com/lemire/testingRNG/blob/master/source/splitmix64.h
-     */
+    // The detail of parameteres are from
+    // https://github.com/lemire/testingRNG/blob/master/source/splitmix64.h
+
     constexpr auto kSeedIndex = kSeedSize - 1;
 
     seeds_[kSeedIndex] += 0x9e3779b97f4a7c15;
@@ -72,10 +69,8 @@ std::uint64_t Random<RandomType::kSplitMix64>::Generate() {
 
 template<>
 std::uint64_t Random<RandomType::kXoroShiro128Plus>::Generate() {
-    /*
-     * The detail of parameteres are from
-     * https://github.com/lemire/testingRNG/blob/master/source/xoroshiro128plus.h
-     */
+    // The detail of parameteres are from
+    // https://github.com/lemire/testingRNG/blob/master/source/xoroshiro128plus.h
 
     const std::uint64_t s0 = seeds_[0];
     std::uint64_t s1 = seeds_[1];
