@@ -42,7 +42,7 @@ public:
     int GetX(const int vtx) const;
     int GetY(const int vtx) const;
 
-    // Get the vertex board.
+    // Get the vertex board move.
     int GetVertex(const int x, const int y) const;
 
     // Get the index board.
@@ -130,6 +130,7 @@ protected:
 
     bool IsNeighbor(const int vtx, const int avtx) const;
     bool IsSimpleEye(const int vtx, const int color) const;
+    bool IsRealEye(const int vtx, const int color) const;
     bool IsSuicide(const int vtx, const int color) const;
     int CountPliberties(const int vtx) const;
 
@@ -142,18 +143,21 @@ protected:
     // Get the possible lowest and most liberties. 
     std::pair<int, int> GetLadderLiberties(const int vtx, const int color) const;
 
-
+    // Find Prey's possible move for ladder searching.
     LadderType PreySelections(const int prey_color,
                               const int ladder_vtx,
                               std::vector<int>& selections, bool think_ko) const;
 
+    // Find Hunter's possible move for ladder searching.
     LadderType HunterSelections(const int prey_color,
                                 const int ladder_vtx, std::vector<int>& selections) const;
 
+    // Prey do move to try to escape from hunter.
     LadderType PreyMove(std::shared_ptr<SimpleBoard> board,
                         const int hunter_vtx, const int prey_color,
                         const int ladder_vtx, size_t& ladder_nodes, bool fork) const;
 
+    // Hunter do move to try to capture the prey.
     LadderType HunterMove(std::shared_ptr<SimpleBoard> board,
                           const int prey_vtx, const int prey_color,
                           const int ladder_vtx, size_t& ladder_nodes, bool fork) const;

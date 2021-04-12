@@ -49,7 +49,7 @@ size_t CommandParser::GetCount() const {
 }
 
 std::shared_ptr<CommandParser::Reuslt> CommandParser::GetCommand(size_t id) const {
-    if (!Valid() || id > count_) {
+    if (!Valid() || id >= count_) {
         return nullptr;
     }
     return std::make_shared<Reuslt>(Reuslt(*commands_buffer_[id], (int)id));

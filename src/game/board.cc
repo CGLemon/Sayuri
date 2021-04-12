@@ -2,10 +2,14 @@
 
 #include <algorithm>
 
-int Board::ComputeFinalScore(float komi) const {
+int Board::ComputeScoreOnBoard(int black_bonus) const {
     const auto black = ComputeReachColor(kBlack);
     const auto white = ComputeReachColor(kWhite);
-    return static_cast<float>(black - white) - komi;
+    return black - white + black_bonus;
+}
+
+float Board::ComputeFinalScore(float komi) const {
+    return static_cast<float>(ComputeScoreOnBoard(0)) - komi;
 }
 
 std::vector<int> Board::GetSimpleOwnership() const {
@@ -115,7 +119,7 @@ bool Board::SetFreeHandicap(std::vector<int> movelist) {
     return true;
 }
 
-std::vector<LadderType> Board::GetLadderMap() const {
+std::vector<LadderType> Board::GetLadderPlane() const {
     auto res = std::vector<LadderType>(GetNumIntersections(), LadderType::kNotLadder);
     auto ladder = std::vector<int>{};
     auto not_ladder = std::vector<int>{};
@@ -161,9 +165,12 @@ std::vector<LadderType> Board::GetLadderMap() const {
 
             if (first_found) {
                 auto buf = std::vector<int>{};
-                auto num_move = FindStringLiberties(vtx, buf);
-                assert(num_move == libs);
-
+                auto move_num = FindStringLiberties(vtx, buf);
+            #ifdef NDEBUG
+                (void)move_num;
+            #else
+                assert(move_num == libs);
+            #endif
                 for (const auto &v : buf) {
                     const auto ax = GetX(v);
                     const auto ay = GetY(v);
@@ -180,3 +187,20 @@ std::vector<LadderType> Board::GetLadderMap() const {
 
     return res;
 }
+
+std::vector<bool> Board::GetOcupiedPlane(const int color) const {
+    auto res = std::vector<bool>(GetNumIntersections(), false);
+    auto bsize = GetBoardSize();
+    for (int y = 0; y < bsize; ++y) {
+        for (int x = 0; x < bsize; ++x) {
+            const auto state = GetState(x, y);
+            const auto index = GetIndex(x, y);
+            if (state == color) {
+                res[index] = true;
+            }
+        }
+    }
+
+    return res;
+}
+

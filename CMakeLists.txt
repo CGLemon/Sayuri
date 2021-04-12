@@ -33,6 +33,7 @@ set(UTILS_SOURCES
     ${UTILS_SOURCES_DIR}/log.cc
     ${UTILS_SOURCES_DIR}/parser.cc
     ${UTILS_SOURCES_DIR}/random.cc
+    ${UTILS_SOURCES_DIR}/time.cc
     )
 
 find_package(Threads REQUIRED)

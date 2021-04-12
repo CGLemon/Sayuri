@@ -74,14 +74,14 @@ private:
 // A very simple spin lock.
 class SpinMutex {
 public:
-  // std::unique_lock<SpinMutex> wrapper.
+    // std::lock_guard<SpinMutex> wrapper.
     class Lock {
     public:
         Lock(SpinMutex& m) : lock_(m) {}
         ~Lock() {}
 
     private:
-        std::unique_lock<SpinMutex> lock_;
+        std::lock_guard<SpinMutex> lock_;
     };
 
     void lock() {

@@ -24,5 +24,6 @@ struct String {
 
     void Reset();
     void AddStone(const int vtx, const int lib);
-    std::string DebugString(int boardsize);
+
+    std::string DebugString(int boardsize) const;
 };

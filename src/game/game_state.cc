@@ -21,14 +21,14 @@ void GameState::ClearBoard() {
 bool GameState::PlayMove(const int vtx, const int color) {
     if (vtx == kResign) {
         if (color == kBlack) {
-            winner_ = kBlackWon;
-        } else {
             winner_ = kWhiteWon;
+        } else {
+            winner_ = kBlackWon;
         }
         return true;
     }
 
-    if (board_.IsLegalMove(vtx, color)) {
+    if (IsLegalMove(vtx, color)) {
         board_.PlayMoveAssumeLegal(vtx, color);
 
         // Cut off unused history.
@@ -102,6 +102,32 @@ int GameState::TextToVertex(std::string text) {
     return board_.GetVertex(x, y);
 }
 
+std::string GameState::VertexToSgf(const int vtx) {
+    assert(vtx != kNullVertex);
+
+    if (vtx == kPass || vtx == kResign) {
+        return std::string{};
+    }
+
+    auto out = std::ostringstream{};    
+    const auto x = GetX(vtx);
+    const auto y = GetY(vtx);
+
+    if (x >= 26) {
+        out << static_cast<char>(x - 26 + 'A');
+    } else {
+        out << static_cast<char>(x + 'a');
+    }
+
+    if (y >= 26) {
+        out << static_cast<char>(y - 26 + 'A');
+    } else {
+        out << static_cast<char>(y + 'a');
+    }
+
+    return out.str();
+}
+
 bool GameState::PlayTextMove(std::string input) {
     int color = kInvalid;
     int vertex = kNullVertex;
@@ -146,8 +172,17 @@ std::string GameState::GetStateString() const {
     out << "Move Number: " << GetMoveNumber() << ", ";
     out << "Komi: " << GetKomi() << ", ";
     out << "Board Size: " << GetBoardSize() << ", ";
-    out << "Handicap: " << GetHandicap();
-
+    out << "Handicap: " << GetHandicap() << ", ";
+    out << "Result: ";
+    if (GetWinner() == kBlackWon) {
+        out << "Black Won";
+    } else if (GetWinner() == kWhiteWon) {
+        out << "White Won";
+    } else if (GetWinner() == kDraw) {
+        out << "Draw";
+    } else if (GetWinner() == kUndecide) {
+        out << "None";
+    }
     out << "}" << std::endl;
     return out.str();
 }
@@ -158,12 +193,20 @@ void GameState::ShowBoard() const {
     LOGGING << GetStateString();
 }
 
+void GameState::SetWinner(GameResult result) {
+    winner_ = result;
+}
+
 void GameState::SetKomi(float komi) {
     komi_integer_ = static_cast<int>(komi);
     komi_float_ = komi - static_cast<float>(komi_integer_);
     if (komi_float_ < 1e-4 && komi_float_ > (-1e-4)) {
         komi_float_ = 0.0f;
     }
+}
+
+void GameState::SetColor(const int color) {
+    board_.SetToMove(color);
 }
 
 void GameState::SetHandicap(int handicap) {
@@ -177,6 +220,15 @@ bool GameState::IsSuperko() const {
     auto res = std::find(++first, last, GetKoHash());
 
     return (res != last);
+}
+
+bool GameState::IsLegalMove(const int vertex, const int color) const {
+    return board_.IsLegalMove(vertex, color);
+}
+
+bool GameState::IsLegalMove(const int vertex, const int color,
+                            std::function<bool(int, int)> AvoidToMove) const {
+    return board_.IsLegalMove(vertex, color, AvoidToMove);
 }
 
 bool GameState::SetFixdHandicap(int handicap) {
@@ -202,16 +254,42 @@ bool GameState::SetFreeHandicap(std::vector<std::string> movelist) {
     return false;
 }
 
-std::vector<int> GameState::GetSimpleOwnership() const {
-    return board_.GetSimpleOwnership();
-}
-
 float GameState::GetFinalScore(float bonus) const {
     return board_.ComputeFinalScore(GetKomi() + GetHandicap() + bonus);
 }
 
+int GameState::GetVertex(const int x, const int y) const {
+    return board_.GetVertex(x, y);
+}
+
+int GameState::GetIndex(const int x, const int y) const {
+    return board_.GetIndex(x, y);
+}
+
+int GameState::GetX(const int vtx) const {
+    return board_.GetX(vtx);
+}
+
+int GameState::GetY(const int vtx) const {
+    return board_.GetY(vtx);
+}
+
 float GameState::GetKomi() const {
     return komi_float_ + static_cast<float>(komi_integer_);
+}
+
+int GameState::GetWinner() const {
+    if (GetPasses() >= 2) {
+        auto score = GetFinalScore();
+        if (score > (-1e-4) && score < 1e-4) {
+            return kDraw;
+        } else if (score > 0.f){
+            return kBlack;
+        } else {
+            return kWhite;
+        }
+    }
+    return winner_;
 }
 
 int GameState::GetHandicap() const {
@@ -264,4 +342,13 @@ int GameState::GetState(const int vtx) const {
 
 int GameState::GetState(const int x, const int y) const {
     return board_.GetState(x, y);
+}
+
+std::shared_ptr<const Board> GameState::GetPastBoard(unsigned int p) const {
+    assert(p <= (unsigned)GetMoveNumber());
+    return game_history_[(unsigned)GetMoveNumber() - p];  
+}
+
+const std::vector<std::shared_ptr<const Board>>& GameState::GetHistory() const {
+    return game_history_;
 }

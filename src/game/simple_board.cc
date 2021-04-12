@@ -157,6 +157,8 @@ std::string SimpleBoard::GetPrisonersString() const {
     return out.str();
 }
 
+#include <iomanip>
+
 std::string SimpleBoard::GetBoardString(const int last_move, bool is_sgf) const {
     auto out = std::ostringstream{};
     auto boardsize = GetBoardSize();
@@ -711,6 +713,41 @@ bool SimpleBoard::IsSimpleEye(const int vtx, const int color) const {
     return neighbours_[vtx] & kEyeMask[color];
 }
 
+bool SimpleBoard::IsRealEye(const int vtx, const int color) const {
+    if (state_[vtx] != kEmpty) {
+        return false;
+    }
+
+    if (!IsSimpleEye(vtx, color)) {
+        return false;
+    }
+
+    std::array<int, 4> colorcount;
+
+    colorcount[kBlack] = 0;
+    colorcount[kWhite] = 0;
+    // colorcount[kEmpty] = 0; unused
+    colorcount[kInvalid] = 0;
+
+    for (int k = 4; k < 8; ++k) {
+        const auto avtx = vtx + directions_[k];
+        colorcount[state_[avtx]]++;
+    }
+
+    if (colorcount[kInvalid] == 0) {
+        // The eye is not at side or corner.
+        if (colorcount[!color] > 1) {
+            return false;
+        }
+    } else {
+        if (colorcount[!color] > 0) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool SimpleBoard::IsSuicide(const int vtx, const int color) const {
     if (CountPliberties(vtx)) {
         return false;
@@ -906,6 +943,7 @@ int SimpleBoard::UpdateBoard(const int vtx, const int color) {
         UpdateZobristPrisoner(color, new_prisoners, old_prisoners);
     }
 
+    // move last vertex in list to our position
     int lastvertex = empty_[--empty_cnt_];
     empty_idx_[lastvertex] = empty_idx_[vtx];
     empty_[empty_idx_[vtx]] = lastvertex;
@@ -916,6 +954,7 @@ int SimpleBoard::UpdateBoard(const int vtx, const int color) {
     }
 
     if (captured_stones == 1 && is_eyeplay) {
+        // Make a ko.
         assert(state_[captured_vtx] == kEmpty && !IsSuicide(captured_vtx, !color));
         return captured_vtx;
     }

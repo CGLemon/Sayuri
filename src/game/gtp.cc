@@ -1,4 +1,5 @@
 #include "game/gtp.h"
+#include "game/sgf.h"
 #include "game/commands_list.h"
 #include "utils/log.h"
 
@@ -104,8 +105,23 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             out << GTPFail("");
         }
     } else if (const auto res = parser.Find("loadsgf", 0)) {
-        out << GTPFail("");
+        auto movenum = 999;
+        auto filename = std::string{};
+        if (const auto input = parser.GetCommand(1)) {
+            filename = input->Get<std::string>();
+        }
+        if (const auto input = parser.GetCommand(2)) {
+            movenum = input->Get<int>();
+        }
+        if (filename.empty()) {
+            out << GTPFail("");
+        } else {
+            agent_->GetState() = Sgf::Get().FormFile(filename, movenum);
+            out << GTPSuccess("");
+        }
     } else if (const auto res = parser.Find("printsgf", 0)) {
+        out << GTPSuccess(Sgf::Get().ToString(agent_->GetState()));
+    } else if (const auto res = parser.Find("final_score", 0)) {
         out << GTPFail("");
     } else if (const auto res = parser.Find("genmove", 0)) {
         out << GTPFail("");

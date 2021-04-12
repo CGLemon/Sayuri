@@ -14,6 +14,7 @@ public:
 
     void Reset(const int boardsize, const float komi);
 
+    // GTP interface to clear the board.
     void ClearBoard();
 
     bool PlayMove(const int vtx, const int color);
@@ -22,7 +23,13 @@ public:
 
     void SetKomi(float komi);
 
+    void SetColor(const int color);
+
+    void SetWinner(GameResult result);
+
     int TextToVertex(std::string text);
+
+    std::string VertexToSgf(const int vtx);
 
     // GTP interface to play move.
     bool PlayTextMove(std::string input);
@@ -36,12 +43,20 @@ public:
     // GTP interface to set free handicap.
     bool SetFreeHandicap(std::vector<std::string> movelist);
 
-    std::vector<int> GetSimpleOwnership() const;
     float GetFinalScore(float bonus = 0) const;
 
     bool IsSuperko() const;
+    bool IsLegalMove(const int vertex, const int color) const;
+    bool IsLegalMove(const int vertex, const int color,
+                     std::function<bool(int, int)> AvoidToMove) const;
+
+    int GetVertex(const int x, const int y) const;
+    int GetIndex(const int x, const int y) const;
+    int GetX(const int vtx) const;
+    int GetY(const int vtx) const;
 
     float GetKomi() const;
+    int GetWinner() const;
     int GetHandicap() const;
     int GetMoveNumber() const;
     int GetBoardSize() const;
@@ -55,6 +70,8 @@ public:
     int GetPrisoner(const int color) const;
     int GetState(const int vtx) const;
     int GetState(const int x, const int y) const;
+    std::shared_ptr<const Board> GetPastBoard(unsigned int p) const;
+    const std::vector<std::shared_ptr<const Board>>& GetHistory() const;
 
 private:
     void SetHandicap(int handicap);

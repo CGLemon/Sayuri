@@ -7,7 +7,9 @@
 
 class Board : public SimpleBoard {
 public:
-    int ComputeFinalScore(float komi) const;
+    float ComputeFinalScore(float komi) const;
+
+    int ComputeScoreOnBoard(int black_bonus) const;
 
     std::vector<int> GetSimpleOwnership() const;
 
@@ -15,10 +17,10 @@ public:
 
     bool SetFreeHandicap(std::vector<int> movelist);
 
-    std::vector<LadderType> GetLadderMap() const;
+    std::vector<LadderType> GetLadderPlane() const;
+
+    std::vector<bool> GetOcupiedPlane(const int color) const;
 
 private:
     bool ValidHandicap(int handicap);
-
-
 };
