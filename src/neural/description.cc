@@ -1,4 +1,4 @@
-#include "neural/layer_description.h"
+#include "neural/description.h"
 
 void LinearLayer::Set(int inputs, int outputs) {
     inputs_ = inputs;

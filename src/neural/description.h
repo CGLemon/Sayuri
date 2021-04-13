@@ -52,7 +52,7 @@ private:
     int channels_{0};
 };
 
-struct ConvLayer {
+class ConvLayer {
 public:
     void Set(int inputs, int outputs, int filter);
 
@@ -73,4 +73,55 @@ private:
     int inputs_{0};
     int outputs_{0};
     int filter_{0};
+};
+
+class ResidualBlock {
+public:
+    ConvLayer conv1;
+    BatchNormLayer bn1;
+
+    ConvLayer conv2;
+    BatchNormLayer bn2;
+
+    LinearLayer extend;
+    LinearLayer squeeze;
+
+    int se_size{0};
+    int apply_se{false};
+};
+
+
+class DNNWeights {
+public:
+    bool loaded{false};
+    bool winograd{false};
+
+    int input_channels{0};
+
+    int residual_blocks{0};
+    int residual_channels{0};
+
+    int policy_extract_channels{0};
+    int value_extract_channels{0};
+
+    // input layer
+    ConvLayer input_conv;
+    BatchNormLayer input_bn;
+
+    // residual tower
+    std::vector<ResidualBlock> tower;
+
+    // policy head
+    ConvLayer p_ex_conv;
+    BatchNormLayer p_ex_bn;
+
+    ConvLayer prob_conv;
+    LinearLayer pass_fc;
+
+    // value head
+    ConvLayer v_ex_conv;
+    BatchNormLayer v_ex_bn;
+
+    ConvLayer ownership;
+    LinearLayer val_fc;
 };

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "utils/cppattributes.h"
+
 #include <mutex>
 #include <atomic>
 #include <cassert>
@@ -31,18 +33,18 @@ private:
     friend class SpinMutex;
 };
 
-class Mutex {
+class CAPABILITY("mutex") Mutex {
 public:
-    class Lock {
+    class SCOPED_CAPABILITY Lock {
     public:
-        Lock(Mutex& m) : lock_(m) {}
-        ~Lock() {}
+        Lock(Mutex& m) ACQUIRE(m) : lock_(m) {}
+        ~Lock() RELEASE() {}
 
     private:
         std::lock_guard<Mutex> lock_;
     };
 
-    void lock() {
+    void lock() ACQUIRE() {
         // Test and Test-and-Set reduces memory contention
         // However, just trying to Test-and-Set first improves performance in almost
         // all cases
@@ -51,7 +53,7 @@ public:
         }
     }
 
-    void unlock() {
+    void unlock() RELEASE() {
         auto lock_held = Get().exchange(false, std::memory_order_release);
 
         // If this fails it means we are unlocking an unlocked lock
@@ -72,19 +74,19 @@ private:
 };
 
 // A very simple spin lock.
-class SpinMutex {
+class CAPABILITY("mutex") SpinMutex {
 public:
     // std::lock_guard<SpinMutex> wrapper.
-    class Lock {
+    class SCOPED_CAPABILITY Lock {
     public:
-        Lock(SpinMutex& m) : lock_(m) {}
-        ~Lock() {}
+        Lock(SpinMutex& m) ACQUIRE(m) : lock_(m) {}
+        ~Lock() RELEASE() {}
 
     private:
         std::lock_guard<SpinMutex> lock_;
     };
 
-    void lock() {
+    void lock() ACQUIRE() {
         int spins = 0;
         while (true) {
             auto val = false;
@@ -101,7 +103,7 @@ public:
             }
         }
     }
-    void unlock() {
+    void unlock() RELEASE()  {
         Get().store(false, std::memory_order_release);
     }
 

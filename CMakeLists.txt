@@ -26,7 +26,12 @@ set(GAME_SOURCES
 
 set(NEURAL_SOURCES
     ${NEURAL_SOURCES_DIR}/loader.cc
-    ${NEURAL_SOURCES_DIR}/layer_description.cc
+    ${NEURAL_SOURCES_DIR}/description.cc
+
+    ${NEURAL_SOURCES_DIR}/blas/sgemm.cc
+    ${NEURAL_SOURCES_DIR}/blas/blas.cc
+    ${NEURAL_SOURCES_DIR}/blas/convolution1.cc
+    ${NEURAL_SOURCES_DIR}/blas/winograd_convolution3
     )
 
 set(UTILS_SOURCES
@@ -48,7 +53,6 @@ else()
    set(CMAKE_BUILD_TYPE RELEASE)
 endif()
 
-set(IncludePath "${CMAKE_CURRENT_SOURCE_DIR}/src")
 set(GCC_COMPILE_FLAGS "-Wall -Wextra -ffast-math -march=native -flto")
 set(GCC_DISABLED_WARNING_COMPILE_FLAGS "-Wno-ignored-attributes -Wno-maybe-uninitialized -Wno-mismatched-tags")
 set(CMAKE_CXX_FLAGS "${GCC_COMPILE_FLAGS} ${GCC_DISABLED_WARNING_COMPILE_FLAGS} ${CMAKE_CXX_FLAGS}")
