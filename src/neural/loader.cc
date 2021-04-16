@@ -144,6 +144,9 @@ void DNNLoder::ParseInfo(NetInfo &netinfo, std::istream &buffer) const {
     if (NotFound(netinfo, "ValueExtract")) {
         throw "ValueExtract must be provided";
     }
+    if (NotFound(netinfo, "UseOwnership")) {
+        throw "ValueExtract must be provided";
+    }
 }
 
 void DNNLoder::ParseStruct(NetStruct &netstruct, std::istream &buffer) const {
@@ -194,6 +197,12 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
     weights->policy_extract_channels = std::stoi(netinfo["PolicyExtract"]);
     weights->value_extract_channels = std::stoi(netinfo["ValueExtract"]);
 
+    if (netinfo["UseOwnership"] == "True") {
+        weights->use_ownership = true;
+    }
+    if (netinfo["UseFinalScore"] == "True") {
+        weights->use_final_score = true;
+    }
 
     if (weights->input_channels != kInputChannels) {
         throw "The number of input channels is wrong.";
@@ -295,14 +304,125 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
         }
     }
 
-    // policy head
-    // value head
+    const auto h_offset = 4 * residuals + 2 * se_cnt + inputs_cnt;
+    auto aux_cnt = 0;
 
+    // policy head 4
+    const auto p_ex_conv_shape = netstruct[h_offset + aux_cnt];
+    FillConvolutionLayer(weights->p_ex_conv,
+                         buffer,
+                         p_ex_conv_shape[0],
+                         p_ex_conv_shape[1],
+                         p_ex_conv_shape[2]);
+
+    const auto p_ex_bn_shape = netstruct[h_offset + aux_cnt + 1];
+    FillBatchnormLayer(weights->p_ex_bn,
+                       buffer,
+                       p_ex_bn_shape[0]);
+
+
+    const auto prob_conv_shape = netstruct[h_offset + aux_cnt + 2];
+    FillConvolutionLayer(weights->prob_conv,
+                         buffer,
+                         prob_conv_shape[0],
+                         prob_conv_shape[1],
+                         prob_conv_shape[2]);
+
+    const auto pass_fc_shape = netstruct[h_offset + aux_cnt + 3];
+    FillFullyconnectLayer(weights->pass_fc,
+                          buffer,
+                          pass_fc_shape[0],
+                          pass_fc_shape[1]);
+
+    if (p_ex_conv_shape[2] != 1 || prob_conv_shape[2] != 1) {
+        throw "The policy convolution kernel size is wrong";
+    }
+    if (prob_conv_shape[1] != 1) {
+        throw "The number of policy ouput size is wrong";
+    }
+    if (pass_fc_shape[1] != kOuputPassProbability) {
+        throw "The number of pass ouput size is wrong";
+    }
+
+    // value head
+    const auto v_ex_conv_shape = netstruct[h_offset + aux_cnt + 4];
+    FillConvolutionLayer(weights->v_ex_conv,
+                         buffer,
+                         v_ex_conv_shape[0],
+                         v_ex_conv_shape[1],
+                         v_ex_conv_shape[2]);
+
+    const auto v_ex_bn_shape = netstruct[h_offset + aux_cnt + 5];
+    FillBatchnormLayer(weights->v_ex_bn,
+                       buffer,
+                       v_ex_bn_shape[0]);
+
+    if (weights->use_ownership) {
+        aux_cnt++;
+        const auto v_os_conv_shape = netstruct[h_offset + aux_cnt + 5];
+        FillConvolutionLayer(weights->v_ownership,
+                             buffer,
+                             v_os_conv_shape[0],
+                             v_os_conv_shape[1],
+                             v_os_conv_shape[2]);
+    }
+
+    const auto misc_fc_shape = netstruct[h_offset + aux_cnt + 6];
+    FillFullyconnectLayer(weights->v_misc,
+                          buffer,
+                          misc_fc_shape[0],
+                          misc_fc_shape[1]);
+    if (v_ex_conv_shape[2] != 1) {
+        throw "The value convolution kernel size is wrong";
+    }
+    if (misc_fc_shape[1] != kOuputValueMisc) {
+        throw "The misc value layer size is wrong";
+    }
+
+    auto line = std::string{};
+    std::getline(buffer, line);
+    const auto p = CommandParser(line);
+    if (p.GetCommand(0)->Get<std::string>() != "end") {
+        throw "Not end? Weights file format is not acceptable";
+    }
+    weights->loaded = true;
     ProcessWeights(weights, false);
 }
 
-void DNNLoder::ProcessWeights(std::shared_ptr<DNNWeights> &weights, bool winograd) const {
+void DNNLoder::ProcessWeights(std::shared_ptr<DNNWeights> weights, bool winograd) const {
+    // input layer
+    for (auto idx = size_t{0}; idx < weights->input_conv.GetBiases().size(); ++idx) {
+        weights->input_bn.GetMeans()[idx] -= weights->input_conv.GetBiases()[idx] *
+                                                 weights->input_bn.GetStddevs()[idx];
+        weights->input_conv.GetBiases()[idx] = 0.0f;
+    }
+    // residual tower
+    for (auto &residual : weights->tower) {
+        for (auto idx = size_t{0}; idx < residual.conv1.GetBiases().size(); ++idx) {
+            residual.bn1.GetMeans()[idx] -= residual.conv1.GetBiases()[idx] *
+                                                residual.bn1.GetStddevs()[idx];
+            residual.conv1.GetBiases()[idx] = 0.0f;
+        }
+        for (auto idx = size_t{0}; idx < residual.conv2.GetBiases().size(); ++idx) {
+            residual.bn2.GetMeans()[idx] -= residual.conv2.GetBiases()[idx] *
+                                                residual.bn2.GetStddevs()[idx];
+            residual.conv2.GetBiases()[idx] = 0.0f;
+        }
+    }
+    // policy head
+    for (auto idx = size_t{0}; idx < weights->p_ex_conv.GetBiases().size(); ++idx) {
+        weights->p_ex_bn.GetMeans()[idx] -= weights->p_ex_conv.GetBiases()[idx] *
+                                             weights->p_ex_bn.GetStddevs()[idx];
+        weights->p_ex_conv.GetBiases()[idx] = 0.0f;
+    }
+    // value head
+    for (auto idx = size_t{0}; idx < weights->v_ex_conv.GetBiases().size(); ++idx) {
+        weights->v_ex_bn.GetMeans()[idx] -= weights->v_ex_conv.GetBiases()[idx] *
+                                             weights->v_ex_bn.GetStddevs()[idx];
+        weights->v_ex_conv.GetBiases()[idx] = 0.0f;
+    }
 
+    // TODO: Implement winograd convolve.
 }
 
 void DNNLoder::GetWeightsFromBuffer(std::vector<float> &weights, std::istream &buffer) const {

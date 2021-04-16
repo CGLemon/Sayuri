@@ -26,7 +26,7 @@ private:
                      std::shared_ptr<DNNWeights> weights,
                      std::istream &buffer) const;
 
-    void ProcessWeights(std::shared_ptr<DNNWeights> &weights, bool winograd) const;
+    void ProcessWeights(std::shared_ptr<DNNWeights> weights, bool winograd) const;
     void GetWeightsFromBuffer(std::vector<float> &weights, std::istream &buffer) const;
 
 

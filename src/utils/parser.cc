@@ -3,11 +3,11 @@
 constexpr size_t CommandParser::kMaxBufferSize;
 
 CommandParser::CommandParser(std::string &input) {
-    Parser(std::forward<std::string>(input), kMaxBufferSize);
+    Parse(std::forward<std::string>(input), kMaxBufferSize);
 }
 
 CommandParser::CommandParser(std::string &input, const size_t max) {
-    Parser(std::forward<std::string>(input), std::min(max, kMaxBufferSize));
+    Parse(std::forward<std::string>(input), std::min(max, kMaxBufferSize));
 }
 
 CommandParser::CommandParser(int argc, char** argv) {
@@ -15,14 +15,14 @@ CommandParser::CommandParser(int argc, char** argv) {
     for (int i = 0; i < argc; ++i) {
         out << argv[i] << " ";
     }
-    Parser(std::forward<std::string>(out.str()), kMaxBufferSize);
+    Parse(std::forward<std::string>(out.str()), kMaxBufferSize);
 }
 
 bool CommandParser::Valid() const {
     return count_ != 0;
 }
 
-void CommandParser::Parser(std::string &input, const size_t max) {
+void CommandParser::Parse(std::string &input, const size_t max) {
     count_ = 0;
     auto stream = std::istringstream{input};
     auto in = std::string{};
@@ -33,7 +33,7 @@ void CommandParser::Parser(std::string &input, const size_t max) {
     }
 }
 
-void CommandParser::Parser(std::string &&input, const size_t max) {
+void CommandParser::Parse(std::string &&input, const size_t max) {
     count_ = 0;
     auto stream = std::istringstream{input};
     auto in = std::string{};
@@ -173,4 +173,8 @@ char CommandParser::Reuslt::Get<char>() const{
 template<>
 const char* CommandParser::Reuslt::Get<const char*>() const{
     return str_.c_str();
+}
+
+int CommandParser::Reuslt::Index() const {
+    return idx_;
 }

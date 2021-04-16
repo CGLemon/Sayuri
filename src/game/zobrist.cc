@@ -9,10 +9,10 @@ constexpr Zobrist::KEY Zobrist::kInitSeed;
 constexpr Zobrist::KEY Zobrist::kEmpty;
 constexpr Zobrist::KEY Zobrist::kBlackToMove;
 
-std::array<std::array<Zobrist::KEY, Zobrist::ZOBRIST_SIZE>, 4> Zobrist::kState;
-std::array<std::array<Zobrist::KEY, Zobrist::ZOBRIST_SIZE * 2>, 2> Zobrist::kPrisoner;
+std::array<std::array<Zobrist::KEY, Zobrist::kZobristSize>, 4> Zobrist::kState;
+std::array<std::array<Zobrist::KEY, Zobrist::kZobristSize * 2>, 2> Zobrist::kPrisoner;
 
-std::array<Zobrist::KEY, Zobrist::ZOBRIST_SIZE> Zobrist::kKoMove;
+std::array<Zobrist::KEY, Zobrist::kZobristSize> Zobrist::kKoMove;
 std::array<Zobrist::KEY, 5> Zobrist::KPass;
 
 template<typename T>
@@ -42,20 +42,20 @@ void Zobrist::Initialize() {
         auto buf = std::vector<KEY>{};
 
         for (int i = 0; i < 4; ++i) {
-            for (int j = 0; j < ZOBRIST_SIZE; ++j) {
+            for (int j = 0; j < kZobristSize; ++j) {
                 Zobrist::kState[i][j] = rng.Generate();
                 buf.emplace_back(Zobrist::kState[i][j]);
             }
         }
 
         for (int i = 0; i < 2; ++i) {
-            for (int j = 0; j < ZOBRIST_SIZE * 2; ++j) {
+            for (int j = 0; j < kZobristSize * 2; ++j) {
                 Zobrist::kPrisoner[i][j] = rng.Generate();
                 buf.emplace_back(Zobrist::kPrisoner[i][j]);
             }
         }
 
-        for (int i = 0; i < ZOBRIST_SIZE; ++i) {
+        for (int i = 0; i < kZobristSize; ++i) {
             Zobrist::kKoMove[i] = rng.Generate();
             buf.emplace_back(Zobrist::kKoMove[i]);
         }

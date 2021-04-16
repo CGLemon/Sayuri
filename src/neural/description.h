@@ -13,8 +13,8 @@ public:
     int GetInputs() const;
     int GetOutputs() const;
 
-    const std::vector<float>& GetWeights() const;
-    const std::vector<float>& GetBiases() const;
+    std::vector<float>& GetWeights();
+    std::vector<float>& GetBiases();
 
 private:
     std::vector<float> weights_;
@@ -32,8 +32,8 @@ public:
     void LoadMeans(std::vector<float> &load_weights);
     void LoadStddevs(std::vector<float> &load_weights);
 
-    const std::vector<float>& GetMeans() const;
-    const std::vector<float>& GetStddevs() const;
+    std::vector<float>& GetMeans();
+    std::vector<float>& GetStddevs();
 
     int GetChannels() const;
 
@@ -63,8 +63,8 @@ public:
     int GetOutputs() const;
     int GetFilter() const;
 
-    const std::vector<float>& GetWeights() const;
-    const std::vector<float>& GetBiases() const;
+    std::vector<float>& GetWeights();
+    std::vector<float>& GetBiases();
 
 private:
     std::vector<float> weights_;
@@ -95,6 +95,8 @@ class DNNWeights {
 public:
     bool loaded{false};
     bool winograd{false};
+    bool use_ownership{false};
+    bool use_final_score{false};
 
     int input_channels{0};
 
@@ -122,6 +124,6 @@ public:
     ConvLayer v_ex_conv;
     BatchNormLayer v_ex_bn;
 
-    ConvLayer ownership;
-    LinearLayer val_fc;
+    ConvLayer v_ownership;
+    LinearLayer v_misc;
 };

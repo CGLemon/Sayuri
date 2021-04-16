@@ -1,7 +1,7 @@
 #include <iostream>
+#include <sstream>
 
 #include "utils/log.h"
-#include "utils/parser.h"
 
 LogWriter& LogWriter::Get() {
     static LogWriter writer;
@@ -30,25 +30,19 @@ void LogWriter::SetFilename(std::string filename) {
 
 void LogWriter::WriteString(std::string data) {
     Mutex::Lock lock_(mutex_);
-    auto parser = CommandParser(data);
-    auto cnt = size_t{0};
+    auto stm = std::istringstream(data);
+    auto line = std::string{};
 
     if (filename_.empty()) {
-        while (const auto line = parser.GetCommand(cnt++)) {
-            buffer_.emplace_back(line->Get<std::string>());
-            if (parser.GetCount() == cnt) {
-                break;
-            }
+        while (std::getline(stm, line)) {
+            buffer_.emplace_back(line);
             if (buffer_.size()  >= kMaxBufferLines) {
                 buffer_.pop_front();
             }
         }
     } else {
-        while (const auto line = parser.GetCommand(cnt++)) {
-            file_ << line->Get<std::string>() << std::endl;
-            if (parser.GetCount() == cnt) {
-                break;
-            }
+        while (std::getline(stm, line)) {
+            file_ << line << std::endl;
         }
     }
 }

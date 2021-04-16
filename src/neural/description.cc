@@ -27,11 +27,11 @@ int LinearLayer::GetOutputs() const {
     return outputs_;
 }
 
-const std::vector<float>& LinearLayer::GetWeights() const {
+std::vector<float>& LinearLayer::GetWeights() {
     return weights_;
 }
 
-const std::vector<float>& LinearLayer::GetBiases() const {
+std::vector<float>& LinearLayer::GetBiases() {
     return biases_;
 }
 
@@ -54,11 +54,11 @@ void BatchNormLayer::LoadStddevs(std::vector<float> &load_weights){
     stddevs_ = std::move(load_weights);
 }
 
-const std::vector<float>& BatchNormLayer::GetMeans() const {
+std::vector<float>& BatchNormLayer::GetMeans() {
     return means_;
 }
 
-const std::vector<float>& BatchNormLayer::GetStddevs() const {
+std::vector<float>& BatchNormLayer::GetStddevs() {
     return stddevs_;
 }
 
@@ -98,10 +98,10 @@ int ConvLayer::GetFilter() const {
     return filter_;
 }
 
-const std::vector<float>& ConvLayer::GetWeights() const {
+std::vector<float>& ConvLayer::GetWeights() {
     return weights_;
 }
 
-const std::vector<float>& ConvLayer::GetBiases() const {
+std::vector<float>& ConvLayer::GetBiases() {
     return biases_;
 }

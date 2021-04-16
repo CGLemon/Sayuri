@@ -19,6 +19,7 @@ public:
             str_(std::forward<decltype(s)>(s)), idx_(i) {};
 
         template<typename T> T Get() const;
+        int Index() const;
 
     private:
         std::string str_;
@@ -51,6 +52,6 @@ private:
     std::vector<std::shared_ptr<const std::string>> commands_buffer_;
     size_t count_;
 
-    void Parser(std::string &input, const size_t max);
-    void Parser(std::string &&input, const size_t max);
+    void Parse(std::string &input, const size_t max);
+    void Parse(std::string &&input, const size_t max);
 };

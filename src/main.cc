@@ -8,6 +8,9 @@ static void StartGtpLoop() {
 }
 
 int main(int argc, char **argv) {
+    ArgsParser(argc, argv);
+
     StartGtpLoop();
+
     return 0;
 }

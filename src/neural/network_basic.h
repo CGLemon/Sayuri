@@ -1,17 +1,22 @@
 #pragma once
 
+#include "neural/description.h"
 #include "game/types.h"
 #include <array>
 
-static constexpr size_t kInputChannels = 18;
+static constexpr int kInputChannels = 18;
+static constexpr int kOuputValueMisc = 3;
+static constexpr int kOuputPassProbability = 1;
 
 struct InputData {
+    int board_size{-1};
     std::array<float, kNumIntersections * kInputChannels> planes;
-
     std::uint64_t mode{0ULL};
 };
 
 struct OutputResult {
+    int board_size{-1};
+
     float winrate;
     float final_score;
     float score_width;
@@ -23,15 +28,12 @@ struct OutputResult {
     std::uint64_t mode{0ULL};
 };
 
-class Compution {
+class NetworkForwardPipe {
 public:
-    virtual void Compute();
+    virtual void Initialize(std::shared_ptr<DNNWeights> weights);
 
-    virtual std::uint64_t AddInputs(InputData &inpnt);
+    virtual OutputResult Forward(const InputData &inpnt);
 
-    virtual OutputResult GetResult(std::uint64_t hash);
-
-    virtual void Evict(std::uint64_t hash);
 };
 
 
