@@ -38,11 +38,14 @@ private:
 class SgfParser {
 public:
     static SgfParser& Get();
+
     std::shared_ptr<SgfNode> ParseFormFile(std::string filename, size_t index=0) const;
+    std::shared_ptr<SgfNode> ParseFormString(std::string sgfstring) const;
+
+    std::vector<std::string> ChopAll(std::string filename) const;
 
 private:
     void Parse(std::istringstream &strm, std::shared_ptr<SgfNode> node) const;
-    std::shared_ptr<SgfNode> ParseFormString(std::string sgfstring) const;
 
     std::string ParsePropertyValue(std::istringstream &strm) const;
     std::string ParsePropertyName(std::istringstream &strm) const;
@@ -55,6 +58,10 @@ private:
 class Sgf {
 public:
     static Sgf& Get();
+
     GameState FormFile(std::string filename, unsigned int movenum);
+
+    GameState FormString(std::string sgfstring, unsigned int movenum);
+
     std::string ToString(GameState &state);
 };

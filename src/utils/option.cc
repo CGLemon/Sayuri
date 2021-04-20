@@ -2,8 +2,8 @@
 
 #include <sstream>
 
-bool Option::boundary_valid() const {
-    option_handle();
+bool Option::BoundaryValid() const {
+    OptionHandle();
     return !(max_ == 0 && min_ == 0);
 }
 
@@ -28,14 +28,14 @@ Option Option::setoption<bool>(bool val, int /*max*/, int /*min*/) {
 template<>
 Option Option::setoption<int>(int val, int max, int min) {
     auto op = Option{Type::kInteger, std::to_string(val), max, min};
-    op.adjust<int>();
+    op.Adjust<int>();
     return op;
 }
 
 template<>
 Option Option::setoption<float>(float val, int max, int min) {
     auto op = Option{Type::kFloat, std::to_string(val), max, min};
-    op.adjust<float>();
+    op.Adjust<float>();
     return op;
 }
 
@@ -46,7 +46,7 @@ Option Option::setoption<char>(char val, int /*max*/, int /*min*/) {
 
 #define OPTION_EXPASSION(T) \
 template<>                  \
-T Option::get<T>() const {  \
+T Option::Get<T>() const {  \
     return (T)*this;        \
 }
 
@@ -57,21 +57,21 @@ OPTION_EXPASSION(int)
 OPTION_EXPASSION(char)
 
 template<>
-const char* Option::get<const char*>() const {
+const char* Option::Get<const char*>() const {
     return value_.c_str();
 }
 
 #undef OPTION_EXPASSION
 
 template<>
-void Option::set<std::string>(std::string value) {
-    option_handle();
+void Option::Set<std::string>(std::string value) {
+    OptionHandle();
     value_ = value;
 }
 
 template<>
-void Option::set<bool>(bool value) {
-    option_handle();
+void Option::Set<bool>(bool value) {
+    OptionHandle();
     if (value) {
         value_ = std::string{"true"};
     } else {
@@ -80,26 +80,26 @@ void Option::set<bool>(bool value) {
 }
 
 template<>
-void Option::set<int>(int value) {
-    option_handle();
+void Option::Set<int>(int value) {
+    OptionHandle();
     value_ = std::to_string(value);
-    adjust<int>();
+    Adjust<int>();
 }
 
 template<>
-void Option::set<float>(float value) {
-    option_handle();
+void Option::Set<float>(float value) {
+    OptionHandle();
     value_ = std::to_string(value);
-    adjust<float>();
+    Adjust<float>();
 }
 
 template<>
-void Option::set<char>(char value) {
-    option_handle();
+void Option::Set<char>(char value) {
+    OptionHandle();
     value_ = std::string{value};
 }
 
-void Option::option_handle() const {
+void Option::OptionHandle() const {
     if (max_ < min_) {
         auto out = std::ostringstream{};
         out << " Option Error :";

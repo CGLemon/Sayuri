@@ -3,6 +3,8 @@
 #include "utils/log.h"
 #include "utils/time.h"
 
+#include <limits>
+
 void SgfNode::AddProperty(std::string property, std::string value) {
     properties_.emplace(property, value);
 }
@@ -392,7 +394,11 @@ std::vector<std::string> SgfParser::ChopAll(std::string filename,
     return result;
 }
 
-// scan the file and extract the game with number index
+std::vector<std::string> SgfParser::ChopAll(std::string filename) const {
+    return ChopAll(filename,  std::numeric_limits<size_t>::max());
+}
+
+// Scan the file and extract the game with number index.
 std::string SgfParser::ChopFromFile(std::string filename, size_t index) const {
     auto vec = ChopAll(filename, index);
     return vec[index];
@@ -425,6 +431,11 @@ Sgf& Sgf::Get() {
 
 GameState Sgf::FormFile(std::string filename, unsigned int movenum) {
     auto node = SgfParser::Get().ParseFormFile(filename);
+    return node->GetMainlineState(movenum);
+}
+
+GameState Sgf::FormString(std::string sgfstring, unsigned int movenum) {
+    auto node = SgfParser::Get().ParseFormString(sgfstring);
     return node->GetMainlineState(movenum);
 }
 
@@ -482,6 +493,3 @@ std::string Sgf::ToString(GameState &state) {
     out << ')';
     return out.str();
 }
-
-
-

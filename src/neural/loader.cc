@@ -3,8 +3,8 @@
 #include "utils/parser.h"
 #include "utils/log.h"
 
-#include "iostream"
-#include "sstream"
+#include <iostream>
+#include <sstream>
 
 #ifdef USE_FAST_PARSER
 #include "fast_float.h"
@@ -105,7 +105,7 @@ void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) 
         const auto p = CommandParser(line);
         if (p.GetCommand(0)->Get<std::string>() == "get") {
             if (p.GetCommand(1)->Get<std::string>() == "parameters") {
-
+                FillWeights(netinfo, netstruct, weights, buffer);
             }
         }
     }
@@ -123,7 +123,6 @@ void DNNLoder::ParseInfo(NetInfo &netinfo, std::istream &buffer) const {
         netinfo.emplace(p.GetCommand(0)->Get<std::string>(),
                             p.GetCommand(1)->Get<std::string>());
     }
-
 
     const auto NotFound = [](NetInfo &netinfo, std::string target) -> bool {
         return std::end(netinfo) == netinfo.find(target);
@@ -145,7 +144,10 @@ void DNNLoder::ParseInfo(NetInfo &netinfo, std::istream &buffer) const {
         throw "ValueExtract must be provided";
     }
     if (NotFound(netinfo, "UseOwnership")) {
-        throw "ValueExtract must be provided";
+        throw "UseOwnership must be provided";
+    }
+    if (NotFound(netinfo, "UseFinalScore")) {
+        throw "UseFinalScore must be provided";
     }
 }
 
@@ -170,9 +172,9 @@ void DNNLoder::ParseStruct(NetStruct &netstruct, std::istream &buffer) const {
             if (netstruct[cnt].size() != 2) {
                 throw "The FullyConnect Layer shape is error";
             }
-        } else if (p.GetCommand(0)->Get<std::string>() == "Convolve") {
+        } else if (p.GetCommand(0)->Get<std::string>() == "Convolution") {
             if (netstruct[cnt].size() != 3) {
-                throw "The Convolve Layer shape is error";
+                throw "The Convolution Layer shape is error";
             }
         } else if (p.GetCommand(0)->Get<std::string>() == "BatchNorm") {
             if (netstruct[cnt].size() != 1) {
@@ -422,7 +424,7 @@ void DNNLoder::ProcessWeights(std::shared_ptr<DNNWeights> weights, bool winograd
         weights->v_ex_conv.GetBiases()[idx] = 0.0f;
     }
 
-    // TODO: Implement winograd convolve.
+    // TODO: Implement winograd convolution.
 }
 
 void DNNLoder::GetWeightsFromBuffer(std::vector<float> &weights, std::istream &buffer) const {

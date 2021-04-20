@@ -12,21 +12,21 @@ const std::string kNoWeightsFile = "NO_WEIGHT_FILE";
 const std::string kNologFile = "NO_LOG_FILE";
 
 template<typename T>
-T option(std::string name);
+T GetOption(std::string name);
 
 template<typename T>
-bool set_option(std::string name, T val);
+bool SetOption(std::string name, T val);
 
-void init_basic_parameters();
+void InitBasicParameters();
 
 class ArgsParser {
 public:
     ArgsParser() = delete;
     ArgsParser(int argc, char** argv);
 
-    void dump() const;
+    void Dump() const;
 
 private:
-    void help() const;
+    void Helper() const;
 };
 

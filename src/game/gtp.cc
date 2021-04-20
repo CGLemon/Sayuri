@@ -105,7 +105,7 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             out << GTPFail("");
         }
     } else if (const auto res = parser.Find("loadsgf", 0)) {
-        auto movenum = 999;
+        auto movenum = 9999;
         auto filename = std::string{};
         if (const auto input = parser.GetCommand(1)) {
             filename = input->Get<std::string>();

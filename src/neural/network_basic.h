@@ -10,8 +10,10 @@ static constexpr int kOuputPassProbability = 1;
 
 struct InputData {
     int board_size{-1};
+
     std::array<float, kNumIntersections * kInputChannels> planes;
-    std::uint64_t mode{0ULL};
+
+    int side_to_move{kInvalid};
 };
 
 struct OutputResult {
@@ -23,9 +25,7 @@ struct OutputResult {
     float pass_probability;
 
     std::array<float, kNumIntersections> probabilities;
-    std::array<float, kNumIntersections> ownership; 
-
-    std::uint64_t mode{0ULL};
+    std::array<float, kNumIntersections> ownership;
 };
 
 class NetworkForwardPipe {

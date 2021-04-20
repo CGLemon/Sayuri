@@ -1,3 +1,5 @@
+#pragma once
+
 #ifdef USE_OPENBLAS
 #ifdef __APPLE__
 #include <Accelerate/Accelerate.h>

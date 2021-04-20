@@ -5,6 +5,7 @@ project(Sayuri)
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(GAME_SOURCES_DIR ${SOURCE_DIR}/game)
 set(NEURAL_SOURCES_DIR ${SOURCE_DIR}/neural)
+set(DATA_SOURCES_DIR ${SOURCE_DIR}/data)
 set(UTILS_SOURCES_DIR ${SOURCE_DIR}/utils)
 
 set(IncludePath "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -73,6 +74,7 @@ set(GAME_SOURCES
 set(NEURAL_SOURCES
     ${NEURAL_SOURCES_DIR}/loader.cc
     ${NEURAL_SOURCES_DIR}/description.cc
+    ${NEURAL_SOURCES_DIR}/encoder.cc
 
     ${NEURAL_SOURCES_DIR}/blas/sgemm.cc
     ${NEURAL_SOURCES_DIR}/blas/blas.cc
@@ -83,6 +85,10 @@ set(NEURAL_SOURCES
     ${NEURAL_SOURCES_DIR}/blas/biases.cc
     ${NEURAL_SOURCES_DIR}/blas/se_unit.cc
     ${NEURAL_SOURCES_DIR}/blas/blas_forward_pipe.cc
+    )
+set(DATA_SOURCES
+    ${DATA_SOURCES_DIR}/supervised.cc
+    ${DATA_SOURCES_DIR}/training.cc
     )
 
 set(UTILS_SOURCES
@@ -150,6 +156,7 @@ find_package(Threads REQUIRED)
 add_executable(Sayuri
     ${BASIC_SOURCES}
     ${GAME_SOURCES}
+    ${DATA_SOURCES}
     ${NEURAL_SOURCES}
     ${UTILS_SOURCES}
     ${CUDA_SOURCES}

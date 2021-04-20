@@ -13,7 +13,11 @@
 template<typename V>
 class LruCache {
 public:
-    LruCache() = default;
+    LruCache() {
+        capacity_ = 0;
+        allocated_ = 0;
+    }
+
     LruCache(size_t capacity) {
         capacity_ = capacity;
         allocated_ = 0;

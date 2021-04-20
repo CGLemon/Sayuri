@@ -2,14 +2,16 @@
 #include "utils/parser.h"
 #include "utils/log.h"
 #include "game/zobrist.h"
+#include "game/symmetry.h"
+#include "game/types.h"
 #include "config.h"
 
 std::unordered_map<std::string, Option> options_map;
 
 #define OPTIONS_EXPASSION(T)                        \
 template<>                                          \
-T option<T>(std::string name) {                     \
-    return options_map.find(name)->second.get<T>(); \
+T GetOption<T>(std::string name) {                  \
+    return options_map.find(name)->second.Get<T>(); \
 }                                                   \
 
 OPTIONS_EXPASSION(std::string)
@@ -21,15 +23,15 @@ OPTIONS_EXPASSION(char)
 
 #undef OPTIONS_EXPASSION
 
-#define OPTIONS_SET_EXPASSION(T)                     \
-template<>                                           \
-bool set_option<T>(std::string name, T val) {        \
-    auto res = options_map.find(name);               \
-    if (res != std::end(options_map)) {              \
-        res->second.set<T>(val);                     \
-        return true;                                 \
-    }                                                \
-    return false;                                    \
+#define OPTIONS_SET_EXPASSION(T)                    \
+template<>                                          \
+bool SetOption<T>(std::string name, T val) {        \
+    auto res = options_map.find(name);              \
+    if (res != std::end(options_map)) {             \
+        res->second.Set<T>(val);                    \
+        return true;                                \
+    }                                               \
+    return false;                                   \
 }
 
 OPTIONS_SET_EXPASSION(std::string)
@@ -42,7 +44,7 @@ OPTIONS_SET_EXPASSION(char)
 #undef OPTIONS_SET_EXPASSION
 
 
-void init_options_map() {
+void InitOptionsMap() {
     options_map["name"] << Option::setoption(kProgram);
     options_map["version"] << Option::setoption(kVersion);
     options_map["help"] << Option::setoption(false);
@@ -52,14 +54,17 @@ void init_options_map() {
     options_map["playouts"] << Option::setoption(1600);
     options_map["threads"] << Option::setoption(1);
 
+    options_map["boardsize"] << Option::setoption(kDefaultBoardSize);
+    options_map["komi"] << Option::setoption(kDefaultKomi);
+
     options_map["weights_file"] << Option::setoption(kNoWeightsFile);
     options_map["log_file"] << Option::setoption(kNologFile);
 }
 
-void init_basic_parameters() {
+void InitBasicParameters() {
     Zobrist::Initialize();
+    Symmetry::Initialize(GetOption<int>("boardsize"));
 }
-
 
 ArgsParser::ArgsParser(int argc, char** argv) {
     auto parser = CommandParser(argc, argv);
@@ -87,29 +92,30 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         return true;
     };
 
-    init_options_map();
+    InitOptionsMap();
 
     const auto name = parser.RemoveCommand(0);
     (void) name;
 
     if (const auto res = parser.Find({"--help", "-h"})) {
-        set_option("help", true);
+        SetOption("help", true);
         parser.RemoveCommand(res->Index());
     }
 
     if (const auto res = parser.Find({"--playouts", "-h"})) {
-        set_option("playouts", true);
+        SetOption("playouts", true);
         parser.RemoveCommand(res->Index());
     }
 
     if (error_commands(parser)) {
-        help();
+        Helper();
     }
 
-    dump();
+    Dump();
+    InitBasicParameters();
 }
 
-void ArgsParser::help() const {
+void ArgsParser::Helper() const {
     ERROR << "Arguments:" << std::endl
               << "  --help, -h" << std::endl
               << "  --mode, -m [gtp]" << std::endl
@@ -119,8 +125,8 @@ void ArgsParser::help() const {
     exit(-1);
 }
 
-void ArgsParser::dump() const {
-    if (option<bool>("help")) {
-        help();
+void ArgsParser::Dump() const {
+    if (GetOption<bool>("help")) {
+        Helper();
     }
 }

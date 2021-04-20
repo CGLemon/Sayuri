@@ -7,8 +7,6 @@
 #include <unordered_map>
 
 class Option {
-public:
-
 private:
     enum class Type {
         kInvalid,
@@ -53,10 +51,10 @@ private:
     }
 
     template<typename T>
-    void adjust();
+    void Adjust();
 
-    bool boundary_valid() const;
-    void option_handle() const;
+    bool BoundaryValid() const;
+    void OptionHandle() const;
 
 public:
     Option() = default;
@@ -69,18 +67,18 @@ public:
 
     // Get the value. We need to assign type.
     template<typename T>
-    T get() const;
+    T Get() const;
 
     // Set the value.
     template<typename T>
-    void set(T value);
+    void Set(T value);
 };
 
 // Adjust the value. Be sure the value is not bigger 
 // than maximal and smaller than minimal.
 template<typename T>
-void Option::adjust() {
-    if (!boundary_valid()) {
+void Option::Adjust() {
+    if (!BoundaryValid()) {
         return;
     }
 
@@ -89,8 +87,8 @@ void Option::adjust() {
     const auto val = (T)*this;
 
     if (val > upper) {
-        set<T>(upper);
+        Set<T>(upper);
     } else if (val < lower) {
-        set<T>(lower);
+        Set<T>(lower);
     }
 }
