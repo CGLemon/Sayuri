@@ -143,3 +143,14 @@ void LruCache<V>::Evict() {
     order_.pop_front();
     allocated_--;
 }
+
+template<typename V>
+bool LookupCache(LruCache<V> &cache, std::uint64_t key, V& val) {
+    auto result = cache.LookupAndPin(key);
+    if (result) {
+        val = *result;
+        cache.Unpin(key);
+        return true;
+    }
+    return false;
+}

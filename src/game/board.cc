@@ -142,16 +142,22 @@ std::vector<LadderType> Board::GetLadderPlane() const {
 
             if (VectorFind(ladder, parent)) {
                 // Found! It is a ladder.
-                libs = strings_.GetLiberty(strings_.GetParent(vtx));
+                libs = strings_.GetLiberty(parent);
             } else if (!VectorFind(not_ladder, parent)) {
-                // Not found! Searching please.
+                // Not found! Now Search it.
                 if (IsLadder(vtx)) {
+                    // It is a ladder.
                     ladder.emplace_back(parent);
                     first_found = true; 
-                    libs = strings_.GetLiberty(strings_.GetParent(vtx));
+                    libs = strings_.GetLiberty(parent);
                 } else {
+                    // It is not a ladder.
                     not_ladder.emplace_back(parent);
+                    continue;
                 }
+            } else {
+                // It is not a ladder.
+                continue;
             }
 
             assert(libs == 1 || libs == 2);
@@ -176,8 +182,10 @@ std::vector<LadderType> Board::GetLadderPlane() const {
                     const auto ay = GetY(v);
                     const auto aidx = GetIndex(ax, ay); 
                     if (libs == 1) {
+                        // Someone can capture this ladder string.
                         res[aidx] = LadderType::kLadderTake;
                     } else {
+                        // Someone can atari this ladder string.
                         res[aidx] = LadderType::kLadderAtari;
                     }
                 }

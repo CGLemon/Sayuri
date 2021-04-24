@@ -2,6 +2,7 @@
 
 #include "game/game_state.h"
 #include "game/types.h"
+#include "config.h"
 #include "utils/parser.h"
 
 #include <memory>
@@ -20,7 +21,8 @@ public:
 
     GtpLoop() {
         agent_ = std::make_unique<Agent>();
-        agent_->GetState().Reset(kDefaultBoardSize, kDefaultKomi);
+        agent_->GetState().Reset(GetOption<int>("defualt_boardsize"),
+                                     GetOption<float>("defualt_komi"));
         Loop();
     }
 

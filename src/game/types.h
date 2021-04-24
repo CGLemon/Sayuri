@@ -7,7 +7,6 @@
 static constexpr int kDefaultBoardSize = 19;
 static constexpr float kDefaultKomi = 7.5f;
 
-
 static constexpr int kBoardSize = MAX_BOARD_SIZE;
 static constexpr int kLetterBoxSize = kBoardSize+2;
 static constexpr int kNumIntersections = kBoardSize * kBoardSize;

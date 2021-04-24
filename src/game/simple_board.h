@@ -20,7 +20,7 @@ public:
     void SetBoardSize(int boardsize);
     void SetToMove(int color);
     void SetMoveNumber(int number);
-    void SetLastMove(int vertex); 
+    void SetLastMove(int vertex);
 
     float GetKomi() const;
     int GetMoveNumber() const;
@@ -37,7 +37,7 @@ public:
     int GetPrisoner(const int color) const;
     int GetState(const int vtx) const;
     int GetState(const int x, const int y) const;
-
+    int GetLiberties(const int vtx) const;
 
     int GetX(const int vtx) const;
     int GetY(const int vtx) const;
@@ -53,6 +53,12 @@ public:
     bool IsLegalMove(const int vertex, const int color,
                      std::function<bool(int, int)> AvoidToMove) const;
 
+    bool IsAtariMove(const int vtx, const int color) const;
+
+    bool IsCaptureMove(const int vtx, const int color) const;
+
+    bool IsNeighbor(const int vtx, const int avtx) const;
+
     // Is the string ladder?
     bool IsLadder(const int vtx) const;
 
@@ -64,6 +70,8 @@ public:
 
     // Compute the symmetry Zobrist hashing.
     std::uint64_t ComputeSymmetryHash(int komove, int symmetry) const;
+
+    int ComputeReachGroup(int vtx, int spread_color, std::vector<bool> &buf) const;
 
 protected:
     // Compute the Zobrist hashing.
@@ -128,7 +136,6 @@ protected:
     // The move number.
     int move_number_;
 
-    bool IsNeighbor(const int vtx, const int avtx) const;
     bool IsSimpleEye(const int vtx, const int color) const;
     bool IsRealEye(const int vtx, const int color) const;
     bool IsSuicide(const int vtx, const int color) const;

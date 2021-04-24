@@ -90,7 +90,6 @@ public:
     int apply_se{false};
 };
 
-
 class DNNWeights {
 public:
     bool loaded{false};

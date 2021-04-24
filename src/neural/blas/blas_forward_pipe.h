@@ -11,6 +11,8 @@ public:
 
    virtual OutputResult Forward(const InputData &inpnt);
 
+   virtual bool Valid();
+
 private:
     std::shared_ptr<DNNWeights> weights_{nullptr};
 

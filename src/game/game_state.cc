@@ -18,6 +18,11 @@ void GameState::ClearBoard() {
     Reset(GetBoardSize(), GetKomi());
 }
 
+
+bool GameState::PlayMove(const int vtx) {
+    return PlayMove(vtx, GetToMove());
+}
+
 bool GameState::PlayMove(const int vtx, const int color) {
     if (vtx == kResign) {
         if (color == kBlack) {
@@ -342,6 +347,14 @@ int GameState::GetState(const int vtx) const {
 
 int GameState::GetState(const int x, const int y) const {
     return board_.GetState(x, y);
+}
+
+int GameState::GetLiberties(const int vtx) const {
+    return board_.GetLiberties(vtx);
+}
+
+std::vector<int> GameState::GetSimpleOwnership() const {
+    return GetSimpleOwnership();
 }
 
 std::shared_ptr<const Board> GameState::GetPastBoard(unsigned int p) const {

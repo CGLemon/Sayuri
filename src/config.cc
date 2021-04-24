@@ -51,31 +51,30 @@ void InitOptionsMap() {
 
     options_map["mode"] << Option::setoption("gtp");
 
+    options_map["defualt_boardsize"] << Option::setoption(kDefaultBoardSize);
+    options_map["defualt_komi"] << Option::setoption(kDefaultKomi);
+
     options_map["playouts"] << Option::setoption(1600);
     options_map["threads"] << Option::setoption(1);
 
-    options_map["boardsize"] << Option::setoption(kDefaultBoardSize);
-    options_map["komi"] << Option::setoption(kDefaultKomi);
-
     options_map["weights_file"] << Option::setoption(kNoWeightsFile);
-    options_map["log_file"] << Option::setoption(kNologFile);
 }
 
 void InitBasicParameters() {
     Zobrist::Initialize();
-    Symmetry::Initialize(GetOption<int>("boardsize"));
+    Symmetry::Initialize(GetOption<int>("defualt_boardsize"));
 }
 
 ArgsParser::ArgsParser(int argc, char** argv) {
     auto parser = CommandParser(argc, argv);
-    const auto is_parameter = [](const std::string &param) -> bool {
+    const auto IsParameter = [](const std::string &param) -> bool {
         if (param.empty()) {
             return false;
         }
         return param[0] != '-';
     };
 
-    const auto error_commands = [is_parameter](CommandParser & parser) -> bool {
+    const auto ErrorCommands = [IsParameter](CommandParser & parser) -> bool {
         const auto cnt = parser.GetCount();
         if (cnt == 0) {
             return false;
@@ -84,7 +83,7 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         ERROR << "Command(s) Error:" << std::endl;
         for (auto i = size_t{0}; i < cnt; ++i) {
             const auto command = parser.GetCommand(i)->Get<std::string>();
-            if (!is_parameter(command)) {
+            if (!IsParameter(command)) {
                 ERROR << " " << t << command << std::endl;
             }
         }
@@ -102,12 +101,34 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         parser.RemoveCommand(res->Index());
     }
 
-    if (const auto res = parser.Find({"--playouts", "-h"})) {
+    if (const auto res = parser.Find({"--playouts", "-p"})) {
         SetOption("playouts", true);
         parser.RemoveCommand(res->Index());
     }
 
-    if (error_commands(parser)) {
+    if (const auto res = parser.FindNext({"--logfile", "-l"})) {
+        if (IsParameter(res->Get<std::string>())) {
+            auto fname = res->Get<std::string>();
+            LogWriter::Get().SetFilename(fname);
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext({"--boardsize", "-b"})) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("defualt_boardsize", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext({"--komi", "-k"})) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("defualt_komi", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (ErrorCommands(parser)) {
         Helper();
     }
 
@@ -117,11 +138,12 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 
 void ArgsParser::Helper() const {
     ERROR << "Arguments:" << std::endl
-              << "  --help, -h" << std::endl
-              << "  --mode, -m [gtp]" << std::endl
-              << "  --playouts, -p <integer>" << std::endl
-              << "  --threads, -t <integer>" << std::endl
-              << "  --weights, -w <weight file name>" << std::endl;
+              << "\t--help, -h" << std::endl
+              << "\t--mode, -m [gtp]" << std::endl
+              << "\t--playouts, -p <integer>" << std::endl
+              << "\t--threads, -t <integer>" << std::endl
+              << "\t--logfile, -l <log file name>" << std::endl
+              << "\t--weights, -w <weight file name>" << std::endl;
     exit(-1);
 }
 

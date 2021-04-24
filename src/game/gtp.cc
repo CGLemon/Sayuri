@@ -3,6 +3,10 @@
 #include "game/commands_list.h"
 #include "utils/log.h"
 
+#include "data/supervised.h"
+#include "neural/encoder.h"
+#include "search/end_game.h"
+
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -146,9 +150,9 @@ std::string GtpLoop::Execute(CommandParser &parser) {
     } else if (const auto res = parser.Find({"help", "list_commands"}, 0)) {
         auto list_commands = std::ostringstream{};
         auto idx = size_t{0};
-        for (const auto &cmd : kCommandsList) {
+        for (const auto &cmd : kGtpCommandsList) {
             list_commands << cmd;
-            if (++idx != kCommandsList.size()) list_commands << std::endl;
+            if (++idx != kGtpCommandsList.size()) list_commands << std::endl;
         }
         out << GTPSuccess(list_commands.str());
     } else if (const auto res = parser.Find("known_command", 0)) {
@@ -156,16 +160,40 @@ std::string GtpLoop::Execute(CommandParser &parser) {
         if (const auto input = parser.GetCommand(1)) {
             cmd = input->Get<std::string>();
         }
-        auto ite = std::find(std::begin(kCommandsList), std::end(kCommandsList), cmd);
-        if (ite != std::end(kCommandsList)) {
+        auto ite = std::find(std::begin(kGtpCommandsList), std::end(kGtpCommandsList), cmd);
+        if (ite != std::end(kGtpCommandsList)) {
             out << GTPSuccess("true");
         } else {
             out << GTPFail("false");
         }
+    } else if (const auto res = parser.Find("supervised", 0)) {
+        auto sgf_file = std::string{};
+        auto data_file = std::string{};
+
+        if (const auto sgf = parser.GetCommand(1)) {
+            sgf_file = sgf->Get<std::string>();
+        }
+        if (const auto data = parser.GetCommand(2)) {
+            data_file = data->Get<std::string>();
+        }
+
+        if (!sgf_file.empty() && !data_file.empty()) {
+            Supervised::Get().FromSgf(sgf_file, data_file);
+            out << GTPSuccess("");
+        } else {
+            out << GTPFail("");
+        }
+    } else if (const auto res = parser.Find("planes", 0)) {
+        int symmetry = 0;
+
+        if (const auto symm = parser.GetCommand(1)) {
+            symmetry = symm->Get<int>();
+        }
+
+        out << GTPSuccess(Encoder::Get().GetPlanesString(agent_->GetState(), symmetry));
     } else {
         out << GTPFail("unknown command");
     }
-
     return out.str();
 }
 

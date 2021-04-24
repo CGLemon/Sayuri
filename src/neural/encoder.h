@@ -8,19 +8,49 @@
 
 class Encoder {
 public:
-    static constexpr auto kPlaneChannels = kInputChannels;
-    static constexpr auto kHistoryMove = 3;
+    static constexpr int kPlaneChannels = kInputChannels;
+    static constexpr int kHistoryMove = 8;
+    static constexpr int kNumFeatures = 12;
 
     static Encoder& Get();
 
     InputData GetInputs(GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
 
+    std::vector<float> GetPlanes(GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
+
+    std::string GetPlanesString(GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
+
 private:
     void FillColorStones(std::shared_ptr<const Board> board,
-                         std::vector<float>::iterator it,
-                         int color, int symmetry) const;
+                         std::vector<float>::iterator black_it,
+                         std::vector<float>::iterator white_it,
+                         int symmetry) const;
+
+    void FillMove(std::shared_ptr<const Board> board,
+                  std::vector<float>::iterator move_it, int symmetry) const;
+
     void EncoderHistoryMove(GameState &state,
+                            int counter,
                             std::vector<float>::iterator it,
                             int symmetry) const;
+
+    void FillKoMove(std::shared_ptr<const Board> board,
+                    std::vector<float>::iterator ko_it, int symmetry) const;
+
+    void FillCaptureMove(std::shared_ptr<const Board> board,
+                         std::vector<float>::iterator capture_it, int symmetry) const;
+
+    void FillLiberties(std::shared_ptr<const Board> board,
+                       std::vector<float>::iterator liberties_it, int symmetry) const;
+
+    void FillLadder(std::shared_ptr<const Board> board,
+                    std::vector<float>::iterator ladder_it, int symmetry) const;
+
+    void FillSideToMove(std::shared_ptr<const Board> board,
+                        std::vector<float>::iterator color_it) const;
+
+    void EncoderFeatures(GameState &state,
+                         std::vector<float>::iterator it,
+                         int symmetry) const;
 
 };

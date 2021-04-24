@@ -189,3 +189,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
 
     return result;
 }
+
+bool BlasForwardPipe::Valid() {
+    return weights_ != nullptr;
+}

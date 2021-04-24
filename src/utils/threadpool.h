@@ -44,7 +44,7 @@ public:
     ThreadPool(size_t threads);
     ~ThreadPool();
 
-    static ThreadPool& Get(size_t threads);
+    static ThreadPool& Get(size_t threads=0);
 
     template<class F, class... Args>
     auto AddTask(F&& f, Args&&... args)
@@ -78,7 +78,7 @@ inline ThreadPool& ThreadPool::Get(size_t threads) {
     while (threads > pool.GetNumThreads()) {
         pool.AddThread([](){});
     }
-    while (threads < pool.GetNumThreads()) {
+    while (threads < pool.GetNumThreads() && threads != 0) {
         // TODO: Destory the unused thread.
         break;
     }

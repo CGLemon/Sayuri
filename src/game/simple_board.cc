@@ -255,6 +255,35 @@ void SimpleBoard::SetLastMove(int vertex) {
     last_move_ = vertex;
 }
 
+int SimpleBoard::ComputeReachGroup(int start_vertex, int spread_color,
+                                   std::vector<bool> &buf) const {
+    if (buf.size() != (size_t)num_vertices_) {
+        buf.resize(num_vertices_);
+    }
+    int reachable = 0;
+    auto open = std::queue<int>();
+
+    buf[start_vertex] = true;
+    open.emplace(start_vertex);
+
+    while (!open.empty()) {
+        const auto vertex = open.front();
+        open.pop();
+
+        for (int k = 0; k < 4; ++k) {
+            const auto neighbor = vertex + directions_[k];
+            const auto peek = state_[neighbor];
+
+            if (!buf[neighbor] && peek == spread_color) {
+                reachable++;
+                buf[neighbor] = true;
+                open.emplace(neighbor);
+            }
+        }
+    }
+    return reachable;
+}
+
 int SimpleBoard::ComputeReachColor(int color) const {
 
     auto buf = std::vector<bool>(num_vertices_, false);
@@ -264,7 +293,6 @@ int SimpleBoard::ComputeReachColor(int color) const {
 
     return ComputeReachColor(color, kEmpty, buf, PeekState);
 }
-
 
 int SimpleBoard::ComputeReachColor(int color, int spread_color,
                                    std::vector<bool> &buf,
@@ -565,7 +593,7 @@ LadderType SimpleBoard::PreyMove(std::shared_ptr<SimpleBoard> board,
                                  const int ladder_vtx, size_t& ladder_nodes, bool fork) const {
 
     if ((++ladder_nodes) >= kMaxLadderNodes) {
-        // If hitting the limit, assume prey have escaped. 
+        // If hit the limit, assume prey have escaped. 
         return LadderType::kGoodForPrey;
     }
 
@@ -618,7 +646,7 @@ LadderType SimpleBoard::HunterMove(std::shared_ptr<SimpleBoard> board,
                                    const int prey_vtx, const int prey_color,
                                    const int ladder_vtx, size_t& ladder_nodes, bool fork) const {
     if ((++ladder_nodes) >= kMaxLadderNodes) {
-        // If hitting the limit, assume prey have escaped. 
+        // If hit the limit, assume prey have escaped. 
         return LadderType::kGoodForPrey;
     }
 
@@ -700,6 +728,38 @@ bool SimpleBoard::IsLadder(const int vtx) const {
     return res == LadderType::kGoodForHunter;
 }
 
+bool SimpleBoard::IsAtariMove(const int vtx, const int color) const {
+    if (IsSuicide(vtx, color)) {
+        return false;
+    }
+    const int opp_color = (!color);
+
+    for (int k = 0; k < 4; ++k) {
+        const auto avtx = vtx + directions_[k];
+        if (GetState(avtx) == opp_color) {
+             const auto libs = strings_.GetLiberty(strings_.GetParent(avtx));
+             if (libs == 2) {
+                 return true;
+             }
+        }
+    }
+    return false;
+}
+
+bool SimpleBoard::IsCaptureMove(const int vtx, const int color) const {
+    const int opp_color = (!color);
+    for (int k = 0; k < 4; ++k) {
+        const auto avtx = vtx + directions_[k];
+        if (GetState(avtx) == opp_color) {
+             const auto libs = strings_.GetLiberty(strings_.GetParent(avtx));
+             if (libs == 1) {
+                 return true;
+             }
+        }
+    }
+    return false;
+}
+
 bool SimpleBoard::IsNeighbor(const int vtx, const int avtx) const {
     for (int k = 0; k < 4; ++k) {
         if ((vtx + directions_[k]) == avtx) {
@@ -722,25 +782,25 @@ bool SimpleBoard::IsRealEye(const int vtx, const int color) const {
         return false;
     }
 
-    std::array<int, 4> colorcount;
+    std::array<int, 4> color_count;
 
-    colorcount[kBlack] = 0;
-    colorcount[kWhite] = 0;
-    // colorcount[kEmpty] = 0; unused
-    colorcount[kInvalid] = 0;
+    color_count[kBlack] = 0;
+    color_count[kWhite] = 0;
+    // color_count[kEmpty] = 0; unused
+    color_count[kInvalid] = 0;
 
     for (int k = 4; k < 8; ++k) {
         const auto avtx = vtx + directions_[k];
-        colorcount[state_[avtx]]++;
+        color_count[state_[avtx]]++;
     }
 
-    if (colorcount[kInvalid] == 0) {
+    if (color_count[kInvalid] == 0) {
         // The eye is not at side or corner.
-        if (colorcount[!color] > 1) {
+        if (color_count[!color] > 1) {
             return false;
         }
     } else {
-        if (colorcount[!color] > 0) {
+        if (color_count[!color] > 0) {
             return false;
         }
     }
@@ -1058,6 +1118,10 @@ int SimpleBoard::GetState(const int vtx) const {
 
 int SimpleBoard::GetState(const int x, const int y) const {
     return GetState(GetVertex(x,y));
+}
+
+int SimpleBoard::GetLiberties(const int vtx) const {
+    return strings_.GetLiberty(strings_.GetParent(vtx));
 }
 
 void SimpleBoard::UpdateZobrist(const int vtx,

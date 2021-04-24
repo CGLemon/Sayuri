@@ -10,9 +10,9 @@ struct TrainingBuffer {
 
     int board_size;
 
-    int side_to_move;
-
     float komi;
+
+    int side_to_move;
 
     std::vector<float> planes;
 
@@ -22,7 +22,7 @@ struct TrainingBuffer {
 
     std::vector<float> ownership;
 
-    int winner;
+    int result;
 
     float final_score;
 

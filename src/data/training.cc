@@ -13,15 +13,16 @@ void TrainingBuffer::StreamOut(std::ostream &out) {
     out << version << std::endl;
     out << mode << std::endl;
     out << board_size << std::endl;
-    out << side_to_move << std::endl;
     out << komi << std::endl;
+
+    out << side_to_move << std::endl;
 
     ArrayStreamOut(out, planes);
     ArrayStreamOut(out, probabilities);
     ArrayStreamOut(out, auxiliary_probabilities);
     ArrayStreamOut(out, ownership);
 
-    out << winner << std::endl;
+    out << result << std::endl;
     out << final_score << std::endl;
 }
 

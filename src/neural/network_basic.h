@@ -3,8 +3,9 @@
 #include "neural/description.h"
 #include "game/types.h"
 #include <array>
+#include <vector>
 
-static constexpr int kInputChannels = 18;
+static constexpr int kInputChannels = 36; // 8 * 3 + 12
 static constexpr int kOuputValueMisc = 3;
 static constexpr int kOuputPassProbability = 1;
 
@@ -34,6 +35,7 @@ public:
 
     virtual OutputResult Forward(const InputData &inpnt);
 
+    virtual bool Valid();
 };
 
 
