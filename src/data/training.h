@@ -16,17 +16,19 @@ struct TrainingBuffer {
 
     std::vector<float> planes;
 
+    int probabilities_index{-1};
+
     std::vector<float> probabilities;
+
+    int auxiliary_probabilities_index{-1};
 
     std::vector<float> auxiliary_probabilities;
 
-    std::vector<float> ownership;
+    std::vector<int> ownership;
 
     int result;
 
     float final_score;
 
-    void StreamOut(std::ostream &out);
-
-    friend std::ostream &operator<<(std::ostream& out, TrainingBuffer& buf);
+    void StreamOut(std::ostream &out) const;
 };

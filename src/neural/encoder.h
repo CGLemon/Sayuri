@@ -14,11 +14,11 @@ public:
 
     static Encoder& Get();
 
-    InputData GetInputs(GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
+    InputData GetInputs(const GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
 
-    std::vector<float> GetPlanes(GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
+    std::vector<float> GetPlanes(const GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
 
-    std::string GetPlanesString(GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
+    std::string GetPlanesString(const GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
 
 private:
     void FillColorStones(std::shared_ptr<const Board> board,
@@ -29,7 +29,7 @@ private:
     void FillMove(std::shared_ptr<const Board> board,
                   std::vector<float>::iterator move_it, int symmetry) const;
 
-    void EncoderHistoryMove(GameState &state,
+    void EncoderHistoryMove(const GameState &state,
                             int counter,
                             std::vector<float>::iterator it,
                             int symmetry) const;
@@ -49,7 +49,7 @@ private:
     void FillSideToMove(std::shared_ptr<const Board> board,
                         std::vector<float>::iterator color_it) const;
 
-    void EncoderFeatures(GameState &state,
+    void EncoderFeatures(const GameState &state,
                          std::vector<float>::iterator it,
                          int symmetry) const;
 

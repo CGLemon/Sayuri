@@ -20,10 +20,26 @@ struct String {
     int GetNext(int vtx) const;
     int GetParent(int vtx) const;
     int GetLiberty(int vtx) const;
-    int GetStone(int vtx) const;
+    int GetStones(int vtx) const;
 
     void Reset();
     void AddStone(const int vtx, const int lib);
 
     std::string DebugString(int boardsize) const;
 };
+
+inline int String::GetNext(int vtx) const {
+    return next_[vtx];
+}
+
+inline int String::GetParent(int vtx) const {
+    return parent_[vtx];
+}
+
+inline int String::GetLiberty(int vtx) const {
+    return liberties_[vtx];
+}
+
+inline int String::GetStones(int vtx) const {
+    return stones_[vtx];
+}

@@ -1,21 +1,10 @@
 #pragma once
 
 #include "game/game_state.h"
+#include "game/board.h"
 
 class EndGame {
 public:
-    enum FinalState : int {
-        kBlackStone = 0,
-        kBlackTerritory,
-
-        kWhiteStone,
-        kWhiteTerritory,
-
-        kDame,
-        kSeki
-    };
-
-
     static EndGame &Get(GameState &state);
 
     EndGame(GameState &state) : root_state_(state) {}
@@ -23,18 +12,9 @@ public:
     std::vector<int> GetFinalOwnership() const;
 
 private:
-    std::vector<int> GatherVertex(std::vector<bool> &buf) const;
+    std::vector<int> RandomRollout(Board board) const;
 
-    void AssignVertex(std::vector<int>, std::vector<bool> &buf) const;
-
-    std::vector<int> GetLivedGroups(Board &board) const;
-
-    int ComputeNumEye(std::vector<int> &eye_group) const;
-
-    void FillMoves(Board &board, int color, std::vector<int> &vertex_group) const;
-
-    void CompareAndRemoveDeadString(Board &board,
-                                    std::vector<int> &lived_groups) const;
+    bool RandomMove(Board &current_board, std::vector<int> &movelist) const;
 
     GameState &root_state_;
 };

@@ -1,10 +1,10 @@
 #include "search/end_game.h"
 #include "game/types.h"
+#include "utils/random.h"
 
 #include <algorithm>
 
 #include <iostream>
-#include <iomanip>
 
 EndGame &EndGame::Get(GameState &state) {
     static EndGame end_game(state);
@@ -12,151 +12,132 @@ EndGame &EndGame::Get(GameState &state) {
 }
 
 std::vector<int> EndGame::GetFinalOwnership() const {
-    auto passes = root_state_.GetPasses();
-    if (passes < 2) {
-        // The game is not over.
-        // return std::vector<int>{};
-    }
+    auto root_board = root_state_.board_;
 
-    auto board = root_state_.board_;
-    auto simple_ownership = board.GetSimpleOwnership();
+    // We assume that the game is end. But still some stone
+    // not be captured.  
 
-    // We assume that the string is alive if it has at least
-    // one eye, first.
-    auto lived_groups = GetLivedGroups(board);
-    CompareAndRemoveDeadString(board, lived_groups);
+    auto num_intersections = root_board.GetNumIntersections();
+    auto buffer = std::vector<int>(num_intersections, 0);
+    auto cnt = 0;
 
-    std::cout << board.GetBoardString(board.GetLastMove(), false);
-    std::cout << std::endl;
-    std::cout << std::endl;
-    simple_ownership = board.GetSimpleOwnership();
+    static constexpr int kPlayoutsCount = 100;
 
-    auto board_size = board.GetBoardSize();
-    for (int y = 0; y < board_size; ++y) {
-        for (int x = 0; x < board_size; ++x) {
-            auto idx = board.GetIndex(x, board_size - y - 1);
-            std::cout << std::setw(4) << simple_ownership[idx];
-        }
-        std::cout << std::endl;
-    }
-    std::cout << std::endl;
-
-    return simple_ownership;
-}
-
-std::vector<int> EndGame::GatherVertex(std::vector<bool> &buf) const {
-    auto result = std::vector<int>{};
-
-    for (auto vtx = 0; vtx < buf.size(); ++vtx) {
-        if (buf[vtx]) {
-            result.emplace_back(vtx);
-        }
-    }
-
-    return result;
-}
-
-std::vector<int> EndGame::GetLivedGroups(Board &board) const {
-    auto board_size = board.GetBoardSize();
-    auto num_intersections = board.GetNumIntersections();
-    auto num_vertices = board.GetNumVertices();
-
-    auto lived_groups = std::vector<int>(num_vertices);
-    auto territory = std::vector<bool>(num_vertices);
-
-    auto simple_ownership = board.GetSimpleOwnership();
-
-    auto group_count = 1;
-    std::fill(std::begin(lived_groups), std::begin(lived_groups), -1);
-    std::fill(std::begin(territory), std::begin(territory), false);
-
-    for (int index = 0; index < num_intersections; ++index) {
-        auto x = index % board_size;
-        auto y = index / board_size;
-        auto vtx = board.GetVertex(x, y);
-        lived_groups[vtx] = 0;
-    }
-
-    int directions[4] = {
-        board_size+2, 1, -1, -board_size-2
-    };
-
-    for (int index = 0; index < num_intersections; ++index) {
-        auto x = index % board_size;
-        auto y = index / board_size;
-
-        auto vtx = board.GetVertex(x, y);
-        auto color = board.GetState(vtx);
-        auto owner = simple_ownership[index];
-
-        if (owner != kEmpty &&
-                color == kEmpty &&
-                territory[vtx] == false) {
-            auto territory_buffer = std::vector<bool>{};
-            board.ComputeReachGroup(vtx, kEmpty, territory_buffer);
-
-            auto connection_strings = std::vector<bool>(num_vertices);
-            auto vertex_group = GatherVertex(territory_buffer);
-
-            for (const auto avtx : vertex_group) {
-                territory[avtx] = true;
-                lived_groups[avtx] = group_count;
-
-                for (int k = 0; k < 4; ++k) {
-                    const auto aavtx = avtx + directions[k];
-                    if (!connection_strings[aavtx] && 
-                            board.GetState(aavtx) == owner) {
-                        board.ComputeReachGroup(aavtx, owner, connection_strings);
-                    }
-                }
+    for (int p = 0; p < kPlayoutsCount; ++p) {
+        auto final_ownership = RandomRollout(root_board);
+        if (!final_ownership.empty()) {
+            cnt += 1;
+            for (int idx = 0; idx < num_intersections; ++idx) {
+                auto owner = final_ownership[idx];
+                if (owner == kBlack) {
+                    buffer[idx] += 1;
+                } else if (owner == kWhite) {
+                    buffer[idx] -= 1;
+                } else if (owner == kEmpty) {
+                    buffer[idx] += 0;
+                } 
             }
-
-            vertex_group = GatherVertex(connection_strings);
-
-            for (const auto avtx : vertex_group) {
-                lived_groups[avtx] = group_count;
-            }
-            group_count++;
         }
     }
 
+    auto reuslt = std::vector<int>(num_intersections, kInvalid);
 
-    return lived_groups;
-}
-
-void EndGame::FillMoves(Board &board, int color, std::vector<int> &vertex_group) const {
-    for (const auto vtx : vertex_group) {
-        assert(board.IsLegalMove(vtx, color));
-        board.PlayMoveAssumeLegal(vtx, color);
+    if (cnt == 0) {
+        return reuslt;
     }
+
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        if (buffer[idx] >= 0.9 * kPlayoutsCount) {
+            reuslt[idx] = kBlack;
+        } else if (buffer[idx] <= (-0.9 * kPlayoutsCount)) {
+            reuslt[idx] = kWhite;
+        } else if (buffer[idx] == 0) {
+            reuslt[idx] = kEmpty;
+        }
+    }
+
+    return reuslt;
 }
 
-void EndGame::CompareAndRemoveDeadString(Board &board,
-                                         std::vector<int> &lived_groups) const {
-    auto board_size = board.GetBoardSize();
+std::vector<int> EndGame::RandomRollout(Board board) const {
     auto num_intersections = board.GetNumIntersections();
-    auto num_vertices = board.GetNumVertices();
+    auto boardsize = board.GetBoardSize();
 
-    for (int index = 0; index < num_intersections; ++index) {
-        auto x = index % board_size;
-        auto y = index / board_size;
+    while(true) {
+        auto color = board.GetToMove();
+        auto simple_ownership = board.GetSimpleOwnership();
+        auto movelist = std::vector<int>{};
+        auto buffer = std::vector<bool>{};
 
-        auto vtx = board.GetVertex(x, y);
-        auto color = board.GetState(vtx);
-        auto group = lived_groups[vtx];
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            const auto x = idx % boardsize;
+            const auto y = idx / boardsize;
+            const auto vtx = board.GetVertex(x, y);
 
-        if (group == 0 && color != kEmpty) {
-            auto dead_string = std::vector<bool>(num_vertices);
-            board.ComputeReachGroup(vtx, kEmpty, dead_string);
+            if (simple_ownership[idx] == kEmpty ||
+                    board.IsCaptureMove(vtx, color) ||
+                    board.IsEscapeMove(vtx, color)) {
+                movelist.emplace_back(vtx);
+            }
+        }
 
-            dead_string[vtx] = false;
 
-            auto vertex_group = GatherVertex(dead_string);
-            FillMoves(board, !color, vertex_group);
-        } 
+        if (!RandomMove(board, movelist)) {
+            board.PlayMoveAssumeLegal(kPass, color);
+        }
+
+        if (board.GetPasses() >= 4) {
+            break;     
+        }
     }
+
+    return board.GetSimpleOwnership();
 }
 
-int EndGame::ComputeNumEye(std::vector<int> &eye_group) const {
-    return 0;
+bool EndGame::RandomMove(Board &current_board, std::vector<int> &movelist) const {
+    auto size = movelist.size();
+    auto color = current_board.GetToMove();
+    auto mark = std::vector<bool>(size, false);
+
+    Board board;
+    auto stop = false;
+
+    if (movelist.empty()) {
+        return false;
+    }
+
+    while(!stop) {
+        stop = true;
+        for (auto s = size_t{0}; s < size; ++s) {
+            if (!mark[s]) {
+                stop = false;
+                break;
+            }
+        }
+
+        auto choice = Random<RandomType::kXoroShiro128Plus>::Get().Generate() % size;
+        if (mark[choice]) {
+            continue;
+        }
+
+        auto vertex = movelist[choice];
+
+        if (!current_board.IsLegalMove(vertex, color)) {
+            mark[choice] = true;
+            continue;
+        }
+        board = current_board;
+        board.PlayMoveAssumeLegal(vertex, color);
+
+        if (board.GetLiberties(vertex) == 1) {
+            mark[choice] = true;
+            continue;
+        }
+
+        current_board = board; 
+        break;
+    }
+
+    return !stop;
 }
+

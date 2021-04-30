@@ -21,6 +21,15 @@ public:
 
     std::vector<bool> GetOcupiedPlane(const int color) const;
 
+    std::vector<bool> GetPassAlive(const int color) const;
+
 private:
     bool ValidHandicap(int handicap);
+
+    std::vector<int> FindStringSurround(std::vector<int> &groups, int index) const;
+
+    std::vector<int> GatherVertex(std::vector<bool> &buf) const;
+
+    int ClassifyGroups(std::vector<int> &features, std::vector<int> &groups, int target) const;
+
 };

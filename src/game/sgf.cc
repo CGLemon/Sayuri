@@ -88,7 +88,6 @@ int SgfNode::GetVertexFromString(const std::string& movestring) {
     return vtx;
 }
 
-
 void SgfNode::PopulateState(GameState currstate) {
     state_ = currstate;
 
@@ -137,6 +136,22 @@ void SgfNode::PopulateState(GameState currstate) {
         } else {
             GetState().SetWinner(kUndecide);
         }
+
+        auto result = *res;
+        auto black_final_score = 0;
+        if (result == "0") {
+            black_final_score = 0;
+        } else {
+            if (result.size() > 2 && result.find("+") == 1) {
+                result.erase(0, 2);
+                black_final_score = std::stof(result);
+
+                if (res->find("W+") != std::string::npos) {
+                    black_final_score = 0 - black_final_score;
+                }
+            }
+        }
+        (void) black_final_score;
     }
 
     if (const auto res = GetPropertyValue("PL")) {
@@ -223,7 +238,7 @@ std::string SgfParser::ParsePropertyName(std::istringstream & strm) const {
     return result.str();
 }
 
-std::string SgfParser::ParsePropertyValue(std::istringstream &strm) const {
+std::string SgfParser::ParsePropertyValue(std::istringstream &strm, bool &success) const {
     strm >> std::noskipws;
     auto c = char{};
 
@@ -238,6 +253,7 @@ std::string SgfParser::ParsePropertyValue(std::istringstream &strm) const {
 
     if (c != '[') {
         strm.unget();
+        success = false;
         return std::string{};
     }
 
@@ -253,7 +269,7 @@ std::string SgfParser::ParsePropertyValue(std::istringstream &strm) const {
     }
 
     strm >> std::skipws;
-
+    success = true;
     return result.str();
 }
 
@@ -276,8 +292,9 @@ void SgfParser::Parse(std::istringstream &strm, std::shared_ptr<SgfNode> node) c
 
             auto propname = ParsePropertyName(strm);
             do {
-                auto propval = ParsePropertyValue(strm);
-                if (!propval.empty()) {
+                auto success = false;
+                auto propval = ParsePropertyValue(strm, success);
+                if (success) {
                     node->AddProperty(propname, propval);
                 } else {
                     break;

@@ -255,8 +255,16 @@ void SimpleBoard::SetLastMove(int vertex) {
     last_move_ = vertex;
 }
 
+int SimpleBoard::ComputeReachGroup(int start_vertex, int spread_color, std::vector<bool> &buf) const {
+    auto PeekState = [&](int vtx) -> int {
+        return state_[vtx];
+    };
+
+    return ComputeReachColor(start_vertex, spread_color, buf, PeekState);
+}
+
 int SimpleBoard::ComputeReachGroup(int start_vertex, int spread_color,
-                                   std::vector<bool> &buf) const {
+                                   std::vector<bool> &buf, std::function<int(int)> Peek) const {
     if (buf.size() != (size_t)num_vertices_) {
         buf.resize(num_vertices_);
     }
@@ -272,7 +280,7 @@ int SimpleBoard::ComputeReachGroup(int start_vertex, int spread_color,
 
         for (int k = 0; k < 4; ++k) {
             const auto neighbor = vertex + directions_[k];
-            const auto peek = state_[neighbor];
+            const auto peek = Peek(neighbor);
 
             if (!buf[neighbor] && peek == spread_color) {
                 reachable++;
@@ -460,7 +468,7 @@ std::pair<int, int> SimpleBoard::GetLadderLiberties(const int vtx, const int col
             const int alibs = strings_.GetLiberty(aip);
             if (alibs == 1) {
                 num_captures++;
-                potential_libs_from_captures += strings_.GetStone(aip);
+                potential_libs_from_captures += strings_.GetStones(aip);
             }
         }
     }
@@ -760,6 +768,14 @@ bool SimpleBoard::IsCaptureMove(const int vtx, const int color) const {
     return false;
 }
 
+bool SimpleBoard::IsEscapeMove(const int vtx, const int color) const {
+    if (IsSuicide(vtx, color)) {
+        return false;
+    }
+
+    return IsCaptureMove(vtx, !color);
+}
+
 bool SimpleBoard::IsNeighbor(const int vtx, const int avtx) const {
     for (int k = 0; k < 4; ++k) {
         if ((vtx + directions_[k]) == avtx) {
@@ -908,9 +924,9 @@ void SimpleBoard::RemoveStone(const int vtx, const int color) {
 
 void SimpleBoard::MergeStrings(const int ip, const int aip) {
     assert(ip != kNumVertices && aip != kNumVertices);
-    assert(strings_.GetStone(ip) >= strings_.GetStone(aip));
+    assert(strings_.GetStones(ip) >= strings_.GetStones(aip));
 
-    strings_.stones_[ip] += strings_.GetStone(aip);
+    strings_.stones_[ip] += strings_.GetStones(aip);
     int next_pos = aip;
 
     do {
@@ -987,7 +1003,7 @@ int SimpleBoard::UpdateBoard(const int vtx, const int color) {
         } else if (state == color) {
             const auto ip = strings_.GetParent(vtx);
             if (ip != aip) {
-                if (strings_.GetStone(ip) >= strings_.GetStone(aip)) {
+                if (strings_.GetStones(ip) >= strings_.GetStones(aip)) {
                     MergeStrings(ip, aip);
                 } else {
                     MergeStrings(aip, ip);
@@ -1122,6 +1138,10 @@ int SimpleBoard::GetState(const int x, const int y) const {
 
 int SimpleBoard::GetLiberties(const int vtx) const {
     return strings_.GetLiberty(strings_.GetParent(vtx));
+}
+
+int SimpleBoard::GetStones(const int vtx) const {
+    return strings_.GetStones(vtx);
 }
 
 void SimpleBoard::UpdateZobrist(const int vtx,

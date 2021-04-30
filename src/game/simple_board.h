@@ -38,6 +38,7 @@ public:
     int GetState(const int vtx) const;
     int GetState(const int x, const int y) const;
     int GetLiberties(const int vtx) const;
+    int GetStones(const int vtx) const;
 
     int GetX(const int vtx) const;
     int GetY(const int vtx) const;
@@ -53,13 +54,18 @@ public:
     bool IsLegalMove(const int vertex, const int color,
                      std::function<bool(int, int)> AvoidToMove) const;
 
+    // Reture true if the move can atari others.
     bool IsAtariMove(const int vtx, const int color) const;
 
+    // Reture true if the move can capture others.
     bool IsCaptureMove(const int vtx, const int color) const;
 
+    bool IsEscapeMove(const int vtx, const int color) const;
+
+    // Reture true if the two vertex are Neighbor.
     bool IsNeighbor(const int vtx, const int avtx) const;
 
-    // Is the string ladder?
+    // Reture true if the string is ladder.
     bool IsLadder(const int vtx) const;
 
     // Play the move assume the move is legal.
@@ -71,7 +77,10 @@ public:
     // Compute the symmetry Zobrist hashing.
     std::uint64_t ComputeSymmetryHash(int komove, int symmetry) const;
 
-    int ComputeReachGroup(int vtx, int spread_color, std::vector<bool> &buf) const;
+    int ComputeReachGroup(int start_vertex, int spread_color,
+                          std::vector<bool> &buf,
+                          std::function<int(int)> Peek) const;
+    int ComputeReachGroup(int start_vertex, int spread_color, std::vector<bool> &buf) const;
 
 protected:
     // Compute the Zobrist hashing.
@@ -107,15 +116,22 @@ protected:
     // The Prisoners per color
     std::array<int, 2> prisoners_;
 
-    // The Zobrist hash of board.
+    // The Zobrist hash of board position.
     std::uint64_t hash_;
 
-    // The Zobrist ko hash of board.
+    // The Zobrist ko hash of board position.
     std::uint64_t ko_hash_;
 
-    int board_size_; 
+    // The board size.
+    int board_size_;
+
+    // The letter box size.
     int letter_box_size_;
+
+    // The vertices number.
     int num_vertices_;
+
+    // The intersections number.
     int num_intersections_;
 
     // The next player to play move.
@@ -136,9 +152,16 @@ protected:
     // The move number.
     int move_number_;
 
+    // Reture true if the point is eye shape.
     bool IsSimpleEye(const int vtx, const int color) const;
+
+    // Reture true if the point is read eye.
     bool IsRealEye(const int vtx, const int color) const;
+
+    // Reture true if the move will kill itself.
     bool IsSuicide(const int vtx, const int color) const;
+
+    // Compute the empty count of the point neighbor.
     int CountPliberties(const int vtx) const;
 
     // Find the liberties of string.
@@ -176,7 +199,7 @@ private:
     // The Generally function compute the Zobrist ko hashing.
     std::uint64_t ComputeKoHash(std::function<int(int)> transform) const;
 
-    // About Board infomation.
+    // About to display the board information.
     bool IsStar(const int x, const int y) const;
     std::string GetStateString(const VertexType color, bool is_star) const;
     std::string GetSpcacesString(const int times) const;
@@ -184,22 +207,41 @@ private:
     std::string GetPrisonersString() const;
     std::string GetHashingString() const;
 
-    // About to update the board.
+    // Update the to move.
     void ExchangeToMove();
+
+    // Add a stone to board.
     void AddStone(const int vtx, const int color);
+
+    // Remove a stone from board.
     void RemoveStone(const int vtx, const int color);
+
+    // Merge two strings.
     void MergeStrings(const int ip, const int aip);
+
+    // Remove a string from board.
     int RemoveString(const int ip);
+
+    // Update the board after do a move.
     int UpdateBoard(const int vtx, const int color);
+
     void SetPasses(int val);
     void IncrementPasses();
 
-    // About to update the Zobrist hashing.
+    // Update Zobrist key for board position.
     void UpdateZobrist(const int vtx, const int new_color, const int old_color);
+
+    // Update Zobrist key for prisoner.
     void UpdateZobristPrisoner(const int color, const int new_pris,
                                const int old_pris);
+
+    // Update Zobrist key for to move.
     void UpdateZobristToMove(const int new_color, const int old_color);
+
+    // Update Zobrist key for ko move.
     void UpdateZobristKo(const int new_komove, const int old_komove);
+
+    // Update Zobrist key for pass move.
     void UpdateZobristPass(const int new_pass, const int old_pass);
 };
 

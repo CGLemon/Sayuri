@@ -130,9 +130,9 @@ std::vector<LadderType> Board::GetLadderPlane() const {
         return std::find(begin, end, element) != end;
     };
 
-    auto boardsize = GetBoardSize();
-    for (int y = 0; y < boardsize; ++y) {
-        for (int x = 0; x < boardsize; ++x) {
+    auto bsize = GetBoardSize();
+    for (int y = 0; y < bsize; ++y) {
+        for (int x = 0; x < bsize; ++x) {
             const auto idx = GetIndex(x, y);
             const auto vtx = GetVertex(x, y);
 
@@ -210,5 +210,164 @@ std::vector<bool> Board::GetOcupiedPlane(const int color) const {
     }
 
     return res;
+}
+
+std::vector<bool> Board::GetPassAlive(const int color) const {
+    auto num_vertices = GetNumVertices();
+
+    auto ocupied = std::vector<int>(num_vertices, kInvalid);
+    auto eyes = std::vector<bool>(num_vertices, false);
+    auto bsize = GetBoardSize();
+
+    for (int y = 0; y < bsize; ++y) {
+        for (int x = 0; x < bsize; ++x) {
+            auto vertex = GetVertex(x, y);
+            auto state = GetState(vertex);
+            if (state == color) {
+                ocupied[vertex] = color;
+            } else {
+                ocupied[vertex] = kEmpty;
+            }
+
+            if (state == kEmpty && IsSimpleEye(vertex, color)) {
+                eyes[vertex] = true;
+            }
+        }
+    }
+
+    auto pass_alive_groups = std::vector<int>(num_vertices, -1);
+    auto group_count = ClassifyGroups(ocupied, pass_alive_groups, color);
+
+    auto string_linking = std::vector<int>(group_count);
+    for (int i = 0; i < group_count; ++i) {
+        int linking = 0;
+
+        for (int v = 0; v < num_vertices; ++v) {
+            if (i+1 == pass_alive_groups[v]) {
+                linking = v;
+                break;
+            }
+        }
+        string_linking[i] = linking;
+    }
+
+    // Start the Benson's algorithm.
+    // https://senseis.xmp.net/?BensonsAlgorithm
+    while(true) {
+        auto change = false;
+
+        for (int i = 0; i < group_count; ++i) {
+            auto vertex = string_linking[i];
+            auto index = pass_alive_groups[vertex];
+            if (index <= 0) {
+                continue;
+            }
+
+            auto eye_cnt = 0;
+            auto surround = FindStringSurround(pass_alive_groups, index);
+            
+            for (const auto v : surround) {
+                if (eyes[v]) {
+                    eye_cnt++;
+                }
+            }
+            if (eye_cnt < 2) {
+                // If the string doesn't have enough eyes. It is not
+                // a pass alive string.
+                for (auto &idx : pass_alive_groups) {
+                    if (idx == index) idx = 0;
+                }
+                string_linking[i] = -1;
+                change = true;
+            }
+        }
+
+        if (!change) break;
+    }
+
+    auto result = std::vector<bool>(GetNumIntersections(), false);
+
+    for (int y = 0; y < bsize; ++y) {
+        for (int x = 0; x < bsize; ++x) {
+            auto index = GetIndex(x, y);
+            auto vertex = GetVertex(x, y);
+            if (pass_alive_groups[vertex] > 0) {
+                result[index] = true;
+            }
+        }
+    }
+
+    return result;
+}
+
+int Board::ClassifyGroups(std::vector<int> &features, std::vector<int> &groups, int target) const {
+    if (groups.size() != (size_t)GetNumVertices()) {
+        groups.resize(GetNumVertices());
+    }
+
+    for (int vtx = 0; vtx < GetNumVertices(); ++vtx) {
+        groups[vtx] = -1;
+    }
+
+    auto bsize = GetBoardSize();
+    for (int y = 0; y < bsize; ++y) {
+        for (int x = 0; x < bsize; ++x) {
+            auto vtx = GetVertex(x, y);
+            groups[vtx] = 0;
+        }
+    }
+
+    auto marked = std::vector<bool>(GetNumVertices(), false);
+    auto groups_index = 1;
+    for (int y = 0; y < bsize; ++y) {
+        for (int x = 0; x < bsize; ++x) {
+            auto vtx = GetVertex(x, y);
+
+            if (!marked[vtx] && features[vtx] == target) {
+                auto buf = std::vector<bool>(GetNumVertices(), false);
+
+                ComputeReachGroup(vtx, target, buf, [&](int v){ return features[v]; });
+
+                auto VertexGroups = GatherVertex(buf);
+                for (const auto v : VertexGroups) {
+                    marked[v] = true;
+                    groups[v] = groups_index;
+                }
+                groups_index += 1;
+            }
+        }
+    }
+    return groups_index - 1;
+}
+
+std::vector<int> Board::FindStringSurround(std::vector<int> &groups, int index) const {
+    auto result = std::vector<int>{};
+
+    for (auto vtx = size_t{0}; vtx < groups.size(); ++vtx) {
+        if (groups[vtx] == index) {
+            for (int k = 0; k < 4; ++k) {
+                auto avtx = directions_[k] + vtx;
+                auto it = std::find(std::begin(result), std::end(result), avtx);
+
+                if (groups[avtx] != index && it == std::end(result)) {
+                    result.emplace_back(avtx);
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+std::vector<int> Board::GatherVertex(std::vector<bool> &buf) const {
+    auto result = std::vector<int>{};
+
+    for (auto vtx = size_t{0}; vtx < buf.size(); ++vtx) {
+        if (buf[vtx]) {
+            result.emplace_back(vtx);
+        }
+    }
+
+    return result;
 }
 

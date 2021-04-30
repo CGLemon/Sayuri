@@ -57,28 +57,12 @@ std::string String::DebugString(int boardsize) const {
     for (int y = 0; y < boardsize; y++) {
         for (int x = 0; x < boardsize; x++) {
             const int vtx = x + 1 + (boardsize + 2) * (y + 1);
-            out << std::setw(5) << GetStone(vtx);
+            out << std::setw(5) << GetStones(vtx);
         }
         out << std::endl;
     }
-    out << "Remaning: " << GetStone(kNumVertices) << std::endl << std::endl;
+    out << "Remaning: " << GetStones(kNumVertices) << std::endl << std::endl;
 
 
     return out.str();
-}
-
-
-int String::GetNext(int vtx) const {
-    return next_[vtx];
-}
-
-int String::GetParent(int vtx) const {
-    return parent_[vtx];
-}
-
-int String::GetLiberty(int vtx) const {
-    return liberties_[vtx];
-}
-int String::GetStone(int vtx) const {
-    return stones_[vtx];
 }

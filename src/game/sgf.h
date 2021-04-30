@@ -47,7 +47,7 @@ public:
 private:
     void Parse(std::istringstream &strm, std::shared_ptr<SgfNode> node) const;
 
-    std::string ParsePropertyValue(std::istringstream &strm) const;
+    std::string ParsePropertyValue(std::istringstream &strm, bool &success) const;
     std::string ParsePropertyName(std::istringstream &strm) const;
 
     std::vector<std::string> ChopStream(std::istream& ins, size_t stopat) const;

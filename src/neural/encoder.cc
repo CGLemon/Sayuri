@@ -7,10 +7,12 @@ Encoder& Encoder::Get() {
     return encoder;
 }
 
-InputData Encoder::GetInputs(GameState &state, int symmetry) const {
+InputData Encoder::GetInputs(const GameState &state, int symmetry) const {
     auto data = InputData{};
 
     data.board_size = state.GetBoardSize();
+    data.side_to_move = state.GetToMove();
+    data.komi = state.GetKomi();
 
     auto planes = GetPlanes(state, symmetry);
     auto plane_size = planes.size();
@@ -22,14 +24,14 @@ InputData Encoder::GetInputs(GameState &state, int symmetry) const {
     return data;
 }
 
-std::vector<float> Encoder::GetPlanes(GameState &state, int symmetry) const {
+std::vector<float> Encoder::GetPlanes(const GameState &state, int symmetry) const {
     auto boardsize = state.GetBoardSize();
     auto num_intersections = state.GetNumIntersections();
 
     Symmetry::Initialize(boardsize);
 
     auto plane_size = num_intersections * kPlaneChannels;
-    auto planes = std::vector<float>(num_intersections * kPlaneChannels);
+    auto planes = std::vector<float>(plane_size);
     auto it = std::begin(planes);
 
     EncoderHistoryMove(state, kHistoryMove, it, symmetry);
@@ -43,7 +45,7 @@ std::vector<float> Encoder::GetPlanes(GameState &state, int symmetry) const {
     return planes;
 }
 
-std::string Encoder::GetPlanesString(GameState &state, int symmetry) const {
+std::string Encoder::GetPlanesString(const GameState &state, int symmetry) const {
     auto out = std::ostringstream{};
     auto boardsize = state.GetBoardSize();
     auto num_intersections = state.GetNumIntersections();
@@ -113,14 +115,13 @@ void Encoder::FillMove(std::shared_ptr<const Board> board,
     }
 }
 
-void Encoder::EncoderHistoryMove(GameState &state,
+void Encoder::EncoderHistoryMove(const GameState &state,
                                  int counter,
                                  std::vector<float>::iterator it,
                                  int symmetry) const {
     auto move_num = state.GetMoveNumber();
     auto past = std::min(move_num+1, counter);
 
-    auto boardsize = state.GetBoardSize();
     auto num_intersections = state.GetNumIntersections();
 
     auto black_to_move = state.GetToMove() == kBlack;
@@ -240,7 +241,7 @@ void Encoder::FillSideToMove(std::shared_ptr<const Board> board,
     }
 }
 
-void Encoder::EncoderFeatures(GameState &state,
+void Encoder::EncoderFeatures(const GameState &state,
                               std::vector<float>::iterator it, int symmetry) const {
     auto board = state.GetPastBoard(0);
     auto num_intersections = board->GetNumIntersections();

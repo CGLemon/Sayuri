@@ -3,27 +3,40 @@
 #include "neural/description.h"
 #include "game/types.h"
 #include <array>
-#include <vector>
+#include <memory>
 
 static constexpr int kInputChannels = 36; // 8 * 3 + 12
 static constexpr int kOuputValueMisc = 3;
 static constexpr int kOuputPassProbability = 1;
 
 struct InputData {
-    int board_size{-1};
+    InputData() : komi(0.f), board_size(-1), side_to_move(kInvalid) {
+        planes.fill(0.f);
+    };
 
-    std::array<float, kNumIntersections * kInputChannels> planes;
+    float komi;
+    int board_size;
+    int side_to_move;
 
-    int side_to_move{kInvalid};
+    std::array<float, kInputChannels * kNumIntersections> planes;
 };
 
 struct OutputResult {
-    int board_size{-1};
+    OutputResult() : board_size(-1),
+                     pass_probability(0.f),
+                     winrate(0.f),
+                     final_score(0.f), 
+                     score_width(0.f) {
+        probabilities.fill(0.f);
+        ownership.fill(0.f);
+    }
 
+    int board_size;
+
+    float pass_probability;
     float winrate;
     float final_score;
     float score_width;
-    float pass_probability;
 
     std::array<float, kNumIntersections> probabilities;
     std::array<float, kNumIntersections> ownership;

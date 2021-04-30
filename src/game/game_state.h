@@ -74,8 +74,6 @@ public:
     int GetState(const int x, const int y) const;
     int GetLiberties(const int vtx) const;
 
-    std::vector<int> GetSimpleOwnership() const;
-
     std::shared_ptr<const Board> GetPastBoard(unsigned int p) const;
     const std::vector<std::shared_ptr<const Board>>& GetHistory() const;
 

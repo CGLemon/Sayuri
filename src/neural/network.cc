@@ -18,8 +18,12 @@
 #include "game/symmetry.h"
 #include "neural/loader.h"
 #include "neural/network.h"
+#include "neural/encoder.h"
 #include "utils/log.h"
 #include "utils/random.h"
+
+
+#include <random>
 
 void Network::Initialize(const std::string &weightsfile) {
 #ifndef __APPLE__
@@ -58,8 +62,39 @@ void Network::Initialize(const std::string &weightsfile) {
     }
 }
 
+Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
+    Network::Result result{};
+
+    auto rng = Random<RandomType::kXoroShiro128Plus>::Get();
+    auto dis = std::uniform_real_distribution<float>(0, 1);
+
+    const auto boardsize = inputs.board_size;
+    const auto num_intersections = boardsize * boardsize;
+
+    result.board_size = boardsize;
+
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        result.probabilities[idx] = dis(rng);
+    }
+    result.pass_probability = dis(rng);
+
+    return result;
+}
+
+void Network::ProcessResult(Network::Result &result) {
+    result.winrate = std::tanh(result.winrate);
+}
+
 Network::Result
 Network::GetOutputInternal(const GameState &state, const bool symmetry) {
+
+    auto inputs = Encoder::Get().GetInputs(state, symmetry);
+    auto result = DummyForward(inputs);
+
+    const auto boardsize = inputs.board_size;
+    const auto num_intersections = boardsize * boardsize;
+
+
 /*
     auto policy_out = std::vector<float>(POLICYMAP * INTERSECTIONS);
     auto winrate_out = std::vector<float>(WINRATELAYER);

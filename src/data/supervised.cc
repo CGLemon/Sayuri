@@ -4,10 +4,14 @@
 #include "game/sgf.h"
 #include "game/types.h"
 #include "neural/encoder.h"
+#include "search/end_game.h"
 #include "utils/log.h"
 
 #include <fstream>
 #include <cassert>
+
+#include <cmath>
+#include "utils/log.h"
 
 Supervised &Supervised::Get() {
     static Supervised supervised;
@@ -25,13 +29,41 @@ void Supervised::FromSgf(std::string sgf_name, std::string out_name) {
         return;
     }
 
+    int games = 0;
     for (auto &sgf : sgfs) {
+        if (++games % 200 == 0) {
+            LOGGING << "Process games: " << games << std::endl;
+        }
         SgfProcess(sgf, file);
     }
 }
 
 void Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
     GameState state = Sgf::Get().FormString(sgfstring, 9999);
+
+    auto final_ownership = EndGame::Get(state).GetFinalOwnership();
+
+    auto success = true;
+    auto black_score_on_board = 0;
+    const auto bsize = state.GetBoardSize();
+
+    for (int y = 0; y < bsize; ++y) {
+        for (int x = 0; x < bsize; ++x) {
+            auto index = state.GetIndex(x, bsize-y-1);
+            auto owner = final_ownership[index];
+            if (owner == kBlack) {
+                black_score_on_board += 1;
+            } else if (owner == kWhite) {
+                black_score_on_board -= 1;
+            } else if (owner == kInvalid) {
+                success = false;
+            }
+        }
+    }
+
+    const auto black_final_score = (float)black_score_on_board - state.GetKomi();
+
+    (void) success;
 
     auto history = state.GetHistory();
     auto movelist = std::vector<int>{};
@@ -43,25 +75,36 @@ void Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
         }
     }
 
-    assert(movelist.size() == history.size());
+    assert(movelist.size() == history.size()-1);
 
     GameState main_state;
     main_state.Reset(state.GetBoardSize(), state.GetKomi());
 
     const auto board_size = state.GetBoardSize();
-    const auto intersections = state.GetNumIntersections();
+    const auto num_intersections = state.GetNumIntersections();
     const auto komi = state.GetKomi();
     const auto winner = state.GetWinner();
 
     auto train_datas = std::vector<TrainingBuffer>{};
 
     const auto VertexToIndex = [](GameState &state, int vertex) -> int {
+        if (vertex == kPass) {
+            return state.GetNumIntersections();
+        }
+
         auto x = state.GetX(vertex);
         auto y = state.GetY(vertex);
         return state.GetIndex(x, y);
     };
 
-    for (const auto &vtx : movelist) {
+    for (auto i = size_t{0}; i < movelist.size(); ++i) {
+        auto vtx = movelist[i];
+        auto aux_vtx = kPass;
+
+        if (i != movelist.size()-1) {
+            aux_vtx = movelist[i+1];
+        }
+
         auto buf = TrainingBuffer{};
 
         buf.version = 0;
@@ -71,23 +114,39 @@ void Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
         buf.side_to_move = main_state.GetToMove();
 
         buf.planes = Encoder::Get().GetPlanes(main_state);
-        buf.probabilities = std::vector<float>(intersections, 0);
 
+        buf.probabilities = std::vector<float>(num_intersections+1, 0);
+        buf.auxiliary_probabilities = std::vector<float>(num_intersections+1, 0);
+        buf.ownership = std::vector<int>(num_intersections, 0);
+
+        buf.probabilities_index = VertexToIndex(main_state, vtx);
         buf.probabilities[VertexToIndex(main_state, vtx)] = 1.0f;
 
-        main_state.PlayMove(vtx);
+        buf.auxiliary_probabilities_index = VertexToIndex(main_state, aux_vtx);
+        buf.auxiliary_probabilities[VertexToIndex(main_state, aux_vtx)] = 1.0f;
+
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            if (final_ownership[idx] == buf.side_to_move) {
+                buf.ownership[idx] = 1; 
+            } else if (final_ownership[idx] == !buf.side_to_move) {
+                buf.ownership[idx] = -1;
+            }
+        }
 
         assert(winner != kUndecide);
         if (winner == kDraw) {
+            buf.final_score = 0;
             buf.result = 0;
         } else {
             buf.result = (int)winner == (int)buf.side_to_move ? 1 : -1;
+            buf.final_score = buf.side_to_move == kBlack ? black_final_score : -black_final_score;
         }
 
+        main_state.PlayMove(vtx);
         train_datas.emplace_back(buf);
     }
 
     for (const auto &buf : train_datas) {
-        // out_file << buf;
+        buf.StreamOut(out_file);
     }
 }

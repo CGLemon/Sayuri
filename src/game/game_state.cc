@@ -18,7 +18,6 @@ void GameState::ClearBoard() {
     Reset(GetBoardSize(), GetKomi());
 }
 
-
 bool GameState::PlayMove(const int vtx) {
     return PlayMove(vtx, GetToMove());
 }
@@ -351,10 +350,6 @@ int GameState::GetState(const int x, const int y) const {
 
 int GameState::GetLiberties(const int vtx) const {
     return board_.GetLiberties(vtx);
-}
-
-std::vector<int> GameState::GetSimpleOwnership() const {
-    return GetSimpleOwnership();
 }
 
 std::shared_ptr<const Board> GameState::GetPastBoard(unsigned int p) const {
