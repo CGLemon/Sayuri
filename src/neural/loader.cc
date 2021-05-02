@@ -10,8 +10,7 @@
 #include "fast_float.h"
 #endif 
 
-
-DNNLoder& Get() {
+DNNLoder& DNNLoder::Get() {
     static DNNLoder lodaer;
     return lodaer;
 }

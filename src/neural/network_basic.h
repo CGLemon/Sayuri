@@ -6,7 +6,7 @@
 #include <memory>
 
 static constexpr int kInputChannels = 36; // 8 * 3 + 12
-static constexpr int kOuputValueMisc = 3;
+static constexpr int kOuputValueMisc = 5;
 static constexpr int kOuputPassProbability = 1;
 
 struct InputData {
@@ -27,6 +27,7 @@ struct OutputResult {
                      winrate(0.f),
                      final_score(0.f), 
                      score_width(0.f) {
+        wdl.fill(0.0f);
         probabilities.fill(0.f);
         ownership.fill(0.f);
     }
@@ -35,20 +36,22 @@ struct OutputResult {
 
     float pass_probability;
     float winrate;
+
     float final_score;
     float score_width;
 
+    std::array<float, 3> wdl;
     std::array<float, kNumIntersections> probabilities;
     std::array<float, kNumIntersections> ownership;
 };
 
 class NetworkForwardPipe {
 public:
-    virtual void Initialize(std::shared_ptr<DNNWeights> weights);
+    virtual void Initialize(std::shared_ptr<DNNWeights> weights) = 0;
 
-    virtual OutputResult Forward(const InputData &inpnt);
+    virtual OutputResult Forward(const InputData &inpnt) = 0;
 
-    virtual bool Valid();
+    virtual bool Valid() = 0;
 };
 
 

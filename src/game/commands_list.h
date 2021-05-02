@@ -73,7 +73,8 @@ static const std::array<std::string, 25> kGtpCommandsList = {
 };
 
 
-static const std::array<std::string, 2> kExtendCommandsList = {
+static const std::array<std::string, 3> kExtendCommandsList = {
     "supervised",
-    "planes"
+    "planes",
+    "raw-nn"
 };

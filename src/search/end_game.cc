@@ -4,8 +4,6 @@
 
 #include <algorithm>
 
-#include <iostream>
-
 EndGame &EndGame::Get(GameState &state) {
     static EndGame end_game(state);
     return end_game;
@@ -80,7 +78,6 @@ std::vector<int> EndGame::RandomRollout(Board board) const {
                 movelist.emplace_back(vtx);
             }
         }
-
 
         if (!RandomMove(board, movelist)) {
             board.PlayMoveAssumeLegal(kPass, color);

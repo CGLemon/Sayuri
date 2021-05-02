@@ -174,6 +174,8 @@ class NNProcess(nn.Module):
         self.set_layers()
 
     def set_layers(self):
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+
         self.input_conv = ConvBlock(
             in_channels=self.input_channels,
             out_channels=self.residual_channels,
@@ -242,49 +244,54 @@ class NNProcess(nn.Module):
         )
         
         # value head
-        if self.use_ownership:
-            self.ownership_conv = ConvBlock(
-                in_channels=self.residual_channels,
-                out_channels=self.value_extract,
-                kernel_size=1,
-                relu=False,
-                collector=self.tensor_collector
-            )
+        self.ownership_conv = ConvBlock(
+            in_channels=self.residual_channels,
+            out_channels=self.value_extract,
+            kernel_size=1,
+            relu=False,
+            collector=self.tensor_collector
+        )
 
         self.value_misc_fc = FullyConnect(
             in_size=self.value_extract,
             out_size=self.value_misc,
             relu=False,
+            collector=self.tensor_collector
         )
-        
 
     def forward(self, planes, features):
         x = self.input_conv(planes)
-        biases = self.input_fc1(features);
-        biases = self.input_fc2(biases);
-
-        b, c, _, _ = x.size()
-        biases = torch.reshape(biases, (b, c, 1, 1));
-
-        x += biases
-        x = F.relu(x, inplace=True)
 
         # residual tower
         x = self.residual_tower(x)
 
         # policy head
         pol = self.policy_conv(x)
-        pol = self.map_conv(pol)
-        pol = torch.flatten(pol, start_dim=1)
+
+        prob_without_pass = self.prob(pol)
+        pol_gpool = self.avg_pool(pol)
+        pol_gpool = torch.flatten(pol_gpool, start_dim=1, end_dim=3)
+        prob_pass = self.prob_pass_fc(pol_gpool)
+
+        prob = torch.cat((prob_without_pass, prob_pass), 1)
+
+        # auxiliary policy
+        aux_prob_without_pass = self.aux_prob(pol)
+        aux_pol_gpool = self.avg_pool(pol)
+        aux_pol_gpool = torch.flatten(aux_pol_gpool, start_dim=1, end_dim=3)
+        aux_prob_pass = self.aux_prob_pass_fc(aux_pol_gpool)
+
+        aux_prob = torch.cat((aux_prob_without_pass, aux_prob_pass), 1)
 
         # value head
         val = self.value_conv(x)
-        val = torch.flatten(val, start_dim=1)
-        val = self.value_fc_1(val)
-        val = self.value_fc_2(val)
-        wdl, stm = torch.split(val, 3, dim=1)
 
-        return pol, wdl, torch.tanh(stm)
+        ownership = self.ownership_conv(val)
+
+        val_gpool = self.avg_pool(val)
+        val_misc = self.value_misc_fc(val_gpool)
+
+        return prob, aux_prob, ownership, val_misc
 
     def trainable(self, t=True):
         if t==True:

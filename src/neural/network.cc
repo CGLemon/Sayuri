@@ -15,6 +15,7 @@
 #endif
 #endif
 
+#include "neural/blas/blas_forward_pipe.h"
 #include "game/symmetry.h"
 #include "neural/loader.h"
 #include "neural/network.h"
@@ -22,8 +23,8 @@
 #include "utils/log.h"
 #include "utils/random.h"
 
-
 #include <random>
+#include <sstream>
 
 void Network::Initialize(const std::string &weightsfile) {
 #ifndef __APPLE__
@@ -53,6 +54,7 @@ void Network::Initialize(const std::string &weightsfile) {
 
     pipe_ = std::make_unique<backend>();
     auto dnn_weights = std::make_shared<DNNWeights>();
+    dnn_weights = nullptr;
 
     DNNLoder::Get().FormFile(dnn_weights, weightsfile);
     pipe_->Initialize(dnn_weights);
@@ -72,6 +74,9 @@ Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
     const auto num_intersections = boardsize * boardsize;
 
     result.board_size = boardsize;
+    for (int idx = 0; idx < 3; ++idx) {
+        result.wdl[idx] = dis(rng);
+    }
 
     for (int idx = 0; idx < num_intersections; ++idx) {
         result.probabilities[idx] = dis(rng);
@@ -81,44 +86,76 @@ Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
     return result;
 }
 
-void Network::ProcessResult(Network::Result &result) {
-    result.winrate = std::tanh(result.winrate);
-}
-
 Network::Result
 Network::GetOutputInternal(const GameState &state, const bool symmetry) {
+    const auto Softmax = [](std::vector<float> &input, float temperature) {
+        auto output = std::vector<float>{};
+        output.reserve(input.size());
+
+        const auto alpha = *std::max_element(std::begin(input), std::end(input));
+        auto denom = 0.0f;
+
+        for (const auto in_val : input) {
+            auto val = std::exp((in_val - alpha) / temperature);
+            denom += val;
+            output.emplace_back(val);
+        }
+
+        for (auto &out : output) {
+            out /= denom;
+        }
+
+        return output;
+    };
+
+    Network::Result out_result;
+    Network::Result result;
 
     auto inputs = Encoder::Get().GetInputs(state, symmetry);
-    auto result = DummyForward(inputs);
+    if (pipe_->Valid()) {
+        result = pipe_->Forward(inputs);
+    } else {
+        result = DummyForward(inputs);
+    }
+
+    out_result = result;
 
     const auto boardsize = inputs.board_size;
     const auto num_intersections = boardsize * boardsize;
 
-
-/*
-    auto policy_out = std::vector<float>(POLICYMAP * INTERSECTIONS);
-    auto winrate_out = std::vector<float>(WINRATELAYER);
-
-    auto input_planes = Model::gather_planes(position, symmetry);
-    auto input_features = Model::gather_features(position);
-
-    if (m_forward->valid()) {
-        m_forward->forward(input_planes, input_features, policy_out, winrate_out);
-    } else {
-        // If we didn't load the network yet, output the random result.
-        dummy_forward(policy_out, winrate_out);
+    auto probabilities_buffer = std::vector<float>(num_intersections+1);
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        probabilities_buffer[idx] = result.probabilities[idx];
     }
+    probabilities_buffer[num_intersections] = result.pass_probability;
+    probabilities_buffer = Softmax(probabilities_buffer, 0);
 
-    // TODO: Remove "softmax_pol_temp" and "softmax_wdl_temp" to UCCI Option.
-    const auto result = Model::get_result(policy_out,
-                                          winrate_out,
-                                          option<float>("softmax_pol_temp"),
-                                          option<float>("softmax_wdl_temp"),
-                                          symmetry);
 
-    return result;
- */
-    return Result{};
+    // Probabilities, ownership
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        const auto symm_index = Symmetry::Get().TransformIndex(symmetry, idx);
+        out_result.probabilities[symm_index] = probabilities_buffer[idx];
+        out_result.ownership[symm_index] = std::tanh(out_result.ownership[idx]);
+    }
+    out_result.pass_probability = probabilities_buffer[num_intersections];
+
+    // Final score
+    out_result.final_score = 20 * result.final_score;
+
+    // winrate
+    auto wdl_buffer = std::vector<float>(3);
+    wdl_buffer[0] = result.wdl[0];
+    wdl_buffer[1] = result.wdl[1];
+    wdl_buffer[2] = result.wdl[2];
+    wdl_buffer = Softmax(wdl_buffer, 1);
+
+    out_result.wdl[0] = wdl_buffer[0];
+    out_result.wdl[1] = wdl_buffer[1];
+    out_result.wdl[2] = wdl_buffer[2];
+    out_result.winrate = std::tanh(wdl_buffer[0] - wdl_buffer[2]);
+    out_result.winrate = (out_result.winrate + 1.f) / 2;
+
+    return out_result;
 }
 
 bool Network::ProbeCache(const GameState &state,
@@ -133,7 +170,10 @@ bool Network::ProbeCache(const GameState &state,
 
 Network::Result
 Network::GetOutput(const GameState &state,
-                   const Ensemble ensemble, int symmetry) {
+                   const Ensemble ensemble,
+                   int symmetry,
+                   const bool read_cache,
+                   const bool write_cache) {
     Result result;
     if (ensemble == NONE) {
         symmetry = Symmetry::kIdentitySymmetry;
@@ -143,18 +183,35 @@ Network::GetOutput(const GameState &state,
         auto rng = Random<RandomType::kXoroShiro128Plus>::Get();
         symmetry = rng.RandFix<Symmetry::kNumSymmetris>();
     }
-
-
     // Get result from cache, if the it is in the cache memory.
-    if (ProbeCache(state, result)) {
-        return result;
+    if (read_cache) {
+        if (ProbeCache(state, result)) {
+            return result;
+        }
     }
 
-    // result = get_output_internal(state, symm);
-
+    result = GetOutputInternal(state, symmetry);
 
     // Write result to cache, if the it is not in the cache memory.
-    nn_cache_.Insert(state.GetHash(), result);
+    if (write_cache) {
+        nn_cache_.Insert(state.GetHash(), result);
+    }
 
     return result;
+}
+
+std::string Network::GetOutputString(const GameState &state,
+                                     const Ensemble ensemble,
+                                     int symmetry) {
+    const auto result = GetOutput(state, ensemble, symmetry, false, false);
+    const auto bsize = result.board_size;
+
+    auto out = std::ostringstream{};
+ 
+    out << "winrate: " << result.winrate << std::endl;
+    out << "win probability: " << result.wdl[0] << std::endl;
+    out << "draw probability: " << result.wdl[1] << std::endl;
+    out << "loss probability: " << result.wdl[2] << std::endl;
+
+    return out.str();
 }

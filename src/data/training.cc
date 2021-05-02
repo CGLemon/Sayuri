@@ -14,8 +14,14 @@ void ArrayStreamOut(std::ostream &out, const std::vector<float> &arr) {
 void OwnershipStreamOut(std::ostream &out, const std::vector<int> &arr) {
     const auto size = arr.size();
     for (size_t i = 0; i < size; ++i) {
-        out << arr[i];
-        if (i != size-1) out << ' ';
+        const auto v = arr[i];
+        if (v == 0) {
+            out << 0;
+        } else if (v == 1) {
+            out << 1;
+        } else if (v == -1) {
+            out << (1 + 2);
+        }
     }
     out << std::endl;
 }

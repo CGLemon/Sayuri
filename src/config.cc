@@ -128,6 +128,13 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
+    if (const auto res = parser.FindNext({"--weights", "-w"})) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("weights_file", res->Get<std::string>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
     if (ErrorCommands(parser)) {
         Helper();
     }

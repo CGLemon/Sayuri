@@ -191,6 +191,14 @@ std::string GtpLoop::Execute(CommandParser &parser) {
         }
 
         out << GTPSuccess(Encoder::Get().GetPlanesString(agent_->GetState(), symmetry));
+    } else if (const auto res = parser.Find("raw-nn", 0)) {
+        int symmetry = 0;
+
+        if (const auto symm = parser.GetCommand(1)) {
+            symmetry = symm->Get<int>();
+        }
+
+        out << GTPSuccess(agent_->GetNetwork().GetOutputString(agent_->GetState(), Network::DIRECT, symmetry));
     } else {
         out << GTPFail("unknown command");
     }
