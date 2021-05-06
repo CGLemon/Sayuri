@@ -193,12 +193,10 @@ class ChunkParser:
         datalines = Data.get_datalines(FIXED_DATA_VERSION);
         for name in glob.glob(self.dirname + "/*"):
             with open(name, 'r') as f:
-                count = 0
                 while True:
                     if self.linesparser(datalines, f) == False:
                         break
-                    count += 1
-                    print(count)
+
             
     def dump(self):
         for b, s in self.buffer:

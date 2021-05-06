@@ -52,6 +52,12 @@ public:
     virtual OutputResult Forward(const InputData &inpnt) = 0;
 
     virtual bool Valid() = 0;
+
+    virtual void Load(std::shared_ptr<DNNWeights> weights) = 0;
+
+    virtual void Release() = 0;
+
+    virtual void Destroy() = 0;
 };
 
 

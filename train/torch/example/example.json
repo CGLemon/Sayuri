@@ -2,11 +2,11 @@
     "NeuralNetwork" : {
         "NNType": "Residual",
         "DefaultBoardSize": 9,
-        "InputChannels": 16,
+        "InputChannels": 36,
         "ResidualChannels": 192,
         "PolicyExtract": 64,
         "ValueExtract": 64,
-        "ValueMisc": 4,
+        "ValueMisc": 5,
 
         "UseOwnership": true,
         "UseFinalScore": true,

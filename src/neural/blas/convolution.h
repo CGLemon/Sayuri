@@ -55,7 +55,6 @@ void Convolution<FILTERS>::Forward(const size_t board_size,
     //                ldb, beta, C, N);
 
     Im2col(board_size, input_channels, input, col);
-
     Blas::ConvolutionSgemm((int)output_channels,
                            (int)spatial_size,
                            filter_dim,

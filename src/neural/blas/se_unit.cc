@@ -13,9 +13,6 @@ void GlobalAvgPool::Forward(const size_t board_size,
     const auto spatial_size = width * height;
     const float *input_ptr = input.data();
 
-    assert(channels * spatial_size == input.size());
-    assert(channels == output.size());
-
     for (auto c = size_t{0}; c < channels; ++c) {
         float Sum = 0.0f;
         for (auto b = size_t{0}; b < spatial_size; ++b) {
@@ -27,8 +24,6 @@ void GlobalAvgPool::Forward(const size_t board_size,
         output[c] = Mean;
     }
 }
-
-
 
 void SEUnit::Forward(const size_t board_size,
                      const size_t channels,

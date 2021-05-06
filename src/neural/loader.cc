@@ -190,6 +190,7 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
                            NetStruct &netstruct,
                            std::shared_ptr<DNNWeights> weights,
                            std::istream &buffer) const {
+
     weights->input_channels = std::stoi(netinfo["InputChannels"]);
 
     weights->residual_blocks = std::stoi(netinfo["ResidualBlocks"]);
@@ -276,7 +277,6 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
         }
             
         const auto res_next_shape = netstruct[t_offset+4];
-            
         if (res_next_shape.size() == 2 /* fullyconnect layer */) {
             tower_ptr->apply_se = true;
             se_cnt++;
@@ -306,30 +306,29 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
     }
 
     const auto h_offset = 4 * residuals + 2 * se_cnt + inputs_cnt;
-    auto aux_cnt = 0;
 
     // policy head 4
-    const auto p_ex_conv_shape = netstruct[h_offset + aux_cnt];
+    const auto p_ex_conv_shape = netstruct[h_offset];
     FillConvolutionLayer(weights->p_ex_conv,
                          buffer,
                          p_ex_conv_shape[0],
                          p_ex_conv_shape[1],
                          p_ex_conv_shape[2]);
 
-    const auto p_ex_bn_shape = netstruct[h_offset + aux_cnt + 1];
+    const auto p_ex_bn_shape = netstruct[h_offset + 1];
     FillBatchnormLayer(weights->p_ex_bn,
                        buffer,
                        p_ex_bn_shape[0]);
 
 
-    const auto prob_conv_shape = netstruct[h_offset + aux_cnt + 2];
+    const auto prob_conv_shape = netstruct[h_offset + 2];
     FillConvolutionLayer(weights->prob_conv,
                          buffer,
                          prob_conv_shape[0],
                          prob_conv_shape[1],
                          prob_conv_shape[2]);
 
-    const auto pass_fc_shape = netstruct[h_offset + aux_cnt + 3];
+    const auto pass_fc_shape = netstruct[h_offset + 3];
     FillFullyconnectLayer(weights->pass_fc,
                           buffer,
                           pass_fc_shape[0],
@@ -346,29 +345,27 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
     }
 
     // value head
-    const auto v_ex_conv_shape = netstruct[h_offset + aux_cnt + 4];
+    const auto v_ex_conv_shape = netstruct[h_offset + 4];
     FillConvolutionLayer(weights->v_ex_conv,
                          buffer,
                          v_ex_conv_shape[0],
                          v_ex_conv_shape[1],
                          v_ex_conv_shape[2]);
 
-    const auto v_ex_bn_shape = netstruct[h_offset + aux_cnt + 5];
+    const auto v_ex_bn_shape = netstruct[h_offset  + 5];
     FillBatchnormLayer(weights->v_ex_bn,
                        buffer,
                        v_ex_bn_shape[0]);
 
-    if (weights->use_ownership) {
-        aux_cnt++;
-        const auto v_os_conv_shape = netstruct[h_offset + aux_cnt + 5];
-        FillConvolutionLayer(weights->v_ownership,
-                             buffer,
-                             v_os_conv_shape[0],
-                             v_os_conv_shape[1],
-                             v_os_conv_shape[2]);
-    }
+    const auto v_os_conv_shape = netstruct[h_offset + 6];
+    FillConvolutionLayer(weights->v_ownership,
+                         buffer,
+                         v_os_conv_shape[0],
+                         v_os_conv_shape[1],
+                         v_os_conv_shape[2]);
 
-    const auto misc_fc_shape = netstruct[h_offset + aux_cnt + 6];
+
+    const auto misc_fc_shape = netstruct[h_offset + 7];
     FillFullyconnectLayer(weights->v_misc,
                           buffer,
                           misc_fc_shape[0],

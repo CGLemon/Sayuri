@@ -1,6 +1,6 @@
 import argparse
 
-# from train import *
+from train import *
 from config import *
 from nnprocess import *
 
@@ -12,21 +12,16 @@ def cover(args, cfg):
 
 def main(args, cfg):
     a = 0
-    # train_loader = DataModule(cfg)
-    # Net = Network(cfg)
-    # if args.dummy != True:
-    #     trainer = pl.Trainer(gpus=cfg.gpus, max_epochs=cfg.epochs)
-    #     trainer.fit(Net, train_loader)
-    # if args.output != None:
-    #     Net.save_pt(args.output + ".pt")
-    #     Net.transfer2text(args.output + ".txt")
+    train_loader = DataModule(cfg)
+    Net = Network(cfg)
+    if args.dummy != True:
+        trainer = pl.Trainer(gpus=cfg.gpus, max_epochs=cfg.epochs)
+        trainer.fit(Net, train_loader)
+    if args.output != None:
+        Net.save_pt(args.output + ".pt")
+        Net.transfer2text(args.output + ".txt")
 
 if __name__ == "__main__":
-    cfg = gather_config("example/example.json")
-    net = NNProcess(cfg)
-    net.dump_info()
-    net.transfer2text("test.txt")
-'''
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--dummy", help="Genrating the dummy network.", action="store_true")
     parser.add_argument("-j", "--json", help="The json file name", type=str)
@@ -37,9 +32,9 @@ if __name__ == "__main__":
     cfg = gather_config(args.json)
     cover(args, cfg)
     
-    if cfg.miscVerbose:
+    if cfg.misc_verbose:
         dump_dependent_version()
 
     if args.json != None:
         main(args, cfg)
-'''
+

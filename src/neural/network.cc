@@ -1,4 +1,5 @@
 #ifdef USE_CUDA
+#include "neural/cuda/cuda_forward_pipe.h"
 #endif
 
 #ifdef USE_EIGEN
@@ -25,6 +26,7 @@
 
 #include <random>
 #include <sstream>
+#include <iomanip>
 
 void Network::Initialize(const std::string &weightsfile) {
 #ifndef __APPLE__
@@ -48,20 +50,22 @@ void Network::Initialize(const std::string &weightsfile) {
 
 
 #ifdef USE_CUDA
+    using backend = CudaForwardPipe;
 #else
     using backend = BlasForwardPipe;
 #endif
 
     pipe_ = std::make_unique<backend>();
     auto dnn_weights = std::make_shared<DNNWeights>();
-    dnn_weights = nullptr;
 
     DNNLoder::Get().FormFile(dnn_weights, weightsfile);
-    pipe_->Initialize(dnn_weights);
 
-    if (dnn_weights->loaded) {
-        // Do nothing...
+    if (!dnn_weights->loaded) {
+        dnn_weights.reset();
+        dnn_weights = nullptr;
     }
+
+    pipe_->Initialize(dnn_weights);
 }
 
 Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
@@ -112,12 +116,12 @@ Network::GetOutputInternal(const GameState &state, const bool symmetry) {
     Network::Result result;
 
     auto inputs = Encoder::Get().GetInputs(state, symmetry);
+
     if (pipe_->Valid()) {
         result = pipe_->Forward(inputs);
     } else {
         result = DummyForward(inputs);
     }
-
     out_result = result;
 
     const auto boardsize = inputs.board_size;
@@ -128,7 +132,7 @@ Network::GetOutputInternal(const GameState &state, const bool symmetry) {
         probabilities_buffer[idx] = result.probabilities[idx];
     }
     probabilities_buffer[num_intersections] = result.pass_probability;
-    probabilities_buffer = Softmax(probabilities_buffer, 0);
+    probabilities_buffer = Softmax(probabilities_buffer, 1);
 
 
     // Probabilities, ownership
@@ -212,6 +216,29 @@ std::string Network::GetOutputString(const GameState &state,
     out << "win probability: " << result.wdl[0] << std::endl;
     out << "draw probability: " << result.wdl[1] << std::endl;
     out << "loss probability: " << result.wdl[2] << std::endl;
+    out << "final score: " << result.final_score << std::endl;
+    out << "score width: " << result.score_width << std::endl;
+
+    out << "probabilities: " << std::endl;
+    for (int y = 0; y < bsize; ++y) {
+        for (int x = 0; x < bsize; ++x) {
+            auto idx = state.GetIndex(x,y);
+            out << std::setw(9) << std::fixed << std::setprecision(6) << result.probabilities[idx] << " ";
+        }
+        out << std::endl;
+    }
+    out << "pass probabilities: " << std::setw(9) << std::fixed << std::setprecision(6) << result.pass_probability << std::endl;
+    out << std::endl;
+
+    out << "ownership: " << std::endl;
+    for (int y = 0; y < bsize; ++y) {
+        for (int x = 0; x < bsize; ++x) {
+            auto idx = state.GetIndex(x,y);
+            out << std::setw(9) << std::fixed << std::setprecision(6) << result.ownership[idx] << " ";
+        }
+        out << std::endl;
+    }
+    out << std::endl;
 
     return out.str();
 }

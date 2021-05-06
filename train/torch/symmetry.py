@@ -5,10 +5,10 @@ class Symmetry:
         self.symmetry_table = []
         self.init_symmetry_table(size)
 
-    def get_symmetry(symm, index):
+    def get_symmetry(self, symm, index):
         return self.symmetry_table[symm][index]
 
-    def init_symmetry_table(size):
+    def init_symmetry_table(self, size):
         def get_index(x, y, size):
             return x + y * size
 
@@ -20,6 +20,7 @@ class Symmetry:
             if symm & 4 != 0:
                 x, y = y, x
             return get_index(x,y,size)
+
         self.symmetry_table.clear()
         for symm in range(8):
             self.symmetry_table.append([])
@@ -27,4 +28,4 @@ class Symmetry:
                 for x in range(size):
                     idx = get_symmetry(x, y, size, symm)
                     self.symmetry_table[symm].append(idx)
-        self.symmetry_table = np.array(symmetry_table)
+        self.symmetry_table = np.array(self.symmetry_table)

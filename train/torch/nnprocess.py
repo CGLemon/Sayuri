@@ -242,11 +242,10 @@ class NNProcess(nn.Module):
             relu=True,
             collector=self.tensor_collector
         )
-        
-        # value head
-        self.ownership_conv = ConvBlock(
-            in_channels=self.residual_channels,
-            out_channels=self.value_extract,
+
+        self.ownership_conv = Convolve(
+            in_channels=self.value_extract,
+            out_channels=1,
             kernel_size=1,
             relu=False,
             collector=self.tensor_collector
@@ -259,7 +258,7 @@ class NNProcess(nn.Module):
             collector=self.tensor_collector
         )
 
-    def forward(self, planes, features):
+    def forward(self, planes):
         x = self.input_conv(planes)
 
         # residual tower
@@ -269,6 +268,7 @@ class NNProcess(nn.Module):
         pol = self.policy_conv(x)
 
         prob_without_pass = self.prob(pol)
+        prob_without_pass = torch.flatten(prob_without_pass, start_dim=1, end_dim=3)
         pol_gpool = self.avg_pool(pol)
         pol_gpool = torch.flatten(pol_gpool, start_dim=1, end_dim=3)
         prob_pass = self.prob_pass_fc(pol_gpool)
@@ -277,6 +277,7 @@ class NNProcess(nn.Module):
 
         # auxiliary policy
         aux_prob_without_pass = self.aux_prob(pol)
+        aux_prob_without_pass = torch.flatten(aux_prob_without_pass, start_dim=1, end_dim=3)
         aux_pol_gpool = self.avg_pool(pol)
         aux_pol_gpool = torch.flatten(aux_pol_gpool, start_dim=1, end_dim=3)
         aux_prob_pass = self.aux_prob_pass_fc(aux_pol_gpool)
@@ -287,11 +288,16 @@ class NNProcess(nn.Module):
         val = self.value_conv(x)
 
         ownership = self.ownership_conv(val)
+        ownership = torch.flatten(ownership, start_dim=1, end_dim=3)
+        ownership = torch.tanh(ownership)
 
         val_gpool = self.avg_pool(val)
+        val_gpool = torch.flatten(val_gpool, start_dim=1, end_dim=3)
         val_misc = self.value_misc_fc(val_gpool)
 
-        return prob, aux_prob, ownership, val_misc
+        wdl, score = torch.split(val_misc, [3, 2], dim=1)
+
+        return prob, aux_prob, ownership, wdl, score
 
     def trainable(self, t=True):
         if t==True:
@@ -351,15 +357,17 @@ class NNProcess(nn.Module):
                         f.write(NNProcess.fullyconnect2text(self.residual_channels * 1, self.residual_channels * 4))
                         f.write(NNProcess.fullyconnect2text(self.residual_channels * 4, self.residual_channels * 2))
 
+            # policy head
             f.write(NNProcess.conv2text(self.residual_channels, self.policy_extract, 1))
             f.write(NNProcess.bn2text(self.policy_extract))
             f.write(NNProcess.conv2text(self.policy_extract, 1, 1))
             f.write(NNProcess.fullyconnect2text(self.policy_extract, 1))
-            
+
+            # value head
             f.write(NNProcess.conv2text(self.residual_channels, self.value_extract, 1))
             f.write(NNProcess.bn2text(self.value_extract))
-            if self.use_ownership:
-                f.write(NNProcess.conv2text(self.residual_channels, self.value_extract, 1))
+            f.write(NNProcess.conv2text(self.value_extract, 1, 1))
+
             f.write(NNProcess.fullyconnect2text(self.value_extract, self.value_misc))
             f.write("end struct\n")
             f.write("get parameters\n")
@@ -374,7 +382,7 @@ class NNProcess(nn.Module):
 
     @staticmethod
     def conv2text(in_channels, out_channels, kernel_size):
-        return "Convolve {iC} {oC} {KS}\n".format(
+        return "Convolution {iC} {oC} {KS}\n".format(
                    iC=in_channels,
                    oC=out_channels,
                    KS=kernel_size)

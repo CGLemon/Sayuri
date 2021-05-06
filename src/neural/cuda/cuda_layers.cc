@@ -79,11 +79,11 @@ void Batchnorm::LoadingWeight(const std::vector<float> &means,
     is_loaded = true;
 }
 
-Convolve::Convolve(const int max_batch,
-                   const size_t board_size, 
-                   const size_t filter_size,
-                   const size_t input_channels,
-                   const size_t output_channels) {
+Convolution::Convolution(const int max_batch,
+                         const size_t board_size, 
+                         const size_t filter_size,
+                         const size_t input_channels,
+                         const size_t output_channels) {
     width = board_size;
     height = board_size;
     spatial_size = width * height;
@@ -100,7 +100,7 @@ Convolve::Convolve(const int max_batch,
     is_loaded = false;
 }
 
-Convolve::~Convolve() {
+Convolution::~Convolution() {
     if (is_loaded) {
         ReportCUDAErrors(cudaFree(cuda_weights));
     }
@@ -122,8 +122,8 @@ Convolve::~Convolve() {
     }
 }
 
-void Convolve::Forward(const int batch, float *input, float *output,
-                       void *scratch, size_t scratch_size, CudaHandel *handel) {
+void Convolution::Forward(const int batch, float *input, float *output,
+                          void *scratch, size_t scratch_size, CudaHandel *handel) {
     if (!is_loaded) {
         return;
     }
@@ -184,8 +184,8 @@ void Convolve::Forward(const int batch, float *input, float *output,
 #endif
 }
 
-void Convolve::LoadingWeight(const std::vector<float> &weights,
-                             size_t &scratch_size, CudaHandel *handel) {
+void Convolution::LoadingWeight(const std::vector<float> &weights,
+                                size_t &scratch_size, CudaHandel *handel) {
     if (is_loaded) {
         return;
     }
@@ -257,9 +257,9 @@ void Convolve::LoadingWeight(const std::vector<float> &weights,
 }
 
 
-void Convolve::LoadingWeight(const std::vector<float> &weights,
-                             const std::vector<float> &biases,
-                             size_t &scratch_size, CudaHandel *handel) {
+void Convolution::LoadingWeight(const std::vector<float> &weights,
+                                const std::vector<float> &biases,
+                                size_t &scratch_size, CudaHandel *handel) {
     if (is_loaded) {
         return;
     }

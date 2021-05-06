@@ -54,12 +54,12 @@ private:
     float *cuda_stddevs;
 };
 
-class Convolve {
+class Convolution {
 public:
-    Convolve() = default;
-    Convolve(const int batch, const size_t board_size, const size_t filter,
-             const size_t in_channels, const size_t out_channels);
-    ~Convolve();
+    Convolution() = default;
+    Convolution(const int batch, const size_t board_size, const size_t filter,
+                const size_t in_channels, const size_t out_channels);
+    ~Convolution();
 
     void Forward(const int batch, float *input, float *output,
                  void *scratch, size_t scratch_size, CudaHandel *handel);
