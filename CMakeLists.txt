@@ -6,7 +6,7 @@ set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(GAME_SOURCES_DIR ${SOURCE_DIR}/game)
 set(NEURAL_SOURCES_DIR ${SOURCE_DIR}/neural)
 set(DATA_SOURCES_DIR ${SOURCE_DIR}/data)
-set(SEARCH_SOURCES_DIR ${SOURCE_DIR}/search)
+set(MCTS_SOURCES_DIR ${SOURCE_DIR}/mcts)
 set(UTILS_SOURCES_DIR ${SOURCE_DIR}/utils)
 
 set(IncludePath "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -94,11 +94,11 @@ set(DATA_SOURCES
     ${DATA_SOURCES_DIR}/training.cc
     )
 
-set(SEARCH_SOURCES
-    ${SEARCH_SOURCES_DIR}/end_game.cc
-    ${SEARCH_SOURCES_DIR}/time_control.cc
-    ${SEARCH_SOURCES_DIR}/puct/node.cc
-    ${SEARCH_SOURCES_DIR}/puct/search.cc
+set(MCTS_SOURCES
+    ${MCTS_SOURCES_DIR}/end_game.cc
+    ${MCTS_SOURCES_DIR}/time_control.cc
+    ${MCTS_SOURCES_DIR}/node.cc
+    ${MCTS_SOURCES_DIR}/search.cc
     )
 
 set(UTILS_SOURCES
@@ -109,6 +109,8 @@ set(UTILS_SOURCES
     ${UTILS_SOURCES_DIR}/filesystem.cc
     ${UTILS_SOURCES_DIR}/option.cc
     )
+
+find_package(Threads REQUIRED)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED on)
@@ -161,19 +163,17 @@ else()
     endif()
 endif()
 
-find_package(Threads REQUIRED)
-
 add_executable(Sayuri
     ${BASIC_SOURCES}
     ${GAME_SOURCES}
     ${DATA_SOURCES}
-    ${SEARCH_SOURCES}
+    ${MCTS_SOURCES}
     ${NEURAL_SOURCES}
     ${UTILS_SOURCES}
     ${CUDA_SOURCES}
     )
 
-target_link_libraries(Sayuri  Threads::Threads)
+target_link_libraries(Sayuri Threads::Threads)
 target_link_libraries(Sayuri ${BLAS_LIBRARIES})
 
 if(GPU_BACKEND STREQUAL "CUDA")

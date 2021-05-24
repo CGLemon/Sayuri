@@ -20,7 +20,7 @@ public:
     using Cache = LruCache<Result>;
     
     void Initialize(const std::string &weights);
-
+    void Destroy();
 
     Result GetOutput(const GameState &state,
                      const Ensemble ensemble,
@@ -31,6 +31,8 @@ public:
     std::string GetOutputString(const GameState &state,
                                 const Ensemble ensemble,
                                 int symmetry = -1);
+
+    void Reload(int board_size);
 
 private:
     bool ProbeCache(const GameState &state, Result &result);

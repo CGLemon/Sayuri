@@ -19,7 +19,7 @@ def main(args, cfg):
         trainer.fit(Net, train_loader)
     if args.output != None:
         Net.save_pt(args.output + ".pt")
-        Net.transfer2text(args.output + ".txt")
+        # Net.transfer2text(args.output + ".txt")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

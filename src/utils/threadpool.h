@@ -54,7 +54,7 @@ public:
 
 private:
     void AddThread(std::function<void()> initializer);
-    
+
     bool IsStopRunning() const;
     std::atomic<bool> stop_running_{false};
 
@@ -68,7 +68,7 @@ private:
     std::queue<std::function<void(void)>> tasks_;
 
     std::mutex queue_mutex_;
-    
+
     std::condition_variable cv_;
 };
 
@@ -88,7 +88,7 @@ inline ThreadPool& ThreadPool::Get(size_t threads) {
 // The constructor just launches some amount of workers
 inline ThreadPool::ThreadPool(size_t threads) {
     stop_running_.store(false, std::memory_order_relaxed);
-    for (int t = 0; t < threads ; ++t) {
+    for (auto t = size_t{0}; t < threads ; ++t) {
         AddThread([](){});
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
@@ -168,12 +168,9 @@ public:
             pool_->AddTask(std::forward<F>(f), std::forward<Args>(args)...));
     }
 
-    void WaitToJoin(bool dump = false) {
+    void WaitToJoin() {
         for (auto &&res : tasks_future_) {
-            auto out = res.get();
-            if (dump) {
-                std::cout << out << std::endl;
-            }
+            res.get();
         }
     }
 

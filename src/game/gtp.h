@@ -4,8 +4,12 @@
 #include "game/types.h"
 #include "config.h"
 #include "utils/parser.h"
-#include "neural/network.h"
+// #include "neural/network.h"
+#include "mcts/search.h"
+
 #include <memory>
+
+class Search;
 
 class GtpLoop {
 public:
@@ -19,7 +23,24 @@ public:
             return network_;
         }
 
+        Search& GetSearch() {
+            return *search_;
+        }
+
+        void ApplySearch() {
+            search_ = std::make_unique<Search>(main_state_, network_);
+        }
+
+        void Quit() {
+            network_.Destroy();
+            if (search_) {
+                search_.reset();
+            }
+        }
+
     private:
+        std::unique_ptr<Search> search_;
+
         GameState main_state_;
         Network network_;
     };
@@ -29,6 +50,7 @@ public:
         agent_->GetState().Reset(GetOption<int>("defualt_boardsize"),
                                      GetOption<float>("defualt_komi"));
         agent_->GetNetwork().Initialize(GetOption<std::string>("weights_file"));
+        agent_->ApplySearch();
 
         Loop();
     }

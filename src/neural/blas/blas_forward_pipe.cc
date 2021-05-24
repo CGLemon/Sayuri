@@ -199,3 +199,5 @@ bool BlasForwardPipe::Valid() {
 void BlasForwardPipe::Release() {}
 
 void BlasForwardPipe::Destroy() {}
+
+void BlasForwardPipe::Reload(int) {}

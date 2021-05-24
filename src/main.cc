@@ -1,6 +1,7 @@
 #include <iostream>
 #include <memory>
 
+#include "utils/threadpool.h"
 #include "include.h"
 
 static void StartGtpLoop() {
@@ -9,6 +10,8 @@ static void StartGtpLoop() {
 
 int main(int argc, char **argv) {
     ArgsParser(argc, argv);
+
+    ThreadPool::Get(1);
 
     StartGtpLoop();
 

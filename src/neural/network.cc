@@ -242,3 +242,15 @@ std::string Network::GetOutputString(const GameState &state,
 
     return out.str();
 }
+
+void Network::Destroy() {
+    if (pipe_) {
+        pipe_->Destroy();
+    }
+}
+
+void Network::Reload(int board_size) {
+    if (pipe_) {
+        pipe_->Reload(board_size);
+    }
+}

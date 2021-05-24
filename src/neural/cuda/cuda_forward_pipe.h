@@ -18,7 +18,14 @@
 
 #pragma once
 #ifdef USE_CUDA
+#include <atomic>
 #include <memory>
+#include <list>
+#include <array>
+#include <vector>
+#include <mutex>
+#include <thread>
+#include <condition_variable>
 
 #include "neural/cuda/cuda_layers.h"
 #include "neural/network_basic.h"
@@ -33,6 +40,8 @@ public:
     virtual bool Valid();
 
     virtual void Load(std::shared_ptr<DNNWeights> weights);
+
+    virtual void Reload(int board_size);
 
     virtual void Release();
 
@@ -68,7 +77,7 @@ private:
 
     class NNGraph {
     public:
-         ~NNGraph();
+        ~NNGraph();
         void BuildGraph(const int gpu, 
                         const int max_batch_size,
                         const int board_size,
@@ -96,12 +105,42 @@ private:
 
         std::array<float*, 3> cuda_conv_op_;
         std::array<float*, 2> cuda_pol_op_;
-        std::array<float*, 3> cuda_val_op_;
-
+        std::array<float*, 2> cuda_val_op_;
 
         size_t scratch_size_;
         std::shared_ptr<DNNWeights> weights_{nullptr};
     };
+
+    struct ForwawrdEntry {
+	    const InputData &input;
+        OutputResult &output;
+
+        std::condition_variable cv;
+        std::mutex mutex;
+
+        ForwawrdEntry(const InputData &in,
+                      OutputResult &out) :
+                      input(in), output(out) {}
+    };
+
     std::shared_ptr<DNNWeights> weights_{nullptr};
+
+    std::list<std::shared_ptr<ForwawrdEntry>> entry_queue_;
+    std::mutex mutex_;
+    std::mutex queue_mutex_;
+    std::condition_variable cv_;
+
+    std::atomic<int> waittime_{20};
+    std::atomic<bool> worker_running_;
+    std::atomic<bool> narrow_pipe_;
+
+    std::vector<std::unique_ptr<NNGraph>> nngraphs_;
+    std::vector<std::thread> workers_;
+
+    int max_batch_;
+
+    void PrepareWorkers();
+    void Worker(int gpu);
+    void QuitWorkers();
 };
 #endif

@@ -1,15 +1,20 @@
 #pragma once
 
+#include "config.h"
+
 class Parameters {
 public:
     Parameters() = default;
+
+    void Reset() {
+        threads = GetOption<int>("threads");
+        playouts = GetOption<int>("playouts");
+    }
 
     int threads;
     int visits;
     int playouts;
     int random_min_visits;
-    int forced_checkmate_depth;
-    int forced_checkmate_root_depth;
 
     bool dirichlet_noise;
     bool collect;
@@ -28,3 +33,5 @@ public:
     float dirichlet_factor;
     float dirichlet_init;
 };
+
+

@@ -132,6 +132,31 @@ std::string GameState::VertexToSgf(const int vtx) {
     return out.str();
 }
 
+std::string GameState::VertexToText(const int vtx) {
+    assert(vtx != kNullVertex);
+
+    if (vtx == kPass) {
+        return "pass";
+    }
+    if (vtx == kResign) {
+        return "resign";
+    }
+
+    auto out = std::ostringstream{};    
+    const auto x = GetX(vtx);
+    const auto y = GetY(vtx);
+
+    auto offset = 0;
+    if (static_cast<char>(x + 'A') >= 'I') {
+        offset = 1;
+    }
+
+    out << static_cast<char>(x + offset + 'A');
+    out << y+1;
+
+    return out.str();
+}
+
 bool GameState::PlayTextMove(std::string input) {
     int color = kInvalid;
     int vertex = kNullVertex;
@@ -283,6 +308,9 @@ float GameState::GetKomi() const {
 }
 
 int GameState::GetWinner() const {
+    if (winner_ != kUndecide) {
+        return winner_;
+    }
     if (GetPasses() >= 2) {
         auto score = GetFinalScore();
         if (score > (-1e-4) && score < 1e-4) {
@@ -293,7 +321,7 @@ int GameState::GetWinner() const {
             return kWhite;
         }
     }
-    return winner_;
+    return kUndecide;
 }
 
 int GameState::GetHandicap() const {

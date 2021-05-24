@@ -15,6 +15,8 @@ public:
 
     virtual void Load(std::shared_ptr<DNNWeights> weights);
 
+    virtual void Reload(int);
+
     virtual void Release();
 
     virtual void Destroy();

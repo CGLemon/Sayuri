@@ -1,4 +1,4 @@
-#include "search/end_game.h"
+#include "mcts/end_game.h"
 #include "game/types.h"
 #include "utils/random.h"
 

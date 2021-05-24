@@ -230,6 +230,7 @@ void Encoder::FillLadder(std::shared_ptr<const Board> board,
 }
 
 void Encoder::FillSideToMove(std::shared_ptr<const Board> board,
+                             float komi,
                              std::vector<float>::iterator color_it) const {
     auto num_intersections = board->GetNumIntersections();
     auto side_to_move = board->GetToMove();
@@ -237,7 +238,7 @@ void Encoder::FillSideToMove(std::shared_ptr<const Board> board,
     auto offset = side_to_move == kBlack ? 0 : num_intersections;
 
     for (int index = 0; index < num_intersections; ++index) {
-        color_it[offset + index] = static_cast<float>(true);
+        color_it[offset + index] = komi / 10.f;
     }
 }
 
@@ -252,12 +253,11 @@ void Encoder::EncoderFeatures(const GameState &state,
     auto ladder_it = it + 6 * num_intersections;
     auto color_it = it + 10 * num_intersections;
 
-
     FillKoMove(board, ko_it, symmetry);
     FillCaptureMove(board, capture_it, symmetry);
     FillLiberties(board, liberties_it, symmetry);
     FillLadder(board, ladder_it, symmetry);
-    FillSideToMove(board, color_it);
+    FillSideToMove(board, state.GetKomi(), color_it);
 }
 
 

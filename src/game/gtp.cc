@@ -5,7 +5,6 @@
 
 #include "data/supervised.h"
 #include "neural/encoder.h"
-#include "search/end_game.h"
 
 #include <iomanip>
 #include <iostream>
@@ -26,6 +25,7 @@ void GtpLoop::Loop() {
             }
 
             if (parser.GetCount() == 1 && parser.Find("quit")) {
+                agent_->Quit();
                 LOGGING << GTPSuccess("");
                 break;
             }
@@ -46,9 +46,9 @@ std::string GtpLoop::Execute(CommandParser &parser) {
     if (const auto res = parser.Find("protocol_version", 0)) {
         out << GTPSuccess(std::to_string(kProtocolVerion));
     } else if (const auto res = parser.Find("name", 0)) {
-        out << GTPSuccess("NA");
+        out << GTPSuccess("Name");
     } else if (const auto res = parser.Find("version", 0)) {
-        out << GTPSuccess("NA");
+        out << GTPSuccess("Version");
     } else if (const auto res = parser.Find("showboard", 0)) {
         agent_->GetState().ShowBoard();
         out << GTPSuccess("");
@@ -61,6 +61,7 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             out << GTPFail("");
         }
         agent_->GetState().Reset(size, agent_->GetState().GetKomi());
+        agent_->GetNetwork().Reload(size);
     } else if (const auto res = parser.Find("clear_board", 0)){
         agent_->GetState().ClearBoard();
         out << GTPSuccess("");
@@ -128,7 +129,13 @@ std::string GtpLoop::Execute(CommandParser &parser) {
     } else if (const auto res = parser.Find("final_score", 0)) {
         out << GTPFail("");
     } else if (const auto res = parser.Find("genmove", 0)) {
-        out << GTPFail("");
+        auto color = agent_->GetState().GetToMove();
+        if (const auto input = parser.GetCommand(1)) {
+
+        }
+        auto move = agent_->GetSearch().ThinkBestMove();
+        agent_->GetState().PlayMove(move, color);
+        out << GTPSuccess(agent_->GetState().VertexToText(move));
     } else if (const auto res = parser.Find("kgs-genmove_cleanup", 0)) {
         out << GTPFail("");
     } else if (const auto res = parser.Find("kgs-time_settings", 0)) {

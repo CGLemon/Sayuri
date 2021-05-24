@@ -5,7 +5,7 @@ import numpy as np
 
 from symmetry import *
 from nnprocess import NNProcess
-from chunkparser import ChunkParser
+from loader import Loader
 
 from torch.utils.data import DataLoader
 
@@ -16,53 +16,63 @@ def dump_dependent_version():
 
 class DataSet():
     def __init__(self, cfg, dirname):
-        self.parser = ChunkParser(cfg, dirname)
+        self.data_loader = Loader(cfg, dirname)
         self.cfg = cfg
         self.board_size = cfg.boardsize
         self.input_channels = cfg.input_channels
-        self.symmetry = Symmetry(self.board_size)
+        self.symmetry = Symmetry()
 
     def __getitem__(self, idx):
-        data = self.parser[idx]
+        data = self.data_loader[idx]
 
         symm = int(np.random.choice(8, 1)[0])
 
-        assert self.board_size == data.board_size, ""
-        num_intersections = self.board_size * self.board_size
+        num_intersections = data.board_size * data.board_size
 
         input_planes = np.zeros((self.input_channels, num_intersections))
-        prob = np.zeros(num_intersections + 1)
-        aux_prob = np.zeros(num_intersections + 1)
+        prob = np.zeros(num_intersections+1)
+        aux_prob = np.zeros(num_intersections+1)
         ownership = np.zeros(num_intersections)
         result = np.zeros(3)
         final_score = np.zeros(1)
 
+        buf = np.zeros(num_intersections)
+
         # input planes
         for p in range(self.input_channels-2):
-            for index in range(num_intersections):
-                symm_index = self.symmetry.get_symmetry(symm, index)
-                input_planes[p][symm_index] = data.planes[p][index]
+            buf[:] = data.planes[p][:]
+            buf = self.symmetry.get_transform_planes(symm, buf, data.board_size)
+            input_planes[p][:] = buf[:]
 
         if data.to_move == 1:
-            input_planes[self.input_channels-2][:] = 1
+            input_planes[self.input_channels-2][:] = data.komi/10
         else:
-            input_planes[self.input_channels-1][:] = 1
+            input_planes[self.input_channels-1][:] = data.komi/10
 
-        input_planes = np.reshape(input_planes, (self.input_channels, self.board_size, self.board_size))
+        # probabilities
+        buf[:] = data.prob[0:num_intersections]
+        buf = self.symmetry.get_transform_planes(symm, buf, data.board_size)
 
-        # probabilities, auxiliary probabilities, ownership
-        for index in range(num_intersections):
-            symm_index = self.symmetry.get_symmetry(symm, index)
-            prob[symm_index] = data.prob[index]
-            aux_prob[symm_index] = data.aux_prob[index]
-            ownership[symm_index] = data.ownership[index]
-
+        prob[0:num_intersections] = buf[:]
         prob[num_intersections] = data.prob[num_intersections]
+
+        # auxiliary probabilities
+        buf[:] = data.aux_prob[0:num_intersections]
+        buf = self.symmetry.get_transform_planes(symm, buf, data.board_size)
+
+        aux_prob[0:num_intersections] = buf[:]
         aux_prob[num_intersections] = data.aux_prob[num_intersections]
+
+        # ownership
+        buf[:] = data.ownership[:]
+        buf = self.symmetry.get_transform_planes(symm, buf, data.board_size)
+        ownership[:] = buf[:]
 
         # winrate
         result[1 - data.result] = 1
         final_score[0] = data.final_score
+
+        input_planes = np.reshape(input_planes, (self.input_channels, data.board_size, data.board_size))
 
         return (
             torch.tensor(input_planes).float(),
@@ -74,7 +84,7 @@ class DataSet():
         )
 
     def __len__(self):
-        return len(self.parser)
+        return len(self.data_loader)
 
 class DataModule(pl.LightningDataModule):
     def __init__(self, cfg):
@@ -125,21 +135,22 @@ class Network(NNProcess, pl.LightningModule):
 
         def huber_loss(x, y, delta):
             absdiff = torch.abs(x - y)
-            return torch.where(absdiff > delta, (0.5 * delta*delta) + delta * (absdiff - delta), 0.5 * absdiff * absdiff)
+            loss = torch.where(absdiff > delta, (0.5 * delta*delta) + delta * (absdiff - delta), 0.5 * absdiff * absdiff)
+            return torch.mean(torch.sum(loss, dim=1), dim=0)
 
         porb_loss = cross_entropy(pred_prob, target_prob)
         aux_porb_loss = 0.15 * cross_entropy(pred_aux_prob, target_aux_prob)
         ownership_loss = 0.15 * F.mse_loss(pred_ownership, target_ownership)
-        result_loss = cross_entropy(pred_result, target_result)
+        wdl_loss = cross_entropy(pred_result, target_result)
 
         pred_final_score, pred_score_width = torch.split(pred_score, [1, 1], dim=1)
         pred_final_score = 20 * pred_final_score
         fina_score_loss = 0.0012 * huber_loss(pred_final_score, target_final_score, 12)
 
-        target_score_width = torch.abs(pred_final_score - target_final_score)
+        target_score_width = torch.pow(pred_final_score - target_final_score, 2)
         score_width_loss = 0.0012 * huber_loss(pred_score_width, target_score_width, 12)
 
-        return porb_loss, aux_porb_loss, ownership_loss, result_loss, fina_score_loss, score_width_loss
+        return porb_loss, aux_porb_loss, ownership_loss, wdl_loss, fina_score_loss, score_width_loss
 
     def training_step(self, batch, batch_idx):
         planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_score = batch

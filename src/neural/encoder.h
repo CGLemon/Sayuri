@@ -47,6 +47,7 @@ private:
                     std::vector<float>::iterator ladder_it, int symmetry) const;
 
     void FillSideToMove(std::shared_ptr<const Board> board,
+                        float komi,
                         std::vector<float>::iterator color_it) const;
 
     void EncoderFeatures(const GameState &state,

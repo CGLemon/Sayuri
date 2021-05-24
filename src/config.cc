@@ -55,9 +55,11 @@ void InitOptionsMap() {
     options_map["defualt_komi"] << Option::setoption(kDefaultKomi);
 
     options_map["playouts"] << Option::setoption(1600);
+    options_map["batch_size"] << Option::setoption(1);
     options_map["threads"] << Option::setoption(1);
 
     options_map["weights_file"] << Option::setoption(kNoWeightsFile);
+    options_map["gpu"] << Option::setoption(0);
 }
 
 void InitBasicParameters() {

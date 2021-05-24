@@ -1,4 +1,4 @@
-#include "search/time_control.h"
+#include "mcts/time_control.h"
 #include "game/types.h"
 
 #include <iomanip>

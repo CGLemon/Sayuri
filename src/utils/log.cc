@@ -55,7 +55,7 @@ Logging::Logging(const char* file, int line, bool write_only) {
 
 Logging::~Logging() {
     if (!write_only_) {
-        std::cerr << str() << std::flush;
+        std::cout << str() << std::flush;
     }
     LogWriter::Get().WriteString(str());
 }

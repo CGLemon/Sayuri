@@ -33,6 +33,8 @@ public:
 
     std::string VertexToSgf(const int vtx);
 
+    std::string VertexToText(const int vtx);
+
     // GTP interface to play move.
     bool PlayTextMove(std::string input);
 

@@ -4,7 +4,7 @@
 #include "game/sgf.h"
 #include "game/types.h"
 #include "neural/encoder.h"
-#include "search/end_game.h"
+#include "mcts/end_game.h"
 #include "utils/log.h"
 
 #include <fstream>
@@ -62,7 +62,17 @@ void Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
     }
 
     const auto black_final_score = (float)black_score_on_board - state.GetKomi();
+    auto game_winner = kUndecide;
 
+    if (std::abs(black_final_score) < 1e-4) {
+        game_winner = kDraw;
+    } else if (black_final_score > 0) {
+        game_winner = kBlackWon;
+    } else if (black_final_score < 0) {
+        game_winner = kWhiteWon;
+    }
+
+    assert(game_winner == state.GetWinner());
     (void) success;
 
     auto history = state.GetHistory();
@@ -83,7 +93,7 @@ void Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
     const auto board_size = state.GetBoardSize();
     const auto num_intersections = state.GetNumIntersections();
     const auto komi = state.GetKomi();
-    const auto winner = state.GetWinner();
+    const auto winner = game_winner;
 
     auto train_datas = std::vector<TrainingBuffer>{};
 
