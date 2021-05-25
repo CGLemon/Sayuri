@@ -1141,7 +1141,7 @@ int SimpleBoard::GetLiberties(const int vtx) const {
 }
 
 int SimpleBoard::GetStones(const int vtx) const {
-    return strings_.GetStones(vtx);
+    return strings_.GetStones(strings_.GetParent(vtx));
 }
 
 void SimpleBoard::UpdateZobrist(const int vtx,

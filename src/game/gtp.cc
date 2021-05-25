@@ -131,10 +131,16 @@ std::string GtpLoop::Execute(CommandParser &parser) {
     } else if (const auto res = parser.Find("genmove", 0)) {
         auto color = agent_->GetState().GetToMove();
         if (const auto input = parser.GetCommand(1)) {
-
+            auto color_str = input->Get<std::string>();
+            if (color_str == "b" || color_str == "B" || color_str == "black") {
+                color = kBlack;
+            } else if (color_str == "w" || color_str == "W" || color_str == "white") {
+                color = kWhite;
+            }
         }
+        agent_->GetState().SetColor(color);
         auto move = agent_->GetSearch().ThinkBestMove();
-        agent_->GetState().PlayMove(move, color);
+        agent_->GetState().PlayMove(move);
         out << GTPSuccess(agent_->GetState().VertexToText(move));
     } else if (const auto res = parser.Find("kgs-genmove_cleanup", 0)) {
         out << GTPFail("");
@@ -149,9 +155,48 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             out << GTPFail("");
         }
     } else if (const auto res = parser.Find("time_settings", 0)) {
-        out << GTPFail("");
+        int main_time = -1, byo_yomi_time = -1, byo_yomi_stones = -1;
+
+        if (const auto input = parser.GetCommand(1)) {
+            main_time = input->Get<int>();
+        }
+        if (const auto input = parser.GetCommand(2)) {
+            byo_yomi_time = input->Get<int>();
+        }
+        if (const auto input = parser.GetCommand(3)) {
+            byo_yomi_stones = input->Get<int>();
+        }
+
+        if (main_time == -1 || byo_yomi_time == -1 || byo_yomi_stones == -1) {
+            out << GTPFail("");
+        } else {
+            agent_->GetSearch().TimeSettings(main_time, byo_yomi_time, byo_yomi_stones);
+            out << GTPSuccess("");
+        }
     } else if (const auto res = parser.Find("time_left", 0)) {
-        out << GTPFail("");
+        int color = kInvalid, time = -1, stones = -1;
+
+        if (const auto input = parser.GetCommand(1)) {
+            auto color_str = input->Get<std::string>();
+            if (color_str == "b" || color_str == "B" || color_str == "black") {
+                color = kBlack;
+            } else if (color_str == "w" || color_str == "W" || color_str == "white") {
+                color = kWhite;
+            }
+        }
+        if (const auto input = parser.GetCommand(2)) {
+            time = input->Get<int>();
+        }
+        if (const auto input = parser.GetCommand(3)) {
+            stones = input->Get<int>();
+        }
+
+        if (color == kInvalid || time == -1 || stones == -1) {
+            out << GTPFail("");
+        } else {
+            agent_->GetSearch().TimeLeft(color, time, stones);
+            out << GTPSuccess("");
+        }
     } else if (const auto res = parser.Find("final_status_list", 0)) {
         out << GTPFail("");
     } else if (const auto res = parser.Find({"help", "list_commands"}, 0)) {
@@ -205,7 +250,7 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             symmetry = symm->Get<int>();
         }
 
-        out << GTPSuccess(agent_->GetNetwork().GetOutputString(agent_->GetState(), Network::DIRECT, symmetry));
+        out << GTPSuccess(agent_->GetNetwork().GetOutputString(agent_->GetState(), Network::kDirect, symmetry));
     } else {
         out << GTPFail("unknown command");
     }

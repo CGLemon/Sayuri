@@ -17,6 +17,8 @@ public:
     // GTP interface to clear the board.
     void ClearBoard();
 
+    bool PlayRandomMove(bool end_game);
+
     bool PlayMove(const int vtx);
 
     bool PlayMove(const int vtx, const int color);
@@ -49,10 +51,14 @@ public:
 
     float GetFinalScore(float bonus = 0) const;
 
+    bool IsGameOver() const;
     bool IsSuperko() const;
+    bool IsLegalMove(const int vertex) const;
     bool IsLegalMove(const int vertex, const int color) const;
     bool IsLegalMove(const int vertex, const int color,
                      std::function<bool(int, int)> AvoidToMove) const;
+
+    std::vector<int> GetOwnership();
 
     int GetVertex(const int x, const int y) const;
     int GetIndex(const int x, const int y) const;
@@ -78,6 +84,8 @@ public:
 
     std::shared_ptr<const Board> GetPastBoard(unsigned int p) const;
     const std::vector<std::shared_ptr<const Board>>& GetHistory() const;
+
+    float black_final_score;
 
 private:
     void SetHandicap(int handicap);

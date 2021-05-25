@@ -4,6 +4,11 @@
 #include <iomanip>
 #include <cassert>
 #include <algorithm>
+#include <sstream>
+
+TimeControl::TimeControl() {
+    TimeSettings(0, 0, 0);
+}
 
 void TimeControl::TimeSettings(const int main_time,
                                const int byo_yomi_time,
@@ -41,11 +46,15 @@ void TimeControl::TimeLeft(const int color, const int time, const int stones) {
 }
 
 void TimeControl::Clock() {
-    timer_.clock();
+    timer_.Clock();
 }
 
 void TimeControl::TookTime(int color) {
     assert(color == kBlack || color == kWhite);
+
+    if (IsInfiniteTime()) {
+        return;
+    }
 
     assert(!IsTimeOver(color));
     float remaing_took_time = timer_.GetDuration();
@@ -95,10 +104,17 @@ void TimeControl::CheckInByo() {
     in_byo_[kWhite] = (maintime_left_[kWhite] <= 0.f);
 }
 
+std::string TimeControl::ToString() const {
+    auto out = std::ostringstream{};
+    TimeStream(out);
+    return out.str();
+}
+
 void TimeControl::TimeStream(std::ostream &out) const {
     TimeStream(out, kBlack);
     out << " | ";
     TimeStream(out, kWhite);
+    out << std::endl;
 }
 
 void TimeControl::TimeStream(std::ostream &out, int color) const {
@@ -110,7 +126,9 @@ void TimeControl::TimeStream(std::ostream &out, int color) const {
         out << "White time: ";
     }
 
-    if (!in_byo_[color]) {
+    if (IsInfiniteTime()) {
+        out << "infinite";
+    } else if (!in_byo_[color]) {
        const int remaining = static_cast<int>(maintime_left_[color]);
        const int hours = remaining / 3600;
        const int minutes = (remaining % 3600) / 60;
@@ -128,7 +146,7 @@ void TimeControl::TimeStream(std::ostream &out, int color) const {
        out << std::setw(2) << hours << ":";
        out << std::setw(2) << std::setfill('0') << minutes << ":";
        out << std::setw(2) << std::setfill('0') << seconds << ", ";;
-       out << "Stones left : " << stones_left;
+       out << "Stones left: " << stones_left;
     }
     out << std::setfill(' ');
 }
@@ -136,24 +154,27 @@ void TimeControl::TimeStream(std::ostream &out, int color) const {
 float TimeControl::GetThinkingTime(int color, int boardsize, int move_num) const {
     assert(color == kBlack || color == kWhite);
 
-    if(!IsTimeOver(color)) {
-        // No time to use;
-        return 0.f;
-    }
-
     if(IsInfiniteTime()) {
         return 31 * 24 * 60 * 60 * 100;
     }
 
-    auto time_remaining = 0;
+    if(IsTimeOver(color)) {
+        // No time to use;
+        return 0.f;
+    }
+
+    auto time_remaining = 0.f;
     auto moves_remaining = 0;
-    auto extra_time_per_move = 0;
+    auto extra_time_per_move = 0.f;
 
     if (in_byo_[color]) {
         time_remaining = byotime_left_[color];
         moves_remaining = stones_left_[color];
     } else {
-        int byo_extra = byotime_left_[color] / stones_left_[color];
+        float byo_extra = 0;
+        if (stones_left_[color] > 0) {
+            byo_extra = byotime_left_[color] / stones_left_[color];
+        }
 
         time_remaining = maintime_left_[color] + byo_extra;
         moves_remaining = EstimateMovesExpected(boardsize, move_num, 0);
@@ -183,13 +204,11 @@ bool TimeControl::IsInfiniteTime() const {
 }
 
 int TimeControl::EstimateMovesExpected(int boardsize, int move_num, int div_delta) const {
+    const int num_intersections = boardsize * boardsize;
 
-    const int board_div = 5 + div_delta;
-    const int num_intersections = (boardsize * boardsize);
-
-    const int base_remaining = num_intersections / board_div;
-    const int fast_moves = num_intersections / 6;
-    const int moves_buffer = (num_intersections / 9);
+    const int base_remaining = num_intersections / (4 + div_delta);
+    const int fast_moves = num_intersections / (6 + div_delta);
+    const int moves_buffer = num_intersections / (20 + div_delta);
 
     int estimate_moves = 0;
 

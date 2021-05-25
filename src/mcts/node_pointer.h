@@ -125,7 +125,7 @@ inline bool NodePointer<NodeType, DataType>::Inflate() {
         auto new_pointer =
             reinterpret_cast<std::uint64_t>(new NodeType(data_)) | kPointer;
         auto old_pointer = pointer_.exchange(new_pointer);
-#ifndef NDEBUG
+#ifdef NDEBUG
         (void) old_pointer;
 #endif
         assert(IsInflating(old_pointer));

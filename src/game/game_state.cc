@@ -3,6 +3,11 @@
 #include "utils/parser.h"
 #include "utils/log.h"
 
+#include "neural/fast_policy.h"
+
+#include "utils/random.h"
+#include <random>
+
 void GameState::Reset(const int boardsize, const float komi) {
     board_.Reset(boardsize);
     SetKomi(komi);
@@ -16,6 +21,96 @@ void GameState::Reset(const int boardsize, const float komi) {
 
 void GameState::ClearBoard() {
     Reset(GetBoardSize(), GetKomi());
+}
+
+bool GameState::PlayRandomMove(bool end_game) {
+
+    auto policy = std::vector<float>{};
+    const auto board_size = GetBoardSize();
+
+    if (end_game) {
+        policy = std::vector<float>(GetNumIntersections(), 0.f);
+    } else {
+        policy = FastPolicy::Get().Forward(*this);
+    }
+
+    const auto random_prob_move = [](std::vector<std::pair<float, int>> &list) {
+        float acc = 0.f;
+
+        for (auto &e : list) {
+            acc += e.first;
+            e.first = acc;
+        }
+
+        auto size = list.size();
+        auto rng = Random<RandomType::kXoroShiro128Plus>::Get();
+        auto dis = std::uniform_real_distribution<float>(0, acc);
+        auto p = dis(rng);
+
+        for (size_t i = 1; i < size; ++i) {
+            auto low = list[i-1].first;
+            auto high = list[i].first;
+          
+            if (p >= low && p < high) {
+                return list[i].second;
+            }
+        }
+        return list[0].second;
+    };
+
+    auto simple_ownership = board_.GetSimpleOwnership();
+
+    int color = GetToMove();
+    auto movelist = std::vector<std::pair<float, int>>{};
+    auto acc_prob = 0.f;
+
+    for (int idx = 0; idx < GetNumIntersections(); ++idx) {
+        const auto prob = policy[idx];
+        const auto x = idx % board_size;
+        const auto y = idx / board_size;
+        const auto vtx = GetVertex(x, y);
+
+        if (end_game &&
+                simple_ownership[idx] != kEmpty &&
+                !board_.IsCaptureMove(vtx, color) &&
+                !board_.IsCaptureMove(vtx, !color)) {
+            continue;
+        }
+
+        if (!IsLegalMove(vtx, color)) {
+            continue;
+        }
+
+        if (board_.IsRealEye(vtx, color)) {
+            continue;
+        }
+
+        if (end_game) {
+            auto fork_board = board_;
+            fork_board.PlayMoveAssumeLegal(vtx, color);
+
+            if (fork_board.GetLiberties(vtx) <= 1) {
+                continue;
+            }
+        }
+        acc_prob += prob;
+        movelist.emplace_back(prob, vtx);
+
+    }
+
+    if (!movelist.empty()) {
+        if (acc_prob == 0.0f) {
+            auto new_prob = 1.f / (float)movelist.size();
+            for (auto &m : movelist) {
+                m.first = new_prob;
+            }
+        }
+
+        auto move = random_prob_move(movelist);
+        PlayMove(move);
+    }
+
+    return !movelist.empty();
 }
 
 bool GameState::PlayMove(const int vtx) {
@@ -242,6 +337,10 @@ void GameState::SetHandicap(int handicap) {
     handicap_ = handicap;
 }
 
+bool GameState::IsGameOver() const {
+    return winner_ != kUndecide || GetPasses() >= 2;
+}
+
 bool GameState::IsSuperko() const {
     auto first = std::crbegin(ko_hash_history_);
     auto last = std::crend(ko_hash_history_);
@@ -249,6 +348,10 @@ bool GameState::IsSuperko() const {
     auto res = std::find(++first, last, GetKoHash());
 
     return (res != last);
+}
+
+bool GameState::IsLegalMove(const int vertex) const {
+    return board_.IsLegalMove(vertex, GetToMove());
 }
 
 bool GameState::IsLegalMove(const int vertex, const int color) const {
@@ -281,6 +384,60 @@ bool GameState::SetFreeHandicap(std::vector<std::string> movelist) {
         return true;
     }
     return false;
+}
+
+std::vector<int> GameState::GetOwnership() {
+    auto state = *this;
+
+    auto num_intersections = GetNumIntersections();
+    auto buffer = std::vector<int>(num_intersections, 0);
+
+    static constexpr int kPlayoutsCount = 200;
+
+    auto end_game = (state.GetPasses() >=2);
+
+    for (int p = 0; p < kPlayoutsCount; ++p) {
+        int moves = 0;
+        while(true) {
+            if (!state.PlayRandomMove(end_game)) {
+                state.PlayMove(kPass);
+            }
+
+            if (state.GetPasses() >= 4) {
+                break;     
+            }
+
+            if (moves++ >= 2 * num_intersections) {
+                break;     
+            }
+        }
+
+        auto final_ownership = state.board_.GetSimpleOwnership();
+
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            auto owner = final_ownership[idx];
+            if (owner == kBlack) {
+                buffer[idx] += 1;
+            } else if (owner == kWhite) {
+                buffer[idx] -= 1;
+            }
+        }
+    }
+
+    auto reuslt = std::vector<int>(num_intersections, kInvalid);
+    auto thes = (int)(0.9 * kPlayoutsCount);
+
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        if (buffer[idx] >= thes) {
+            reuslt[idx] = kBlack;
+        } else if (buffer[idx] <= -thes) {
+            reuslt[idx] = kWhite;
+        } else if (buffer[idx] == 0) {
+            reuslt[idx] = kEmpty;
+        }
+    }
+
+    return reuslt;
 }
 
 float GameState::GetFinalScore(float bonus) const {

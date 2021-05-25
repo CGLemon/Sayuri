@@ -68,6 +68,9 @@ public:
     // Reture true if the string is ladder.
     bool IsLadder(const int vtx) const;
 
+    // Reture true if the point is read eye.
+    bool IsRealEye(const int vtx, const int color) const;
+
     // Play the move assume the move is legal.
     void PlayMoveAssumeLegal(const int vtx, const int color);
 
@@ -154,9 +157,6 @@ protected:
 
     // Reture true if the point is eye shape.
     bool IsSimpleEye(const int vtx, const int color) const;
-
-    // Reture true if the point is read eye.
-    bool IsRealEye(const int vtx, const int color) const;
 
     // Reture true if the move will kill itself.
     bool IsSuicide(const int vtx, const int color) const;

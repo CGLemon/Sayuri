@@ -14,10 +14,10 @@ const std::string CurrentDateTime() {
 }
 
 Timer::Timer() {
-    clock();
+    Clock();
 }
 
-void Timer::clock() {
+void Timer::Clock() {
     clock_time_ = std::chrono::steady_clock::now();
 }
 

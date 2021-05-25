@@ -1,13 +1,14 @@
 #pragma once
 
 #include <array>
+#include <string>
 #include <iostream>
 
 #include "utils/time.h"
 
 class TimeControl {
 public:
-    TimeControl() = default;
+    TimeControl();
 
     void TimeSettings(const int main_time,
                       const int byo_yomi_time,
@@ -26,6 +27,7 @@ public:
 
     void TimeStream(std::ostream &out) const;
     void TimeStream(std::ostream &out, int color) const;
+    std::string ToString() const;
 
 private:
     void Reset();

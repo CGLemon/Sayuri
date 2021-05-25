@@ -151,7 +151,7 @@ void SgfNode::PopulateState(GameState currstate) {
                 }
             }
         }
-        (void) black_final_score;
+        GetState().black_final_score = black_final_score;
     }
 
     if (const auto res = GetPropertyValue("PL")) {

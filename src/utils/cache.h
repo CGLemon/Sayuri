@@ -41,6 +41,7 @@ public:
     // Unpin the item to the cache.
     void Unpin(std::uint64_t key);
 
+    void Clear();
 
 private:
     void Evict() REQUIRES(mutex_);
@@ -142,6 +143,13 @@ void LruCache<V>::Evict() {
     }
     order_.pop_front();
     allocated_--;
+}
+
+template<typename V>
+void LruCache<V>::Clear() {
+    while (allocated_ > 0) {
+        Evict();
+    }
 }
 
 template<typename V>

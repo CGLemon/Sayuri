@@ -12,13 +12,14 @@
 class Network {
 public:
     enum Ensemble {
-        NONE, DIRECT, RANDOM_SYMMETRY
+        kNone, kDirect, kRandom
     };
 
     using Inputs = InputData;
     using Result = OutputResult;
     using Cache = LruCache<Result>;
-    
+    using PolicyVertexPair = std::pair<float, int>;
+
     void Initialize(const std::string &weights);
     void Destroy();
 
@@ -33,6 +34,9 @@ public:
                                 int symmetry = -1);
 
     void Reload(int board_size);
+
+    void SetCacheSize(int playouts);
+    void ClearCache();
 
 private:
     bool ProbeCache(const GameState &state, Result &result);

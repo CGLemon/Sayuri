@@ -77,6 +77,7 @@ set(NEURAL_SOURCES
     ${NEURAL_SOURCES_DIR}/description.cc
     ${NEURAL_SOURCES_DIR}/encoder.cc
     ${NEURAL_SOURCES_DIR}/network.cc
+    ${NEURAL_SOURCES_DIR}/fast_policy.cc
 
     ${NEURAL_SOURCES_DIR}/blas/sgemm.cc
     ${NEURAL_SOURCES_DIR}/blas/blas.cc
@@ -95,7 +96,6 @@ set(DATA_SOURCES
     )
 
 set(MCTS_SOURCES
-    ${MCTS_SOURCES_DIR}/end_game.cc
     ${MCTS_SOURCES_DIR}/time_control.cc
     ${MCTS_SOURCES_DIR}/node.cc
     ${MCTS_SOURCES_DIR}/search.cc

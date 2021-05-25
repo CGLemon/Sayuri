@@ -4,7 +4,7 @@
 #include "game/types.h"
 #include "config.h"
 #include "utils/parser.h"
-// #include "neural/network.h"
+#include "neural/fast_policy.h"
 #include "mcts/search.h"
 
 #include <memory>
@@ -51,6 +51,8 @@ public:
                                      GetOption<float>("defualt_komi"));
         agent_->GetNetwork().Initialize(GetOption<std::string>("weights_file"));
         agent_->ApplySearch();
+
+        FastPolicy::Get().LoaderFile();
 
         Loop();
     }

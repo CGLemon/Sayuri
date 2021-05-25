@@ -4,7 +4,6 @@
 #include "game/sgf.h"
 #include "game/types.h"
 #include "neural/encoder.h"
-#include "mcts/end_game.h"
 #include "utils/log.h"
 
 #include <fstream>
@@ -41,16 +40,17 @@ void Supervised::FromSgf(std::string sgf_name, std::string out_name) {
 void Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
     GameState state = Sgf::Get().FormString(sgfstring, 9999);
 
-    auto final_ownership = EndGame::Get(state).GetFinalOwnership();
+    auto ownership = state.GetOwnership();
 
     auto success = true;
     auto black_score_on_board = 0;
-    const auto bsize = state.GetBoardSize();
+    const auto board_size = state.GetBoardSize();
 
-    for (int y = 0; y < bsize; ++y) {
-        for (int x = 0; x < bsize; ++x) {
-            auto index = state.GetIndex(x, bsize-y-1);
-            auto owner = final_ownership[index];
+    for (int y = 0; y < board_size; ++y) {
+        for (int x = 0; x < board_size; ++x) {
+            auto index = state.GetIndex(x, board_size-y-1);
+            auto owner = ownership[index];
+
             if (owner == kBlack) {
                 black_score_on_board += 1;
             } else if (owner == kWhite) {
@@ -72,7 +72,6 @@ void Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
         game_winner = kWhiteWon;
     }
 
-    assert(game_winner == state.GetWinner());
     (void) success;
 
     auto history = state.GetHistory();
@@ -90,7 +89,6 @@ void Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
     GameState main_state;
     main_state.Reset(state.GetBoardSize(), state.GetKomi());
 
-    const auto board_size = state.GetBoardSize();
     const auto num_intersections = state.GetNumIntersections();
     const auto komi = state.GetKomi();
     const auto winner = game_winner;
@@ -136,9 +134,9 @@ void Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
         buf.auxiliary_probabilities[VertexToIndex(main_state, aux_vtx)] = 1.0f;
 
         for (int idx = 0; idx < num_intersections; ++idx) {
-            if (final_ownership[idx] == buf.side_to_move) {
+            if (ownership[idx] == buf.side_to_move) {
                 buf.ownership[idx] = 1; 
-            } else if (final_ownership[idx] == !buf.side_to_move) {
+            } else if (ownership[idx] == !buf.side_to_move) {
                 buf.ownership[idx] = -1;
             }
         }

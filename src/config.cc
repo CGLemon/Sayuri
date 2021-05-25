@@ -49,17 +49,30 @@ void InitOptionsMap() {
     options_map["version"] << Option::setoption(kVersion);
     options_map["help"] << Option::setoption(false);
 
+    options_map["analysis_verbose"] << Option::setoption(false);
     options_map["mode"] << Option::setoption("gtp");
 
     options_map["defualt_boardsize"] << Option::setoption(kDefaultBoardSize);
     options_map["defualt_komi"] << Option::setoption(kDefaultKomi);
 
     options_map["playouts"] << Option::setoption(1600);
+    options_map["visits"] << Option::setoption(1600);
     options_map["batch_size"] << Option::setoption(1);
     options_map["threads"] << Option::setoption(1);
 
     options_map["weights_file"] << Option::setoption(kNoWeightsFile);
     options_map["gpu"] << Option::setoption(0);
+
+    options_map["resign_threshold"] << Option::setoption(0.1f, 1.f, 0.f);
+
+    options_map["fpu_reduction"] << Option::setoption(0.25f);
+    options_map["fpu_root_reduction"] << Option::setoption(0.25f);
+    options_map["cpuct_init"] << Option::setoption(2.5f);
+    options_map["cpuct_root_init"] << Option::setoption(2.5f);
+    options_map["cpuct_base"] << Option::setoption(19652.f);
+    options_map["cpuct_root_base"] << Option::setoption(19652.f);
+    options_map["draw_factor"] << Option::setoption(0.f);
+    options_map["draw_root_factor"] << Option::setoption(0.f);
 }
 
 void InitBasicParameters() {
@@ -103,9 +116,16 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         parser.RemoveCommand(res->Index());
     }
 
-    if (const auto res = parser.Find({"--playouts", "-p"})) {
-        SetOption("playouts", true);
+    if (const auto res = parser.Find("--analysis-verbose")) {
+        SetOption("analysis_verbose", true);
         parser.RemoveCommand(res->Index());
+    }
+
+    if (const auto res = parser.FindNext({"--playouts", "-p"})) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("playouts", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
     }
 
     if (const auto res = parser.FindNext({"--logfile", "-l"})) {

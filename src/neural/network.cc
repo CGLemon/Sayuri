@@ -16,6 +16,7 @@
 #endif
 #endif
 
+#include "config.h"
 #include "neural/blas/blas_forward_pipe.h"
 #include "game/symmetry.h"
 #include "neural/loader.h"
@@ -48,7 +49,6 @@ void Network::Initialize(const std::string &weightsfile) {
                 << "library." << std::endl;
 #endif
 
-
 #ifdef USE_CUDA
     using backend = CudaForwardPipe;
 #else
@@ -66,6 +66,15 @@ void Network::Initialize(const std::string &weightsfile) {
     }
 
     pipe_->Initialize(dnn_weights);
+    SetCacheSize(GetOption<int>("playouts"));
+}
+
+void Network::SetCacheSize(int playouts) {
+    nn_cache_.SetCapacity(playouts * 20);
+}
+
+void Network::ClearCache() {
+    nn_cache_.Clear();
 }
 
 Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
@@ -179,14 +188,15 @@ Network::GetOutput(const GameState &state,
                    const bool read_cache,
                    const bool write_cache) {
     Result result;
-    if (ensemble == NONE) {
+    if (ensemble == kNone) {
         symmetry = Symmetry::kIdentitySymmetry;
-    } else if (ensemble == DIRECT) {
+    } else if (ensemble == kDirect) {
         assert(symmetry >= 0 && symmetry < Symmetry::kNumSymmetris);
-    } else if (ensemble == RANDOM_SYMMETRY) {
+    } else if (ensemble == kRandom) {
         auto rng = Random<RandomType::kXoroShiro128Plus>::Get();
         symmetry = rng.RandFix<Symmetry::kNumSymmetris>();
     }
+
     // Get result from cache, if the it is in the cache memory.
     if (read_cache) {
         if (ProbeCache(state, result)) {
