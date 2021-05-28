@@ -24,9 +24,9 @@ struct InputData {
 struct OutputResult {
     OutputResult() : board_size(-1),
                      pass_probability(0.f),
-                     winrate(0.f),
-                     final_score(0.f), 
-                     score_width(0.f) {
+                     wdl_winrate(0.f),
+                     stm_winrate(0.f),
+                     final_score(0.f) {
         wdl.fill(0.0f);
         probabilities.fill(0.f);
         ownership.fill(0.f);
@@ -35,10 +35,9 @@ struct OutputResult {
     int board_size;
 
     float pass_probability;
-    float winrate;
-
+    float wdl_winrate;
+    float stm_winrate;
     float final_score;
-    float score_width;
 
     std::array<float, 3> wdl;
     std::array<float, kNumIntersections> probabilities;

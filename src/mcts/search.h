@@ -28,8 +28,8 @@ public:
         assert(state.GetPasses() >= 2);
 
         auto black_score = 0;
+        auto ownership = state.GetOwnership(20);
 
-        auto ownership = state.GetOwnership();
         for (int idx = 0; idx < (int)ownership.size(); ++idx) {
             auto owner = ownership[idx];
             if (owner == kBlack) {
@@ -44,6 +44,7 @@ public:
         }
 
         auto black_final_score = (float)black_score - state.GetKomi();
+        nn_evals_-> black_final_score = black_final_score;
 
         if (black_final_score > 1e-4) {
             nn_evals_->black_wl = 1.0f;
@@ -63,6 +64,9 @@ private:
 
 struct ComputationResult {
     int best_move{kNullVertex};
+    float root_eval;
+    float final_score;
+    std::vector<float> ownership;
 };
 
 class Search {

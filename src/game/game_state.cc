@@ -24,7 +24,6 @@ void GameState::ClearBoard() {
 }
 
 bool GameState::PlayRandomMove(bool end_game) {
-
     auto policy = std::vector<float>{};
     const auto board_size = GetBoardSize();
 
@@ -95,7 +94,6 @@ bool GameState::PlayRandomMove(bool end_game) {
         }
         acc_prob += prob;
         movelist.emplace_back(prob, vtx);
-
     }
 
     if (!movelist.empty()) {
@@ -313,7 +311,7 @@ std::string GameState::GetStateString() const {
 
 
 void GameState::ShowBoard() const {
-    LOGGING << board_.GetBoardString(board_.GetLastMove(), false);
+    LOGGING << board_.GetBoardString(board_.GetLastMove(), true);
     LOGGING << GetStateString();
 }
 
@@ -386,18 +384,19 @@ bool GameState::SetFreeHandicap(std::vector<std::string> movelist) {
     return false;
 }
 
-std::vector<int> GameState::GetOwnership() {
-    auto state = *this;
-
+std::vector<int> GameState::GetOwnership(int playouts) {
     auto num_intersections = GetNumIntersections();
     auto buffer = std::vector<int>(num_intersections, 0);
 
-    static constexpr int kPlayoutsCount = 200;
+    static constexpr int kMaxPlayoutsCount = 200;
 
-    auto end_game = (state.GetPasses() >=2);
+    playouts = std::min(playouts, kMaxPlayoutsCount);
 
-    for (int p = 0; p < kPlayoutsCount; ++p) {
+    auto end_game = (GetPasses() >= 2);
+
+    for (int p = 0; p < playouts; ++p) {
         int moves = 0;
+        auto state = *this;
         while(true) {
             if (!state.PlayRandomMove(end_game)) {
                 state.PlayMove(kPass);
@@ -425,7 +424,7 @@ std::vector<int> GameState::GetOwnership() {
     }
 
     auto reuslt = std::vector<int>(num_intersections, kInvalid);
-    auto thes = (int)(0.9 * kPlayoutsCount);
+    auto thes = (int)(0.7 * playouts);
 
     for (int idx = 0; idx < num_intersections; ++idx) {
         if (buffer[idx] >= thes) {
@@ -434,6 +433,11 @@ std::vector<int> GameState::GetOwnership() {
             reuslt[idx] = kWhite;
         } else if (buffer[idx] == 0) {
             reuslt[idx] = kEmpty;
+        } else if (end_game) {
+            const auto board_size = GetBoardSize();
+            const auto x = idx % board_size;
+            const auto y = idx / board_size;
+            reuslt[idx] = GetState(x, y);
         }
     }
 

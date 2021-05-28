@@ -64,6 +64,7 @@ std::string GtpLoop::Execute(CommandParser &parser) {
         agent_->GetNetwork().Reload(size);
     } else if (const auto res = parser.Find("clear_board", 0)){
         agent_->GetState().ClearBoard();
+        agent_->GetNetwork().ClearCache();
         out << GTPSuccess("");
     } else if (const auto res = parser.Find("komi", 0)) {
         auto komi = agent_->GetState().GetKomi();

@@ -33,7 +33,8 @@ class DataSet():
         prob = np.zeros(num_intersections+1)
         aux_prob = np.zeros(num_intersections+1)
         ownership = np.zeros(num_intersections)
-        result = np.zeros(3)
+        wdl = np.zeros(3)
+        stm = np.zeros(1)
         final_score = np.zeros(1)
 
         buf = np.zeros(num_intersections)
@@ -69,7 +70,8 @@ class DataSet():
         ownership[:] = buf[:]
 
         # winrate
-        result[1 - data.result] = 1
+        wdl[1 - data.result] = 1
+        stm[0] = data.result
         final_score[0] = data.final_score
 
         input_planes = np.reshape(input_planes, (self.input_channels, data.board_size, data.board_size))
@@ -79,7 +81,8 @@ class DataSet():
             torch.tensor(prob).float(),
             torch.tensor(aux_prob).float(),
             torch.tensor(ownership).float(),
-            torch.tensor(result).float(),
+            torch.tensor(wdl).float(),
+            torch.tensor(stm).float(),
             torch.tensor(final_score).float()
         )
 
@@ -127,8 +130,8 @@ class Network(NNProcess, pl.LightningModule):
         self.test_accuracy = pl.metrics.Accuracy()
 
     def compute_loss(self, pred, target):
-        (pred_prob, pred_aux_prob, pred_ownership, pred_result, pred_score) = pred
-        (target_prob,target_aux_prob, target_ownership, target_result, target_final_score) = target
+        (pred_prob, pred_aux_prob, pred_ownership, pred_wdl, pred_stm, pred_score) = pred
+        (target_prob,target_aux_prob, target_ownership, target_wdl, target_stm, target_final_score) = target
 
         def cross_entropy(pred, target):
             return torch.mean(-torch.sum(torch.mul(F.log_softmax(pred, dim=-1), target), dim=1), dim=0)
@@ -138,78 +141,74 @@ class Network(NNProcess, pl.LightningModule):
             loss = torch.where(absdiff > delta, (0.5 * delta*delta) + delta * (absdiff - delta), 0.5 * absdiff * absdiff)
             return torch.mean(torch.sum(loss, dim=1), dim=0)
 
-        porb_loss = cross_entropy(pred_prob, target_prob)
-        aux_porb_loss = 0.15 * cross_entropy(pred_aux_prob, target_aux_prob)
+        prob_loss = cross_entropy(pred_prob, target_prob)
+        aux_prob_loss = 0.15 * cross_entropy(pred_aux_prob, target_aux_prob)
         ownership_loss = 0.15 * F.mse_loss(pred_ownership, target_ownership)
-        wdl_loss = cross_entropy(pred_result, target_result)
+        wdl_loss = cross_entropy(pred_wdl, target_wdl)
+        stm_loss = F.mse_loss(pred_stm, target_stm)
 
-        pred_final_score, pred_score_width = torch.split(pred_score, [1, 1], dim=1)
-        pred_final_score = 20 * pred_final_score
-        fina_score_loss = 0.0012 * huber_loss(pred_final_score, target_final_score, 12)
+        fina_score_loss = 0.0012 * huber_loss(20 * pred_score, target_final_score, 12)
 
-        target_score_width = torch.pow(pred_final_score - target_final_score, 2)
-        score_width_loss = 0.0012 * huber_loss(pred_score_width, target_score_width, 12)
-
-        return porb_loss, aux_porb_loss, ownership_loss, wdl_loss, fina_score_loss, score_width_loss
+        return prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, fina_score_loss
 
     def training_step(self, batch, batch_idx):
-        planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_score = batch
-        target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_score)
+        planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
+        target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score)
         predict = self(planes)
 
-        porb_loss, aux_porb_loss, ownership_loss, wdl_loss, fina_score_loss, score_width_loss = self.compute_loss(predict, target)
-        loss = porb_loss + aux_porb_loss + ownership_loss + wdl_loss + fina_score_loss + score_width_loss
+        prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, fina_score_loss = self.compute_loss(predict, target)
+        loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + fina_score_loss
 
         self.log("train_loss", loss, prog_bar=True)
         self.log_dict(
             {
-                "train_prob_loss": porb_loss,
-                "train_aux_prob_loss": aux_porb_loss,
+                "train_prob_loss": prob_loss,
+                "train_aux_prob_loss": aux_prob_loss,
                 "train_ownership_loss": ownership_loss,
                 "train_wdl_loss": wdl_loss,
-                "train_fina_score_loss": fina_score_loss,
-                "train_fscore_width_loss": score_width_loss,
+                "train_stm_loss": stm_loss,
+                "train_fina_score_loss": fina_score_loss
             }
         )
         return loss
 
     def validation_step(self, batch, batch_idx):
-        planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_score = batch
-        target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_score)
+        planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
+        target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score)
         predict = self(planes)
 
-        porb_loss, aux_porb_loss, ownership_loss, wdl_loss, fina_score_loss, score_width_loss = self.compute_loss(predict, target)
-        loss = porb_loss + aux_porb_loss + ownership_loss + wdl_loss + fina_score_loss + score_width_loss
+        prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, fina_score_loss = self.compute_loss(predict, target)
+        loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + fina_score_loss
 
         self.log_dict(
             {
                 "val_loss": loss,
-                "val_prob_loss": porb_loss,
-                "val_aux_prob_loss": aux_porb_loss,
+                "val_prob_loss": prob_loss,
+                "val_aux_prob_loss": aux_prob_loss,
                 "val_ownership_loss": ownership_loss,
                 "val_wdl_loss": wdl_loss,
-                "val_fina_score_loss": fina_score_loss,
-                "val_fscore_width_loss": score_width_loss,
+                "val_stm_loss": stm_loss,
+                "val_fina_score_loss": fina_score_loss
             }
         )
 
     def test_step(self, batch, batch_idx):
-        planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_score = batch
-        target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_score)
+        planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
+        target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score)
         predict = self(planes)
 
-        porb_loss, aux_porb_loss, ownership_loss, wdl_loss, fina_score_loss, score_width_loss = self.compute_loss(predict, target)
-        loss = porb_loss + aux_porb_loss + ownership_loss + wdl_loss + fina_score_loss + score_width_loss
+        prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, fina_score_loss = self.compute_loss(predict, target)
+        loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + fina_score_loss
 
         self.log_dict(
             {
                 "test_loss": loss,
-                "test_prob_loss": porb_loss,
-                "test_aux_prob_loss": aux_porb_loss,
+                "test_prob_loss": prob_loss,
+                "test_aux_prob_loss": aux_prob_loss,
                 "test_ownership_loss": ownership_loss,
                 "test_wdl_loss": wdl_loss,
-                "test_fina_score_loss": fina_score_loss,
-                "test_fscore_width_loss": score_width_loss,
+                "test_stm_loss": stm_loss,
+                "test_fina_score_loss": fina_score_loss
             }
         )
 

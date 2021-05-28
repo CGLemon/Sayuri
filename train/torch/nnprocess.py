@@ -295,9 +295,10 @@ class NNProcess(nn.Module):
         val_gpool = torch.flatten(val_gpool, start_dim=1, end_dim=3)
         val_misc = self.value_misc_fc(val_gpool)
 
-        wdl, score = torch.split(val_misc, [3, 2], dim=1)
+        wdl, stm, score = torch.split(val_misc, [3, 1, 1], dim=1)
+        stm = torch.tanh(stm)
 
-        return prob, aux_prob, ownership, wdl, score
+        return prob, aux_prob, ownership, wdl, stm, score
 
     def trainable(self, t=True):
         if t==True:

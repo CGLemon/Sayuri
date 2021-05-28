@@ -58,7 +58,7 @@ public:
     bool IsLegalMove(const int vertex, const int color,
                      std::function<bool(int, int)> AvoidToMove) const;
 
-    std::vector<int> GetOwnership();
+    std::vector<int> GetOwnership(int playouts);
 
     int GetVertex(const int x, const int y) const;
     int GetIndex(const int x, const int y) const;

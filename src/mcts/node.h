@@ -33,6 +33,7 @@ struct NodeData {
 };
 
 struct NodeEvals {
+    float black_final_score{0.0f};
     float black_wl{0.0f};
     float draw{0.0f};
 
@@ -64,15 +65,18 @@ public:
     int GetVisits() const;
     int GetVertex() const;
     float GetPolicy() const;
+
+    float GetNetFinalScore(const int color) const;
+    float GetFinalScore(const int color) const;
+    float GetEval(const int color, const bool use_virtual_loss=true) const;
     float GetNetEval(const int color) const;
+    float GetNetDraw() const;
     float GetDraw() const;
 
     size_t GetMemoryUsed() const;
 
-    std::array<float, kNumIntersections> GetOwnerShip(int color) const;
+    std::array<float, kNumIntersections> GetOwnership(int color) const;
     NodeEvals GetNodeEvals() const;
-
-    float GetEval(const int color, const bool use_virtual_loss=true) const;
     void ApplyEvals(std::shared_ptr<NodeEvals> evals);
 
     void IncrementThreads();
@@ -145,6 +149,7 @@ private:
     void WaitExpanded() const;
 
     int color_{kInvalid};
+    float black_fs_;
     float black_wl_;
     float draw_;
     std::array<float, kNumIntersections> black_ownership_;
@@ -152,6 +157,7 @@ private:
     std::mutex update_mtx_;
 
     std::atomic<float> squared_eval_diff_{1e-4f};
+    std::atomic<float> accumulated_black_fs_{0.0f};
     std::atomic<float> accumulated_black_wl_{0.0f};
     std::atomic<float> accumulated_draw_{0.0f};
     std::array<float, kNumIntersections> accumulated_black_ownership_;

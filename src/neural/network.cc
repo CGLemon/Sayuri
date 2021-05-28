@@ -100,7 +100,7 @@ Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
 }
 
 Network::Result
-Network::GetOutputInternal(const GameState &state, const bool symmetry) {
+Network::GetOutputInternal(const GameState &state, const int symmetry) {
     const auto Softmax = [](std::vector<float> &input, float temperature) {
         auto output = std::vector<float>{};
         output.reserve(input.size());
@@ -165,8 +165,9 @@ Network::GetOutputInternal(const GameState &state, const bool symmetry) {
     out_result.wdl[0] = wdl_buffer[0];
     out_result.wdl[1] = wdl_buffer[1];
     out_result.wdl[2] = wdl_buffer[2];
-    out_result.winrate = std::tanh(wdl_buffer[0] - wdl_buffer[2]);
-    out_result.winrate = (out_result.winrate + 1.f) / 2;
+    out_result.wdl_winrate = std::tanh(wdl_buffer[0] - wdl_buffer[2]);
+    out_result.wdl_winrate = (out_result.wdl_winrate + 1.f) / 2;
+    out_result.stm_winrate = (out_result.stm_winrate + 1.f) / 2;
 
     return out_result;
 }
@@ -222,12 +223,12 @@ std::string Network::GetOutputString(const GameState &state,
 
     auto out = std::ostringstream{};
  
-    out << "winrate: " << result.winrate << std::endl;
+    out << "stm winrate: " << result.stm_winrate << std::endl;
+    out << "wdl winrate: " << result.wdl_winrate << std::endl;
     out << "win probability: " << result.wdl[0] << std::endl;
     out << "draw probability: " << result.wdl[1] << std::endl;
     out << "loss probability: " << result.wdl[2] << std::endl;
     out << "final score: " << result.final_score << std::endl;
-    out << "score width: " << result.score_width << std::endl;
 
     out << "probabilities: " << std::endl;
     for (int y = 0; y < bsize; ++y) {

@@ -26,7 +26,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
                             Node *const root_node, SearchResult &search_result) {
     node->IncrementThreads();
     if (node->Expandable()) {
-        if (currstate.IsGameOver()) {
+        if (currstate.GetPasses() >= 2) {
             search_result.FromGameover(currstate);
             node->ApplyEvals(search_result.GetEvals());
         } else {
@@ -68,11 +68,15 @@ void Search::PrepareRootNode() {
 
     const auto color = root_state_.GetToMove();
     const auto winloss = color == kBlack ? evals.black_wl : 1 - evals.black_wl;
+    const auto final_score = color == kBlack ? evals.black_final_score :
+                                                   -evals.black_final_score;
+
     if (GetOption<bool>("analysis_verbose")) {
         LOGGING << "Raw NN output:" << std::endl
                     << std::fixed << std::setprecision(2)
                     << std::setw(7) << "eval:" << ' ' << winloss * 100.f << "%" << std::endl
-                    << std::setw(7) << "draw:" << ' ' << evals.draw * 100.f << "%" << std::endl;
+                    << std::setw(7) << "draw:" << ' ' << evals.draw * 100.f << "%" << std::endl
+                    << std::setw(7) << "final score:" << ' ' << final_score << std::endl;
     }
 }
 
@@ -161,7 +165,18 @@ ComputationResult Search::Computation(int playours) {
     }
 
     group_->WaitToJoin();
+
     result.best_move = root_node_->GetBestMove();
+    result.root_eval = root_node_->GetEval(color, false);
+    result.final_score = root_node_->GetFinalScore(color);
+
+    auto num_intersections = root_state_.GetNumIntersections();
+    auto ownership = root_node_->GetOwnership(color);
+    result.ownership.resize(num_intersections);
+    std::copy(std::begin(ownership), 
+                  std::begin(ownership) + num_intersections,
+                  std::begin(result.ownership));
+
 
     time_control_.TookTime(color);
     if (GetOption<bool>("analysis_verbose")) {
@@ -176,5 +191,9 @@ ComputationResult Search::Computation(int playours) {
 
 int Search::ThinkBestMove() {
     auto result = Computation(max_playouts_);
+    if (result.root_eval < param_->resign_threshold) {
+        return kResign;
+    }
+
     return result.best_move;
 }

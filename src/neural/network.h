@@ -41,7 +41,7 @@ public:
 private:
     bool ProbeCache(const GameState &state, Result &result);
 
-    Result GetOutputInternal(const GameState &state, const bool symmetry);
+    Result GetOutputInternal(const GameState &state, const int symmetry);
 
     Network::Result DummyForward(const Network::Inputs& inputs) const;
 

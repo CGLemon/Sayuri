@@ -54,7 +54,8 @@ bool Node::ExpendChildren(Network &network,
     linkNetOutput(raw_netlist, color_);
 
     auto nodelist = std::vector<Network::PolicyVertexPair>{};
-    float legal_accumulate = 0.0f;
+    auto allow_pass = true;
+    auto legal_accumulate = 0.0f;
 
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto x = idx % board_size;
@@ -62,16 +63,28 @@ bool Node::ExpendChildren(Network &network,
         const auto vtx = state.GetVertex(x, y);
         const auto policy = raw_netlist.probabilities[idx];
 
+        if (!state.IsLegalMove(vtx, color_)) {
+            continue;
+        }
+
         if (is_root) {}
 
         nodelist.emplace_back(policy, vtx);
         legal_accumulate += policy;
     }
 
-    nodelist.emplace_back(raw_netlist.pass_probability, kPass);
+    if (allow_pass) {
+        nodelist.emplace_back(raw_netlist.pass_probability, kPass);
+    }
 
-    for (auto &node : nodelist) {
-        node.first /= legal_accumulate;
+    if (legal_accumulate <= 0.0f) {
+        for (auto &node : nodelist) {
+            node.first = 1.f/nodelist.size();
+        }
+    } else {
+        for (auto &node : nodelist) {
+            node.first /= legal_accumulate;
+        }
     }
 
     LinkNodeList(nodelist);
@@ -102,14 +115,17 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
 void Node::linkNetOutput(const Network::Result &raw_netlist, const int color){
     auto wl = raw_netlist.wdl[0] - raw_netlist.wdl[2];
     auto draw = raw_netlist.wdl[1];
+    auto final_score = raw_netlist.final_score;
 
     wl = (wl + 1) * 0.5f;
     if (color == kWhite) {
         wl = 1.0f - wl;
+        final_score = 0.0f - final_score;
     }
 
     black_wl_ = wl;
     draw_ = draw;
+    black_fs_ = final_score;
 
     for (int idx = 0; idx < kNumIntersections; ++idx) {
         auto owner = raw_netlist.ownership[idx];
@@ -253,6 +269,8 @@ void Node::Update(std::shared_ptr<NodeEvals> evals) {
     atomic_add(squared_eval_diff_, delta);
     atomic_add(accumulated_black_wl_, eval);
     atomic_add(accumulated_draw_, evals->draw);
+    atomic_add(accumulated_black_fs_, evals->black_final_score);
+
     {
         std::lock_guard<std::mutex> lock(update_mtx_);
         for (int idx = 0; idx < kNumIntersections; ++idx) {
@@ -264,12 +282,14 @@ void Node::Update(std::shared_ptr<NodeEvals> evals) {
 void Node::ApplyEvals(std::shared_ptr<NodeEvals> evals) {
     black_wl_ = evals->black_wl;
     draw_ = evals->draw;
+    black_fs_ = evals->black_final_score;
+
     std::copy(std::begin(evals->black_ownership),
                   std::end(evals->black_ownership),
                   std::begin(black_ownership_));
 }
 
-std::array<float, kNumIntersections> Node::GetOwnerShip(int color) const {
+std::array<float, kNumIntersections> Node::GetOwnership(int color) const {
     const auto visits = GetVisits();
     auto out = std::array<float, kNumIntersections>{};
     for (int idx = 0; idx < kNumIntersections; ++idx) {
@@ -327,6 +347,7 @@ std::string Node::ToString(GameState &state) {
             << std::setw(space) << "D(%)"
             << std::setw(space) << "P(%)"
             << std::setw(space) << "N(%)"
+            << std::setw(space) << "S(%)"
             << std::endl;
 
     for (auto &lcb : lcblist) {
@@ -338,6 +359,7 @@ std::string Node::ToString(GameState &state) {
         const auto pobability = child->GetPolicy();
         assert(visits != 0);
 
+        const auto final_score = child->GetFinalScore(color);
         const auto eval = child->GetEval(color, false);
         const auto draw = child->GetDraw();
 
@@ -347,11 +369,12 @@ std::string Node::ToString(GameState &state) {
         out << std::fixed << std::setprecision(2)
                 << std::setw(6) << state.VertexToText(vertex)
                 << std::setw(10) << visits
-                << std::setw(space) << eval * 100.f     // win loss eval
+                << std::setw(space) << eval * 100.f        // win loss eval
                 << std::setw(space) << lcb_value * 100.f   // LCB eval
                 << std::setw(space) << draw * 100.f        // draw probability
                 << std::setw(space) << pobability * 100.f  // move probability
                 << std::setw(space) << visit_ratio * 100.f
+                << std::setw(space) << final_score
                 << std::setw(6) << "| PV:" << ' ' << pv_string
                 << std::endl;
     }
@@ -457,6 +480,8 @@ NodeEvals Node::GetNodeEvals() const {
 
     evals.black_wl = black_wl_;
     evals.draw = draw_;
+    evals.black_final_score = black_fs_;
+
 
     for (int idx = 0; idx < kNumIntersections; ++idx) {
         evals.black_ownership[idx] = black_ownership_[idx];
@@ -494,8 +519,28 @@ int Node::GetVisits() const {
     return visits_.load();
 }
 
-float Node::GetDraw() const {
+float Node::GetNetFinalScore(const int color) const {
+    if (color == kBlack) {
+        return black_fs_;
+    }
+    return 1.0f - black_fs_;
+}
+
+float Node::GetFinalScore(const int color) const {
+    auto score = accumulated_black_fs_.load() / GetVisits();
+
+    if (color == kBlack) {
+        return score;
+    }
+    return 1.0f - score;
+}
+
+float Node::GetNetDraw() const {
     return draw_;
+}
+
+float Node::GetDraw() const {
+    return accumulated_draw_.load() / GetVisits();
 }
 
 float Node::GetNetEval(const int color) const {
