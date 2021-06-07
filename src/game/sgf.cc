@@ -113,7 +113,13 @@ void SgfNode::PopulateState(GameState currstate) {
     // handicap
     if (const auto res = GetPropertyValue("HA")) {
         const auto handicap = std::stoi(*res);
-        GetState().SetFixdHandicap(handicap);
+        const auto is_free_handicap = (GetPropertyValue("AB") != nullptr ||
+                                           GetPropertyValue("AW")!= nullptr);
+        if (!is_free_handicap) {
+            GetState().SetFixdHandicap(handicap);
+        } else {
+            GetState().SetHandicap(handicap);
+        }
     }
 
     // time
@@ -121,8 +127,18 @@ void SgfNode::PopulateState(GameState currstate) {
 
     }
 
-    if (const auto res = GetPropertyValue("AB")) {
+    const auto& prop_pair_ab = properties_.equal_range("AB");
+    for (auto pit = prop_pair_ab.first; pit != prop_pair_ab.second; ++pit) {
+        const auto move = pit->second;
+        const auto vtx = GetVertexFromString(move);
+        GetState().PlayMove(vtx, kBlack);
+    }
 
+    const auto& prop_pair_aw = properties_.equal_range("AW");
+    for (auto pit = prop_pair_aw.first; pit != prop_pair_aw.second; ++pit) {
+        const auto move = pit->second;
+        const auto vtx = GetVertexFromString(move);
+        GetState().PlayMove(vtx, kWhite);
     }
 
     // result
@@ -151,7 +167,6 @@ void SgfNode::PopulateState(GameState currstate) {
                 }
             }
         }
-        GetState().black_final_score = black_final_score;
     }
 
     if (const auto res = GetPropertyValue("PL")) {
@@ -457,7 +472,7 @@ GameState Sgf::FormString(std::string sgfstring, unsigned int movenum) {
 }
 
 template<typename T>
-std::string MakePropertyString(std::string property, T value) {
+std::string MakePropertyToString(std::string property, T value) {
     auto out = std::ostringstream{};
     out << property << '[' << value << ']';
     return out.str();
@@ -468,14 +483,14 @@ std::string Sgf::ToString(GameState &state) {
     auto &history = state.GetHistory();
 
     out << '(' << ';';
-    out << MakePropertyString("GM", 1);
-    out << MakePropertyString("FF", 4);
-    out << MakePropertyString("SZ", state.GetBoardSize());
-    out << MakePropertyString("KM", state.GetKomi());
-    out << MakePropertyString("RU", "chinese");
-    out << MakePropertyString("PB", "black bot");
-    out << MakePropertyString("PW", "white bot");
-    out << MakePropertyString("DT", CurrentDateTime());
+    out << MakePropertyToString("GM", 1);
+    out << MakePropertyToString("FF", 4);
+    out << MakePropertyToString("SZ", state.GetBoardSize());
+    out << MakePropertyToString("KM", state.GetKomi());
+    out << MakePropertyToString("RU", "chinese");
+    out << MakePropertyToString("PB", "black bot");
+    out << MakePropertyToString("PW", "white bot");
+    out << MakePropertyToString("DT", CurrentDateTime());
 
     if (state.GetWinner() != kUndecide) {
         out << "RE" << '[';

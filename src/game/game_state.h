@@ -49,6 +49,13 @@ public:
     // GTP interface to set free handicap.
     bool SetFreeHandicap(std::vector<std::string> movelist);
 
+    void SetHandicap(int handicap);
+
+    // Compute final score by Tromp Taylor.
+    float GetSimpleFinalScore(float bonus = 0) const;
+
+
+    // Compute final score by ownership.
     float GetFinalScore(float bonus = 0) const;
 
     bool IsGameOver() const;
@@ -58,7 +65,7 @@ public:
     bool IsLegalMove(const int vertex, const int color,
                      std::function<bool(int, int)> AvoidToMove) const;
 
-    std::vector<int> GetOwnership(int playouts);
+    std::vector<int> GetOwnership(int playouts) const;
 
     int GetVertex(const int x, const int y) const;
     int GetIndex(const int x, const int y) const;
@@ -85,11 +92,7 @@ public:
     std::shared_ptr<const Board> GetPastBoard(unsigned int p) const;
     const std::vector<std::shared_ptr<const Board>>& GetHistory() const;
 
-    float black_final_score;
-
 private:
-    void SetHandicap(int handicap);
-
     std::string GetStateString() const;
 
     std::vector<std::shared_ptr<const Board>> game_history_;

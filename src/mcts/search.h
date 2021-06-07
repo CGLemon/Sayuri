@@ -80,14 +80,18 @@ public:
 
     void Initialize();
 
+    // Compute the result by monte carlo tree search.
     ComputationResult Computation(int playouts);
 
+    // Get the best move.
     int ThinkBestMove();
 
+    // Set the time control.
     void TimeSettings(const int main_time,
                       const int byo_yomi_time,
                       const int byo_yomi_stones);
 
+    // Set time left.
     void TimeLeft(const int color, const int time, const int stones);
 
 

@@ -296,6 +296,7 @@ std::string GameState::GetStateString() const {
     out << "Board Size: " << GetBoardSize() << ", ";
     out << "Handicap: " << GetHandicap() << ", ";
     out << "Result: ";
+
     if (GetWinner() == kBlackWon) {
         out << "Black Won";
     } else if (GetWinner() == kWhiteWon) {
@@ -305,6 +306,7 @@ std::string GameState::GetStateString() const {
     } else if (GetWinner() == kUndecide) {
         out << "None";
     }
+
     out << "}" << std::endl;
     return out.str();
 }
@@ -384,7 +386,7 @@ bool GameState::SetFreeHandicap(std::vector<std::string> movelist) {
     return false;
 }
 
-std::vector<int> GameState::GetOwnership(int playouts) {
+std::vector<int> GameState::GetOwnership(int playouts) const {
     auto num_intersections = GetNumIntersections();
     auto buffer = std::vector<int>(num_intersections, 0);
 
@@ -444,8 +446,22 @@ std::vector<int> GameState::GetOwnership(int playouts) {
     return reuslt;
 }
 
+float GameState::GetSimpleFinalScore(float bonus) const {
+    return board_.ComputeSimpleFinalScore(GetKomi() + GetHandicap() + bonus);
+}
+
 float GameState::GetFinalScore(float bonus) const {
-    return board_.ComputeFinalScore(GetKomi() + GetHandicap() + bonus);
+    auto ownership = GetOwnership(200);
+    int score = 0;
+
+    for (const auto owner : ownership) {
+        if (owner == kBlack) {
+            score += 1;
+        } else if (owner == kWhite) {
+            score -= 1;
+        }
+    }
+    return score + GetHandicap() + bonus;
 }
 
 int GameState::GetVertex(const int x, const int y) const {
@@ -484,6 +500,7 @@ int GameState::GetWinner() const {
     }
     return kUndecide;
 }
+
 
 int GameState::GetHandicap() const {
     return handicap_;

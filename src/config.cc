@@ -172,7 +172,8 @@ void ArgsParser::Helper() const {
               << "\t--playouts, -p <integer>" << std::endl
               << "\t--threads, -t <integer>" << std::endl
               << "\t--logfile, -l <log file name>" << std::endl
-              << "\t--weights, -w <weight file name>" << std::endl;
+              << "\t--weights, -w <weight file name>" << std::endl
+              << "\t--analysis-verbose" << std::endl;
     exit(-1);
 }
 

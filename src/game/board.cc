@@ -8,7 +8,7 @@ int Board::ComputeScoreOnBoard(int black_bonus) const {
     return black - white + black_bonus;
 }
 
-float Board::ComputeFinalScore(float komi) const {
+float Board::ComputeSimpleFinalScore(float komi) const {
     return static_cast<float>(ComputeScoreOnBoard(0)) - komi;
 }
 

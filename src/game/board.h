@@ -7,7 +7,7 @@
 
 class Board : public SimpleBoard {
 public:
-    float ComputeFinalScore(float komi) const;
+    float ComputeSimpleFinalScore(float komi) const;
 
     int ComputeScoreOnBoard(int black_bonus) const;
 

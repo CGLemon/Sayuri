@@ -249,9 +249,7 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
 template <typename T> 
 void atomic_add(std::atomic<T> &f, T d) {
     T old = f.load();
-    while (!f.compare_exchange_weak(old, old + d)) {
-        std::this_thread::yield();
-    }
+    while (!f.compare_exchange_weak(old, old + d)) {}
 }
 
 void Node::Update(std::shared_ptr<NodeEvals> evals) {

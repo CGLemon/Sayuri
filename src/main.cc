@@ -5,7 +5,7 @@
 #include "include.h"
 
 static void StartGtpLoop() {
-    auto gtploop = std::make_shared<GtpLoop>();
+    auto gtp_loop = std::make_shared<GtpLoop>();
 }
 
 int main(int argc, char **argv) {
