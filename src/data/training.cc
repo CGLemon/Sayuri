@@ -55,7 +55,7 @@ void PlanesStreamOut(std::ostream &out, const std::vector<float> &arr, size_t pl
     }
 }
 
-void TrainingBuffer::StreamOut(std::ostream &out) const {
+void Training::StreamOut(std::ostream &out) const {
     out << version << std::endl;
     out << mode << std::endl;
     out << board_size << std::endl;
@@ -80,4 +80,12 @@ void TrainingBuffer::StreamOut(std::ostream &out) const {
 
     out << result << std::endl;
     out << final_score << std::endl;
+}
+
+int GetTrainigVersion() {
+    return 0;
+}
+
+int GetTrainigMode() {
+    return 0;
 }

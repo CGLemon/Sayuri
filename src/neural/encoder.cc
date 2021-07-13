@@ -27,20 +27,20 @@ InputData Encoder::GetInputs(const GameState &state, int symmetry) const {
 std::vector<float> Encoder::GetPlanes(const GameState &state, int symmetry) const {
     auto boardsize = state.GetBoardSize();
     auto num_intersections = state.GetNumIntersections();
-
-    Symmetry::Initialize(boardsize);
-
     auto plane_size = num_intersections * kPlaneChannels;
     auto planes = std::vector<float>(plane_size);
     auto it = std::begin(planes);
 
-    EncoderHistoryMove(state, kHistoryMove, it, symmetry);
+    EncoderHistoryMove(state, kHistoryMove, it);
     it += kHistoryMove * 3 * num_intersections;
 
-    EncoderFeatures(state, it, symmetry);
+    EncoderFeatures(state, it);
     it += kNumFeatures * num_intersections;
 
     assert(it == std::end(planes));
+
+    Symmetry::Initialize(boardsize);
+    SymmetryPlanes(state, planes, symmetry);
 
     return planes;
 }
@@ -67,17 +67,31 @@ std::string Encoder::GetPlanesString(const GameState &state, int symmetry) const
     return out.str();
 }
 
+void Encoder::SymmetryPlanes(const GameState &state, std::vector<float> &planes, int symmetry) const {
+    auto num_intersections = state.GetNumIntersections();
+    auto buffer = std::vector<float>(num_intersections);
+    auto planes_it = std::begin(planes);
+
+    for (int p = 0; p < kInputChannels; ++p) {
+        for (int index = 0; index < num_intersections; ++index) {
+            auto symm_index = Symmetry::Get().TransformIndex(symmetry, index);
+            buffer[index] = planes_it[symm_index];
+        }
+
+        std::copy(std::begin(buffer), std::end(buffer), planes_it);
+        planes_it += num_intersections;
+    }
+}
+
 void Encoder::FillColorStones(std::shared_ptr<const Board> board,
                               std::vector<float>::iterator black_it,
-                              std::vector<float>::iterator white_it,
-                             int symmetry) const {
+                              std::vector<float>::iterator white_it) const {
     auto boardsize = board->GetBoardSize();
     auto num_intersections = board->GetNumIntersections();
 
     for (int index = 0; index < num_intersections; ++index) {
-        auto symm_index = Symmetry::Get().TransformIndex(symmetry, index);
-        auto x = symm_index % boardsize;
-        auto y = symm_index / boardsize;
+        auto x = index % boardsize;
+        auto y = index / boardsize;
         auto vtx = board->GetVertex(x, y);
         auto state = board->GetState(vtx);
 
@@ -90,7 +104,7 @@ void Encoder::FillColorStones(std::shared_ptr<const Board> board,
 }
 
 void Encoder::FillMove(std::shared_ptr<const Board> board,
-                       std::vector<float>::iterator move_it, int symmetry) const {
+                       std::vector<float>::iterator move_it) const {
     auto boardsize = board->GetBoardSize();
     auto num_intersections = board->GetNumIntersections();
 
@@ -103,9 +117,8 @@ void Encoder::FillMove(std::shared_ptr<const Board> board,
         }
     } else {
         for (int index = 0; index < num_intersections; ++index) {
-            auto symm_index = Symmetry::Get().TransformIndex(symmetry, index);
-            auto x = symm_index % boardsize;
-            auto y = symm_index / boardsize;
+            auto x = index % boardsize;
+            auto y = index / boardsize;
             auto vtx = board->GetVertex(x, y);
 
             if (vtx == last_move) {
@@ -117,8 +130,7 @@ void Encoder::FillMove(std::shared_ptr<const Board> board,
 
 void Encoder::EncoderHistoryMove(const GameState &state,
                                  int counter,
-                                 std::vector<float>::iterator it,
-                                 int symmetry) const {
+                                 std::vector<float>::iterator it) const {
     auto move_num = state.GetMoveNumber();
     auto past = std::min(move_num+1, counter);
 
@@ -132,8 +144,8 @@ void Encoder::EncoderHistoryMove(const GameState &state,
 
     for (auto p = 0; p < past; ++p) {
         auto board = state.GetPastBoard(p);
-        FillColorStones(board, black_it, white_it, symmetry);
-        FillMove(board, move_it, symmetry);
+        FillColorStones(board, black_it, white_it);
+        FillMove(board, move_it);
 
         if (p != past-1) {
             black_it += 3 * num_intersections;
@@ -144,7 +156,7 @@ void Encoder::EncoderHistoryMove(const GameState &state,
 }
 
 void Encoder::FillKoMove(std::shared_ptr<const Board> board,
-                         std::vector<float>::iterator ko_it, int symmetry) const {
+                         std::vector<float>::iterator ko_it) const {
     auto boardsize = board->GetBoardSize();
     auto num_intersections = board->GetNumIntersections();
 
@@ -154,27 +166,21 @@ void Encoder::FillKoMove(std::shared_ptr<const Board> board,
         return;
     }
 
-    for (int index = 0; index < num_intersections; ++index) {
-        auto symm_index = Symmetry::Get().TransformIndex(symmetry, index);
-        auto x = symm_index % boardsize;
-        auto y = symm_index / boardsize;
-        auto vtx = board->GetVertex(x, y);
-        if (vtx == ko_move) {
-            ko_it[index] = static_cast<float>(true);
-        }
-    }
+    auto x = board->GetX(ko_move);
+    auto y = board->GetY(ko_move);
+    auto index = board->GetIndex(x, y);
+    ko_it[index] = static_cast<float>(true);
 }
 
 void Encoder::FillCaptureMove(std::shared_ptr<const Board> board,
-                              std::vector<float>::iterator capture_it, int symmetry) const {
+                              std::vector<float>::iterator capture_it) const {
     auto boardsize = board->GetBoardSize();
     auto num_intersections = board->GetNumIntersections();
     auto color = board->GetToMove();
 
     for (int index = 0; index < num_intersections; ++index) {
-        auto symm_index = Symmetry::Get().TransformIndex(symmetry, index);
-        auto x = symm_index % boardsize;
-        auto y = symm_index / boardsize;
+        auto x = index % boardsize;
+        auto y = index / boardsize;
         auto vtx = board->GetVertex(x, y);
         auto state = board->GetState(vtx);
 
@@ -185,14 +191,13 @@ void Encoder::FillCaptureMove(std::shared_ptr<const Board> board,
 }
 
 void Encoder::FillLiberties(std::shared_ptr<const Board> board,
-                            std::vector<float>::iterator liberties_it, int symmetry) const {
+                            std::vector<float>::iterator liberties_it) const {
     auto boardsize = board->GetBoardSize();
     auto num_intersections = board->GetNumIntersections();
 
     for (int index = 0; index < num_intersections; ++index) {
-        auto symm_index = Symmetry::Get().TransformIndex(symmetry, index);
-        auto x = symm_index % boardsize;
-        auto y = symm_index / boardsize;
+        auto x = index % boardsize;
+        auto y = index / boardsize;
         auto vtx = board->GetVertex(x, y);
         auto liberties = board->GetLiberties(vtx);
 
@@ -209,13 +214,12 @@ void Encoder::FillLiberties(std::shared_ptr<const Board> board,
 }
 
 void Encoder::FillLadder(std::shared_ptr<const Board> board,
-                         std::vector<float>::iterator ladder_it, int symmetry) const {
+                         std::vector<float>::iterator ladder_it) const {
     auto num_intersections = board->GetNumIntersections();
     auto ladders = board->GetLadderPlane();
 
     for (int index = 0; index < num_intersections; ++index) {
-        auto symm_index = Symmetry::Get().TransformIndex(symmetry, index);
-        auto ladder = ladders[symm_index];
+        auto ladder = ladders[index];
 
         if (ladder == kLadderDeath) {
             ladder_it[index + 0 * num_intersections] = static_cast<float>(true);
@@ -243,7 +247,7 @@ void Encoder::FillSideToMove(std::shared_ptr<const Board> board,
 }
 
 void Encoder::EncoderFeatures(const GameState &state,
-                              std::vector<float>::iterator it, int symmetry) const {
+                              std::vector<float>::iterator it) const {
     auto board = state.GetPastBoard(0);
     auto num_intersections = board->GetNumIntersections();
 
@@ -253,10 +257,10 @@ void Encoder::EncoderFeatures(const GameState &state,
     auto ladder_it = it + 6 * num_intersections;
     auto color_it = it + 10 * num_intersections;
 
-    FillKoMove(board, ko_it, symmetry);
-    FillCaptureMove(board, capture_it, symmetry);
-    FillLiberties(board, liberties_it, symmetry);
-    FillLadder(board, ladder_it, symmetry);
+    FillKoMove(board, ko_it);
+    FillCaptureMove(board, capture_it);
+    FillLiberties(board, liberties_it);
+    FillLadder(board, ladder_it);
     FillSideToMove(board, state.GetKomi(), color_it);
 }
 

@@ -2,8 +2,10 @@
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
+#include <fstream>
 
 #include "mcts/search.h"
+#include "neural/encoder.h"
 #include "utils/log.h"
 
 Search::~Search() {
@@ -16,7 +18,7 @@ void Search::Initialize() {
 
     threads_ = param_->threads;
 
-    group_ = std::make_unique<ThreadGroup<void>>(&ThreadPool::Get(threads_ - 1));
+    group_ = std::make_unique<ThreadGroup<void>>(&ThreadPool::Get());
 
     max_playouts_ = param_->playouts;
     playouts_.store(0);
@@ -51,7 +53,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
     node->DecrementThreads();
 }
 
-void Search::PrepareRootNode() {
+std::vector<float> Search::PrepareRootNode() {
     auto data = std::make_shared<NodeData>();
     node_stats_ = std::make_shared<NodeStats>();
 
@@ -62,7 +64,9 @@ void Search::PrepareRootNode() {
     playouts_.store(0);
     running_.store(true);
 
-    root_node_->PrepareRootNode(network_, root_state_);
+    auto root_noise = std::vector<float>{};
+
+    root_node_->PrepareRootNode(network_, root_state_, root_noise);
     const auto evals = root_node_->GetNodeEvals();
     root_node_->Update(std::make_shared<NodeEvals>(evals));
 
@@ -78,6 +82,8 @@ void Search::PrepareRootNode() {
                     << std::setw(7) << "draw:" << ' ' << evals.draw * 100.f << "%" << std::endl
                     << std::setw(7) << "final score:" << ' ' << final_score << std::endl;
     }
+
+    return root_noise;
 }
 
 void Search::ClearNodes() {
@@ -105,10 +111,10 @@ void Search::TimeLeft(const int color, const int time, const int stones) {
 }
 
 ComputationResult Search::Computation(int playours) {
-    auto result = ComputationResult{};
+    auto computation_result = ComputationResult{};
 
     if (root_state_.IsGameOver()) {
-        return result;
+        return computation_result;
     }
 
     const auto Worker = [this]() -> void {
@@ -126,14 +132,16 @@ ComputationResult Search::Computation(int playours) {
     const auto board_size = root_state_.GetBoardSize();
     const auto move_num = root_state_.GetMoveNumber();
 
+    computation_result.board_size = board_size;
+    computation_result.komi = root_state_.GetKomi();
+
     Timer timer;
 
     time_control_.Clock();
     timer.Clock();
 
-    auto thinking_time = time_control_.GetThinkingTime(color, board_size, move_num);
-
-    PrepareRootNode();
+    const auto thinking_time = time_control_.GetThinkingTime(color, board_size, move_num);
+    const auto root_noise = PrepareRootNode();
 
     if (thinking_time < timer.GetDuration()) {
         running_.store(false);
@@ -166,17 +174,61 @@ ComputationResult Search::Computation(int playours) {
 
     group_->WaitToJoin();
 
-    result.best_move = root_node_->GetBestMove();
-    result.root_eval = root_node_->GetEval(color, false);
-    result.final_score = root_node_->GetFinalScore(color);
+    // Fill side to move, moves, root eval and score.
+    computation_result.to_move = (VertexType) color;
+    computation_result.best_move = root_node_->GetBestMove();
+    computation_result.random_move = root_node_->RandomizeFirstProportionally(1);
+    computation_result.root_eval = root_node_->GetEval(color, false);
+    computation_result.root_final_score = root_node_->GetFinalScore(color);
 
     auto num_intersections = root_state_.GetNumIntersections();
+
+    // Resize the childern status buffer.
+    computation_result.root_ownership.resize(num_intersections);
+    computation_result.root_probabilities.resize(num_intersections+1);
+    computation_result.root_noise.resize(num_intersections+1);
+    computation_result.root_visits.resize(num_intersections+1);
+
+    // Fill noise.
+    std::copy(std::begin(root_noise), 
+                  std::end(root_noise),
+                  std::begin(computation_result.root_noise));
+
+    // Fill ownership.
     auto ownership = root_node_->GetOwnership(color);
-    result.ownership.resize(num_intersections);
     std::copy(std::begin(ownership), 
                   std::begin(ownership) + num_intersections,
-                  std::begin(result.ownership));
+                  std::begin(computation_result.root_ownership));
 
+    // Fill visits.
+    auto parentvisits = 0;
+    const auto children = root_node_->GetChildren();
+    for (const auto &child : children) {
+        const auto node = child->Get();
+        const auto visits = node->GetVisits();
+        const auto vertex = node->GetVertex();
+        if (vertex == kPass) {
+            computation_result.root_visits[num_intersections] = visits;
+            continue;
+        }
+
+        const auto x = root_state_.GetX(vertex);
+        const auto y = root_state_.GetY(vertex);
+        const auto index = root_state_.GetIndex(x, y);
+
+        computation_result.root_visits[index] = visits;
+        parentvisits += visits;
+    }
+
+    // Fill probabilities.
+    for (int idx = 0; idx < num_intersections+1; ++idx) {
+        float prob = (float) computation_result.root_visits[idx]/ (float) parentvisits;
+        computation_result.root_probabilities[idx] = prob;
+    }
+
+
+    // Push the data to buffer.
+    GatherData(root_state_, computation_result);
 
     time_control_.TookTime(color);
     if (GetOption<bool>("analysis_verbose")) {
@@ -186,7 +238,7 @@ ComputationResult Search::Computation(int playours) {
 
     ClearNodes();
 
-    return result;
+    return computation_result;
 }
 
 int Search::ThinkBestMove() {
@@ -196,4 +248,84 @@ int Search::ThinkBestMove() {
     }
 
     return result.best_move;
+}
+
+void Search::SaveTrainingBuffer(GameState &end_state, std::string filename) {
+    auto file = std::ofstream{};
+    file.open(filename, std::ios_base::app);
+
+    if (!file.is_open()) {
+        ERROR << "Fail to create the file: " << filename << '!' << std::endl; 
+        return;
+    }
+
+    auto num_intersections = end_state.GetNumIntersections();
+    auto winner = end_state.GetWinner();
+    auto black_final_score = 0.f;
+    auto ownership = end_state.GetOwnership(200);
+
+    for (const auto owner : ownership) {
+        if (owner == kBlack) {
+            black_final_score += 1;
+        } else if (owner == kWhite) {
+            black_final_score -= 1;
+        }
+    }
+
+    black_final_score -= end_state.GetKomi();
+
+    for (auto &buf : training_buffer_) {
+        assert(winner != kUndecide);
+        if (winner == kDraw) {
+            buf.final_score = 0;
+            buf.result = 0;
+        } else {
+            buf.result = (int)winner == (int)buf.side_to_move ? 1 : -1;
+            buf.final_score = buf.side_to_move == kBlack ? black_final_score : -black_final_score;
+        }
+
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            const auto owner = ownership[idx];
+            if (buf.side_to_move == owner) {
+                buf.ownership[idx] = 1;
+            } else if (buf.side_to_move == !owner) {
+                buf.ownership[idx] = -1;
+            } else {
+                buf.ownership[idx] = 0;
+            }
+        }
+    }
+
+    auto aux_prob = std::vector<float>(num_intersections+1, 0);
+    aux_prob[num_intersections] = 1.f;
+    for (int i = training_buffer_.size()-1; i >= 0; --i) {
+        auto &buf = training_buffer_[i];
+
+        buf.auxiliary_probabilities_index = -1;
+        buf.auxiliary_probabilities = aux_prob;
+
+        buf.probabilities_index = -1;
+        aux_prob = buf.probabilities;
+    }
+
+    for (auto &buf : training_buffer_) {
+        buf.StreamOut(file);
+    }
+
+    training_buffer_.clear();
+}
+
+void Search::GatherData(const GameState &state, ComputationResult &result) {
+    auto data = Training{};
+    data.version = GetTrainigVersion();
+    data.mode = GetTrainigMode();
+
+    data.board_size = result.board_size;
+    data.komi = result.komi;
+    data.side_to_move = result.to_move;
+
+    data.planes = Encoder::Get().GetPlanes(state);
+    data.probabilities = data.probabilities;
+
+    training_buffer_.emplace_back(data);
 }

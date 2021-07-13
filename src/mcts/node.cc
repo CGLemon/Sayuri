@@ -1,5 +1,7 @@
 #include "mcts/node.h"
 #include "mcts/lcb.h"
+#include "utils/atomic.h"
+#include <utils/random.h>
 
 #include <cassert>
 #include <algorithm>
@@ -25,13 +27,39 @@ Node::~Node() {
 }
 
 NodeEvals Node::PrepareRootNode(Network &network,
-                                GameState &state) {
+                                GameState &state,
+                                std::vector<float> &dirichlet) {
     const auto is_root = true;
     const auto success = ExpendChildren(network, state, is_root);
     assert(success);
     assert(HaveChildren());
     if (success) {
         InflateAllChildren();
+        if (GetParameters()->dirichlet_noise) {
+            const auto legal_move = children_.size();
+            const auto epsilon = GetParameters()->dirichlet_epsilon;
+            const auto factor = GetParameters()->dirichlet_factor;
+            const auto init = GetParameters()->dirichlet_init;
+            const auto alpha = init * factor / static_cast<float>(legal_move);
+
+            const auto raw_dirichlet = ApplyDirichletNoise(epsilon, alpha);
+            const auto num_intersections = state.GetNumIntersections();
+            dirichlet.resize(num_intersections+1);
+            std::fill(std::begin(dirichlet), std::end(dirichlet), 0.0f);
+            for (auto i = size_t{0}; i < legal_move; ++i) {
+                auto node = children_[i]->Get();
+                const auto vertex = node->GetVertex();
+                if (vertex == kPass) {
+                    dirichlet[num_intersections] = raw_dirichlet[i];
+                    continue;
+                }
+
+                const auto x = state.GetX(vertex);
+                const auto y = state.GetY(vertex);
+                const auto index = state.GetIndex(x, y);
+                dirichlet[index] = raw_dirichlet[i];
+            }
+        }
     }
     return GetNodeEvals();
 }
@@ -137,7 +165,6 @@ void Node::linkNetOutput(const Network::Result &raw_netlist, const int color){
     }
 }
 
-
 Node *Node::ProbSelectChild() {
     WaitExpanded();
     assert(HaveChildren());
@@ -195,11 +222,14 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
     const auto cpuct_init           = is_root ? GetParameters()->cpuct_root_init    : GetParameters()->cpuct_init;
     const auto cpuct_base           = is_root ? GetParameters()->cpuct_root_base    : GetParameters()->cpuct_base;
     const auto draw_factor          = is_root ? GetParameters()->draw_root_factor   : GetParameters()->draw_factor;
+    const auto score_utility_factor = GetParameters()->score_utility_factor;
 
     const float cpuct         = cpuct_init + std::log((float(parentvisits) + cpuct_base + 1) / cpuct_base);
     const float numerator     = std::sqrt(float(parentvisits));
     const float fpu_reduction = fpu_reduction_factor * std::sqrt(total_visited_policy);
     const float fpu_value     = GetNetEval(color) - fpu_reduction;
+    const float score   = GetFinalScore(color);
+    
 
     std::shared_ptr<Edge> best_node = nullptr;
     float best_value = std::numeric_limits<float>::lowest();
@@ -231,9 +261,14 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
             denom += node->GetVisits();
         }
 
+        float utility = 0.0f;
+        if (is_pointer) {
+            utility += node->GetScoreUtility(color, score_utility_factor, score);
+        }
+
         const float psa = child->Data()->policy;
         const float puct = cpuct * psa * (numerator / denom);
-        const float value = q_value + puct;
+        const float value = q_value + puct + utility;
         assert(value > std::numeric_limits<float>::lowest());
 
         if (value > best_value) {
@@ -246,10 +281,33 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
     return best_node->Get();
 }
 
-template <typename T> 
-void atomic_add(std::atomic<T> &f, T d) {
-    T old = f.load();
-    while (!f.compare_exchange_weak(old, old + d)) {}
+int Node::RandomizeFirstProportionally(float random_temp) {
+    auto select_vertex = -1;
+    auto accum = float{0.0f};
+    auto accum_vector = std::vector<std::pair<float, int>>{};
+
+    for (const auto &child : children_) {
+        auto node = child->Get();
+        const auto visits = node->GetVisits();
+        const auto vertex = node->GetVertex();
+        if (visits > GetParameters()->random_min_visits) {
+            accum += std::pow((float)visits, (1.0 / random_temp));
+            accum_vector.emplace_back(std::pair<float, int>(accum, vertex));
+        }
+    }
+
+    auto distribution = std::uniform_real_distribution<float>{0.0, accum};
+    auto pick = distribution(Random<RandomType::kXoroShiro128Plus>::Get());
+    auto size = accum_vector.size();
+
+    for (auto idx = size_t{0}; idx < size; ++idx) {
+        if (pick < accum_vector[idx].first) {
+            select_vertex = accum_vector[idx].second;
+            break;
+        }
+    }
+
+    return select_vertex;
 }
 
 void Node::Update(std::shared_ptr<NodeEvals> evals) {
@@ -264,10 +322,10 @@ void Node::Update(std::shared_ptr<NodeEvals> evals) {
     const float delta = old_delta * new_delta;
 
     visits_.fetch_add(1);
-    atomic_add(squared_eval_diff_, delta);
-    atomic_add(accumulated_black_wl_, eval);
-    atomic_add(accumulated_draw_, evals->draw);
-    atomic_add(accumulated_black_fs_, evals->black_final_score);
+    AtomicFetchAdd(squared_eval_diff_, delta);
+    AtomicFetchAdd(accumulated_black_wl_, eval);
+    AtomicFetchAdd(accumulated_draw_, evals->draw);
+    AtomicFetchAdd(accumulated_black_fs_, evals->black_final_score);
 
     {
         std::lock_guard<std::mutex> lock(update_mtx_);
@@ -298,6 +356,10 @@ std::array<float, kNumIntersections> Node::GetOwnership(int color) const {
         out[idx] = owner;
     }
     return out;
+}
+
+float Node::GetScoreUtility(const int color, float factor, float parent_score) const {
+    return std::tanh(factor * (parent_score - GetFinalScore(color)));
 }
 
 float Node::GetVariance(const float default_var, const int visits) const {
@@ -407,7 +469,6 @@ std::string Node::GetPvString(GameState &state) {
     return res;
 }
 
-
 Node *Node::Get() {
     return this;
 }
@@ -488,6 +549,9 @@ NodeEvals Node::GetNodeEvals() const {
     return evals;
 }
 
+const std::vector<std::shared_ptr<Node::Edge>> &Node::GetChildren() const {
+    return children_;
+}
 
 std::shared_ptr<NodeStats> Node::GetStats() const {
     return data_->node_stats;
@@ -692,3 +756,41 @@ bool Node::IsExpended() const {
     return expand_state_.load() == ExpandState::kExpanded;
 }
 
+std::vector<float> Node::ApplyDirichletNoise(const float epsilon, const float alpha) {
+    auto child_cnt = children_.size();
+    auto dirichlet_buffer = std::vector<float>(child_cnt);
+    auto gamma = std::gamma_distribution<float>(alpha, 1.0f);
+
+    std::generate(std::begin(dirichlet_buffer), std::end(dirichlet_buffer),
+                      [&gamma] () { return gamma(Random<RandomType::kXoroShiro128Plus>::Get()); });
+
+    auto sample_sum =
+        std::accumulate(std::begin(dirichlet_buffer), std::end(dirichlet_buffer), 0.0f);
+
+    // If the noise vector sums to 0 or a denormal, then don't try to
+    // normalize.
+    if (sample_sum < std::numeric_limits<float>::min()) {
+        std::fill(std::begin(dirichlet_buffer), std::end(dirichlet_buffer), 0.0f);
+        return dirichlet_buffer;
+    }
+
+    for (auto &v : dirichlet_buffer) {
+        v /= sample_sum;
+    }
+
+    child_cnt = 0;
+    // Be Sure all node are expended.
+    InflateAllChildren();
+    for (const auto &child : children_) {
+        auto node = child->Get();
+        auto policy = node->GetPolicy();
+        auto eta_a = dirichlet_buffer[child_cnt++];
+        policy = policy * (1 - epsilon) + epsilon * eta_a;
+        node->SetPolicy(policy);
+    }
+    return dirichlet_buffer;
+}
+
+void Node::SetPolicy(float p) {
+    data_->policy = p;
+}

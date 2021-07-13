@@ -20,6 +20,11 @@ void DNNLoder::FormFile(std::shared_ptr<DNNWeights> weights, std::string filenam
     auto buffer = std::stringstream{};
     auto line = std::string{};
 
+    if (filename.empty()) {
+        LOGGING << "No weights file," << std::endl;
+        return;
+    }
+
     file.open(filename.c_str());
 
     if (!file.is_open()) {
@@ -184,6 +189,29 @@ void DNNLoder::ParseStruct(NetStruct &netstruct, std::istream &buffer) const {
         }
         cnt++;
     }
+}
+
+void DNNLoder::DumpInfo(std::shared_ptr<DNNWeights> weights) const {
+    auto out = std::ostringstream{};
+
+    out << "Input channels: " << weights->input_channels << '\n';
+
+    out << "Residual Blocks: " << weights->residual_blocks << '\n';
+    out << "Residual Channels: " << weights->residual_channels << '\n';
+
+    for (auto i = 0; i < weights->residual_blocks; ++i) {
+        out << "  " << "block" << ' ' << i+1 << ':';
+        if (weights->tower[i].apply_se) {
+            out << ' ' << "ResidualBlock-SE" << '\n';
+        } else {
+            out << ' ' << "ResidualBlock" << '\n';
+        }
+    }
+
+    out << "Policy Head Channels: " << weights->policy_extract_channels << '\n';
+    out << "Value Head Channels: " << weights->value_extract_channels << '\n';
+
+    LOGGING << out.str();
 }
 
 void DNNLoder::FillWeights(NetInfo &netinfo,
@@ -384,6 +412,7 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
         throw "Not end? Weights file format is not acceptable";
     }
     weights->loaded = true;
+    DumpInfo(weights);
     ProcessWeights(weights, false);
 }
 
@@ -421,6 +450,8 @@ void DNNLoder::ProcessWeights(std::shared_ptr<DNNWeights> weights, bool winograd
     }
 
     // TODO: Implement winograd convolution.
+
+    (void) winograd;
 }
 
 void DNNLoder::GetWeightsFromBuffer(std::vector<float> &weights, std::istream &buffer) const {
@@ -513,4 +544,3 @@ void DNNLoder::FillConvolutionLayer(ConvLayer &layer,
     GetWeightsFromBuffer(weights, buffer);
     layer.LoadBiases(weights);
 }
-

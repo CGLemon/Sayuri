@@ -3,7 +3,7 @@
 #include <vector>
 #include <iostream>
 
-struct TrainingBuffer {
+struct Training {
     int version;
 
     int mode;
@@ -32,3 +32,7 @@ struct TrainingBuffer {
 
     void StreamOut(std::ostream &out) const;
 };
+
+int GetTrainigVersion();
+
+int GetTrainigMode();

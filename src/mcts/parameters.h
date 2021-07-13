@@ -23,11 +23,23 @@ public:
 
         draw_factor = GetOption<float>("draw_factor");
         draw_factor = GetOption<float>("draw_root_factor");
+
+        random_min_visits = GetOption<int>("random_min_visits");
+        random_moves_cnt = GetOption<int>("random_moves_cnt");
+
+        dirichlet_noise = GetOption<bool>("dirichlet_noise");
+        dirichlet_epsilon = GetOption<float>("dirichlet_epsilon");
+        dirichlet_factor = GetOption<float>("dirichlet_factor");
+        dirichlet_init = GetOption<float>("dirichlet_init");
+
+        score_utility_factor = GetOption<float>("score_utility_factor");
     }
 
     int threads;
     int visits;
     int playouts;
+    int random_min_visits;
+    int random_moves_cnt;
 
     float resign_threshold;
 
@@ -39,6 +51,13 @@ public:
     float cpuct_root_base;
     float draw_factor;
     float draw_root_factor;
+
+    bool dirichlet_noise;
+    float dirichlet_epsilon;
+    float dirichlet_factor;
+    float dirichlet_init;
+
+    float score_utility_factor;
 };
 
 

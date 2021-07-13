@@ -405,11 +405,11 @@ std::vector<int> GameState::GetOwnership(int playouts) const {
             }
 
             if (state.GetPasses() >= 4) {
-                break;     
+                break;
             }
 
             if (moves++ >= 2 * num_intersections) {
-                break;     
+                break;
             }
         }
 
@@ -435,7 +435,7 @@ std::vector<int> GameState::GetOwnership(int playouts) const {
             reuslt[idx] = kWhite;
         } else if (buffer[idx] == 0) {
             reuslt[idx] = kEmpty;
-        } else if (end_game) {
+        } else {
             const auto board_size = GetBoardSize();
             const auto x = idx % board_size;
             const auto y = idx / board_size;
@@ -461,7 +461,7 @@ float GameState::GetFinalScore(float bonus) const {
             score -= 1;
         }
     }
-    return score + GetHandicap() + bonus;
+    return (float)score + (float)GetHandicap() + bonus - GetKomi();
 }
 
 int GameState::GetVertex(const int x, const int y) const {

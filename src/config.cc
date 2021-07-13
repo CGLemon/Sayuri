@@ -60,7 +60,7 @@ void InitOptionsMap() {
     options_map["batch_size"] << Option::setoption(1);
     options_map["threads"] << Option::setoption(1);
 
-    options_map["weights_file"] << Option::setoption(kNoWeightsFile);
+    options_map["weights_file"] << Option::setoption(std::string{});
     options_map["gpu"] << Option::setoption(0);
 
     options_map["resign_threshold"] << Option::setoption(0.1f, 1.f, 0.f);
@@ -73,6 +73,15 @@ void InitOptionsMap() {
     options_map["cpuct_root_base"] << Option::setoption(19652.f);
     options_map["draw_factor"] << Option::setoption(0.f);
     options_map["draw_root_factor"] << Option::setoption(0.f);
+    options_map["score_utility_factor"] << Option::setoption(0.15f);
+
+    options_map["random_min_visits"] << Option::setoption(1);
+    options_map["random_moves_cnt"] << Option::setoption(0);
+
+    options_map["dirichlet_noise"] << Option::setoption(false);
+    options_map["dirichlet_epsilon"] << Option::setoption(0.25f);
+    options_map["dirichlet_init"] << Option::setoption(0.03f);
+    options_map["dirichlet_factor"] << Option::setoption(361.f);
 }
 
 void InitBasicParameters() {
@@ -121,6 +130,18 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         parser.RemoveCommand(res->Index());
     }
 
+    if (const auto res = parser.Find({"--noise", "-n"})) {
+        SetOption("dirichlet_noise", true);
+        parser.RemoveCommand(res->Index());
+    }
+
+    if (const auto res = parser.FindNext("--random-moves")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("random_moves_cnt", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
     if (const auto res = parser.FindNext({"--playouts", "-p"})) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("playouts", res->Get<int>());
@@ -153,6 +174,69 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext({"--weights", "-w"})) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("weights_file", res->Get<std::string>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--score-utility-factor")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("score_utility_factor", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--fpu-reduction")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("fpu_reduction", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--fpu-root-reduction")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("fpu_root_reduction", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--cpuct-init")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("cpuct_init", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--cpuct-root-init")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("cpuct_root_init", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--cpuct-base")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("cpuct_base", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--cpuct-root-base")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("cpuct_root_base", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--draw-factor")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("draw_factor", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--draw-root-factor")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("draw_root_factor", res->Get<float>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

@@ -52,15 +52,19 @@ public:
                         const bool is_root);
 
     NodeEvals PrepareRootNode(Network &network,
-                              GameState &state);
+                              GameState &state,
+                              std::vector<float> &dirichlet);
 
     Node *ProbSelectChild();
     Node *UctSelectChild(const int color, const bool is_root);
+    int RandomizeFirstProportionally(float random_temp);
+
     void Update(std::shared_ptr<NodeEvals> evals);
 
     std::vector<std::pair<float, int>> GetLcbList(const int color);
     int GetBestMove();
 
+    const std::vector<std::shared_ptr<Edge>> &GetChildren() const;
     bool HaveChildren() const;
     int GetVisits() const;
     int GetVertex() const;
@@ -88,10 +92,15 @@ public:
 
     std::string ToString(GameState &state);
     std::string GetPvString(GameState &state);
+
 private:
+    std::vector<float> ApplyDirichletNoise(const float epsilon, const float alpha);
+    void SetPolicy(float p);
+
     void LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist);
     void linkNetOutput(const Network::Result &raw_netlist, const int color);
 
+    float GetScoreUtility(const int color, float factor, float parent_score) const;
     float GetVariance(const float default_var, const int visits) const;
     float GetLcb(const int color) const;
 

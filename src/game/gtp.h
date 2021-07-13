@@ -3,9 +3,10 @@
 #include "game/game_state.h"
 #include "game/types.h"
 #include "config.h"
-#include "utils/parser.h"
 #include "neural/fast_policy.h"
 #include "mcts/search.h"
+#include "utils/parser.h"
+#include "utils/threadpool.h"
 
 #include <memory>
 
@@ -52,6 +53,8 @@ public:
         agent_->GetNetwork().Initialize(GetOption<std::string>("weights_file"));
         agent_->ApplySearch();
 
+
+        ThreadPool::Get(GetOption<float>("threads"));
         FastPolicy::Get().LoaderFile();
 
         Loop();

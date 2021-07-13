@@ -5,11 +5,7 @@
 
 const std::string kProgram = "NA";
 
-const std::string kVersion = "pre-alpha"; 
-
-const std::string kNoWeightsFile = "NO_WEIGHT_FILE";
-
-const std::string kNologFile = "NO_LOG_FILE";
+const std::string kVersion = "pre-alpha";
 
 template<typename T>
 T GetOption(std::string name);

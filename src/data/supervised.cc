@@ -93,7 +93,7 @@ void Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
     const auto komi = state.GetKomi();
     const auto winner = game_winner;
 
-    auto train_datas = std::vector<TrainingBuffer>{};
+    auto train_datas = std::vector<Training>{};
 
     const auto VertexToIndex = [](GameState &state, int vertex) -> int {
         if (vertex == kPass) {
@@ -113,10 +113,10 @@ void Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
             aux_vtx = movelist[i+1];
         }
 
-        auto buf = TrainingBuffer{};
+        auto buf = Training{};
 
-        buf.version = 0;
-        buf.mode = 0;
+        buf.version = GetTrainigVersion();
+        buf.mode = GetTrainigMode();
         buf.board_size = board_size;
         buf.komi = komi;
         buf.side_to_move = main_state.GetToMove();

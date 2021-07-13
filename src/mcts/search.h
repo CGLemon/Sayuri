@@ -3,6 +3,7 @@
 #include "mcts/node.h"
 
 #include "game/game_state.h"
+#include "data/training.h"
 #include "utils/threadpool.h"
 #include "utils/time.h"
 
@@ -63,10 +64,21 @@ private:
 };
 
 struct ComputationResult {
+    int board_size;
     int best_move{kNullVertex};
+    int random_move{kNullVertex};
+    int ponder_move{kNullVertex};
+
+    VertexType to_move;
+
+    float komi;
     float root_eval;
-    float final_score;
-    std::vector<float> ownership;
+    float root_final_score;
+
+    std::vector<float> root_ownership;
+    std::vector<float> root_probabilities;
+    std::vector<float> root_noise;
+    std::vector<int> root_visits;
 };
 
 class Search {
@@ -94,16 +106,21 @@ public:
     // Set time left.
     void TimeLeft(const int color, const int time, const int stones);
 
+    void SaveTrainingBuffer(GameState &state, std::string filename);
 
 private:
+    void GatherData(const GameState &state, ComputationResult &result);
+
     void PlaySimulation(GameState &currstate, Node *const node,
                         Node *const root_node, SearchResult &search_result);
 
-    void PrepareRootNode();
+    std::vector<float> PrepareRootNode();
     void ClearNodes();
 
     int threads_;
     int max_playouts_; 
+
+    std::vector<Training> training_buffer_;
 
     std::atomic<bool> running_; 
     std::atomic<int> playouts_; 

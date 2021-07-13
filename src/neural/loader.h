@@ -21,6 +21,8 @@ private:
     void Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) const;
     void ParseInfo(NetInfo &netinfo, std::istream &buffer) const;
     void ParseStruct(NetStruct &netstruct, std::istream &buffer) const;
+    void DumpInfo(std::shared_ptr<DNNWeights> weights) const;
+
     void FillWeights(NetInfo &netinfo,
                      NetStruct &netstruct,
                      std::shared_ptr<DNNWeights> weights,
@@ -44,5 +46,4 @@ private:
                               const int in_channels,
                               const int out_channels,
                               const int kernel_size) const;
-
 };

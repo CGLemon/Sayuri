@@ -157,17 +157,16 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                        weights_->v_ex_bn.GetMeans(),
                        weights_->v_ex_bn.GetStddevs());
 
-    if (weights_->use_ownership) {
-        Convolution1::Forward(board_size, value_extract_channels, 1,
-                              value_conv,
-                              weights_->v_ownership.GetWeights(),
-                              workspace, output_ownership);
+    Convolution1::Forward(board_size, value_extract_channels, 1,
+                          value_conv,
+                          weights_->v_ownership.GetWeights(),
+                          workspace, output_ownership);
     
-        AddSpatialBiases::Forward(board_size, 1,
+    AddSpatialBiases::Forward(board_size, 1,
                                   output_ownership,
                                   weights_->v_ownership.GetBiases(), false);
 
-    }
+
     Pooling::Forward(board_size, value_extract_channels, value_conv, value_layer);
 
     FullyConnect::Forward(value_extract_channels, kOuputValueMisc,

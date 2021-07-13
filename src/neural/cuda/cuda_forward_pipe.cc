@@ -5,9 +5,10 @@
 #include "neural/cuda/cuda_forward_pipe.h"
 #include "neural/cuda/cuda_common.h"
 #include "neural/cuda/cuda_kernels.h"
+#include "utils/log.h"
 
 void CudaForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
-    CUDA::check_devices();
+    LOGGING << CUDA::GetDevicesInfo();
     max_batch_ = GetOption<int>("batch_size");
     Load(weights);
     PrepareWorkers();
@@ -42,7 +43,7 @@ void CudaForwardPipe::Load(std::shared_ptr<DNNWeights> weights) {
 void CudaForwardPipe::Reload(int board_size) {
     Release();
 
-    const auto d_cnt = CUDA::get_devicecount();
+    const auto d_cnt = CUDA::GetDeviceCount();
 
     if (GetOption<int>("gpu") >= 0) {
         nngraphs_.emplace_back(std::make_unique<NNGraph>());
@@ -79,12 +80,11 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
     }
     graph_ = std::make_unique<Graph>();
     gpu_ = gpu;
-    auto d = CUDA::get_device(gpu_);
 
-    cudaSetDevice(d);
+    CUDA::SetDevice(gpu_);
 
     weights_ = weights;
-    handel_.apply(gpu_);
+    handel_.ApplyOnCurrentDevice();
 
     board_size_ = board_size;
     scratch_size_ = 0;
@@ -494,21 +494,17 @@ void CudaForwardPipe::PrepareWorkers() {
 
 void CudaForwardPipe::Worker(int gpu) {
     const auto gether_batches = [this](){
-        const auto gpu_waittime = 40;
+        const auto gpu_waittime = 20;
         auto entries = std::vector<std::shared_ptr<ForwawrdEntry>>{};
         while(true) {
             if (!worker_running_.load()) {
                 return entries;
             }
 
+            bool narrow_pipe = narrow_pipe_.exchange(false);
             int waittime = waittime_.load();
+
             if ((int)entry_queue_.size() >= max_batch_) {
-                if (waittime > gpu_waittime) {
-                    waittime_.store(gpu_waittime);
-                } else if (waittime > 1) {
-                    waittime--;
-                    waittime_.store(waittime);
-                }
                 break;
             }
 
@@ -516,19 +512,26 @@ void CudaForwardPipe::Worker(int gpu) {
             bool timeout = !cv_.wait_for(lock, std::chrono::milliseconds(waittime),
                                              [this](){ return !((int)entry_queue_.size() < max_batch_); }
                                          );
+
             if (!entry_queue_.empty()) {
-                if (timeout && narrow_pipe_.exchange(true) == false) {
-                    if (waittime > 1) {
-                        waittime--;
-                        waittime_.store(waittime);
-                    }
-                    break;
+                waittime = std::min(waittime, gpu_waittime);
+
+                if (timeout && narrow_pipe) {
+                    waittime = 0;
+                } else if (waittime > 0) {
+                    waittime -= 2;
                 }
+
+                waittime = std::max(waittime, 0);
+                waittime_.store(waittime);
+
+                break;
             } else {
                 if (waittime < gpu_waittime) {
-                   waittime += 2;
+                    waittime_.store(waittime+1);
+                } else if (waittime < 20 * gpu_waittime) {
+                    waittime_.store(waittime+10);
                 }
-                waittime_.store(waittime);
             }
         }
 

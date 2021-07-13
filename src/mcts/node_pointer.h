@@ -8,7 +8,6 @@
 
 #define POINTER_MASK (3ULL)
 
-
 static constexpr std::uint64_t kUninflated = 2ULL;
 static constexpr std::uint64_t kInflating  = 1ULL;
 static constexpr std::uint64_t kPointer    = 0ULL;

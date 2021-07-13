@@ -43,17 +43,20 @@ void CudaError(cudaError_t status) {
   }
 }
 
-int get_devicecount() {
+int GetDeviceCount() {
     int n = 0;
-    cudaError_t status = cudaGetDeviceCount(&n);
-    ReportCUDAErrors(status);
+    ReportCUDAErrors(cudaGetDeviceCount(&n));
     return n;
 }
 
-int get_device(int n) {
-    cudaError_t status = cudaGetDevice(&n);
-    ReportCUDAErrors(status);
+int GetDevice() {
+    int n = 0;
+    ReportCUDAErrors(cudaGetDevice(&n));
     return n;
+}
+
+void SetDevice(int n) {
+    cudaSetDevice(n);
 }
 
 #ifdef USE_CUDNN
@@ -65,37 +68,37 @@ void CudnnError(cudnnStatus_t status) {
     }
 }
 
-cudnnHandle_t cudnn_handle(int n) {
-    static int init[MAX_SUPPORT_GPUS] = {0};
+cudnnHandle_t GetCudnnHandle() {
+    static bool init[MAX_SUPPORT_GPUS] = {false};
     static cudnnHandle_t handle[MAX_SUPPORT_GPUS];
-    int i = get_device(n);
+    int i = GetDevice();
     if(!init[i]) {
         cudnnCreate(&handle[i]);
-        init[i] = 1;
+        init[i] = true;
     }
     return handle[i];
 }
 #endif
 
-cublasHandle_t blas_handle(int n) {
-    static int init[MAX_SUPPORT_GPUS] = {0};
+cublasHandle_t GetBlasHandle() {
+    static bool init[MAX_SUPPORT_GPUS] = {false};
     static cublasHandle_t handle[MAX_SUPPORT_GPUS];
-    int i = get_device(n);
+    int i = GetDevice();
     if (!init[i]) {
         cublasCreate(&handle[i]);
-        init[i] = 1;
+        init[i] = true;
     }
     return handle[i];
 }
 
-void CudaHandel::apply(int n) {
+void CudaHandel::ApplyOnCurrentDevice() {
 #ifdef USE_CUDNN
-  cudnn_handel = cudnn_handle(n);
+    cudnn_handel = GetCudnnHandle();
 #endif
-  cublas_handel = blas_handle(n);
+    cublas_handel = GetBlasHandle();
 }
 
-bool is_using_cuDNN() {
+bool IsUsingCuDNN() {
 #ifdef USE_CUDNN
     return true;
 #else
@@ -103,23 +106,35 @@ bool is_using_cuDNN() {
 #endif
 }
 
-void output_spec(const cudaDeviceProp &sDevProp) {
-    printf(" Device name: %s\n", sDevProp.name);
-    printf(" Device memory(MiB): %zu\n", (sDevProp.totalGlobalMem/(1024*1024)));
-    printf(" Memory per-block(KiB): %zu\n", (sDevProp.sharedMemPerBlock/1024));
-    printf(" Register per-block(KiB): %zu\n", (sDevProp.regsPerBlock/1024));
-    printf(" Warp size: %zu\n", sDevProp.warpSize);
-    printf(" Memory pitch(MiB): %zu\n", (sDevProp.memPitch/(1024*1024)));
-    printf(" Constant Memory(KiB): %zu\n", (sDevProp.totalConstMem/1024));
-    printf(" Max thread per-block: %zu\n", sDevProp.maxThreadsPerBlock);
-    printf(" Max thread dim: (%zu, %zu, %zu)\n", sDevProp.maxThreadsDim[0], sDevProp.maxThreadsDim[1], sDevProp.maxThreadsDim[2]);
-    printf(" Max grid size: (%zu, %zu, %zu)\n", sDevProp.maxGridSize[0], sDevProp.maxGridSize[1], sDevProp.maxGridSize[2]);
-    printf(" Clock: %zu(kHz)\n", (sDevProp.clockRate/1000));
-    printf(" textureAlignment: %zu\n", sDevProp.textureAlignment);
+std::string OutputSpec(const cudaDeviceProp &dev_prop) {
+    auto out = std::ostringstream{};
+
+    out << "  Device name: "             << dev_prop.name                       << '\n';
+    out << "  Device memory(MiB): "      << dev_prop.totalGlobalMem/(1024*1024) << '\n';
+    out << "  Memory per-block(KiB): "   << dev_prop.sharedMemPerBlock/1024     << '\n';
+    out << "  Register per-block(KiB): " << dev_prop.regsPerBlock/1024          << '\n';
+    out << "  Warp size: "               << dev_prop.warpSize                   << '\n';
+    out << "  Memory pitch(MiB): "       << dev_prop.memPitch/(1024*1024)       << '\n';
+    out << "  Constant Memory(KiB): "    << dev_prop.totalConstMem/1024         << '\n';
+    out << "  Max thread per-block: "    << dev_prop.maxThreadsPerBlock         << '\n';
+    out << "  Max thread dim: ("
+            << dev_prop.maxThreadsDim[0] << ", "
+            << dev_prop.maxThreadsDim[1] << ", "
+            << dev_prop.maxThreadsDim[2] << ")\n";
+    out << "  Max grid size: ("
+            << dev_prop.maxGridSize[0] << ", "
+            << dev_prop.maxGridSize[1] << ", "
+            << dev_prop.maxGridSize[2] << ")\n";
+    out << "  Clock: "             << dev_prop.clockRate/1000   << "(kHz)" << '\n';
+    out << "  Texture Alignment: " << dev_prop.textureAlignment << '\n';
+
+    return out.str();
 }
 
-void check_devices() {
-    int devicecount = get_devicecount();
+std::string GetDevicesInfo() {
+    auto out = std::stringstream{};
+
+    int devicecount = GetDeviceCount();
     if (devicecount == 0) {
         throw std::runtime_error("No CUDA device");
     }
@@ -129,30 +144,36 @@ void check_devices() {
     {
         const auto major = cuda_version/1000;
         const auto minor = (cuda_version - major * 1000)/10;
-        printf("CUDA version: Major %zu, Minor %zu\n", major, minor);
+        out << "CUDA version: "
+                << " Major " << major
+                << ", Minor " << minor << '\n';
     }
 
-    printf("Using cuDNN: ");
-    if (is_using_cuDNN()) {
-        printf("Yes\n");
+    out << "Using cuDNN: ";
+    if (IsUsingCuDNN()) {
+        out << "Yes\n";
 #ifdef USE_CUDNN
         const auto cudnn_version = cudnnGetVersion();
         const auto major = cudnn_version/1000;
         const auto minor = (cudnn_version -  major * 1000)/100;
-        printf("cuDNN version: Major %zu, Minor %zu\n", major, minor);
+        out << "cuDNN version: "
+                << " Major " << major
+                << ", Minor " << minor << '\n';
 #endif
     } else {
-        printf("No\n");
+        out << "No\n";
     }
 
-    printf("Number of CUDA devices: %zu\n", devicecount);
+    out << "Number of CUDA devices: " << devicecount << '\n';
+
     for(int i = 0; i < devicecount; ++i) {
-        printf("=== Device %zu ===\n", i);
-        cudaDeviceProp sDeviceProp;
-        cudaGetDeviceProperties(&sDeviceProp, i);
-        output_spec(sDeviceProp);
+        out << "=== Device " << i <<"===\n";
+        cudaDeviceProp device_prop;
+        cudaGetDeviceProperties(&device_prop, i);
+        out << OutputSpec(device_prop);
     }
-    printf("\n");
+
+    return out.str();
 }
 } // namespace CUDA
 

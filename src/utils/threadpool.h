@@ -161,6 +161,9 @@ public:
     ThreadGroup(ThreadGroup &&group) {
         pool_ = group.pool_;
     }
+    ~ThreadGroup() {
+        WaitToJoin();
+    }
 
     template<class F, class... Args>
     void AddTask(F&& f, Args&&... args) {
@@ -172,6 +175,7 @@ public:
         for (auto &&res : tasks_future_) {
             res.get();
         }
+        tasks_future_.clear();
     }
 
 private:
