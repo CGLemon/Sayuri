@@ -33,8 +33,10 @@ NodeEvals Node::PrepareRootNode(Network &network,
     const auto success = ExpendChildren(network, state, is_root);
     assert(success);
     assert(HaveChildren());
+
     if (success) {
         InflateAllChildren();
+
         if (GetParameters()->dirichlet_noise) {
             const auto legal_move = children_.size();
             const auto epsilon = GetParameters()->dirichlet_epsilon;
@@ -165,6 +167,66 @@ void Node::linkNetOutput(const Network::Result &raw_netlist, const int color){
     }
 }
 
+void Node::PolicyTargetPruning() {
+    WaitExpanded();
+    assert(HaveChildren());
+    InflateAllChildren();
+
+    auto buffer = std::vector<std::pair<int, int>>{};
+
+    int parentvisits = 0;
+    int most_visits_move = -1;
+    int most_visits = 0;
+
+    for (const auto &child : children_) {
+        const auto node = child->Get();
+
+        if (!node->IsActive()) {
+            continue;
+        }
+
+        const auto visits = node->GetVisits();
+        const auto vertex = node->GetVertex();
+        parentvisits += visits;
+        buffer.emplace_back(visits, vertex);
+
+        if (most_visits < visits) {
+            most_visits = visits;
+            most_visits_move = vertex;
+        }
+    }
+
+    assert(!buffer.empty());
+
+    const auto forced_policy_factor = GetParameters()->forced_policy_factor;
+    for (const auto &x : buffer) {
+        const auto visits = x.first;
+        const auto vertex = x.second;
+        auto node = GetChild(vertex);
+
+        auto forced_playouts = std::sqrt(forced_policy_factor *
+                                             node->GetPolicy() *
+                                             float(parentvisits));
+        auto new_visits = std::max(visits - int(forced_playouts), 0);
+        node->SetVisits(new_visits);
+    }
+
+    while (true) {
+        auto node = UctSelectChild(color_, false);
+        if (node->GetVertex() == most_visits_move) {
+            break;
+        }
+        node->SetActive(false);
+    }
+
+    for (const auto &x : buffer) {
+        const auto visits = x.first;
+        const auto vertex = x.second;
+        GetChild(vertex)->SetVisits(visits);
+    }
+
+}
+
 Node *Node::ProbSelectChild() {
     WaitExpanded();
     assert(HaveChildren());
@@ -218,18 +280,19 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
         }
     }
 
-    const auto fpu_reduction_factor = is_root ? GetParameters()->fpu_root_reduction : GetParameters()->fpu_reduction;
-    const auto cpuct_init           = is_root ? GetParameters()->cpuct_root_init    : GetParameters()->cpuct_init;
-    const auto cpuct_base           = is_root ? GetParameters()->cpuct_root_base    : GetParameters()->cpuct_base;
-    const auto draw_factor          = is_root ? GetParameters()->draw_root_factor   : GetParameters()->draw_factor;
+    const auto fpu_reduction_factor = is_root ? GetParameters()->fpu_root_reduction   : GetParameters()->fpu_reduction;
+    const auto cpuct_init           = is_root ? GetParameters()->cpuct_root_init      : GetParameters()->cpuct_init;
+    const auto cpuct_base           = is_root ? GetParameters()->cpuct_root_base      : GetParameters()->cpuct_base;
+    const auto draw_factor          = is_root ? GetParameters()->draw_root_factor     : GetParameters()->draw_factor;
+    const auto forced_policy_factor = is_root ? GetParameters()->forced_policy_factor : 0.0f;
     const auto score_utility_factor = GetParameters()->score_utility_factor;
+
 
     const float cpuct         = cpuct_init + std::log((float(parentvisits) + cpuct_base + 1) / cpuct_base);
     const float numerator     = std::sqrt(float(parentvisits));
     const float fpu_reduction = fpu_reduction_factor * std::sqrt(total_visited_policy);
     const float fpu_value     = GetNetEval(color) - fpu_reduction;
-    const float score   = GetFinalScore(color);
-    
+    const float score         = GetFinalScore(color);
 
     std::shared_ptr<Edge> best_node = nullptr;
     float best_value = std::numeric_limits<float>::lowest();
@@ -257,18 +320,26 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
         }
 
         float denom = 1.0f;
-        if (is_pointer) {
-            denom += node->GetVisits();
-        }
-
         float utility = 0.0f;
+        float bonus = 0.0f;
         if (is_pointer) {
-            utility += node->GetScoreUtility(color, score_utility_factor, score);
+            const auto visits = node->GetVisits();
+            denom += visits;
+            if (visits > 0) {
+                utility += node->GetScoreUtility(color, score_utility_factor, score);
+            }
+            int forced_playouts = std::sqrt(forced_policy_factor *
+                                                node->GetPolicy() *
+                                                float(parentvisits));
+
+            bonus += (int) (forced_playouts - denom + 1.0f);
+            bonus *= 10;
+            bonus = std::max(bonus, 0.0f);
         }
 
         const float psa = child->Data()->policy;
         const float puct = cpuct * psa * (numerator / denom);
-        const float value = q_value + puct + utility;
+        const float value = q_value + puct + utility + bonus;
         assert(value > std::numeric_limits<float>::lowest());
 
         if (value > best_value) {
@@ -491,7 +562,7 @@ std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
 
     for (const auto & child : children_) {
         const auto node = child->Get();
-        if (node == nullptr) {
+        if (node == nullptr || node->IsPruned()) {
             continue;
         }
 
@@ -789,6 +860,10 @@ std::vector<float> Node::ApplyDirichletNoise(const float epsilon, const float al
         node->SetPolicy(policy);
     }
     return dirichlet_buffer;
+}
+
+void Node::SetVisits(int v) {
+    visits_.store(v);
 }
 
 void Node::SetPolicy(float p) {

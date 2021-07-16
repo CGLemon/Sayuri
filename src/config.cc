@@ -82,6 +82,8 @@ void InitOptionsMap() {
     options_map["dirichlet_epsilon"] << Option::setoption(0.25f);
     options_map["dirichlet_init"] << Option::setoption(0.03f);
     options_map["dirichlet_factor"] << Option::setoption(361.f);
+
+    options_map["forced_policy_factor"] << Option::setoption(0.f);
 }
 
 void InitBasicParameters() {
@@ -237,6 +239,13 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext("--draw-root-factor")) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("draw_root_factor", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--forced-policy-factor")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("forced_policy_factor", res->Get<float>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

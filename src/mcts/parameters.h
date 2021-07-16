@@ -32,6 +32,7 @@ public:
         dirichlet_factor = GetOption<float>("dirichlet_factor");
         dirichlet_init = GetOption<float>("dirichlet_init");
 
+        forced_policy_factor = GetOption<float>("forced_policy_factor");
         score_utility_factor = GetOption<float>("score_utility_factor");
     }
 
@@ -57,6 +58,7 @@ public:
     float dirichlet_factor;
     float dirichlet_init;
 
+    float forced_policy_factor;
     float score_utility_factor;
 };
 

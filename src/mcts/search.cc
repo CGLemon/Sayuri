@@ -134,6 +134,7 @@ ComputationResult Search::Computation(int playours) {
 
     computation_result.board_size = board_size;
     computation_result.komi = root_state_.GetKomi();
+    computation_result.movenum = root_state_.GetMoveNumber();
 
     Timer timer;
 
@@ -174,8 +175,14 @@ ComputationResult Search::Computation(int playours) {
 
     group_->WaitToJoin();
 
+    time_control_.TookTime(color);
+    if (GetOption<bool>("analysis_verbose")) {
+        LOGGING << root_node_->ToString(root_state_);
+        LOGGING << time_control_.ToString();
+    }
+
     // Fill side to move, moves, root eval and score.
-    computation_result.to_move = (VertexType) color;
+    computation_result.to_move = static_cast<VertexType>(color);
     computation_result.best_move = root_node_->GetBestMove();
     computation_result.random_move = root_node_->RandomizeFirstProportionally(1);
     computation_result.root_eval = root_node_->GetEval(color, false);
@@ -186,6 +193,8 @@ ComputationResult Search::Computation(int playours) {
     // Resize the childern status buffer.
     computation_result.root_ownership.resize(num_intersections);
     computation_result.root_probabilities.resize(num_intersections+1);
+    computation_result.root_target_probabilities.resize(num_intersections+1);
+    computation_result.root_policy.resize(num_intersections+1);
     computation_result.root_noise.resize(num_intersections+1);
     computation_result.root_visits.resize(num_intersections+1);
 
@@ -202,13 +211,15 @@ ComputationResult Search::Computation(int playours) {
 
     // Fill visits.
     auto parentvisits = 0;
-    const auto children = root_node_->GetChildren();
+    const auto &children = root_node_->GetChildren();
     for (const auto &child : children) {
         const auto node = child->Get();
         const auto visits = node->GetVisits();
         const auto vertex = node->GetVertex();
+        const auto policy = node->GetPolicy();
         if (vertex == kPass) {
             computation_result.root_visits[num_intersections] = visits;
+            computation_result.root_policy[num_intersections] = policy;
             continue;
         }
 
@@ -217,6 +228,7 @@ ComputationResult Search::Computation(int playours) {
         const auto index = root_state_.GetIndex(x, y);
 
         computation_result.root_visits[index] = visits;
+        computation_result.root_policy[index] = policy;
         parentvisits += visits;
     }
 
@@ -226,15 +238,36 @@ ComputationResult Search::Computation(int playours) {
         computation_result.root_probabilities[idx] = prob;
     }
 
+    // Fill target probabilities.
+    // root_node_->PolicyTargetPruning();
+    float tot_target_policy = 0.0f;
+    for (int idx = 0; idx < num_intersections+1; ++idx) {
+        const auto x = idx % board_size;
+        const auto y = idx / board_size;
+        int vertex;
+
+        if (idx == num_intersections) {
+            vertex = kPass;
+        } else {
+            vertex = root_state_.GetVertex(x, y);
+        }
+
+        auto node = root_node_->GetChild(vertex);
+        if (node && !node->IsPruned()) {
+            const auto prob = computation_result.root_probabilities[idx];
+            computation_result.root_target_probabilities[idx] = prob;
+            tot_target_policy += prob;
+        } else {
+            computation_result.root_target_probabilities[idx] = 0.0f;
+        }
+    }
+
+    for (auto &prob : computation_result.root_target_probabilities) {
+        prob /= tot_target_policy;
+    }
 
     // Push the data to buffer.
     GatherData(root_state_, computation_result);
-
-    time_control_.TookTime(color);
-    if (GetOption<bool>("analysis_verbose")) {
-        LOGGING << root_node_->ToString(root_state_);
-        LOGGING << time_control_.ToString();
-    }
 
     ClearNodes();
 
@@ -248,6 +281,16 @@ int Search::ThinkBestMove() {
     }
 
     return result.best_move;
+}
+
+int Search::GetSetlfPlayMove() {
+    auto result = Computation(max_playouts_);
+    int move = result.best_move;
+    if (param_->random_moves_cnt < result.movenum) {
+        move = result.random_move;
+    }
+
+    return move;
 }
 
 void Search::SaveTrainingBuffer(GameState &end_state, std::string filename) {
@@ -325,7 +368,7 @@ void Search::GatherData(const GameState &state, ComputationResult &result) {
     data.side_to_move = result.to_move;
 
     data.planes = Encoder::Get().GetPlanes(state);
-    data.probabilities = data.probabilities;
+    data.probabilities = result.root_target_probabilities;
 
     training_buffer_.emplace_back(data);
 }

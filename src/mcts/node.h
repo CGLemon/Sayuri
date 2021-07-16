@@ -57,6 +57,8 @@ public:
 
     Node *ProbSelectChild();
     Node *UctSelectChild(const int color, const bool is_root);
+
+    void PolicyTargetPruning();
     int RandomizeFirstProportionally(float random_temp);
 
     void Update(std::shared_ptr<NodeEvals> evals);
@@ -66,6 +68,9 @@ public:
 
     const std::vector<std::shared_ptr<Edge>> &GetChildren() const;
     bool HaveChildren() const;
+
+    Node *Get();
+    Node *GetChild(int vertex);
     int GetVisits() const;
     int GetVertex() const;
     float GetPolicy() const;
@@ -90,12 +95,15 @@ public:
     bool IsExpending() const;
     bool IsExpended() const;
 
+    bool IsPruned() const;
+
     std::string ToString(GameState &state);
     std::string GetPvString(GameState &state);
 
 private:
     std::vector<float> ApplyDirichletNoise(const float epsilon, const float alpha);
     void SetPolicy(float p);
+    void SetVisits(int v);
 
     void LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist);
     void linkNetOutput(const Network::Result &raw_netlist, const int color);
@@ -103,9 +111,6 @@ private:
     float GetScoreUtility(const int color, float factor, float parent_score) const;
     float GetVariance(const float default_var, const int visits) const;
     float GetLcb(const int color) const;
-
-    Node *Get();
-    Node *GetChild(int vertex);
 
     void Inflate(std::shared_ptr<Edge> child);
     void Release(std::shared_ptr<Edge> child);
@@ -134,7 +139,6 @@ private:
 
     void SetActive(const bool active);
     void InvaliNode();
-    bool IsPruned() const;
     bool IsActive() const;
     bool IsValid() const;
 
