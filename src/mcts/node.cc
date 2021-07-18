@@ -39,28 +39,23 @@ NodeEvals Node::PrepareRootNode(Network &network,
 
         if (GetParameters()->dirichlet_noise) {
             const auto legal_move = children_.size();
-            const auto epsilon = GetParameters()->dirichlet_epsilon;
             const auto factor = GetParameters()->dirichlet_factor;
             const auto init = GetParameters()->dirichlet_init;
             const auto alpha = init * factor / static_cast<float>(legal_move);
 
-            const auto raw_dirichlet = ApplyDirichletNoise(epsilon, alpha);
-            const auto num_intersections = state.GetNumIntersections();
-            dirichlet.resize(num_intersections+1);
-            std::fill(std::begin(dirichlet), std::end(dirichlet), 0.0f);
-            for (auto i = size_t{0}; i < legal_move; ++i) {
-                auto node = children_[i]->Get();
-                const auto vertex = node->GetVertex();
-                if (vertex == kPass) {
-                    dirichlet[num_intersections] = raw_dirichlet[i];
-                    continue;
-                }
+            ApplyDirichletNoise(alpha);
 
-                const auto x = state.GetX(vertex);
-                const auto y = state.GetY(vertex);
-                const auto index = state.GetIndex(x, y);
-                dirichlet[index] = raw_dirichlet[i];
+            const auto num_intersections = state.GetNumIntersections();
+            const auto board_size = state.GetBoardSize();
+            dirichlet.resize(num_intersections+1);
+
+            for (auto idx = 0; idx < num_intersections; ++idx) {
+                const auto x = idx % board_size;
+                const auto y = idx / board_size;
+                const auto vtx = state.GetVertex(x, y);
+                dirichlet[idx] = GetParameters()->dirichlet_buffer[vtx];
             }
+            dirichlet[num_intersections] = GetParameters()->dirichlet_buffer[kPass];
         }
     }
     return GetNodeEvals();
@@ -238,13 +233,14 @@ Node *Node::ProbSelectChild() {
         const auto node = child->Get();
         const bool is_pointer = node == nullptr ? false : true;
 
-        auto prob = node->GetPolicy();
+        auto prob = child->Data()->policy;
 
         // The node was pruned. Skip this time.
         if (is_pointer && !node->IsActive()) {
             continue;
         }
 
+        // The node was expending.
         if (is_pointer && node->IsExpending()) {
             prob = -1.0f + prob;
         }
@@ -285,8 +281,8 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
     const auto cpuct_base           = is_root ? GetParameters()->cpuct_root_base      : GetParameters()->cpuct_base;
     const auto draw_factor          = is_root ? GetParameters()->draw_root_factor     : GetParameters()->draw_factor;
     const auto forced_policy_factor = is_root ? GetParameters()->forced_policy_factor : 0.0f;
+    const auto noise                = is_root ? GetParameters()->dirichlet_noise      : false;
     const auto score_utility_factor = GetParameters()->score_utility_factor;
-
 
     const float cpuct         = cpuct_init + std::log((float(parentvisits) + cpuct_base + 1) / cpuct_base);
     const float numerator     = std::sqrt(float(parentvisits));
@@ -337,7 +333,7 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
             bonus = std::max(bonus, 0.0f);
         }
 
-        const float psa = child->Data()->policy;
+        const float psa = GetUctPolicy(child, noise);
         const float puct = cpuct * psa * (numerator / denom);
         const float value = q_value + puct + utility + bonus;
         assert(value > std::numeric_limits<float>::lowest());
@@ -827,39 +823,47 @@ bool Node::IsExpended() const {
     return expand_state_.load() == ExpandState::kExpanded;
 }
 
-std::vector<float> Node::ApplyDirichletNoise(const float epsilon, const float alpha) {
+void Node::ApplyDirichletNoise(const float alpha) {
     auto child_cnt = children_.size();
-    auto dirichlet_buffer = std::vector<float>(child_cnt);
+    auto buffer = std::vector<float>(child_cnt);
     auto gamma = std::gamma_distribution<float>(alpha, 1.0f);
 
-    std::generate(std::begin(dirichlet_buffer), std::end(dirichlet_buffer),
+    std::generate(std::begin(buffer), std::end(buffer),
                       [&gamma] () { return gamma(Random<RandomType::kXoroShiro128Plus>::Get()); });
 
     auto sample_sum =
-        std::accumulate(std::begin(dirichlet_buffer), std::end(dirichlet_buffer), 0.0f);
+        std::accumulate(std::begin(buffer), std::end(buffer), 0.0f);
+
+    auto &dirichlet = GetParameters()->dirichlet_buffer;
+    dirichlet.fill(0.0f);
 
     // If the noise vector sums to 0 or a denormal, then don't try to
     // normalize.
     if (sample_sum < std::numeric_limits<float>::min()) {
-        std::fill(std::begin(dirichlet_buffer), std::end(dirichlet_buffer), 0.0f);
-        return dirichlet_buffer;
+        std::fill(std::begin(buffer), std::end(buffer), 0.0f);
+        return;
     }
 
-    for (auto &v : dirichlet_buffer) {
+    for (auto &v : buffer) {
         v /= sample_sum;
     }
 
-    child_cnt = 0;
-    // Be Sure all node are expended.
     InflateAllChildren();
-    for (const auto &child : children_) {
-        auto node = child->Get();
-        auto policy = node->GetPolicy();
-        auto eta_a = dirichlet_buffer[child_cnt++];
-        policy = policy * (1 - epsilon) + epsilon * eta_a;
-        node->SetPolicy(policy);
+    for (auto i = size_t{0}; i < child_cnt; ++i) {
+        const auto vertex = children_[i]->Data()->vertex;
+        dirichlet[vertex] = buffer[i];
     }
-    return dirichlet_buffer;
+}
+
+float Node::GetUctPolicy(std::shared_ptr<Node::Edge> child, bool noise) {
+    auto policy = child->Data()->policy;
+    if (noise) {
+        const auto vertex = child->Data()->vertex;
+        const auto epsilon = GetParameters()->dirichlet_epsilon;
+        const auto eta_a = GetParameters()->dirichlet_buffer[vertex];
+        policy = policy * (1 - epsilon) + epsilon * eta_a;
+    }
+    return policy;
 }
 
 void Node::SetVisits(int v) {

@@ -41,7 +41,12 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
     }
     if (node->HaveChildren() && !search_result.IsValid()) {
         auto color = currstate.GetToMove();
-        auto next = node->UctSelectChild(color, node == root_node);
+        Node *next = nullptr;
+        if (playouts_.load() < param_->cap_playouts) {
+            next = node->ProbSelectChild();
+        } else {
+            next = node->UctSelectChild(color, node == root_node);
+        }
         auto vtx = next->GetVertex();
 
         currstate.PlayMove(vtx, color);

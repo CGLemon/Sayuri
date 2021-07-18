@@ -1,6 +1,9 @@
 #pragma once
 
+#include "game/types.h"
 #include "config.h"
+
+#include <array>
 
 class Parameters {
 public:
@@ -34,6 +37,7 @@ public:
 
         forced_policy_factor = GetOption<float>("forced_policy_factor");
         score_utility_factor = GetOption<float>("score_utility_factor");
+        cap_playouts = GetOption<float>("cap_playouts");
     }
 
     int threads;
@@ -60,6 +64,10 @@ public:
 
     float forced_policy_factor;
     float score_utility_factor;
+
+    int cap_playouts;
+
+    std::array<float, kNumVertices + 1> dirichlet_buffer;
 };
 
 

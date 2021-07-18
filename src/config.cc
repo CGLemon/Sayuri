@@ -84,6 +84,7 @@ void InitOptionsMap() {
     options_map["dirichlet_factor"] << Option::setoption(361.f);
 
     options_map["forced_policy_factor"] << Option::setoption(0.f);
+    options_map["cap_playouts"] << Option::setoption(0);
 }
 
 void InitBasicParameters() {
@@ -246,6 +247,13 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext("--forced-policy-factor")) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("forced_policy_factor", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--cap-playouts")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("cap_playouts", res->Get<int>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

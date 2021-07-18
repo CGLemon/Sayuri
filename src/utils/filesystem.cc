@@ -10,7 +10,6 @@
 #include <sys/stat.h>
 #endif
 
-
 void CreateDirectory(const std::string& path) {
 #ifdef WIN32
     if (CreateDirectoryA(path.c_str(), nullptr)) return;
@@ -24,6 +23,17 @@ void CreateDirectory(const std::string& path) {
 #endif
 }
 
+bool IsDirectoryExist(const std::string& directory) {
+#ifdef WIN32
+    WIN32_FIND_DATAA dir;
+    const auto handle = FindFirstFileA((directory + "\\*").c_str(), &dir);
+    if (handle == INVALID_HANDLE_VALUE) return false;
+#else
+    DIR* dir = opendir(directory.c_str());
+    if (!dir) return false;
+#endif
+    return true;
+}
 
 std::vector<std::string> GetFileList(const std::string& directory) {
     std::vector<std::string> result;

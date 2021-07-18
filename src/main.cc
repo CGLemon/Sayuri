@@ -1,7 +1,6 @@
 #include <iostream>
 #include <memory>
 
-#include "utils/threadpool.h"
 #include "include.h"
 
 static void StartGtpLoop() {

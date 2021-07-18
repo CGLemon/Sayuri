@@ -101,13 +101,14 @@ public:
     std::string GetPvString(GameState &state);
 
 private:
-    std::vector<float> ApplyDirichletNoise(const float epsilon, const float alpha);
+    void ApplyDirichletNoise(const float alpha);
     void SetPolicy(float p);
     void SetVisits(int v);
 
     void LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist);
     void linkNetOutput(const Network::Result &raw_netlist, const int color);
 
+    float GetUctPolicy(std::shared_ptr<Edge>, bool noise);
     float GetScoreUtility(const int color, float factor, float parent_score) const;
     float GetVariance(const float default_var, const int visits) const;
     float GetLcb(const int color) const;
