@@ -1,3 +1,5 @@
+#pragma once
+
 #include "mcts/time_control.h"
 #include "mcts/parameters.h"
 #include "mcts/node.h"
@@ -113,7 +115,7 @@ public:
     // Set time left.
     void TimeLeft(const int color, const int time, const int stones);
 
-    void SaveTrainingBuffer(GameState &state, std::string filename);
+    void SaveTrainingBuffer(std::string filename, GameState &state);
 
 private:
 

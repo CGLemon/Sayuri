@@ -145,6 +145,20 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
+    if (const auto res = parser.FindNext({"--threads", "-t"})) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("threads", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--batch-size")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("batch_size", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
     if (const auto res = parser.FindNext({"--playouts", "-p"})) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("playouts", res->Get<int>());

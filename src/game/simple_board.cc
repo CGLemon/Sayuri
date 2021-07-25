@@ -13,9 +13,8 @@ void SimpleBoard::Reset(const int boardsize) {
 }
 
 void SimpleBoard::ResetBoard() {
-    const auto num_vertices = GetNumVertices();
     const auto boardsize = GetBoardSize();
-    for (int vtx = 0; vtx < num_vertices; ++vtx) {
+    for (int vtx = 0; vtx < kNumVertices; ++vtx) {
         state_[vtx] = kInvalid;
         neighbours_[vtx] = 0;
     }

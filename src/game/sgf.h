@@ -64,4 +64,6 @@ public:
     GameState FormString(std::string sgfstring, unsigned int movenum);
 
     std::string ToString(GameState &state);
+
+    void ToFile(std::string filename, GameState &state);
 };

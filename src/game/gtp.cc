@@ -126,7 +126,16 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             out << GTPSuccess("");
         }
     } else if (const auto res = parser.Find("printsgf", 0)) {
-        out << GTPSuccess(Sgf::Get().ToString(agent_->GetState()));
+        auto filename = std::string{};
+        if (const auto input = parser.GetCommand(1)) {
+            filename = input->Get<std::string>();
+        }
+        if (filename.empty()) {
+            out << GTPSuccess(Sgf::Get().ToString(agent_->GetState()));
+        } else {
+            out << GTPSuccess("");
+            Sgf::Get().ToFile(filename, agent_->GetState());
+        }
     } else if (const auto res = parser.Find("final_score", 0)) {
         out << GTPFail("");
     } else if (const auto res = parser.Find("genmove", 0)) {

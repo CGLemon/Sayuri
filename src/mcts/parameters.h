@@ -67,7 +67,7 @@ public:
 
     int cap_playouts;
 
-    std::array<float, kNumVertices + 1> dirichlet_buffer;
+    std::array<float, kNumVertices + 10> dirichlet_buffer;
 };
 
 

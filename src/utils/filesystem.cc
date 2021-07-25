@@ -10,6 +10,14 @@
 #include <sys/stat.h>
 #endif
 
+std::string ConnectPath(const std::string path_1, const std::string path_2) {
+#ifdef WIN32
+    return path_1 + '\\' + path_2;
+#else
+    return path_1 + '/' + path_2;
+#endif
+}
+
 void CreateDirectory(const std::string& path) {
 #ifdef WIN32
     if (CreateDirectoryA(path.c_str(), nullptr)) return;

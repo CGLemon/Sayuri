@@ -525,3 +525,11 @@ std::string Sgf::ToString(GameState &state) {
     out << ')';
     return out.str();
 }
+
+void Sgf::ToFile(std::string filename, GameState &state) {
+    std::ofstream out(filename.c_str(), std::ofstream::app | std::ofstream::out);
+    if (out.is_open()) {
+        out << ToString(state) << std::endl;
+        out.close();
+    }
+}

@@ -298,7 +298,7 @@ int Search::GetSetlfPlayMove() {
     return move;
 }
 
-void Search::SaveTrainingBuffer(GameState &end_state, std::string filename) {
+void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
     auto file = std::ofstream{};
     file.open(filename, std::ios_base::app);
 
@@ -332,11 +332,12 @@ void Search::SaveTrainingBuffer(GameState &end_state, std::string filename) {
             buf.final_score = buf.side_to_move == kBlack ? black_final_score : -black_final_score;
         }
 
+        buf.ownership.resize(num_intersections);
         for (int idx = 0; idx < num_intersections; ++idx) {
             const auto owner = ownership[idx];
             if (buf.side_to_move == owner) {
                 buf.ownership[idx] = 1;
-            } else if (buf.side_to_move == !owner) {
+            } else if ((!buf.side_to_move) == owner) {
                 buf.ownership[idx] = -1;
             } else {
                 buf.ownership[idx] = 0;

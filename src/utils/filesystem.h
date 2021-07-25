@@ -3,6 +3,8 @@
 #include <vector>
 #include <string>
 
+std::string ConnectPath(const std::string path_1, const std::string path_2);
+
 // Creates directory at a given path. Throws exception if cannot.
 // Returns silently if already exists.
 void CreateDirectory(const std::string& path);

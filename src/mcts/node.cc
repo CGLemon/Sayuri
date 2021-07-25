@@ -474,7 +474,7 @@ std::string Node::ToString(GameState &state) {
             << std::setw(space) << "D(%)"
             << std::setw(space) << "P(%)"
             << std::setw(space) << "N(%)"
-            << std::setw(space) << "S(%)"
+            << std::setw(space) << "S"
             << std::endl;
 
     for (auto &lcb : lcblist) {

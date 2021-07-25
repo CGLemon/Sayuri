@@ -54,7 +54,7 @@ public:
         agent_->ApplySearch();
 
 
-        ThreadPool::Get(GetOption<float>("threads"));
+        ThreadPool::Get(GetOption<int>("threads"));
         FastPolicy::Get().LoaderFile();
 
         Loop();
