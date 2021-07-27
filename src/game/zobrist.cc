@@ -14,6 +14,7 @@ std::array<std::array<Zobrist::KEY, Zobrist::kZobristSize * 2>, 2> Zobrist::kPri
 
 std::array<Zobrist::KEY, Zobrist::kZobristSize> Zobrist::kKoMove;
 std::array<Zobrist::KEY, 5> Zobrist::KPass;
+std::array<Zobrist::KEY, 4096> Zobrist::kIdentity;
 
 template<typename T>
 bool Collision(std::vector<T> &array) {
@@ -63,6 +64,11 @@ void Zobrist::Initialize() {
         for (int i = 0; i < 5; ++i) {
             Zobrist::KPass[i] = rng.Generate();
             buf.emplace_back(Zobrist::KPass[i]);
+        }
+
+        for (int i = 0; i < 4096; ++i) {
+            Zobrist::kIdentity[i] = rng.Generate();
+            buf.emplace_back(Zobrist::kIdentity[i]);
         }
 
         if (!Collision(buf)) {

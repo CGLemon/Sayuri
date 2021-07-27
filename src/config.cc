@@ -62,6 +62,7 @@ void InitOptionsMap() {
 
     options_map["weights_file"] << Option::setoption(std::string{});
     options_map["gpu"] << Option::setoption(0);
+    options_map["gpu_waittime"] << Option::setoption(2);
 
     options_map["resign_threshold"] << Option::setoption(0.1f, 1.f, 0.f);
 
@@ -145,6 +146,13 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
+    if (const auto res = parser.FindNext("--gpu-waittime")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("gpu_waittime", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
     if (const auto res = parser.FindNext({"--threads", "-t"})) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("threads", res->Get<int>());
@@ -152,7 +160,7 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
-    if (const auto res = parser.FindNext("--batch-size")) {
+    if (const auto res = parser.FindNext({"--batch-size", "-b"})) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("batch_size", res->Get<int>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
@@ -174,7 +182,7 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
-    if (const auto res = parser.FindNext({"--boardsize", "-b"})) {
+    if (const auto res = parser.FindNext({"--board-size", "-s"})) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("defualt_boardsize", res->Get<int>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);

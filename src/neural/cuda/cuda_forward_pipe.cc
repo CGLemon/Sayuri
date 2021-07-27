@@ -27,6 +27,7 @@ OutputResult CudaForwardPipe::Forward(const InputData &inpnt) {
         cv_.notify_one();
     }
     entry->cv.wait(lock);
+    entry->done.store(true);
 
     return output;
 }
@@ -494,7 +495,7 @@ void CudaForwardPipe::PrepareWorkers() {
 
 void CudaForwardPipe::Worker(int gpu) {
     const auto gether_batches = [this](){
-        const auto gpu_waittime = 20;
+        const auto gpu_waittime = GetOption<int>("gpu_waittime");
         auto entries = std::vector<std::shared_ptr<ForwawrdEntry>>{};
         while(true) {
             if (!worker_running_.load()) {
@@ -568,7 +569,9 @@ void CudaForwardPipe::Worker(int gpu) {
 
         for (auto b = size_t{0}; b < batch_size; ++b) {
             entries[b]->output = outputs[b];
-            entries[b]->cv.notify_all();
+            while (!entries[b]->done.load()) {
+                entries[b]->cv.notify_all();
+            }
         }
 
         if (batch_size <= (size_t)max_batch_) {

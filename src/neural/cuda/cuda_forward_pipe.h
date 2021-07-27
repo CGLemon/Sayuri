@@ -95,6 +95,7 @@ private:
     };
 
     struct ForwawrdEntry {
+        std::atomic<bool> done{false};
 	    const InputData &input;
         OutputResult &output;
 
