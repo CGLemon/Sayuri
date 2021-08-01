@@ -222,6 +222,7 @@ ComputationResult Search::Computation(int playours) {
         const auto visits = node->GetVisits();
         const auto vertex = node->GetVertex();
         const auto policy = node->GetPolicy();
+        parentvisits += visits;
         if (vertex == kPass) {
             computation_result.root_visits[num_intersections] = visits;
             computation_result.root_policy[num_intersections] = policy;
@@ -234,7 +235,6 @@ ComputationResult Search::Computation(int playours) {
 
         computation_result.root_visits[index] = visits;
         computation_result.root_policy[index] = policy;
-        parentvisits += visits;
     }
 
     // Fill probabilities.
