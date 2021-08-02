@@ -33,6 +33,7 @@ struct OutputResult {
     }
 
     int board_size;
+    float komi;
 
     float pass_probability;
     float wdl_winrate;

@@ -426,7 +426,7 @@ std::array<float, kNumIntersections> Node::GetOwnership(int color) const {
 }
 
 float Node::GetScoreUtility(const int color, float factor, float parent_score) const {
-    return std::tanh(factor * (parent_score - GetFinalScore(color)));
+    return std::tanh(factor * (GetFinalScore(color) - parent_score));
 }
 
 float Node::GetVariance(const float default_var, const int visits) const {
@@ -652,7 +652,7 @@ float Node::GetNetFinalScore(const int color) const {
     if (color == kBlack) {
         return black_fs_;
     }
-    return 1.0f - black_fs_;
+    return 0.0f - black_fs_;
 }
 
 float Node::GetFinalScore(const int color) const {
@@ -661,7 +661,7 @@ float Node::GetFinalScore(const int color) const {
     if (color == kBlack) {
         return score;
     }
-    return 1.0f - score;
+    return 0.0f - score;
 }
 
 float Node::GetNetDraw() const {

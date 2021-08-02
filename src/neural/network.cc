@@ -167,7 +167,7 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
     out_result.wdl[2] = wdl_buffer[2];
     out_result.wdl_winrate = std::tanh(wdl_buffer[0] - wdl_buffer[2]);
     out_result.wdl_winrate = (out_result.wdl_winrate + 1.f) / 2;
-    out_result.stm_winrate = (out_result.stm_winrate + 1.f) / 2;
+    out_result.stm_winrate = (std::tanh(out_result.stm_winrate) + 1.f) / 2;
 
     return out_result;
 }
@@ -177,7 +177,10 @@ bool Network::ProbeCache(const GameState &state,
     // TODO: Cache the all symmetry board in early game.
 
     if (LookupCache(nn_cache_, state.GetHash(), result) ) {
-        return true;
+        if (std::abs(result.komi - state.GetKomi()) < 1e-4 &&
+                result.board_size == state.GetBoardSize()) {
+            return true;
+        }
     }
     return false;
 }

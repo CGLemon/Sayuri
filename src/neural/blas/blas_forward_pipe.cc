@@ -178,6 +178,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     auto result = OutputResult{};
 
     result.board_size = board_size;
+    result.komi = inpnts.komi;
     result.wdl[0] = output_misc[0];
     result.wdl[1] = output_misc[1];
     result.wdl[2] = output_misc[2];

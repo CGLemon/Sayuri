@@ -288,10 +288,10 @@ int Search::ThinkBestMove() {
     return result.best_move;
 }
 
-int Search::GetSetlfPlayMove() {
+int Search::GetSelfPlayMove() {
     auto result = Computation(max_playouts_);
     int move = result.best_move;
-    if (param_->random_moves_cnt < result.movenum) {
+    if (param_->random_moves_cnt > result.movenum) {
         move = result.random_move;
     }
 

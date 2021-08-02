@@ -449,6 +449,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         output_result.final_score = batch_value_misc[b * kOuputValueMisc + 4];
 
         output_result.board_size = inpnts[b].board_size;
+        output_result.komi = inpnts[b].komi;
     }
 
     return bactch_output_result;

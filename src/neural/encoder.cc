@@ -157,9 +157,6 @@ void Encoder::EncoderHistoryMove(const GameState &state,
 
 void Encoder::FillKoMove(std::shared_ptr<const Board> board,
                          std::vector<float>::iterator ko_it) const {
-    auto boardsize = board->GetBoardSize();
-    auto num_intersections = board->GetNumIntersections();
-
     auto ko_move = board->GetKoMove();
 
     if (ko_move == kNullVertex) {

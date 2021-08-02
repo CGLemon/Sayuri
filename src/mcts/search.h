@@ -105,7 +105,7 @@ public:
     int ThinkBestMove();
 
     // Get the self play move.
-    int GetSetlfPlayMove();
+    int GetSelfPlayMove();
 
     // Set the time control.
     void TimeSettings(const int main_time,
