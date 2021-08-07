@@ -52,13 +52,17 @@ std::string Encoder::GetPlanesString(const GameState &state, int symmetry) const
 
     auto planes = GetPlanes(state, symmetry);
 
-    for (int p = 0; p < kInputChannels; ++p) {
+    for (int p = 0; p < kPlaneChannels; ++p) {
         out << "plane: " << p << std::endl;
         for (int y = 0; y < boardsize; ++y) {
             for (int x = 0; x < boardsize; ++x) {
                 auto idx = state.GetIndex(x, y);
                 auto offset = p * num_intersections;
-                out << std::setw(7) << std::fixed << std::setprecision(4) << planes[offset + idx];
+
+                if (planes[offset + idx] == 0)
+                    out << std::setw(6) << 'x';
+                else 
+                    out << std::setw(6) << std::fixed << std::setprecision(2) << planes[offset + idx];
             }
             out << std::endl;
         }
@@ -72,7 +76,7 @@ void Encoder::SymmetryPlanes(const GameState &state, std::vector<float> &planes,
     auto buffer = std::vector<float>(num_intersections);
     auto planes_it = std::begin(planes);
 
-    for (int p = 0; p < kInputChannels; ++p) {
+    for (int p = 0; p < kPlaneChannels; ++p) {
         for (int index = 0; index < num_intersections; ++index) {
             auto symm_index = Symmetry::Get().TransformIndex(symmetry, index);
             buffer[index] = planes_it[symm_index];
@@ -230,16 +234,31 @@ void Encoder::FillLadder(std::shared_ptr<const Board> board,
     }
 }
 
-void Encoder::FillSideToMove(std::shared_ptr<const Board> board,
-                             float komi,
-                             std::vector<float>::iterator color_it) const {
+void Encoder::FillMisc(std::shared_ptr<const Board> board,
+                       float komi,
+                       std::vector<float>::iterator misc_it) const {
     auto num_intersections = board->GetNumIntersections();
+    auto boardsize = board->GetBoardSize();
     auto side_to_move = board->GetToMove();
+    if (side_to_move == kWhite) {
+        komi = 0.0f - komi;
+    }
 
-    auto offset = side_to_move == kBlack ? 0 : num_intersections;
+    // komi
+    std::fill(misc_it+ 0 * num_intersections,
+                  misc_it+ 1 * num_intersections, komi/10.f);
 
-    for (int index = 0; index < num_intersections; ++index) {
-        color_it[offset + index] = komi / 10.f;
+    // board size
+    std::fill(misc_it+ 1 * num_intersections,
+                  misc_it+ 2 * num_intersections, float(boardsize)/10.f);
+
+    // side to move
+    if (side_to_move == kBlack) {
+        std::fill(misc_it+ 2 * num_intersections,
+                      misc_it+ 3 * num_intersections, static_cast<float>(true));
+    } else {
+        std::fill(misc_it+ 3 * num_intersections,
+                      misc_it+ 4 * num_intersections, static_cast<float>(true));
     }
 }
 
@@ -252,13 +271,13 @@ void Encoder::EncoderFeatures(const GameState &state,
     auto capture_it = it + 1 * num_intersections;
     auto liberties_it = it + 2 * num_intersections;
     auto ladder_it = it + 6 * num_intersections;
-    auto color_it = it + 10 * num_intersections;
+    auto misc_it = it + 10 * num_intersections;
 
     FillKoMove(board, ko_it);
     FillCaptureMove(board, capture_it);
     FillLiberties(board, liberties_it);
     FillLadder(board, ladder_it);
-    FillSideToMove(board, state.GetKomi(), color_it);
+    FillMisc(board, state.GetKomi(), misc_it);
 }
 
 

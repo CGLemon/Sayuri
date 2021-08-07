@@ -20,7 +20,7 @@ void String::AddStone(const int vtx, const int lib) {
     stones_[vtx] = 1;
 }
 
-std::string String::DebugString(int boardsize) const {
+std::string String::GetDebugString(int boardsize) const {
     auto out = std::ostringstream{};
 
     out << "Next string:" << std::endl;

@@ -31,7 +31,7 @@ void PlanesStreamOut(std::ostream &out, const std::vector<float> &arr, size_t pl
     const auto spatial = size / planes;
     const bool remining = (spatial % 4 != 0);
 
-    for (size_t p = 0; p < planes-2; ++p) { // Last two channel is color.
+    for (size_t p = 0; p < planes-4; ++p) { // Last four channels are not binary features.
         for (size_t idx = 0; idx+4 <= spatial; idx+=4) {
             int hex = 0;
 
@@ -48,7 +48,7 @@ void PlanesStreamOut(std::ostream &out, const std::vector<float> &arr, size_t pl
             out << std::hex << hex;
         }
         if (remining) {
-            out << (bool)arr[planes * p + spatial - 1];
+            out << (bool)arr[spatial * (p+1) - 1];
         }
 
         out << std::dec << std::endl;

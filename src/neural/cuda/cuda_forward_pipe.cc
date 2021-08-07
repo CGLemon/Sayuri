@@ -8,7 +8,9 @@
 #include "utils/log.h"
 
 void CudaForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
-    LOGGING << CUDA::GetDevicesInfo();
+    if (!GetOption<bool>("quit")) {
+        LOGGING << CUDA::GetDevicesInfo();
+    }
     max_batch_ = GetOption<int>("batch_size");
     Load(weights);
     PrepareWorkers();

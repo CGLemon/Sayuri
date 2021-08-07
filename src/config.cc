@@ -48,6 +48,7 @@ void InitOptionsMap() {
     options_map["name"] << Option::setoption(kProgram);
     options_map["version"] << Option::setoption(kVersion);
     options_map["help"] << Option::setoption(false);
+    options_map["quit"] << Option::setoption(false);
 
     options_map["analysis_verbose"] << Option::setoption(false);
     options_map["mode"] << Option::setoption("gtp");
@@ -127,6 +128,18 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.Find({"--help", "-h"})) {
         SetOption("help", true);
         parser.RemoveCommand(res->Index());
+    }
+
+    if (const auto res = parser.Find({"--quit", "-q"})) {
+        SetOption("quit", true);
+        parser.RemoveCommand(res->Index());
+    }
+
+    if (const auto res = parser.FindNext({"--resign_threshold", "-r"})) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("resign_threshold", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
     }
 
     if (const auto res = parser.Find("--analysis-verbose")) {

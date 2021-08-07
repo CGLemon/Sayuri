@@ -46,9 +46,9 @@ private:
     void FillLadder(std::shared_ptr<const Board> board,
                     std::vector<float>::iterator ladder_it) const;
 
-    void FillSideToMove(std::shared_ptr<const Board> board,
-                        float komi,
-                        std::vector<float>::iterator color_it) const;
+    void FillMisc(std::shared_ptr<const Board> board,
+                  float komi,
+                  std::vector<float>::iterator color_it) const;
 
     void EncoderFeatures(const GameState &state,
                          std::vector<float>::iterator it) const;

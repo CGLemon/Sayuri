@@ -33,20 +33,26 @@ void Network::Initialize(const std::string &weightsfile) {
 #ifndef __APPLE__
 #ifdef USE_OPENBLAS
     openblas_set_num_threads(1);
-    LOGGING << "BLAS Core:" << ' ' << openblas_get_corename() << std::endl;
+    if (!GetOption<bool>("quit")) {
+        LOGGING << "BLAS Core:" << ' ' << openblas_get_corename() << std::endl;
+    }
 #endif
 #ifdef USE_MKL
     mkl_set_num_threads(1);
     MKLVersion Version;
     mkl_get_version(&Version);
-    LOGGING << "BLAS core: MKL" << ' ' << Version.Processor << std::endl;
+    if (!GetOption<bool>("quit")) {
+        LOGGING << "BLAS core: MKL" << ' ' << Version.Processor << std::endl;
+    }
 #endif
 #endif
 
 #ifdef USE_EIGEN
-    LOGGING << "BLAS Core: Eigen" << ' '
-                << EIGEN_WORLD_VERSION << '.' << EIGEN_MAJOR_VERSION << '.' << EIGEN_MINOR_VERSION << ' '
-                << "library." << std::endl;
+    if (!GetOption<bool>("quit")) {
+        LOGGING << "BLAS Core: Eigen" << ' '
+                    << EIGEN_WORLD_VERSION << '.' << EIGEN_MAJOR_VERSION << '.' << EIGEN_MINOR_VERSION << ' '
+                    << "library." << std::endl;
+    }
 #endif
 
 #ifdef USE_CUDA
@@ -165,7 +171,7 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
     out_result.wdl[0] = wdl_buffer[0];
     out_result.wdl[1] = wdl_buffer[1];
     out_result.wdl[2] = wdl_buffer[2];
-    out_result.wdl_winrate = std::tanh(wdl_buffer[0] - wdl_buffer[2]);
+    out_result.wdl_winrate = wdl_buffer[0] - wdl_buffer[2];
     out_result.wdl_winrate = (out_result.wdl_winrate + 1.f) / 2;
     out_result.stm_winrate = (std::tanh(out_result.stm_winrate) + 1.f) / 2;
 

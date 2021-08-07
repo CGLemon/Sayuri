@@ -2,6 +2,7 @@
 #include "neural/network_basic.h"
 #include "utils/parser.h"
 #include "utils/log.h"
+#include "config.h"
 
 #include <iostream>
 #include <sstream>
@@ -211,7 +212,9 @@ void DNNLoder::DumpInfo(std::shared_ptr<DNNWeights> weights) const {
     out << "Policy Head Channels: " << weights->policy_extract_channels << '\n';
     out << "Value Head Channels: " << weights->value_extract_channels << '\n';
 
-    LOGGING << out.str();
+    if (!GetOption<bool>("quit")) {
+        LOGGING << out.str();
+    }
 }
 
 void DNNLoder::FillWeights(NetInfo &netinfo,

@@ -5,7 +5,9 @@
 #include <array>
 #include <memory>
 
-static constexpr int kInputChannels = 36; // 8 * 3 + 12
+static constexpr int kInputChannels = 38; // 8 past moves * 3 
+                                          // 12 binary features
+                                          // 2 misc features
 static constexpr int kOuputValueMisc = 5;
 static constexpr int kOuputPassProbability = 1;
 

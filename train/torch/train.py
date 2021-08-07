@@ -26,7 +26,6 @@ class DataSet():
         data = self.data_loader[idx]
 
         symm = int(np.random.choice(8, 1)[0])
-
         num_intersections = data.board_size * data.board_size
 
         input_planes = np.zeros((self.input_channels, num_intersections))
@@ -40,15 +39,22 @@ class DataSet():
         buf = np.zeros(num_intersections)
 
         # input planes
-        for p in range(self.input_channels-2):
+        for p in range(self.input_channels-4):
             buf[:] = data.planes[p][:]
             buf = self.symmetry.get_transform_planes(symm, buf, data.board_size)
             input_planes[p][:] = buf[:]
 
         if data.to_move == 1:
-            input_planes[self.input_channels-2][:] = data.komi/10
+            input_planes[self.input_channels-4][:] = data.komi/10
         else:
-            input_planes[self.input_channels-1][:] = data.komi/10
+            input_planes[self.input_channels-4][:] = -data.komi/10
+
+        input_planes[self.input_channels-3][:] = data.board_size/10
+
+        if data.to_move == 1:
+            input_planes[self.input_channels-2][:] = 1
+        else:
+            input_planes[self.input_channels-1][:] = 1
 
         # probabilities
         buf[:] = data.prob[0:num_intersections]
@@ -108,7 +114,7 @@ class DataModule(pl.LightningDataModule):
             self.test_data = DataSet(self.cfg, self.test_dir)
 
     def train_dataloader(self):
-        return DataLoader(self.train_data, num_workers=self.num_workers, batch_size=self.batchsize)
+        return DataLoader(self.train_data, num_workers=self.num_workers, shuffle=True, batch_size=self.batchsize)
 
     def val_dataloader(self):
         return DataLoader(self.val_data, num_workers=self.num_workers, batch_size=self.batchsize)
