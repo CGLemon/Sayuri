@@ -3,7 +3,7 @@
 #include <string>
 #include <unordered_map>
 
-const std::string kProgram = "NA";
+const std::string kProgram = "Sayuri";
 
 const std::string kVersion = "pre-alpha";
 

@@ -48,6 +48,6 @@ private:
 
     Timer timer_;
 
-    bool IsInfiniteTime() const;
+    bool IsInfiniteTime(int color) const;
     int EstimateMovesExpected(int boardsize, int move_num, int div_delta) const;
 };

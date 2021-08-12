@@ -32,7 +32,6 @@ void TimeControl::TimeSettings(const int main_time,
 
 void TimeControl::TimeLeft(const int color, const int time, const int stones) {
     assert(color == kBlack || color == kWhite);
-
     if (stones <= 0) {
         maintime_left_[color] = static_cast<float>(time);
         byotime_left_[color] = 0.0f;
@@ -52,7 +51,7 @@ void TimeControl::Clock() {
 void TimeControl::TookTime(int color) {
     assert(color == kBlack || color == kWhite);
 
-    if (IsInfiniteTime()) {
+    if (IsInfiniteTime(color)) {
         return;
     }
 
@@ -126,7 +125,7 @@ void TimeControl::TimeStream(std::ostream &out, int color) const {
         out << "White time: ";
     }
 
-    if (IsInfiniteTime()) {
+    if (IsInfiniteTime(color)) {
         out << "infinite";
     } else if (!in_byo_[color]) {
        const int remaining = static_cast<int>(maintime_left_[color]);
@@ -154,7 +153,7 @@ void TimeControl::TimeStream(std::ostream &out, int color) const {
 float TimeControl::GetThinkingTime(int color, int boardsize, int move_num) const {
     assert(color == kBlack || color == kWhite);
 
-    if(IsInfiniteTime()) {
+    if(IsInfiniteTime(color)) {
         return 31 * 24 * 60 * 60 * 100;
     }
 
@@ -199,8 +198,11 @@ bool TimeControl::IsTimeOver(int color) const {
     return true;
 }
 
-bool TimeControl::IsInfiniteTime() const {
-    return main_time_ == 0 && byo_stones_ == 0 && byo_time_ == 0;
+bool TimeControl::IsInfiniteTime(int color) const {
+    return maintime_left_[color] == 0 &&
+               byotime_left_[color] == 0 &&
+               stones_left_[color] == 0 &&
+               main_time_ == 0 && byo_stones_ == 0 && byo_time_ == 0;
 }
 
 int TimeControl::EstimateMovesExpected(int boardsize, int move_num, int div_delta) const {

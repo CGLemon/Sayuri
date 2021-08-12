@@ -269,20 +269,20 @@ std::string GtpLoop::Execute(CommandParser &parser) {
 
 std::string GtpLoop::GTPSuccess(std::string response) {
     auto out = std::ostringstream{};
-    auto Prefix = std::string{"= "};
+    auto prefix = std::string{"= "};
     auto suffix = std::string{"\n\n"};
 
-    out << Prefix << response << suffix;
+    out << prefix << response << suffix;
 
     return out.str();
 }
 
 std::string GtpLoop::GTPFail(std::string response) {
     auto out = std::ostringstream{};
-    auto Prefix = std::string{"? "};
+    auto prefix = std::string{"? "};
     auto suffix = std::string{"\n\n"};
 
-    out << Prefix << response << suffix;
+    out << prefix << response << suffix;
 
     return out.str();
 }

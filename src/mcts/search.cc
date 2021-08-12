@@ -365,6 +365,11 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
 }
 
 void Search::GatherData(const GameState &state, ComputationResult &result) {
+    if (training_buffer_.size() > 999) {
+        // To many data in the buffer.
+        return;
+    }
+
     auto data = Training{};
     data.version = GetTrainigVersion();
     data.mode = GetTrainigMode();
