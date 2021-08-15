@@ -342,7 +342,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     for (int b = 0; b < batch_size; ++b) {
         const auto& inpnt = inpnts[b];
         for (int idx = 0; idx < kInputChannels * num_intersections; ++idx) {
-            batch_planes[b * num_intersections + idx] = inpnt.planes[idx];
+            batch_planes[b * kInputChannels * num_intersections + idx] = inpnt.planes[idx];
         }
     }
 
