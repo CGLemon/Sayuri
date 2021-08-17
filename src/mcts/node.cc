@@ -76,7 +76,7 @@ bool Node::ExpendChildren(Network &network,
     const auto num_intersections = state.GetNumIntersections();
 
     color_ = state.GetToMove();
-    linkNetOutput(raw_netlist, color_);
+    LinkNetOutput(raw_netlist, color_);
 
     auto nodelist = std::vector<Network::PolicyVertexPair>{};
     auto allow_pass = true;
@@ -137,7 +137,7 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
 }
 
 
-void Node::linkNetOutput(const Network::Result &raw_netlist, const int color){
+void Node::LinkNetOutput(const Network::Result &raw_netlist, const int color){
     auto wl = raw_netlist.wdl[0] - raw_netlist.wdl[2];
     auto draw = raw_netlist.wdl[1];
     auto final_score = raw_netlist.final_score;

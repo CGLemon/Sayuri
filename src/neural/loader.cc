@@ -212,7 +212,7 @@ void DNNLoder::DumpInfo(std::shared_ptr<DNNWeights> weights) const {
     out << "Policy Head Channels: " << weights->policy_extract_channels << '\n';
     out << "Value Head Channels: " << weights->value_extract_channels << '\n';
 
-    if (!GetOption<bool>("quit")) {
+    if (!GetOption<bool>("quiet")) {
         LOGGING << out.str();
     }
 }

@@ -119,6 +119,7 @@ ComputationResult Search::Computation(int playours) {
     auto computation_result = ComputationResult{};
 
     if (root_state_.IsGameOver()) {
+        computation_result.best_move = kPass;
         return computation_result;
     }
 

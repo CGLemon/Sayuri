@@ -53,15 +53,15 @@ std::string GtpLoop::Execute(CommandParser &parser) {
         agent_->GetState().ShowBoard();
         out << GTPSuccess("");
     } else if (const auto res = parser.Find("boardsize", 0)){
-        auto size = agent_->GetState().GetBoardSize();
+        auto bsize = agent_->GetState().GetBoardSize();
         if (const auto input = parser.GetCommand(1)) {
-            size = input->Get<int>();
+            bsize = input->Get<int>();
             out << GTPSuccess("");
         } else {
             out << GTPFail("");
         }
-        agent_->GetState().Reset(size, agent_->GetState().GetKomi());
-        agent_->GetNetwork().Reload(size);
+        agent_->GetState().Reset(bsize, agent_->GetState().GetKomi());
+        agent_->GetNetwork().Reload(bsize);
     } else if (const auto res = parser.Find("clear_board", 0)){
         agent_->GetState().ClearBoard();
         agent_->GetNetwork().ClearCache();
@@ -137,7 +137,37 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             Sgf::Get().ToFile(filename, agent_->GetState());
         }
     } else if (const auto res = parser.Find("final_score", 0)) {
-        out << GTPFail("");
+        auto result = agent_->GetSearch().Computation(400);
+        auto color = agent_->GetState().GetToMove();
+        auto final_score = result.root_final_score;
+        if (final_score < 0.0f) {
+            color = !color;
+            final_score = -final_score;
+        }
+
+        float float_part = final_score - int(final_score);
+        if (float_part < 0.25f) {
+            float_part = 0;
+        } else if (float_part > 0.75f) {
+            float_part = 1;
+        } else {
+            float_part = 0.5f;
+        }
+        final_score = int(final_score) + float_part;
+
+        if (std::abs(final_score) < 1e-4) {
+            color = kEmpty;
+            final_score = 0.0f;
+        }
+        auto ss = std::ostringstream{};
+        if (color == kEmpty) {
+            ss << "draw";
+        } else if (color == kBlack) {
+            ss << "b+" << final_score;
+        } else if (color == kWhite) {
+            ss << "w+" << final_score;
+        }
+        out << GTPSuccess(ss.str());
     } else if (const auto res = parser.Find("genmove", 0)) {
         auto color = agent_->GetState().GetToMove();
         if (const auto input = parser.GetCommand(1)) {
@@ -157,7 +187,8 @@ std::string GtpLoop::Execute(CommandParser &parser) {
     } else if (const auto res = parser.Find("kgs-time_settings", 0)) {
         out << GTPFail("");
     } else if (const auto res = parser.Find("kgs-game_over", 0)) {
-        out << GTPFail("");
+       // Do nothing.
+        out << GTPSuccess("");
     } else if (const auto res = parser.Find("undo", 0)) {
         if (agent_->GetState().UndoMove()) {
             out << GTPSuccess("");
@@ -208,7 +239,51 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             out << GTPSuccess("");
         }
     } else if (const auto res = parser.Find("final_status_list", 0)) {
-        out << GTPFail("");
+        static constexpr auto OWBERSHIP_THRESHOLD = 0.75f;
+        auto result = agent_->GetSearch().Computation(0);
+        auto bsize = agent_->GetState().GetBoardSize();
+        auto color = agent_->GetState().GetToMove();
+
+        auto alive = std::vector<int>{};
+        auto dead = std::vector<int>{};
+
+        for (int idx = 0; idx < agent_->GetState().GetNumIntersections(); ++idx) {
+            auto x = idx % bsize;
+            auto y = idx / bsize;
+            auto vtx = agent_->GetState().GetVertex(x,y);
+            auto owner = result.root_ownership[idx];
+            auto state = agent_->GetState().GetState(vtx);
+
+
+            if (owner > OWBERSHIP_THRESHOLD) {
+                if (color == state) {
+                    alive.emplace_back(vtx);
+                } else if ((!color) == state) {
+                    dead.emplace_back(vtx);
+                }
+            } else if (owner < -OWBERSHIP_THRESHOLD) {
+                if ((!color) == state) {
+                    alive.emplace_back(vtx);
+                } else if (color == state) {
+                    dead.emplace_back(vtx);
+                }
+            }
+        }
+
+        auto vtx_list = std::ostringstream{};
+        if (const auto input = parser.Find("alive", 1)) {
+            for (auto vtx : alive) {
+                vtx_list << agent_->GetState().VertexToText(vtx) << ' ';
+            }
+            out << GTPSuccess(vtx_list.str());
+        } else if (const auto input = parser.Find("dead", 1)) {
+            for (auto vtx : dead) {
+                vtx_list << agent_->GetState().VertexToText(vtx) << ' ';
+            }
+            out << GTPSuccess(vtx_list.str());
+        } else {
+            out << GTPFail("");
+        }
     } else if (const auto res = parser.Find({"help", "list_commands"}, 0)) {
         auto list_commands = std::ostringstream{};
         auto idx = size_t{0};

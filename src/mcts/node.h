@@ -106,7 +106,7 @@ private:
     void SetVisits(int v);
 
     void LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist);
-    void linkNetOutput(const Network::Result &raw_netlist, const int color);
+    void LinkNetOutput(const Network::Result &raw_netlist, const int color);
 
     float GetUctPolicy(std::shared_ptr<Edge>, bool noise);
     float GetScoreUtility(const int color, float factor, float parent_score) const;

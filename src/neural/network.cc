@@ -33,7 +33,7 @@ void Network::Initialize(const std::string &weightsfile) {
 #ifndef __APPLE__
 #ifdef USE_OPENBLAS
     openblas_set_num_threads(1);
-    if (!GetOption<bool>("quit")) {
+    if (!GetOption<bool>("quiet")) {
         LOGGING << "BLAS Core:" << ' ' << openblas_get_corename() << std::endl;
     }
 #endif
@@ -41,14 +41,14 @@ void Network::Initialize(const std::string &weightsfile) {
     mkl_set_num_threads(1);
     MKLVersion Version;
     mkl_get_version(&Version);
-    if (!GetOption<bool>("quit")) {
+    if (!GetOption<bool>("quiet")) {
         LOGGING << "BLAS core: MKL" << ' ' << Version.Processor << std::endl;
     }
 #endif
 #endif
 
 #ifdef USE_EIGEN
-    if (!GetOption<bool>("quit")) {
+    if (!GetOption<bool>("quiet")) {
         LOGGING << "BLAS Core: Eigen" << ' '
                     << EIGEN_WORLD_VERSION << '.' << EIGEN_MAJOR_VERSION << '.' << EIGEN_MINOR_VERSION << ' '
                     << "library." << std::endl;
@@ -143,8 +143,10 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
     const auto num_intersections = boardsize * boardsize;
 
     auto probabilities_buffer = std::vector<float>(num_intersections+1);
+    auto ownership_buffer = std::vector<float>(num_intersections);
     for (int idx = 0; idx < num_intersections; ++idx) {
         probabilities_buffer[idx] = result.probabilities[idx];
+        ownership_buffer[idx] = result.ownership[idx];
     }
     probabilities_buffer[num_intersections] = result.pass_probability;
     probabilities_buffer = Softmax(probabilities_buffer, 1);
@@ -154,7 +156,7 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto symm_index = Symmetry::Get().TransformIndex(symmetry, idx);
         out_result.probabilities[symm_index] = probabilities_buffer[idx];
-        out_result.ownership[symm_index] = std::tanh(out_result.ownership[idx]);
+        out_result.ownership[symm_index] = std::tanh(ownership_buffer[idx]);
     }
     out_result.pass_probability = probabilities_buffer[num_intersections];
 
