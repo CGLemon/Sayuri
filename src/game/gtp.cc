@@ -241,6 +241,13 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             out << GTPSuccess("");
         }
     } else if (const auto res = parser.Find("final_status_list", 0)) {
+        int pass_cnt = 0;
+        while (agent_->GetState().GetPasses() >= 2) {
+            agent_->GetState().UndoMove();
+            agent_->GetState().UndoMove();
+            pass_cnt += 2;
+        }
+
         static constexpr auto OWBERSHIP_THRESHOLD = 0.75f;
         auto result = agent_->GetSearch().Computation(0);
         auto bsize = agent_->GetState().GetBoardSize();
@@ -255,7 +262,6 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             auto vtx = agent_->GetState().GetVertex(x,y);
             auto owner = result.root_ownership[idx];
             auto state = agent_->GetState().GetState(vtx);
-            // GetStringList
 
             if (owner > OWBERSHIP_THRESHOLD) {
                 if (color == state) {
@@ -308,6 +314,9 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             out << GTPSuccess(vtx_list.str());
         } else {
             out << GTPFail("");
+        }
+        for (int i = 0; i < pass_cnt; ++i) {
+            agent_->GetState().PlayMove(kPass);
         }
     } else if (const auto res = parser.Find({"help", "list_commands"}, 0)) {
         auto list_commands = std::ostringstream{};
