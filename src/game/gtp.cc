@@ -182,10 +182,12 @@ std::string GtpLoop::Execute(CommandParser &parser) {
         auto move = agent_->GetSearch().ThinkBestMove();
         agent_->GetState().PlayMove(move);
         out << GTPSuccess(agent_->GetState().VertexToText(move));
-    } else if (const auto res = parser.Find("kgs-genmove_cleanup", 0)) {
-        out << GTPFail("");
-    } else if (const auto res = parser.Find("kgs-time_settings", 0)) {
-        out << GTPFail("");
+
+    //} else if (const auto res = parser.Find("kgs-genmove_cleanup", 0)) {
+    //    out << GTPFail("");
+    //} else if (const auto res = parser.Find("kgs-time_settings", 0)) {
+    //    out << GTPFail("");
+
     } else if (const auto res = parser.Find("kgs-game_over", 0)) {
        // Do nothing.
         out << GTPSuccess("");
@@ -244,8 +246,8 @@ std::string GtpLoop::Execute(CommandParser &parser) {
         auto bsize = agent_->GetState().GetBoardSize();
         auto color = agent_->GetState().GetToMove();
 
-        auto alive = std::vector<int>{};
-        auto dead = std::vector<int>{};
+        auto alive = std::vector<std::vector<int>>{};
+        auto dead = std::vector<std::vector<int>>{};
 
         for (int idx = 0; idx < agent_->GetState().GetNumIntersections(); ++idx) {
             auto x = idx % bsize;
@@ -253,32 +255,55 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             auto vtx = agent_->GetState().GetVertex(x,y);
             auto owner = result.root_ownership[idx];
             auto state = agent_->GetState().GetState(vtx);
-
+            // GetStringList
 
             if (owner > OWBERSHIP_THRESHOLD) {
                 if (color == state) {
-                    alive.emplace_back(vtx);
+                    alive.emplace_back(agent_->GetState().GetStringList(vtx));
                 } else if ((!color) == state) {
-                    dead.emplace_back(vtx);
+                    dead.emplace_back(agent_->GetState().GetStringList(vtx));
                 }
             } else if (owner < -OWBERSHIP_THRESHOLD) {
                 if ((!color) == state) {
-                    alive.emplace_back(vtx);
+                    alive.emplace_back(agent_->GetState().GetStringList(vtx));
                 } else if (color == state) {
-                    dead.emplace_back(vtx);
+                    dead.emplace_back(agent_->GetState().GetStringList(vtx));
                 }
             }
         }
 
+        // remove multiple mentions of the same string
+        // unique reorders and returns new iterator, erase actually deletes
+        std::sort(begin(alive), end(alive));
+        alive.erase(std::unique(std::begin(alive), std::end(alive)),
+                    std::end(alive));
+
+        std::sort(std::begin(dead), std::end(dead));
+        dead.erase(std::unique(std::begin(dead), std::end(dead)),
+                   std::end(dead));
+
         auto vtx_list = std::ostringstream{};
+
         if (const auto input = parser.Find("alive", 1)) {
-            for (auto vtx : alive) {
-                vtx_list << agent_->GetState().VertexToText(vtx) << ' ';
+            for (size_t i = 0; i < alive.size(); i++) {
+                vtx_list << (i == 0 ? "" : "\n");
+                auto &string = alive[i];
+                for (size_t j = 0; j < string.size(); j++) {
+                    auto vtx = string[j];
+                    vtx_list << agent_->GetState().VertexToText(vtx);
+                    if (j != string.size() - 1) vtx_list << ' ';
+                }
             }
             out << GTPSuccess(vtx_list.str());
         } else if (const auto input = parser.Find("dead", 1)) {
-            for (auto vtx : dead) {
-                vtx_list << agent_->GetState().VertexToText(vtx) << ' ';
+             for (size_t i = 0; i < dead.size(); i++) {
+                vtx_list << (i == 0 ? "" : "\n");
+                auto &string = dead[i];
+                for (size_t j = 0; j < string.size(); j++) {
+                    auto vtx = string[j];
+                    vtx_list << agent_->GetState().VertexToText(vtx);
+                    if (j != string.size() - 1) vtx_list << ' ';
+                }
             }
             out << GTPSuccess(vtx_list.str());
         } else {

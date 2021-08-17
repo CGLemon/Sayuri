@@ -501,7 +501,6 @@ int GameState::GetWinner() const {
     return kUndecide;
 }
 
-
 int GameState::GetHandicap() const {
     return handicap_;
 }
@@ -565,4 +564,8 @@ std::shared_ptr<const Board> GameState::GetPastBoard(unsigned int p) const {
 
 const std::vector<std::shared_ptr<const Board>>& GameState::GetHistory() const {
     return game_history_;
+}
+
+std::vector<int> GameState::GetStringList(const int vtx) const {
+    return board_.GetStringList(vtx);
 }

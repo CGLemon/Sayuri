@@ -1143,6 +1143,24 @@ int SimpleBoard::GetStones(const int vtx) const {
     return strings_.GetStones(strings_.GetParent(vtx));
 }
 
+std::vector<int> SimpleBoard::GetStringList(const int vtx) const {
+
+    auto result = std::vector<int>{};
+
+    auto start = strings_.GetParent(vtx);
+    auto newpos = start;
+
+    do {
+        result.emplace_back(newpos);
+        newpos = strings_.GetNext(newpos);
+    } while (newpos != start);
+
+    // eat last space
+    assert(!result.empty());
+
+    return result;
+}
+
 void SimpleBoard::UpdateZobrist(const int vtx,
                                 const int new_color,
                                 const int old_color) {

@@ -39,6 +39,7 @@ public:
     int GetState(const int x, const int y) const;
     int GetLiberties(const int vtx) const;
     int GetStones(const int vtx) const;
+    std::vector<int> GetStringList(const int vtx) const;
 
     int GetX(const int vtx) const;
     int GetY(const int vtx) const;

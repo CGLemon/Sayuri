@@ -66,9 +66,11 @@ static const std::array<std::string, 25> kGtpCommandsList = {
     // Part of GTP version 2 standard command
     "loadsgf",
 
-    "printsgf",     
-    "kgs-genmove_cleanup",
-    "kgs-time_settings",
+    "printsgf",
+
+    // Kgs commands
+    //"kgs-genmove_cleanup",
+    //"kgs-time_settings",
     "kgs-game_over"
 };
 
