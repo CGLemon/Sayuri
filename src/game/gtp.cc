@@ -46,9 +46,9 @@ std::string GtpLoop::Execute(CommandParser &parser) {
     if (const auto res = parser.Find("protocol_version", 0)) {
         out << GTPSuccess(std::to_string(kProtocolVerion));
     } else if (const auto res = parser.Find("name", 0)) {
-        out << GTPSuccess("Name");
+        out << GTPSuccess(kProgram);
     } else if (const auto res = parser.Find("version", 0)) {
-        out << GTPSuccess("Version");
+        out << GTPSuccess(kVersion);
     } else if (const auto res = parser.Find("showboard", 0)) {
         agent_->GetState().ShowBoard();
         out << GTPSuccess("");
