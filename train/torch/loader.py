@@ -1,6 +1,5 @@
 import numpy as np
-import glob
-import struct
+import glob, os
 
 FIXED_DATA_VERSION = 0
 
@@ -191,7 +190,7 @@ class Loader:
 
     def run(self):
         datalines = Data.get_datalines(FIXED_DATA_VERSION);
-        for name in glob.glob(self.dirname + "/*"):
+        for name in glob.glob(os.path.join(self.dirname, "*")):
             with open(name, 'r') as f:
                 while True:
                     if self.linesparser(datalines, f) == False:
