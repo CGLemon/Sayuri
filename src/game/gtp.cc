@@ -99,7 +99,23 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             out << GTPFail("");
         }
     } else if (const auto res = parser.Find("place_free_handicap", 0)) {
-        out << GTPFail("");
+         auto handicap = -1;
+        if (const auto input = parser.GetCommand(1)) {
+            agent_->GetState().ClearBoard();
+            handicap = input->Get<int>();
+        }
+        auto stone_list = agent_->GetState().PlaceFreeHandicap(handicap);
+        if (!stone_list.empty()) {
+            auto vtx_list = std::ostringstream{};
+            for (size_t i = 0; i < stone_list.size(); i++) {
+                auto vtx = stone_list[i];
+                vtx_list << agent_->GetState().VertexToText(vtx);
+                if (i != stone_list.size() - 1) vtx_list << ' ';
+            }
+            out << GTPSuccess(vtx_list.str());
+        } else {
+            out << GTPFail("");
+        }
     } else if (const auto res = parser.Find("set_free_handicap", 0)) {
         auto movelist = std::vector<std::string>{};
         for (auto i = size_t{1}; i < parser.GetCount(); ++i) {
@@ -189,7 +205,7 @@ std::string GtpLoop::Execute(CommandParser &parser) {
     //    out << GTPFail("");
 
     } else if (const auto res = parser.Find("kgs-game_over", 0)) {
-       // Do nothing.
+        // Do nothing.
         out << GTPSuccess("");
     } else if (const auto res = parser.Find("undo", 0)) {
         if (agent_->GetState().UndoMove()) {

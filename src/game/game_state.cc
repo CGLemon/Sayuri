@@ -386,6 +386,20 @@ bool GameState::SetFreeHandicap(std::vector<std::string> movelist) {
     return false;
 }
 
+std::vector<int> GameState::PlaceFreeHandicap(int handicap) {
+    auto stone_list = std::vector<int>{};
+    if (board_.SetFixdHandicap(handicap)) {
+        SetHandicap(handicap);
+
+        for (auto vtx = 0; vtx < board_.GetNumVertices(); ++vtx) {
+            if (GetState(vtx) == kBlack) {
+                stone_list.emplace_back(vtx);
+            }
+        }
+    }
+    return stone_list;
+}
+
 std::vector<int> GameState::GetOwnership(int playouts) const {
     auto num_intersections = GetNumIntersections();
     auto buffer = std::vector<int>(num_intersections, 0);

@@ -49,6 +49,9 @@ public:
     // GTP interface to set free handicap.
     bool SetFreeHandicap(std::vector<std::string> movelist);
 
+    // GTP interface to place free handicap.
+    std::vector<int> PlaceFreeHandicap(int handicap);
+
     void SetHandicap(int handicap);
 
     // Compute final score by Tromp Taylor.
