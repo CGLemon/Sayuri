@@ -67,6 +67,7 @@ void InitOptionsMap() {
 
     options_map["resign_threshold"] << Option::setoption(0.1f, 1.f, 0.f);
 
+    options_map["lcb_reduction"] << Option::setoption(0.02f);
     options_map["fpu_reduction"] << Option::setoption(0.25f);
     options_map["fpu_root_reduction"] << Option::setoption(0.25f);
     options_map["cpuct_init"] << Option::setoption(2.5f);
@@ -219,6 +220,13 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext("--score-utility-factor")) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("score_utility_factor", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--lcb-reduction")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("lcb_reduction", res->Get<float>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

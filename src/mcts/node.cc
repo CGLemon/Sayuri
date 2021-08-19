@@ -553,7 +553,9 @@ Node *Node::GetChild(int vertex) {
 std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
     WaitExpanded();
     assert(HaveChildren());
-  
+
+    auto lcb_reduction = GetParameters()->lcb_reduction;
+    auto max_playouts = (float) GetParameters()->playouts;
     auto list = std::vector<std::pair<float, int>>{};
 
     for (const auto & child : children_) {
@@ -564,7 +566,8 @@ std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
 
         const auto visits = node->GetVisits();
         const auto vertex = node->GetVertex();
-        const auto lcb = node->GetLcb(color);
+        const auto lcb = node->GetLcb(color) * (1.f - lcb_reduction) + 
+                             lcb_reduction * ((float)visits/max_playouts);
         if (visits > 0) {
             list.emplace_back(lcb, vertex);
         }

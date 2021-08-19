@@ -15,6 +15,7 @@ public:
         visits = GetOption<int>("visits");
 
         resign_threshold = GetOption<float>("resign_threshold");
+        lcb_reduction = GetOption<float>("lcb_reduction");
         fpu_root_reduction = GetOption<float>("fpu_root_reduction");
         fpu_reduction = GetOption<float>("fpu_reduction");
 
@@ -48,6 +49,7 @@ public:
 
     float resign_threshold;
 
+    float lcb_reduction;
     float fpu_root_reduction;
     float fpu_reduction;
     float cpuct_init;
