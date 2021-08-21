@@ -3,6 +3,7 @@
 #include "utils/log.h"
 #include "utils/time.h"
 
+#include <ctype.h>
 #include <limits>
 
 void SgfNode::AddProperty(std::string property, std::string value) {
@@ -158,7 +159,9 @@ void SgfNode::PopulateState(GameState currstate) {
         if (result == "0") {
             black_final_score = 0;
         } else {
-            if (result.size() > 2 && result.find("+") == 1) {
+            if (result.size() > 2 &&
+                    result.find("+") == 1 &&
+                    isdigit(result[2])) {
                 result.erase(0, 2);
                 black_final_score = std::stof(result);
 
@@ -492,16 +495,18 @@ std::string Sgf::ToString(GameState &state) {
     out << MakePropertyToString("PW", "white bot");
     out << MakePropertyToString("DT", CurrentDateTime());
 
-    if (state.GetWinner() != kUndecide) {
+    auto fork_state = state;
+    fork_state.RemoveDeadStrings(200);
+    if (fork_state.GetWinner() != kUndecide) {
         out << "RE" << '[';
-        auto score = state.GetFinalScore();
-        if (state.GetWinner() == kBlackWon) {
+        auto score = fork_state.GetFinalScore();
+        if (fork_state.GetWinner() == kBlackWon) {
             out << "B+";
             if (state.GetPasses() >= 2) out << score;
-        } else if (state.GetWinner() == kWhiteWon) {
+        } else if (fork_state.GetWinner() == kWhiteWon) {
             out << "W+";
             if (state.GetPasses() >= 2) out << -score;
-        } else if (state.GetWinner() == kDraw) {
+        } else if (fork_state.GetWinner() == kDraw) {
             out << "0";
         }
         out << ']';

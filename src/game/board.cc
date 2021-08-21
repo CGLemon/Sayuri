@@ -30,9 +30,9 @@ void Board::ComputeSimpleOwnership(std::vector<int> &buffer) const {
             const auto idx = GetIndex(x, y);
             const auto vtx = GetVertex(x, y);
 
-            if (black[vtx]) {
+            if (black[vtx] && !white[vtx]) {
                 buffer[idx] = kBlack;  
-            } else if (white[vtx]) {
+            } else if (white[vtx] && !black[vtx]) {
                 buffer[idx] = kWhite;
             } else {
                 //The point belongs to both.

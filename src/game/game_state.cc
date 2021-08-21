@@ -73,6 +73,7 @@ bool GameState::PlayRandomMove(bool end_game) {
                 simple_ownership[idx] != kEmpty &&
                 !board_.IsCaptureMove(vtx, color) &&
                 !board_.IsCaptureMove(vtx, !color)) {
+            // In the end game, the move must be in the undefined area.
             continue;
         }
 
@@ -88,7 +89,9 @@ bool GameState::PlayRandomMove(bool end_game) {
             auto fork_board = board_;
             fork_board.PlayMoveAssumeLegal(vtx, color);
 
-            if (fork_board.GetLiberties(vtx) <= 1) {
+            if (fork_board.GetLiberties(vtx) <= 1 &&
+                    fork_board.GetKoMove() != kNullVertex) {
+                // In the end game, We don't allow sucide move, except ko move.
                 continue;
             }
         }
@@ -294,18 +297,7 @@ std::string GameState::GetStateString() const {
     out << "Move Number: " << GetMoveNumber() << ", ";
     out << "Komi: " << GetKomi() << ", ";
     out << "Board Size: " << GetBoardSize() << ", ";
-    out << "Handicap: " << GetHandicap() << ", ";
-    out << "Result: ";
-
-    if (GetWinner() == kBlackWon) {
-        out << "Black Won";
-    } else if (GetWinner() == kWhiteWon) {
-        out << "White Won";
-    } else if (GetWinner() == kDraw) {
-        out << "Draw";
-    } else if (GetWinner() == kUndecide) {
-        out << "None";
-    }
+    out << "Handicap: " << GetHandicap();
 
     out << "}" << std::endl;
     return out.str();

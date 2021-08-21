@@ -308,10 +308,13 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
         return;
     }
 
-    auto num_intersections = end_state.GetNumIntersections();
-    auto winner = end_state.GetWinner();
+    auto fork_state = end_state;
+    fork_state.RemoveDeadStrings(200);
+
+    auto num_intersections = fork_state.GetNumIntersections();
+    auto winner = fork_state.GetWinner();
     auto black_final_score = 0.f;
-    auto ownership = end_state.GetOwnershipAndRemovedDeadStrings(200);
+    auto ownership = fork_state.GetOwnership();
 
     for (const auto owner : ownership) {
         if (owner == kBlack) {
@@ -321,7 +324,7 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
         }
     }
 
-    black_final_score -= end_state.GetKomi();
+    black_final_score -= fork_state.GetKomi();
 
     for (auto &buf : training_buffer_) {
         assert(winner != kUndecide);
