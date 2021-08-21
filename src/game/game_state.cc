@@ -400,7 +400,21 @@ std::vector<int> GameState::PlaceFreeHandicap(int handicap) {
     return stone_list;
 }
 
-std::vector<int> GameState::GetOwnership(int playouts) const {
+std::vector<int> GameState::GetOwnership() const {
+    auto res = std::vector<int>(GetNumIntersections(), kInvalid);
+
+    board_.ComputeSimpleOwnership(res);
+
+    return res;
+}
+
+std::vector<int> GameState::GetOwnershipAndRemovedDeadStrings(int playouts) const {
+    auto fork_state = *this;
+    fork_state.RemoveDeadStrings(playouts);
+    return fork_state.GetOwnership();
+}
+
+std::vector<int> GameState::MarKDeadStrings(int playouts) const {
     auto num_intersections = GetNumIntersections();
     auto buffer = std::vector<int>(num_intersections, 0);
 
@@ -423,6 +437,7 @@ std::vector<int> GameState::GetOwnership(int playouts) const {
             }
 
             if (moves++ >= 2 * num_intersections) {
+                // Too many moves.
                 break;
             }
         }
@@ -439,43 +454,33 @@ std::vector<int> GameState::GetOwnership(int playouts) const {
         }
     }
 
-    auto reuslt = std::vector<int>(num_intersections, kInvalid);
-    auto thes = (int)(0.7 * playouts);
+    const auto board_size = GetBoardSize();
+    const auto thes = (int)(0.7 * playouts);
+    auto dead = std::vector<int>{};
 
     for (int idx = 0; idx < num_intersections; ++idx) {
+        const auto x = idx % board_size;
+        const auto y = idx / board_size;
+        const auto state = GetState(x, y);
         if (buffer[idx] >= thes) {
-            reuslt[idx] = kBlack;
+            // It mean that this area belongs to black.
+            if (state == kWhite) dead.emplace_back(GetVertex(x, y));
         } else if (buffer[idx] <= -thes) {
-            reuslt[idx] = kWhite;
-        } else if (buffer[idx] == 0) {
-            reuslt[idx] = kEmpty;
-        } else {
-            const auto board_size = GetBoardSize();
-            const auto x = idx % board_size;
-            const auto y = idx / board_size;
-            reuslt[idx] = GetState(x, y);
-        }
+            // It mean that this area belongs to white.
+            if (state == kBlack) dead.emplace_back(GetVertex(x, y));
+        } 
     }
 
-    return reuslt;
+    return dead;
 }
 
-float GameState::GetSimpleFinalScore(float bonus) const {
-    return board_.ComputeSimpleFinalScore(GetKomi() + GetHandicap() + bonus);
+void GameState::RemoveDeadStrings(int playouts) {
+    auto dead = MarKDeadStrings(playouts);
+    board_.RemoveMarkedStrings(dead);
 }
 
 float GameState::GetFinalScore(float bonus) const {
-    auto ownership = GetOwnership(200);
-    int score = 0;
-
-    for (const auto owner : ownership) {
-        if (owner == kBlack) {
-            score += 1;
-        } else if (owner == kWhite) {
-            score -= 1;
-        }
-    }
-    return (float)score + (float)GetHandicap() + bonus - GetKomi();
+    return board_.ComputeSimpleFinalScore(GetKomi() + GetHandicap() - bonus);
 }
 
 int GameState::GetVertex(const int x, const int y) const {

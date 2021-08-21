@@ -311,7 +311,7 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
     auto num_intersections = end_state.GetNumIntersections();
     auto winner = end_state.GetWinner();
     auto black_final_score = 0.f;
-    auto ownership = end_state.GetOwnership(200);
+    auto ownership = end_state.GetOwnershipAndRemovedDeadStrings(200);
 
     for (const auto owner : ownership) {
         if (owner == kBlack) {

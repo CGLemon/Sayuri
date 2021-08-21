@@ -54,11 +54,7 @@ public:
 
     void SetHandicap(int handicap);
 
-    // Compute final score by Tromp Taylor.
-    float GetSimpleFinalScore(float bonus = 0) const;
-
-
-    // Compute final score by ownership.
+    // Compute final score by Tromp Taylor
     float GetFinalScore(float bonus = 0) const;
 
     bool IsGameOver() const;
@@ -68,7 +64,12 @@ public:
     bool IsLegalMove(const int vertex, const int color,
                      std::function<bool(int, int)> AvoidToMove) const;
 
-    std::vector<int> GetOwnership(int playouts) const;
+    // Compute ownership by Tromp Taylor.
+    std::vector<int> GetOwnership() const;
+
+    std::vector<int> GetOwnershipAndRemovedDeadStrings(int playouts) const;
+    std::vector<int> MarKDeadStrings(int playouts) const;
+    void RemoveDeadStrings(int playouts);
 
     int GetVertex(const int x, const int y) const;
     int GetIndex(const int x, const int y) const;

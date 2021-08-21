@@ -254,6 +254,23 @@ void SimpleBoard::SetLastMove(int vertex) {
     last_move_ = vertex;
 }
 
+void SimpleBoard::RemoveMarkedStrings(std::vector<int> &marked) {
+    int captured_stones[2] = {0, 0};
+    for (auto &vtx : marked) {
+        auto color = GetState(vtx);
+        if (color == kBlack || color == kWhite) {
+            captured_stones[color] += RemoveString(vtx);
+        }
+    }
+
+    for (int c=0 ; c<2; ++c) {
+        const int old_prisoners = prisoners_[c];
+        const int new_prisoners = old_prisoners + captured_stones[c];
+        prisoners_[c] = new_prisoners;
+        UpdateZobristPrisoner(c, new_prisoners, old_prisoners);
+    }
+}
+
 int SimpleBoard::ComputeReachGroup(int start_vertex, int spread_color, std::vector<bool> &buf) const {
     auto PeekState = [&](int vtx) -> int {
         return state_[vtx];
@@ -292,7 +309,6 @@ int SimpleBoard::ComputeReachGroup(int start_vertex, int spread_color,
 }
 
 int SimpleBoard::ComputeReachColor(int color) const {
-
     auto buf = std::vector<bool>(num_vertices_, false);
     auto PeekState = [&](int vtx) -> int {
         return state_[vtx];
@@ -1011,6 +1027,12 @@ int SimpleBoard::UpdateBoard(const int vtx, const int color) {
         }
     }
 
+    if (strings_.GetLiberty(strings_.GetParent(vtx)) == 0) {
+        // Suicide move, this move is illegal in general rule.
+        assert(captured_stones == 0);
+        captured_stones += RemoveString(vtx);
+    }
+
     if (captured_stones != 0) {
         const int old_prisoners = prisoners_[color];
         const int new_prisoners = old_prisoners + captured_stones;
@@ -1022,11 +1044,6 @@ int SimpleBoard::UpdateBoard(const int vtx, const int color) {
     int lastvertex = empty_[--empty_cnt_];
     empty_idx_[lastvertex] = empty_idx_[vtx];
     empty_[empty_idx_[vtx]] = lastvertex;
-
-    if (strings_.GetLiberty(strings_.GetParent(vtx)) == 0) {
-        assert(captured_stones == 0);
-        RemoveString(vtx);
-    }
 
     if (captured_stones == 1 && is_eyeplay) {
         // Make a ko.

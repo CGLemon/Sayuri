@@ -86,6 +86,9 @@ public:
                           std::function<int(int)> Peek) const;
     int ComputeReachGroup(int start_vertex, int spread_color, std::vector<bool> &buf) const;
 
+
+    void RemoveMarkedStrings(std::vector<int> &marked);
+
 protected:
     // Compute the Zobrist hashing.
     std::uint64_t ComputeHash(int komove = kNullVertex) const;

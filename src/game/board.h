@@ -7,9 +7,13 @@
 
 class Board : public SimpleBoard {
 public:
+    // Compute final score by Tromp Taylor
     float ComputeSimpleFinalScore(float komi) const;
 
     int ComputeScoreOnBoard(int black_bonus) const;
+
+    // Compute ownership by Tromp Taylor
+    void ComputeSimpleOwnership(std::vector<int> &buffer) const;
 
     std::vector<int> GetSimpleOwnership() const;
 

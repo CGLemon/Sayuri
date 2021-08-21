@@ -31,7 +31,7 @@ public:
         assert(state.GetPasses() >= 2);
 
         auto black_score = 0;
-        auto ownership = state.GetOwnership(20);
+        auto ownership = state.GetOwnershipAndRemovedDeadStrings(20);
 
         for (int idx = 0; idx < (int)ownership.size(); ++idx) {
             auto owner = ownership[idx];

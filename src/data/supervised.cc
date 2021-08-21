@@ -40,7 +40,7 @@ void Supervised::FromSgf(std::string sgf_name, std::string out_name) {
 void Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
     GameState state = Sgf::Get().FormString(sgfstring, 9999);
 
-    auto ownership = state.GetOwnership(200);
+    auto ownership = state.GetOwnershipAndRemovedDeadStrings(200);
 
     auto success = true;
     auto black_score_on_board = 0;

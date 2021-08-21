@@ -12,9 +12,10 @@ float Board::ComputeSimpleFinalScore(float komi) const {
     return static_cast<float>(ComputeScoreOnBoard(0)) - komi;
 }
 
-std::vector<int> Board::GetSimpleOwnership() const {
-    auto res = std::vector<int>(num_intersections_, kInvalid);
-
+void Board::ComputeSimpleOwnership(std::vector<int> &buffer) const {
+    if (buffer.size() != (size_t) num_intersections_) {
+        buffer.resize(num_intersections_);
+    }
     auto black = std::vector<bool>(num_intersections_, false);
     auto white = std::vector<bool>(num_intersections_, false);
     auto PeekState = [&](int vtx) -> int {
@@ -29,16 +30,22 @@ std::vector<int> Board::GetSimpleOwnership() const {
             const auto idx = GetIndex(x, y);
             const auto vtx = GetVertex(x, y);
 
-            if ((black[vtx] && white[vtx]) || (!black[vtx] && !white[vtx])) {
-                //The point is seki if there are no stones on board.
-                res[idx] = kEmpty;
-            } else if (black[vtx]) {
-                res[idx] = kBlack;  
+            if (black[vtx]) {
+                buffer[idx] = kBlack;  
             } else if (white[vtx]) {
-                res[idx] = kWhite;
+                buffer[idx] = kWhite;
+            } else {
+                //The point belongs to both.
+                buffer[idx] = kEmpty;
             }
        }
     }
+}
+
+std::vector<int> Board::GetSimpleOwnership() const {
+    auto res = std::vector<int>(num_intersections_, kInvalid);
+
+    ComputeSimpleOwnership(res);
 
     return res;
 }
@@ -370,4 +377,3 @@ std::vector<int> Board::GatherVertex(std::vector<bool> &buf) const {
 
     return result;
 }
-
