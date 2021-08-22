@@ -265,11 +265,11 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
 
         for (int i = 0; i < group_count; ++i) {
             auto vertex = string_linking[i];
-            auto index = pass_alive_groups[vertex];
-            if (index <= 0) {
+            if (vertex == kNullVertex) {
+                // The string is not pass alive.
                 continue;
             }
-
+            auto index = pass_alive_groups[vertex];
             auto eye_cnt = 0;
             auto surround = FindStringSurround(pass_alive_groups, index);
             
@@ -284,8 +284,15 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
                 for (auto &idx : pass_alive_groups) {
                     if (idx == index) idx = 0;
                 }
-                string_linking[i] = -1;
+                string_linking[i] = kNullVertex;
                 change = true;
+
+                // The eyes is broken.
+                for (const auto v : surround) {
+                    if (eyes[v]) {
+                        eyes[v] = false;
+                    }
+                }
             }
         }
 
