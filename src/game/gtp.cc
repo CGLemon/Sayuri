@@ -2,6 +2,7 @@
 #include "game/sgf.h"
 #include "game/commands_list.h"
 #include "utils/log.h"
+#include "utils/komi.h"
 
 #include "data/supervised.h"
 #include "neural/encoder.h"
@@ -156,25 +157,13 @@ std::string GtpLoop::Execute(CommandParser &parser) {
         auto result = agent_->GetSearch().Computation(400);
         auto color = agent_->GetState().GetToMove();
         auto final_score = result.root_final_score;
-        if (final_score < 0.0f) {
-            color = !color;
+
+        final_score = AdjustKomi<float>(final_score);
+        if (final_score < 0) {
             final_score = -final_score;
+            color = !color;
         }
 
-        float float_part = final_score - int(final_score);
-        if (float_part < 0.25f) {
-            float_part = 0;
-        } else if (float_part > 0.75f) {
-            float_part = 1;
-        } else {
-            float_part = 0.5f;
-        }
-        final_score = int(final_score) + float_part;
-
-        if (std::abs(final_score) < 1e-4) {
-            color = kEmpty;
-            final_score = 0.0f;
-        }
         auto ss = std::ostringstream{};
         if (color == kEmpty) {
             ss << "draw";
