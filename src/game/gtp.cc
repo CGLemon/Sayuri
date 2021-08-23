@@ -159,7 +159,9 @@ std::string GtpLoop::Execute(CommandParser &parser) {
         auto final_score = result.root_final_score;
 
         final_score = AdjustKomi<float>(final_score);
-        if (final_score < 0) {
+        if (std::abs(final_score) < 1e-4f) {
+            color = kEmpty;
+        } else if (final_score < 0.f) {
             final_score = -final_score;
             color = !color;
         }

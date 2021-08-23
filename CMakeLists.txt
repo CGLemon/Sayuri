@@ -108,6 +108,7 @@ set(UTILS_SOURCES
     ${UTILS_SOURCES_DIR}/time.cc
     ${UTILS_SOURCES_DIR}/filesystem.cc
     ${UTILS_SOURCES_DIR}/option.cc
+    ${UTILS_SOURCES_DIR}/komi.cc
     )
 
 find_package(Threads REQUIRED)
