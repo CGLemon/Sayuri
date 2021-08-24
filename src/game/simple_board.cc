@@ -156,8 +156,6 @@ std::string SimpleBoard::GetPrisonersString() const {
     return out.str();
 }
 
-#include <iomanip>
-
 std::string SimpleBoard::GetBoardString(const int last_move, bool is_sgf) const {
     auto out = std::ostringstream{};
     auto boardsize = GetBoardSize();

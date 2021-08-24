@@ -358,6 +358,12 @@ bool GameState::IsLegalMove(const int vertex, const int color,
 bool GameState::SetFixdHandicap(int handicap) {
     if (board_.SetFixdHandicap(handicap)) {
         SetHandicap(handicap);
+
+        ko_hash_history_.clear();
+        game_history_.clear();
+
+        ko_hash_history_.emplace_back(GetKoHash());
+        game_history_.emplace_back(std::make_shared<Board>(board_));
         return true;
     }
     return false;
@@ -373,6 +379,12 @@ bool GameState::SetFreeHandicap(std::vector<std::string> movelist) {
 
     if (board_.SetFreeHandicap(movelist_vertex)) {
         SetHandicap(movelist.size());
+
+        ko_hash_history_.clear();
+        game_history_.clear();
+
+        ko_hash_history_.emplace_back(GetKoHash());
+        game_history_.emplace_back(std::make_shared<Board>(board_));
         return true;
     }
     return false;
@@ -388,6 +400,12 @@ std::vector<int> GameState::PlaceFreeHandicap(int handicap) {
                 stone_list.emplace_back(vtx);
             }
         }
+
+        ko_hash_history_.clear();
+        game_history_.clear();
+
+        ko_hash_history_.emplace_back(GetKoHash());
+        game_history_.emplace_back(std::make_shared<Board>(board_));
     }
     return stone_list;
 }
