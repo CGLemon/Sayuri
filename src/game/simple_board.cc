@@ -1172,7 +1172,6 @@ std::vector<int> SimpleBoard::GetStringList(const int vtx) const {
         newpos = strings_.GetNext(newpos);
     } while (newpos != start);
 
-    // eat last space
     assert(!result.empty());
 
     return result;

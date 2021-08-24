@@ -92,7 +92,13 @@ bool Node::ExpendChildren(Network &network,
             continue;
         }
 
-        if (is_root) {}
+        if (is_root) {
+            auto fork_state = state;
+            fork_state.PlayMove(vtx);
+            if (fork_state.IsSuperko()) {
+                continue;
+            }
+        }
 
         nodelist.emplace_back(policy, vtx);
         legal_accumulate += policy;
