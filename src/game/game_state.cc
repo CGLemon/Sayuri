@@ -305,8 +305,8 @@ std::string GameState::GetStateString() const {
 
 
 void GameState::ShowBoard() const {
-    LOGGING << board_.GetBoardString(board_.GetLastMove(), true);
-    LOGGING << GetStateString();
+    ERROR << board_.GetBoardString(board_.GetLastMove(), true);
+    ERROR << GetStateString();
 }
 
 void GameState::SetWinner(GameResult result) {
