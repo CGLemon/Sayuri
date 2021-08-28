@@ -196,7 +196,7 @@ std::string GtpLoop::Execute(CommandParser &parser) {
     //    out << GTPFail("");
 
     } else if (const auto res = parser.Find("kgs-game_over", 0)) {
-        // Do nothing.
+        agent_->GetNetwork().ClearCache();
         out << GTPSuccess("");
     } else if (const auto res = parser.Find("undo", 0)) {
         if (agent_->GetState().UndoMove()) {
