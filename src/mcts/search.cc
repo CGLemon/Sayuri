@@ -115,7 +115,7 @@ void Search::TimeLeft(const int color, const int time, const int stones) {
     time_control_.TimeLeft(color, time, stones);
 }
 
-ComputationResult Search::Computation(int playours) {
+ComputationResult Search::Computation(int playours, bool no_time_limit) {
     auto computation_result = ComputationResult{};
 
     if (root_state_.IsGameOver()) {
@@ -171,7 +171,8 @@ ComputationResult Search::Computation(int playours) {
         if (result.IsValid()) {
             playouts_.fetch_add(1);
         }
-        const auto elapsed = timer.GetDuration();
+        const auto elapsed = no_time_limit ?
+                                 std::numeric_limits<float>::lowest() : timer.GetDuration();
 
         keep_running &= (elapsed < thinking_time);
         keep_running &= (playouts_.load() < playours);
@@ -181,7 +182,9 @@ ComputationResult Search::Computation(int playours) {
 
     group_->WaitToJoin();
 
-    time_control_.TookTime(color);
+    if (!no_time_limit) {
+        time_control_.TookTime(color);
+    }
     if (GetOption<bool>("analysis_verbose")) {
         LOGGING << root_node_->ToString(root_state_);
         LOGGING << time_control_.ToString();

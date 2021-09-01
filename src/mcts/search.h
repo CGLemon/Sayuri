@@ -99,7 +99,7 @@ public:
     void Initialize();
 
     // Compute the result by monte carlo tree search.
-    ComputationResult Computation(int playouts);
+    ComputationResult Computation(int playouts, bool no_time_limit=false);
 
     // Get the best move.
     int ThinkBestMove();
