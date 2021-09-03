@@ -87,7 +87,7 @@ inline ThreadPool& ThreadPool::Get(size_t threads) {
 
 // The constructor just launches some amount of workers
 inline ThreadPool::ThreadPool(size_t threads) {
-    stop_running_.store(false, std::memory_order_relaxed);
+    stop_running_.store(false);
     for (auto t = size_t{0}; t < threads ; ++t) {
         AddThread([](){});
     }
@@ -116,11 +116,11 @@ inline void ThreadPool::AddThread(std::function<void()> initializer) {
 }
 
 inline size_t ThreadPool::GetNumThreads() const {
-    return num_threads_.load(std::memory_order_relaxed);
+    return num_threads_.load();
 }
 
 inline bool ThreadPool::IsStopRunning() const {
-    return stop_running_.load(std::memory_order_relaxed);
+    return stop_running_.load();
 }
 
 // Add new work item to the pool.
@@ -145,7 +145,7 @@ auto ThreadPool::AddTask(F&& f, Args&&... args)
 // The destructor joins all threads.
 inline ThreadPool::~ThreadPool()
 {
-    stop_running_.store(true, std::memory_order_relaxed);
+    stop_running_.store(true);
     cv_.notify_all();
     for(auto &worker: workers_) {
         worker.join();
