@@ -16,6 +16,7 @@ def main(args, cfg):
         pipe.load_pt(args.input + ".pt")
 
     if args.dummy != True:
+        pipe.prepare_data()
         pipe.fit()
 
     if args.output != None:

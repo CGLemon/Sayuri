@@ -118,13 +118,7 @@ class TrainingPipe():
 
         self.net = NNProcess(self.cfg)
         self.net.trainable(True)
-        self.data_set = DataSet(self.cfg, self.train_dir)
-        self.train_data = DataLoader(
-            self.data_set,
-            num_workers=self.num_workers,
-            shuffle=True,
-            batch_size=self.batchsize
-        )
+        self.data_set = None
 
         if self.cfg.misc_verbose:
             dump_dependent_version()
@@ -139,7 +133,19 @@ class TrainingPipe():
             weight_decay=self.weight_decay,
         )
 
+    def prepare_data(self):
+        self.data_set = DataSet(self.cfg, self.train_dir)
+        self.train_data = DataLoader(
+            self.data_set,
+            num_workers=self.num_workers,
+            shuffle=True,
+            batch_size=self.batchsize
+        )
+
     def fit(self):
+        if self.data_set == None:
+            return
+
         # Be sure the network is on the right device.
         self.setup()
 

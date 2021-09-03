@@ -11,5 +11,5 @@ if __name__ == "__main__":
 
     cfg = gather_config(args.json)
     net = NNProcess(cfg)
-    net.load_cp(args.network + ".cp")
+    net.load_pt(args.network + ".pt")
     net.transfer2text(args.network + ".txt")
