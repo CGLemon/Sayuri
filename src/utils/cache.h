@@ -38,6 +38,9 @@ public:
     // not allowed to release.
     V* LookupAndPin(std::uint64_t key);
 
+    // Only lookup the item.
+    V* LookupItem(std::uint64_t key);
+
     // Unpin the item to the cache.
     void Unpin(std::uint64_t key);
 
@@ -108,6 +111,20 @@ V* LruCache<V>::LookupAndPin(std::uint64_t key) {
 }
 
 template<typename V>
+V* LruCache<V>::LookupItem(std::uint64_t key) {
+    SpinMutex::Lock lock(mutex_);
+
+    auto it = lookup_.find(key);
+    if (it == std::end(lookup_)) {
+        // Not found.
+        return nullptr;
+    }
+    auto &entry = it->second;
+
+    return entry.value.get();
+}
+
+template<typename V>
 void LruCache<V>::Unpin(std::uint64_t key) {
     SpinMutex::Lock lock(mutex_);
 
@@ -154,10 +171,9 @@ void LruCache<V>::Clear() {
 
 template<typename V>
 bool LookupCache(LruCache<V> &cache, std::uint64_t key, V& val) {
-    auto result = cache.LookupAndPin(key);
+    auto result = cache.LookupItem(key);
     if (result) {
         val = *result;
-        cache.Unpin(key);
         return true;
     }
     return false;
