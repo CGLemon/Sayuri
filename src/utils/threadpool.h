@@ -79,7 +79,7 @@ inline ThreadPool& ThreadPool::Get(size_t threads) {
         pool.AddThread([](){});
     }
     while (threads < pool.GetNumThreads() && threads != 0) {
-        // TODO: Destory the unused thread.
+        // Do nothing, we don't need to destory the remaing threads.
         break;
     }
     return pool;
@@ -91,6 +91,7 @@ inline ThreadPool::ThreadPool(size_t threads) {
     for (auto t = size_t{0}; t < threads ; ++t) {
         AddThread([](){});
     }
+    // Wait some milliseconds until all the threads are constructed. 
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
 }
 

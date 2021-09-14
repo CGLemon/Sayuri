@@ -10,7 +10,7 @@ CONFIG_KEYWOED = [
     "InputChannels",    # Input planes channels
     "PolicyExtract",    # policy shared head channels
     "ValueExtract",     # value shared head channels
-    "ValueMisc",
+    "ValueMisc",        # output value layer size
 
     "UseOwnership",
     "UseFinalScore",
@@ -22,13 +22,11 @@ CONFIG_KEYWOED = [
     "ResidualBlock-SE", # resnet block with SE structure
 
     "Train",            # claiming
-    "GPUs",
-    "Epochs",
+    "GPUs",             # number of gpus
+    "Epochs",           # number of training epochs
     "LearningRate",     # the learning rate
     "WeightDecay",      # the net weight decay
-    "TrainDirectory",
-    "ValidationDirectory",
-    "TestDirectory"
+    "TrainDirectory"    # The training data directory
 ]
 
 class Config:
@@ -40,13 +38,12 @@ class Config:
         # Training option
         self.num_workers = None
         self.gpus = None
+        self.use_gpu = None
         self.epochs = None
         self.batchsize = None
         self.learn_rate = None
         self.weight_decay = None
         self.train_dir = None
-        self.val_dir = None
-        self.test_dir = None
 
         # Adjustable values
         self.stack = []
@@ -54,10 +51,10 @@ class Config:
         self.policy_extract = None
         self.value_extract = None
 
-        # Options
-        self.use_ownership = None
-        self.use_finalscore = None
-        self.use_auxiliary_policy = None
+        # Options, alwayls true
+        self.use_ownership = True
+        self.use_finalscore = True
+        self.use_auxiliary_policy = True
 
         # Fixed values but flexible
         self.nntype = None
@@ -76,14 +73,19 @@ def trainparser(json_data, config):
     config.weight_decay = train["WeightDecay"]
 
     config.train_dir = train["TrainDirectory"]
-    config.val_dir = train["ValidationDirectory"]
-    config.test_dir = train["TestDirectory"]
     config.epochs = train["Epochs"]
     config.batchsize = train["BatchSize"]
     config.num_workers = train["Workers"]
 
+    # Set the default value if we didn't give them any value.
     if config.epochs == None:
-        config.epochs = 1000 # the lightning default epochs
+        config.epochs = 1000
+
+    if config.learn_rate == None:
+        config.learn_rate = 1e-4
+
+    if config.weight_decay == None:
+        config.weight_decay = 1e-4
 
     if config.num_workers == None:
         config.num_workers = os.cpu_count()
@@ -92,17 +94,18 @@ def trainparser(json_data, config):
         if torch.cuda.is_available():
             config.gpus = torch.cuda.device_count()
 
+    config.use_gpu = True if config.gpus is not None else False
+
     return config
 
 def nnparser(json_data, config):
     # We assume that every value is valid.
     resnet = json_data["NeuralNetwork"]
 
-
     config.boardsize = resnet["DefaultBoardSize"]
-    config.use_ownership = resnet["UseOwnership"]
-    config.use_finalscore = resnet["UseFinalScore"]
-    config.use_auxiliary_policy = resnet["UseAuxiliaryPolicy"]
+    # config.use_ownership = resnet["UseOwnership"]
+    # config.use_finalscore = resnet["UseFinalScore"]
+    # config.use_auxiliary_policy = resnet["UseAuxiliaryPolicy"]
     
     config.nntype = resnet["NNType"]
     config.input_channels = resnet["InputChannels"]

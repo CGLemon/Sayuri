@@ -1,0 +1,30 @@
+{
+    "NeuralNetwork" : {
+        "NNType": "Residual",
+        "DefaultBoardSize": 9,
+        "InputChannels": 38,
+        "ResidualChannels": 192,
+        "PolicyExtract": 64,
+        "ValueExtract": 96,
+        "ValueMisc": 5,
+
+        "Stack" : [
+            "ResidualBlock-SE",
+            "ResidualBlock-SE",
+            "ResidualBlock-SE",
+            "ResidualBlock-SE",
+            "ResidualBlock-SE",
+            "ResidualBlock-SE"
+        ]
+    },
+
+    "Train" : {
+        "GPUs": null,
+        "Epochs": 5,
+        "Workers": null,
+        "BatchSize": 512,
+        "LearningRate": 5e-7,
+        "WeightDecay": 0.001,
+        "TrainDirectory": "train-dir"
+    } 
+}

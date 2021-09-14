@@ -2,7 +2,6 @@ import argparse
 
 from train import *
 from config import *
-from nnprocess import *
 
 def cover(args, cfg):
     if args.verbose >= 1:
@@ -11,26 +10,25 @@ def cover(args, cfg):
         cfg.debug_verbose = True
 
 def main(args, cfg):
-    a = 0
-    train_loader = DataModule(cfg)
-    Net = Network(cfg)
+    pipe = TrainingPipe(cfg)
+
     if args.input != None:
-        Net.load_pt(args.input + ".pt")
+        pipe.load_pt(args.input + ".pt")
 
     if args.dummy != True:
-        trainer = pl.Trainer(gpus=cfg.gpus, max_epochs=cfg.epochs)
-        trainer.fit(Net, train_loader)
+        pipe.prepare_data()
+        pipe.fit()
 
     if args.output != None:
-        Net.save_pt(args.output + ".pt")
+        pipe.save_pt(args.output + ".pt")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--dummy", help="Genrating the dummy network.", action="store_true")
     parser.add_argument("-j", "--json", help="The json file name", type=str)
     parser.add_argument("-v", "--verbose", help="", type=int, choices=[0, 1, 2], default=0)
-    parser.add_argument("-o", "--output", help="", type=str)
-    parser.add_argument("-i", "--input", help="", type=str)
+    parser.add_argument("-o", "--output", help="the ouput weights prefix name ", type=str)
+    parser.add_argument("-i", "--input", help="the intput weights prefix name ", type=str)
     args = parser.parse_args()
 
     cfg = gather_config(args.json)

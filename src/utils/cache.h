@@ -49,7 +49,7 @@ public:
 private:
     void Evict() REQUIRES(mutex_);
 
-    SpinMutex mutex_;
+    SpinLock mutex_;
 
     struct Entry {
         std::unique_ptr<V> value;
@@ -65,7 +65,7 @@ private:
 
 template<typename V>
 void LruCache<V>::SetCapacity(size_t size) {
-    SpinMutex::Lock lock(mutex_);
+    SpinLock::Lock lock(mutex_);
 
     capacity_ = size;
     while (allocated_ > capacity_) {
@@ -75,7 +75,7 @@ void LruCache<V>::SetCapacity(size_t size) {
 
 template<typename V>
 void LruCache<V>::Insert(std::uint64_t key, V value) {
-    SpinMutex::Lock lock(mutex_);
+    SpinLock::Lock lock(mutex_);
 
     auto it = lookup_.find(key);
     if (it != std::end(lookup_)) {
@@ -97,7 +97,7 @@ void LruCache<V>::Insert(std::uint64_t key, V value) {
 
 template<typename V>
 V* LruCache<V>::LookupAndPin(std::uint64_t key) {
-    SpinMutex::Lock lock(mutex_);
+    SpinLock::Lock lock(mutex_);
 
     auto it = lookup_.find(key);
     if (it == std::end(lookup_)) {
@@ -112,7 +112,7 @@ V* LruCache<V>::LookupAndPin(std::uint64_t key) {
 
 template<typename V>
 V* LruCache<V>::LookupItem(std::uint64_t key) {
-    SpinMutex::Lock lock(mutex_);
+    SpinLock::Lock lock(mutex_);
 
     auto it = lookup_.find(key);
     if (it == std::end(lookup_)) {
@@ -126,7 +126,7 @@ V* LruCache<V>::LookupItem(std::uint64_t key) {
 
 template<typename V>
 void LruCache<V>::Unpin(std::uint64_t key) {
-    SpinMutex::Lock lock(mutex_);
+    SpinLock::Lock lock(mutex_);
 
     auto it = lookup_.find(key);
     if (it != std::end(lookup_)) {

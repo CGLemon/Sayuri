@@ -1,29 +1,30 @@
 import torch
 import torch.nn.functional as F
-import pytorch_lightning as pl
 import numpy as np
 
-from symmetry import *
+from symmetry import get_symmetry_plane
 from nnprocess import NNProcess
 from loader import Loader
 
+from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 
 def dump_dependent_version():
     print("Name: {name} ->  Version: {ver}".format(name =  "Numpy", ver = np.__version__))
     print("Name: {name} ->  Version: {ver}".format(name =  "Torch", ver = torch.__version__))
-    print("Name : {name} ->  Version : {ver}".format(name =  "Pytorch Lightning", ver = pl.__version__))
 
 class DataSet():
+    # The simple DataSet wrapper.
+
     def __init__(self, cfg, dirname):
         self.data_loader = Loader(cfg, dirname)
         self.cfg = cfg
         self.board_size = cfg.boardsize
         self.input_channels = cfg.input_channels
-        self.symmetry = Symmetry()
 
     def __getitem__(self, idx):
         data = self.data_loader[idx]
+        data.unpack_planes()
 
         symm = int(np.random.choice(8, 1)[0])
         num_intersections = data.board_size * data.board_size
@@ -38,10 +39,10 @@ class DataSet():
 
         buf = np.zeros(num_intersections)
 
-        # input planes
+        # fill input planes
         for p in range(self.input_channels-4):
             buf[:] = data.planes[p][:]
-            buf = self.symmetry.get_transform_planes(symm, buf, data.board_size)
+            buf = get_symmetry_plane(symm, buf, data.board_size)
             input_planes[p][:] = buf[:]
 
         if data.to_move == 1:
@@ -56,33 +57,35 @@ class DataSet():
         else:
             input_planes[self.input_channels-1][:] = 1
 
-        # probabilities
+        # fill probabilities
         buf[:] = data.prob[0:num_intersections]
-        buf = self.symmetry.get_transform_planes(symm, buf, data.board_size)
+        buf = get_symmetry_plane(symm, buf, data.board_size)
 
         prob[0:num_intersections] = buf[:]
         prob[num_intersections] = data.prob[num_intersections]
 
-        # auxiliary probabilities
+        # fill auxiliary probabilities
         buf[:] = data.aux_prob[0:num_intersections]
-        buf = self.symmetry.get_transform_planes(symm, buf, data.board_size)
+        buf = get_symmetry_plane(symm, buf, data.board_size)
 
         aux_prob[0:num_intersections] = buf[:]
         aux_prob[num_intersections] = data.aux_prob[num_intersections]
 
-        # ownership
+        # fill ownership
         buf[:] = data.ownership[:]
-        buf = self.symmetry.get_transform_planes(symm, buf, data.board_size)
+        buf = get_symmetry_plane(symm, buf, data.board_size)
         ownership[:] = buf[:]
 
-        # winrate
+        # fill winrate
         wdl[1 - data.result] = 1
         stm[0] = data.result
         final_score[0] = data.final_score
 
         input_planes = np.reshape(input_planes, (self.input_channels, data.board_size, data.board_size))
+        data.pack_planes()
 
         return (
+            data.board_size,
             torch.tensor(input_planes).float(),
             torch.tensor(prob).float(),
             torch.tensor(aux_prob).float(),
@@ -95,45 +98,104 @@ class DataSet():
     def __len__(self):
         return len(self.data_loader)
 
-class DataModule(pl.LightningDataModule):
+class TrainingPipe():
+    # TODO: Support for multi-gpu training.
+
     def __init__(self, cfg):
-        super().__init__()
         self.cfg = cfg
         self.batchsize =  cfg.batchsize
         self.num_workers = cfg.num_workers
         self.train_dir = cfg.train_dir
-        self.val_dir = cfg.val_dir
-        self.test_dir = cfg.test_dir
 
-    def setup(self, stage):
-        if stage == 'fit':
-            self.train_data = DataSet(self.cfg, self.train_dir)
-            self.val_data = DataSet(self.cfg, self.val_dir)
-
-        if stage == 'test':
-            self.test_data = DataSet(self.cfg, self.test_dir)
-
-    def train_dataloader(self):
-        return DataLoader(self.train_data, num_workers=self.num_workers, shuffle=True, batch_size=self.batchsize)
-
-    def val_dataloader(self):
-        return DataLoader(self.val_data, num_workers=self.num_workers, batch_size=self.batchsize)
-
-    def test_dataloader(self):
-        return DataLoader(self.test_data, num_workers=self.num_workers , batch_size=self.batchsize)
-
-class Network(NNProcess, pl.LightningModule):
-    def __init__(self, cfg):
-        super().__init__(cfg)
-        self.trainable(True)
-
+        self.epochs = cfg.epochs
         self.learn_rate = cfg.learn_rate
         self.weight_decay = cfg.weight_decay
 
-        # metrics
-        self.train_accuracy = pl.metrics.Accuracy()
-        self.val_accuracy = pl.metrics.Accuracy()
-        self.test_accuracy = pl.metrics.Accuracy()
+        self.use_gpu = cfg.use_gpu
+        self.device = torch.device('cpu')
+        if self.use_gpu:
+            self.device = torch.device('cuda:0')
+
+        self.net = NNProcess(self.cfg)
+        self.net.trainable(True)
+        self.data_set = None
+
+        if self.cfg.misc_verbose:
+            dump_dependent_version()
+
+    def setup(self):
+        if self.use_gpu:
+            self.net = self.net.to(self.device)
+
+        self.adam_opt = torch.optim.Adam(
+            self.net.parameters(),
+            lr=self.learn_rate,
+            weight_decay=self.weight_decay,
+        )
+
+    def prepare_data(self):
+        self.data_set = DataSet(self.cfg, self.train_dir)
+        self.train_data = DataLoader(
+            self.data_set,
+            num_workers=self.num_workers,
+            shuffle=True,
+            batch_size=self.batchsize
+        )
+
+    def fit(self):
+        if self.data_set == None:
+            return
+
+        # Be sure the network is on the right device.
+        self.setup()
+
+        print("start training...")
+
+        tb_writer = SummaryWriter()
+
+        running_loss = 0
+        num_step = 0
+        verbose_step = 500
+
+        print("max step {}...".format(self.epochs * len(self.train_data)))
+
+        for e in range(self.epochs):
+            for _, batch in enumerate(self.train_data):
+                _, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
+                if self.use_gpu:
+                    planes = planes.to(self.device)
+                    target_prob = target_prob.to(self.device)
+                    target_aux_prob = target_aux_prob.to(self.device)
+                    target_ownership = target_ownership.to(self.device)
+                    target_wdl = target_wdl.to(self.device)
+                    target_stm = target_stm.to(self.device)
+                    target_score = target_score.to(self.device)
+
+                target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score)
+
+                # update network
+                running_loss += self.step(planes, target, self.adam_opt)
+
+                num_step += 1
+                if num_step % verbose_step == 0:
+                    print("step: {} -> loss {:.4f}".format(
+                                                        num_step,
+                                                        running_loss/verbose_step
+                                                    ))
+                    tb_writer.add_scalar('loss', running_loss/verbose_step, num_step)
+                    running_loss = 0
+            print("epoch {} finished...".format(e+1))
+
+    def step(self, planes, target, opt):
+        pred = self.net(planes)
+
+        loss = self.compute_loss(pred, target)
+
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+
+        return loss.item()
 
     def compute_loss(self, pred, target):
         (pred_prob, pred_aux_prob, pred_ownership, pred_wdl, pred_stm, pred_score) = pred
@@ -155,80 +217,18 @@ class Network(NNProcess, pl.LightningModule):
 
         fina_score_loss = 0.0012 * huber_loss(20 * pred_score, target_final_score, 12)
 
-        return prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, fina_score_loss
-
-    def training_step(self, batch, batch_idx):
-        planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
-        target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score)
-        predict = self(planes)
-
-        prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, fina_score_loss = self.compute_loss(predict, target)
         loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + fina_score_loss
 
-        self.log("train_loss", loss, prog_bar=True)
-        self.log_dict(
-            {
-                "train_prob_loss": prob_loss,
-                "train_aux_prob_loss": aux_prob_loss,
-                "train_ownership_loss": ownership_loss,
-                "train_wdl_loss": wdl_loss,
-                "train_stm_loss": stm_loss,
-                "train_fina_score_loss": fina_score_loss
-            }
-        )
         return loss
 
-    def validation_step(self, batch, batch_idx):
-        planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
-        target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score)
-        predict = self(planes)
+    def to_cpu(self):
+        self.net = self.net.to(torch.device('cpu'))
 
-        prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, fina_score_loss = self.compute_loss(predict, target)
-        loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + fina_score_loss
+    def to_device(self):
+        self.net = self.net.to(self.device)
 
-        self.log_dict(
-            {
-                "val_loss": loss,
-                "val_prob_loss": prob_loss,
-                "val_aux_prob_loss": aux_prob_loss,
-                "val_ownership_loss": ownership_loss,
-                "val_wdl_loss": wdl_loss,
-                "val_stm_loss": stm_loss,
-                "val_fina_score_loss": fina_score_loss
-            }
-        )
+    def save_pt(self, filename):
+        self.net.save_pt(filename)
 
-    def test_step(self, batch, batch_idx):
-        planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
-        target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score)
-        predict = self(planes)
-
-        prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, fina_score_loss = self.compute_loss(predict, target)
-        loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + fina_score_loss
-
-        self.log_dict(
-            {
-                "test_loss": loss,
-                "test_prob_loss": prob_loss,
-                "test_aux_prob_loss": aux_prob_loss,
-                "test_ownership_loss": ownership_loss,
-                "test_wdl_loss": wdl_loss,
-                "test_stm_loss": stm_loss,
-                "test_fina_score_loss": fina_score_loss
-            }
-        )
-
-    def configure_optimizers(self):
-        adam_opt = torch.optim.Adam(
-            self.parameters(),
-            lr=self.learn_rate,
-            weight_decay=self.weight_decay,
-        )
-        return {
-            "optimizer": adam_opt,
-            "lr_scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-                adam_opt, verbose=self.cfg.misc_verbose, min_lr=5e-6
-            ),
-            "monitor": "val_loss",
-        }
-
+    def load_pt(self, filename):
+        self.net.load_pt(filename)

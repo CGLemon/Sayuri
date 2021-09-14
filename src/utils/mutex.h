@@ -61,16 +61,16 @@ private:
 };
 
 // A very simple spin lock.
-class CAPABILITY("mutex") SpinMutex {
+class CAPABILITY("mutex") SpinLock {
 public:
-    // std::lock_guard<SpinMutex> wrapper.
+    // std::lock_guard<SpinLock> wrapper.
     class SCOPED_CAPABILITY Lock {
     public:
-        Lock(SpinMutex& m) ACQUIRE(m) : lock_(m) {}
+        Lock(SpinLock& m) ACQUIRE(m) : lock_(m) {}
         ~Lock() RELEASE() {}
 
     private:
-        std::lock_guard<SpinMutex> lock_;
+        std::lock_guard<SpinLock> lock_;
     };
 
     void lock() ACQUIRE() {
@@ -94,8 +94,8 @@ public:
         owner_.store(0, std::memory_order_release);
     }
 
-    SpinMutex() = default;
-    ~SpinMutex() = default;
+    SpinLock() = default;
+    ~SpinLock() = default;
 
 private:
     std::atomic<int> owner_{0};

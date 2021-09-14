@@ -1,5 +1,5 @@
 import numpy as np
-import glob, os
+import glob, os, random
 
 FIXED_DATA_VERSION = 0
 
@@ -149,15 +149,32 @@ class Data():
             return 44
         return -1
 
+    def pack_planes(self):
+        # TODO: Pack ownership.
+        c, s = self.planes.shape
+        self.pack_channels = c
+        self.planes = np.packbits(np.reshape(self.planes, (c*s)))
+
+    def unpack_planes(self):
+        s = self.board_size ** 2
+        c = self.pack_channels
+        size = c*s
+        buf = np.zeros((size), dtype=np.int8)
+        buf[:] = np.unpackbits(self.planes)[:size]
+        self.planes = np.reshape(buf, (c, s))
+
     def dump(self):
         print("Board size: {}".format(self.board_size))
         print("Side to move: {}".format(self.to_move))
         print("Komi: {}".format(self.komi))
         print("Result: {}".format(self.result))
         print("Final score: {}".format(self.final_score))
+
+        self.unpack_planes()
         for p in range(len(self.planes)):
             print("Plane: {}".format(p+1))
             print(self.planes[p])
+        self.pack_planes()
 
         print("Probabilities: ")
         print(self.prob)
@@ -184,6 +201,7 @@ class Loader:
                 assert cnt == 0, "The data is incomplete."
                 return False
             data.fill_v1(cnt, readline)
+        data.pack_planes()
         self.buffer.append(data)
 
         return True
@@ -196,7 +214,6 @@ class Loader:
                     if self.linesparser(datalines, f) == False:
                         break
 
-            
     def dump(self):
         for b, s in self.buffer:
             data.dump()

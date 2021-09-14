@@ -512,7 +512,6 @@ std::string Node::ToString(GameState &state) {
                 << std::endl;
     }
 
-
     const auto mem_used = static_cast<double>(GetMemoryUsed()) / (1024.f * 1024.f);
     const auto nodes = GetStats()->nodes.load();
     const auto edges = GetStats()->edges.load();
@@ -520,7 +519,6 @@ std::string Node::ToString(GameState &state) {
             << std::setw(9) << "nodes:" << ' ' << nodes  << std::endl
             << std::setw(9) << "edges:" << ' ' << edges  << std::endl
             << std::setw(9) << "memory:" << ' ' << mem_used << ' ' << "(MiB)" << std::endl;
-
 
     return out.str();
 }
