@@ -143,7 +143,7 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
-    if (const auto res = parser.Find("--analysis-verbose")) {
+    if (const auto res = parser.Find({"--analysis-verbose", "-a"})) {
         SetOption("analysis_verbose", true);
         parser.RemoveCommand(res->Index());
     }
@@ -301,28 +301,22 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
-    if (ErrorCommands(parser)) {
-        Helper();
+    if (ErrorCommands(parser) || GetOption<bool>("help")) {
+        DumpHelper();
     }
 
-    Dump();
     InitBasicParameters();
 }
 
-void ArgsParser::Helper() const {
+void ArgsParser::DumpHelper() const {
     ERROR << "Arguments:" << std::endl
-              << "\t--help, -h" << std::endl
-              << "\t--mode, -m [gtp]" << std::endl
+              << "\t--quiet, -q" << std::endl
+              << "\t--analysis-verbose, -a" << std::endl
               << "\t--playouts, -p <integer>" << std::endl
               << "\t--threads, -t <integer>" << std::endl
+              << "\t--batch-size, -b <integer>" << std::endl
               << "\t--logfile, -l <log file name>" << std::endl
               << "\t--weights, -w <weight file name>" << std::endl
-              << "\t--analysis-verbose" << std::endl;
+        ;
     exit(-1);
-}
-
-void ArgsParser::Dump() const {
-    if (GetOption<bool>("help")) {
-        Helper();
-    }
 }

@@ -10,7 +10,6 @@
 static constexpr std::uint64_t kThreadSeed = 0;
 static constexpr std::uint64_t kTimeSeed = 1;
 
-
 // Select the different random generator that you want.
 enum RandomType {
     kSplitMix64,

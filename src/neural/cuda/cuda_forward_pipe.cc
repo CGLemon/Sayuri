@@ -21,7 +21,7 @@ OutputResult CudaForwardPipe::Forward(const InputData &inpnt) {
     auto entry = std::make_shared<ForwawrdEntry>(inpnt, output);
     std::unique_lock<std::mutex> lock(entry->mutex);
     {
-        std::unique_lock<std::mutex> queue_lock(queue_mutex_);
+        std::lock_guard<std::mutex> queue_lock(queue_mutex_);
         entry_queue_.emplace_back(entry);
     }
 
@@ -512,7 +512,7 @@ void CudaForwardPipe::Worker(int gpu) {
                 break;
             }
 
-            std::unique_lock<std::mutex> lock(mutex_);
+            std::unique_lock<std::mutex> lock(worker_mutex_);
             bool timeout = !cv_.wait_for(lock, std::chrono::milliseconds(waittime),
                                              [this](){ return !((int)entry_queue_.size() < max_batch_); }
                                          );
@@ -539,7 +539,7 @@ void CudaForwardPipe::Worker(int gpu) {
             }
         }
 
-        std::unique_lock<std::mutex> queue_lock(queue_mutex_);
+        std::lock_guard<std::mutex> queue_lock(queue_mutex_);
         auto count = entry_queue_.size();
         if (count > (size_t)max_batch_) {
             count = max_batch_;
@@ -585,7 +585,7 @@ void CudaForwardPipe::Worker(int gpu) {
 
 void CudaForwardPipe::QuitWorkers() {
     {
-        std::unique_lock<std::mutex> queue_lock(queue_mutex_);
+        std::lock_guard<std::mutex> queue_lock(queue_mutex_);
         worker_running_.store(false);
     }
     cv_.notify_all();

@@ -10,7 +10,7 @@ static void StartGtpLoop() {
 int main(int argc, char **argv) {
     ArgsParser(argc, argv);
 
-    ThreadPool::Get(1);
+    ThreadPool::Get(0);
 
     StartGtpLoop();
 

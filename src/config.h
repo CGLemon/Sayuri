@@ -20,9 +20,8 @@ public:
     ArgsParser() = delete;
     ArgsParser(int argc, char** argv);
 
-    void Dump() const;
-
 private:
-    void Helper() const;
+    void DumpHelper() const;
+    std::string helper_;
 };
 

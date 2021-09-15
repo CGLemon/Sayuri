@@ -110,7 +110,7 @@ private:
     std::shared_ptr<DNNWeights> weights_{nullptr};
 
     std::list<std::shared_ptr<ForwawrdEntry>> entry_queue_;
-    std::mutex mutex_;
+    std::mutex worker_mutex_;
     std::mutex queue_mutex_;
     std::condition_variable cv_;
 
