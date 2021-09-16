@@ -16,7 +16,7 @@ DNNLoder& DNNLoder::Get() {
     return lodaer;
 }
 
-void DNNLoder::FormFile(std::shared_ptr<DNNWeights> weights, std::string filename) const {
+void DNNLoder::FromFile(std::shared_ptr<DNNWeights> weights, std::string filename) const {
     auto file = std::ifstream{};
     auto buffer = std::stringstream{};
     auto line = std::string{};

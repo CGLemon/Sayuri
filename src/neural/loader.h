@@ -11,7 +11,7 @@ class DNNLoder {
 public:
     static DNNLoder& Get();
 
-    void FormFile(std::shared_ptr<DNNWeights> weights, std::string filename) const;
+    void FromFile(std::shared_ptr<DNNWeights> weights, std::string filename) const;
 
 private:
     using LayerShape = std::vector<int>;

@@ -64,7 +64,7 @@ void Network::Initialize(const std::string &weightsfile) {
     pipe_ = std::make_unique<backend>();
     auto dnn_weights = std::make_shared<DNNWeights>();
 
-    DNNLoder::Get().FormFile(dnn_weights, weightsfile);
+    DNNLoder::Get().FromFile(dnn_weights, weightsfile);
 
     if (!dnn_weights->loaded) {
         dnn_weights.reset();
