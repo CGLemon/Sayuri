@@ -144,6 +144,7 @@ ComputationResult Search::Computation(int playours, bool no_time_limit) {
 
     Timer timer;
 
+    time_control_.SetLagBuffer(param_->lag_buffer);
     time_control_.Clock();
     timer.Clock();
 

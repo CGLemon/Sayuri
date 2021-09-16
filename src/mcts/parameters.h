@@ -39,6 +39,8 @@ public:
         forced_policy_factor = GetOption<float>("forced_policy_factor");
         score_utility_factor = GetOption<float>("score_utility_factor");
         cap_playouts = GetOption<float>("cap_playouts");
+
+        lag_buffer = GetOption<int>("lag_buffer");
     }
 
     int threads;
@@ -68,6 +70,7 @@ public:
     float score_utility_factor;
 
     int cap_playouts;
+    int lag_buffer;
 
     std::array<float, kNumVertices + 10> dirichlet_buffer;
 };
