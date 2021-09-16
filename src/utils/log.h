@@ -4,9 +4,7 @@
 #include <fstream>
 #include <string>
 #include <deque>
-
-#include "mutex.h"
-#include "utils/mutex.h"
+#include <mutex>
 
 class LogWriter {
 public:
@@ -15,21 +13,31 @@ public:
     void SetFilename(std::string filename);
 
 private:
-    static constexpr size_t kMaxBufferLines = 99999;
     void WriteString(std::string data);
 
-    Mutex mutex_;
+    std::mutex mutex_;
 
     std::string filename_{};
     std::ofstream file_;
-    std::deque<std::string> buffer_;
 
     friend class Logging;
     friend class StandError;
 };
 
+class LogOptions {
+public:
+    static LogOptions& Get();
 
-class Logging : public std::ostringstream{
+    void SetQuiet(bool q);
+
+private:
+    bool quiet_;
+
+    friend class Logging;
+    friend class StandError;
+};
+
+class Logging : public std::ostringstream {
 public:
     Logging(const char* file, int line, bool write_only);
     ~Logging();
@@ -40,7 +48,7 @@ private:
     int line_;
 };
 
-class StandError : public std::ostringstream{
+class StandError : public std::ostringstream {
 public:
     StandError(const char* file, int line);
     ~StandError();

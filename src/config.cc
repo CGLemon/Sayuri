@@ -92,7 +92,8 @@ void InitOptionsMap() {
 
 void InitBasicParameters() {
     Zobrist::Initialize();
-    Symmetry::Initialize(GetOption<int>("defualt_boardsize"));
+    Symmetry::Get().Initialize(GetOption<int>("defualt_boardsize"));
+    LogOptions::Get().SetQuiet(GetOption<bool>("quiet"));
 }
 
 ArgsParser::ArgsParser(int argc, char** argv) {

@@ -25,14 +25,25 @@ void GtpLoop::Loop() {
                 continue;
             }
 
+            auto out = std::string{};
+            auto stop = false;
+
             if (parser.GetCount() == 1 && parser.Find("quit")) {
                 agent_->Quit();
-                LOGGING << GTPSuccess("");
-                break;
+                out = GTPSuccess("");
+                stop = true;
             }
 
-            auto out = Execute(parser);
-            LOGGING << out;
+            if (out.empty()) {
+                out = Execute(parser);
+            }
+
+            WRITING << out;
+            std::cout << out;
+
+            if (stop) {
+                break;
+            }
         }
     }
 }

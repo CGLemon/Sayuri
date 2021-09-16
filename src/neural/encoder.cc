@@ -39,7 +39,7 @@ std::vector<float> Encoder::GetPlanes(const GameState &state, int symmetry) cons
 
     assert(it == std::end(planes));
 
-    Symmetry::Initialize(boardsize);
+    Symmetry::Get().Initialize(boardsize);
     SymmetryPlanes(state, planes, symmetry);
 
     return planes;

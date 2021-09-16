@@ -33,26 +33,22 @@ void Network::Initialize(const std::string &weightsfile) {
 #ifndef __APPLE__
 #ifdef USE_OPENBLAS
     openblas_set_num_threads(1);
-    if (!GetOption<bool>("quiet")) {
-        LOGGING << "BLAS Core:" << ' ' << openblas_get_corename() << std::endl;
-    }
+
+    LOGGING << "BLAS Core:" << ' ' << openblas_get_corename() << std::endl;
 #endif
 #ifdef USE_MKL
     mkl_set_num_threads(1);
     MKLVersion Version;
     mkl_get_version(&Version);
-    if (!GetOption<bool>("quiet")) {
-        LOGGING << "BLAS core: MKL" << ' ' << Version.Processor << std::endl;
-    }
+
+    LOGGING << "BLAS core: MKL" << ' ' << Version.Processor << std::endl;
 #endif
 #endif
 
 #ifdef USE_EIGEN
-    if (!GetOption<bool>("quiet")) {
-        LOGGING << "BLAS Core: Eigen" << ' '
-                    << EIGEN_WORLD_VERSION << '.' << EIGEN_MAJOR_VERSION << '.' << EIGEN_MINOR_VERSION << ' '
-                    << "library." << std::endl;
-    }
+    LOGGING << "BLAS Core: Eigen" << ' '
+                << EIGEN_WORLD_VERSION << '.' << EIGEN_MAJOR_VERSION << '.' << EIGEN_MINOR_VERSION << ' '
+                << "library." << std::endl;
 #endif
 
 #ifdef USE_CUDA

@@ -22,6 +22,5 @@ public:
 
 private:
     void DumpHelper() const;
-    std::string helper_;
 };
 

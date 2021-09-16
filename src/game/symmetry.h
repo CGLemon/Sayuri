@@ -13,7 +13,7 @@ public:
 
     static Symmetry& Get();
 
-    static void Initialize(int boardsize);
+    void Initialize(int boardsize);
 
     int TransformIndex(int symmetry, int idx) const;
     int TransformVertex(int symmetry, int vtx) const;

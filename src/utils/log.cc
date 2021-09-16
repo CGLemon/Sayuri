@@ -9,42 +9,41 @@ LogWriter& LogWriter::Get() {
 }
 
 void LogWriter::SetFilename(std::string filename) {
-    Mutex::Lock lock_(mutex_);
+    std::lock_guard<std::mutex> lk(mutex_);
     if (filename_ == filename) {
         return;
     }
     filename_ = filename;
 
-    if (filename.empty()) {
+    if (filename.empty() && file_.is_open()) {
         file_.close();
         return;
     }
 
     file_.open(filename_, std::ios_base::app);
-
-    for (const auto& line : buffer_) {
-        file_ << line << std::endl;
-    }
-    buffer_.clear();
 }
 
 void LogWriter::WriteString(std::string data) {
-    Mutex::Lock lock_(mutex_);
+    std::lock_guard<std::mutex> lk(mutex_);
+
     auto stm = std::istringstream(data);
     auto line = std::string{};
 
-    if (filename_.empty()) {
-        while (std::getline(stm, line)) {
-            buffer_.emplace_back(line);
-            if (buffer_.size()  >= kMaxBufferLines) {
-                buffer_.pop_front();
-            }
-        }
-    } else {
+    if (!filename_.empty()) {
+        // TODO: Print more verbose for every lines.
         while (std::getline(stm, line)) {
             file_ << line << std::endl;
         }
     }
+}
+
+LogOptions& LogOptions::Get() {
+    static LogOptions lo;
+    return lo;
+}
+
+void LogOptions::SetQuiet(bool q) {
+    quiet_ = q;
 }
 
 Logging::Logging(const char* file, int line, bool write_only) {
@@ -54,7 +53,7 @@ Logging::Logging(const char* file, int line, bool write_only) {
 }
 
 Logging::~Logging() {
-    if (!write_only_) {
+    if (!write_only_ && !LogOptions::Get().quiet_) {
         std::cout << str() << std::flush;
     }
     LogWriter::Get().WriteString(str());

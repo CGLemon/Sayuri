@@ -13,7 +13,7 @@ Symmetry& Symmetry::Get() {
 }
 
 void Symmetry::Initialize(int boardsize) {
-    Get().InnerInitialize(boardsize);
+    InnerInitialize(boardsize);
 }
 
 void Symmetry::InnerInitialize(int boardsize) {
