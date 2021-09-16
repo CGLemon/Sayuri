@@ -1,7 +1,7 @@
 #include "neural/network_basic.h"
 #include "neural/description.h"
 #include "game/game_state.h"
-#include "utils/cache.h"
+#include "utils/cache_new.h"
 
 #include <memory>
 #include <array>
@@ -17,7 +17,7 @@ public:
 
     using Inputs = InputData;
     using Result = OutputResult;
-    using Cache = LruCache<Result>;
+    using Cache = HashKeyCache<Result>;
     using PolicyVertexPair = std::pair<float, int>;
 
     void Initialize(const std::string &weights);

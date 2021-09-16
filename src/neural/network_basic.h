@@ -63,6 +63,3 @@ public:
 
     virtual void Destroy() = 0;
 };
-
-
-

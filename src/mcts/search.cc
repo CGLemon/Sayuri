@@ -155,7 +155,7 @@ ComputationResult Search::Computation(int playours, bool no_time_limit) {
     }
 
     if (GetOption<bool>("analysis_verbose")) {
-        LOGGING << "Thinking time: " << thinking_time << "(sec)" << std::endl;
+        LOGGING << "Max thinking time: " << thinking_time << "(sec)" << std::endl;
     }
 
     for (int t = 0; t < param_->threads-1; ++t) {
@@ -187,7 +187,10 @@ ComputationResult Search::Computation(int playours, bool no_time_limit) {
     }
     if (GetOption<bool>("analysis_verbose")) {
         LOGGING << root_node_->ToString(root_state_);
+        LOGGING << "Time:";
         LOGGING << time_control_.ToString();
+        LOGGING << "spent: " << timer.GetDuration() << "(sec)\n";
+        LOGGING << "speed: " << (float)playouts_.load() / timer.GetDuration() << "(p/sec)\n";
     }
 
     // Fill side to move, moves, root eval and score.

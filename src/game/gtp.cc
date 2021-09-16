@@ -255,7 +255,7 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             pass_cnt += 2;
         }
 
-        static constexpr auto OWBERSHIP_THRESHOLD = 0.75f;
+        constexpr float kOwnshipThreshold = 0.75f;
         auto result = agent_->GetSearch().Computation(400, true);
         auto bsize = agent_->GetState().GetBoardSize();
         auto color = agent_->GetState().GetToMove();
@@ -270,13 +270,13 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             auto owner = result.root_ownership[idx];
             auto state = agent_->GetState().GetState(vtx);
 
-            if (owner > OWBERSHIP_THRESHOLD) {
+            if (owner > kOwnshipThreshold) {
                 if (color == state) {
                     alive.emplace_back(agent_->GetState().GetStringList(vtx));
                 } else if ((!color) == state) {
                     dead.emplace_back(agent_->GetState().GetStringList(vtx));
                 }
-            } else if (owner < -OWBERSHIP_THRESHOLD) {
+            } else if (owner < -kOwnshipThreshold) {
                 if ((!color) == state) {
                     alive.emplace_back(agent_->GetState().GetStringList(vtx));
                 } else if (color == state) {

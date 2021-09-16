@@ -25,7 +25,7 @@ public:
 
     LruCache(LruCache&& cache) {
         capacity_ = cache.capacity_;
-        allocated_ = cache.allocated_;   
+        allocated_ = cache.allocated_;
     }
 
     // Set the capacity.
