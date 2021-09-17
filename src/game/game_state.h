@@ -7,7 +7,6 @@
 
 #include "game/board.h"
 
-
 class GameState {
 public:
     Board board_;
@@ -114,6 +113,8 @@ private:
     bool komi_half_;
 
     bool komi_negative_;
+
+    std::uint64_t komi_hash_;
 
     int winner_;
 };

@@ -181,8 +181,7 @@ bool Network::ProbeCache(const GameState &state,
     // TODO: Cache the all symmetry board in early game.
 
     if (LookupCache(nn_cache_, state.GetHash(), result)) {
-        if (std::abs(result.komi - state.GetKomi()) < 1e-4 &&
-                result.board_size == state.GetBoardSize()) {
+        if (result.board_size == state.GetBoardSize()) {
             return true;
         }
     }

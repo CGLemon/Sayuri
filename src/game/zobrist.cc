@@ -8,13 +8,15 @@
 constexpr Zobrist::KEY Zobrist::kInitSeed;
 constexpr Zobrist::KEY Zobrist::kEmpty;
 constexpr Zobrist::KEY Zobrist::kBlackToMove;
+constexpr Zobrist::KEY Zobrist::kHalfKomi;
+constexpr Zobrist::KEY Zobrist::kNegativeKomi;
 
 std::array<std::array<Zobrist::KEY, Zobrist::kZobristSize>, 4> Zobrist::kState;
 std::array<std::array<Zobrist::KEY, Zobrist::kZobristSize * 2>, 2> Zobrist::kPrisoner;
 
 std::array<Zobrist::KEY, Zobrist::kZobristSize> Zobrist::kKoMove;
 std::array<Zobrist::KEY, 5> Zobrist::KPass;
-std::array<Zobrist::KEY, 4096> Zobrist::kIdentity;
+std::array<Zobrist::KEY, Zobrist::kZobristSize> Zobrist::kKomi;
 
 template<typename T>
 bool Collision(std::vector<T> &array) {
@@ -42,6 +44,11 @@ void Zobrist::Initialize() {
     while (true) {
         auto buf = std::vector<KEY>{};
 
+        buf.emplace_back(kEmpty);
+        buf.emplace_back(kBlackToMove);
+        buf.emplace_back(kHalfKomi);
+        buf.emplace_back(kNegativeKomi);
+
         for (int i = 0; i < 4; ++i) {
             for (int j = 0; j < kZobristSize; ++j) {
                 Zobrist::kState[i][j] = rng.Generate();
@@ -66,9 +73,9 @@ void Zobrist::Initialize() {
             buf.emplace_back(Zobrist::KPass[i]);
         }
 
-        for (int i = 0; i < 4096; ++i) {
-            Zobrist::kIdentity[i] = rng.Generate();
-            buf.emplace_back(Zobrist::kIdentity[i]);
+        for (int i = 0; i < kZobristSize; ++i) {
+            Zobrist::kKomi[i] = rng.Generate();
+            buf.emplace_back(Zobrist::kKomi[i]);
         }
 
         if (!Collision(buf)) {

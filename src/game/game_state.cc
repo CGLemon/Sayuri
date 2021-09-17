@@ -333,6 +333,14 @@ void GameState::SetKomi(float komi) {
 
     komi_negative_ = negative;
     komi_integer_ = integer_part;
+
+    komi_hash_ = Zobrist::kKomi[komi_integer_];
+    if (komi_negative_) {
+        komi_hash_ ^= Zobrist::kNegativeKomi;
+    }
+    if (komi_half_) {
+        komi_hash_ ^= Zobrist::kHalfKomi;
+    }
 }
 
 void GameState::SetColor(const int color) {
@@ -353,7 +361,7 @@ bool GameState::IsSuperko() const {
 
     auto res = std::find(++first, last, GetKoHash());
 
-    return (res != last);
+    return res != last;
 }
 
 bool GameState::IsLegalMove(const int vertex) const {
@@ -590,7 +598,7 @@ int GameState::GetKoHash() const {
 }
 
 int GameState::GetHash() const {
-    return board_.GetHash();
+    return board_.GetHash() ^ komi_hash_;
 }
 
 int GameState::GetState(const int vtx) const {
