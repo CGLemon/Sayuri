@@ -22,7 +22,6 @@ public:
     void SetMoveNumber(int number);
     void SetLastMove(int vertex);
 
-    float GetKomi() const;
     int GetMoveNumber() const;
     int GetBoardSize() const;
     int GetLetterBoxSize() const;

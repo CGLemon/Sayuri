@@ -2,10 +2,10 @@
 #include "game/types.h"
 #include "utils/parser.h"
 #include "utils/log.h"
-
+#include "utils/random.h"
+#include "utils/komi.h"
 #include "neural/fast_policy.h"
 
-#include "utils/random.h"
 #include <random>
 
 void GameState::Reset(const int boardsize, const float komi) {
@@ -314,11 +314,25 @@ void GameState::SetWinner(GameResult result) {
 }
 
 void GameState::SetKomi(float komi) {
-    komi_integer_ = static_cast<int>(komi);
-    komi_float_ = komi - static_cast<float>(komi_integer_);
-    if (komi_float_ < 1e-4 && komi_float_ > (-1e-4)) {
-        komi_float_ = 0.0f;
+    bool negative = komi < 0.f;
+    if (negative) {
+        komi = -komi;
     }
+
+    int integer_part = static_cast<int>(komi);
+    float float_part = komi - static_cast<float>(integer_part);
+
+    if (IsSameKomi(float_part, 0.f)) {
+        komi_half_ = false;
+    } else if (IsSameKomi(float_part, 0.5f)) {
+        komi_half_ = true;
+    } else {
+        ERROR << "Only accept for integer komi or half komi." << std::endl;
+        return;
+    }
+
+    komi_negative_ = negative;
+    komi_integer_ = integer_part;
 }
 
 void GameState::SetColor(const int color) {
@@ -510,7 +524,12 @@ int GameState::GetY(const int vtx) const {
 }
 
 float GameState::GetKomi() const {
-    return komi_float_ + static_cast<float>(komi_integer_);
+    float komi = static_cast<float>(komi_integer_) +
+                     static_cast<float>(komi_half_) * 0.5f;
+    if (komi_negative_) {
+        komi = -komi;
+    }
+    return komi;
 }
 
 int GameState::GetWinner() const {

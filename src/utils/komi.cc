@@ -2,8 +2,12 @@
 #include <cmath>
 #include <iostream>
 
+bool IsSameKomi(float k1, float k2) {
+    return std::abs(k1 - k2) < 1e-4f;
+}
+
 bool EqualToZero(float v) {
-    return std::abs(v) < 1e-4f;
+    return IsSameKomi(v, 0.f);
 }
 
 template <> 

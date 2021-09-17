@@ -110,8 +110,10 @@ private:
     // The komi integer part.
     int komi_integer_;
 
-    // The komi floating-point part.
-    float komi_float_;
+    // The half komi part.
+    bool komi_half_;
+
+    bool komi_negative_;
 
     int winner_;
 };
