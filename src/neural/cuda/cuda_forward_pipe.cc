@@ -34,7 +34,7 @@ OutputResult CudaForwardPipe::Forward(const InputData &inpnt) {
 }
 
 bool CudaForwardPipe::Valid() {
-    return weights_->loaded;
+    return weights_ != nullptr;
 }
 
 void CudaForwardPipe::Load(std::shared_ptr<DNNWeights> weights) {
@@ -44,6 +44,10 @@ void CudaForwardPipe::Load(std::shared_ptr<DNNWeights> weights) {
 
 void CudaForwardPipe::Reload(int board_size) {
     Release();
+
+    if (weights_ == nullptr) {
+        return;
+    }
 
     const auto d_cnt = CUDA::GetDeviceCount();
 
