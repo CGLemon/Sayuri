@@ -253,20 +253,16 @@ void SimpleBoard::SetLastMove(int vertex) {
 }
 
 void SimpleBoard::RemoveMarkedStrings(std::vector<int> &marked) {
-    int captured_stones[2] = {0, 0};
+    int removed_stones[2] = {0, 0};
     for (auto &vtx : marked) {
         auto color = GetState(vtx);
         if (color == kBlack || color == kWhite) {
-            captured_stones[color] += RemoveString(vtx);
+            removed_stones[color] += RemoveString(vtx);
         }
     }
 
-    for (int c=0 ; c<2; ++c) {
-        const int old_prisoners = prisoners_[c];
-        const int new_prisoners = old_prisoners + captured_stones[c];
-        prisoners_[c] = new_prisoners;
-        UpdateZobristPrisoner(c, new_prisoners, old_prisoners);
-    }
+    IncrementPrisoner(kBlack, removed_stones[kBlack]);
+    IncrementPrisoner(kWhite, removed_stones[kWhite]);
 }
 
 int SimpleBoard::ComputeReachGroup(int start_vertex, int spread_color, std::vector<bool> &buf) const {
@@ -566,6 +562,10 @@ LadderType SimpleBoard::HunterSelections(const int prey_color,
     int num_libs = FindStringLiberties(ladder_vtx, buf);
 
     assert(num_libs == libs);
+#ifdef NDEBUG
+    (void) num_libs;
+#endif
+
     const int move_1 = buf[0];
     const int move_2 = buf[1];
     //TODO: Avoid double-ko death.
@@ -990,6 +990,12 @@ int SimpleBoard::RemoveString(const int ip) {
     return removed;
 }
 
+void SimpleBoard::IncrementPrisoner(const int color, const int val) {
+    const int old_prisoners = prisoners_[color];
+    const int new_prisoners = old_prisoners + val;
+    prisoners_[color] = new_prisoners;
+    UpdateZobristPrisoner(color, new_prisoners, old_prisoners);
+}
 
 int SimpleBoard::UpdateBoard(const int vtx, const int color) {
     assert(vtx != kPass && vtx != kResign);
@@ -1028,14 +1034,13 @@ int SimpleBoard::UpdateBoard(const int vtx, const int color) {
     if (strings_.GetLiberty(strings_.GetParent(vtx)) == 0) {
         // Suicide move, this move is illegal in general rule.
         assert(captured_stones == 0);
-        captured_stones += RemoveString(vtx);
+        const int sucide_stones = RemoveString(vtx);
+
+        IncrementPrisoner(!color, sucide_stones);
     }
 
     if (captured_stones != 0) {
-        const int old_prisoners = prisoners_[color];
-        const int new_prisoners = old_prisoners + captured_stones;
-        prisoners_[color] = new_prisoners;
-        UpdateZobristPrisoner(color, new_prisoners, old_prisoners);
+        IncrementPrisoner(color, captured_stones);
     }
 
     // move last vertex in list to our position
@@ -1159,7 +1164,6 @@ int SimpleBoard::GetStones(const int vtx) const {
 }
 
 std::vector<int> SimpleBoard::GetStringList(const int vtx) const {
-
     auto result = std::vector<int>{};
 
     auto start = strings_.GetParent(vtx);
