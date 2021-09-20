@@ -16,8 +16,6 @@ public:
     // GTP interface to clear the board.
     void ClearBoard();
 
-    bool PlayRandomMove(bool end_game);
-
     bool PlayMove(const int vtx);
 
     bool PlayMove(const int vtx, const int color);
@@ -26,9 +24,11 @@ public:
 
     void SetKomi(float komi);
 
-    void SetColor(const int color);
+    void SetToMove(const int color);
 
     void SetWinner(GameResult result);
+
+    void SetFinalScore(float score);
 
     int TextToVertex(std::string text);
 
@@ -96,7 +96,13 @@ public:
     std::shared_ptr<const Board> GetPastBoard(unsigned int p) const;
     const std::vector<std::shared_ptr<const Board>>& GetHistory() const;
 
+    float black_score_;
+
 private:
+    void PlayMoveFast(const int vtx, const int color);
+    void FillRandomMove();
+    void PlayRandomMove();
+
     std::string GetStateString() const;
 
     std::vector<std::shared_ptr<const Board>> game_history_;

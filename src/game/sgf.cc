@@ -170,14 +170,15 @@ void SgfNode::PopulateState(GameState currstate) {
                 }
             }
         }
+        GetState().SetFinalScore(black_final_score);
     }
 
     if (const auto res = GetPropertyValue("PL")) {
         const auto who = *res;
         if (who == "B") {
-            GetState().SetColor(kBlack);
+            GetState().SetToMove(kBlack);
         } else if (who == "W") {
-            GetState().SetColor(kWhite);
+            GetState().SetToMove(kWhite);
         }
     }
 

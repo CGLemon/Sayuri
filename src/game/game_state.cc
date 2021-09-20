@@ -23,95 +23,10 @@ void GameState::ClearBoard() {
     Reset(GetBoardSize(), GetKomi());
 }
 
-bool GameState::PlayRandomMove(bool end_game) {
-    auto policy = std::vector<float>{};
-    const auto board_size = GetBoardSize();
-
-    if (end_game) {
-        policy = std::vector<float>(GetNumIntersections(), 0.f);
-    } else {
-        policy = FastPolicy::Get().Forward(*this);
+void GameState::PlayMoveFast(const int vtx, const int color) {
+    if (vtx != kResign) {
+        board_.PlayMoveAssumeLegal(vtx, color);
     }
-
-    const auto random_prob_move = [](std::vector<std::pair<float, int>> &list) {
-        float acc = 0.f;
-
-        for (auto &e : list) {
-            acc += e.first;
-            e.first = acc;
-        }
-
-        auto size = list.size();
-        auto rng = Random<RandomType::kXoroShiro128Plus>::Get();
-        auto dis = std::uniform_real_distribution<float>(0, acc);
-        auto p = dis(rng);
-
-        for (size_t i = 1; i < size; ++i) {
-            auto low = list[i-1].first;
-            auto high = list[i].first;
-          
-            if (p >= low && p < high) {
-                return list[i].second;
-            }
-        }
-        return list[0].second;
-    };
-
-    auto simple_ownership = board_.GetSimpleOwnership();
-
-    int color = GetToMove();
-    auto movelist = std::vector<std::pair<float, int>>{};
-    auto acc_prob = 0.f;
-
-    for (int idx = 0; idx < GetNumIntersections(); ++idx) {
-        const auto prob = policy[idx];
-        const auto x = idx % board_size;
-        const auto y = idx / board_size;
-        const auto vtx = GetVertex(x, y);
-
-        if (end_game &&
-                simple_ownership[idx] != kEmpty &&
-                !board_.IsCaptureMove(vtx, color) &&
-                !board_.IsCaptureMove(vtx, !color)) {
-            // In the end game, the move must be in the undefined area.
-            continue;
-        }
-
-        if (!IsLegalMove(vtx, color)) {
-            continue;
-        }
-
-        if (board_.IsRealEye(vtx, color)) {
-            continue;
-        }
-
-        if (end_game) {
-            auto fork_board = board_;
-            fork_board.PlayMoveAssumeLegal(vtx, color);
-
-            if (fork_board.GetLiberties(vtx) <= 1 &&
-                    fork_board.GetKoMove() != kNullVertex) {
-                // In the end game, We don't allow sucide move, except ko move.
-                continue;
-            }
-        }
-        acc_prob += prob;
-        movelist.emplace_back(prob, vtx);
-    }
-
-    if (!movelist.empty()) {
-        if (acc_prob == 0.0f) {
-            auto new_prob = 1.f / (float)movelist.size();
-            for (auto &m : movelist) {
-                m.first = new_prob;
-            }
-        }
-
-        auto move = random_prob_move(movelist);
-        PlayMove(move);
-    }
-
-    return !movelist.empty();
 }
 
 bool GameState::PlayMove(const int vtx) {
@@ -313,6 +228,10 @@ void GameState::SetWinner(GameResult result) {
     winner_ = result;
 }
 
+void GameState::SetFinalScore(float score) {
+    black_score_ = score;
+}
+
 void GameState::SetKomi(float komi) {
     bool negative = komi < 0.f;
     if (negative) {
@@ -343,7 +262,7 @@ void GameState::SetKomi(float komi) {
     }
 }
 
-void GameState::SetColor(const int color) {
+void GameState::SetToMove(const int color) {
     board_.SetToMove(color);
 }
 
@@ -440,6 +359,130 @@ std::vector<int> GameState::GetOwnership() const {
     return res;
 }
 
+// FillRandomMove assume that both players think the game is end. Now we try to remove the
+// dead string.
+void GameState::FillRandomMove() {
+    const int color = GetToMove();
+    const int empty_cnt = board_.GetEmptyCount();
+    const int rand = Random<RandomType::kXoroShiro128Plus>::Get().Generate() % empty_cnt;
+    int select_move = kPass;
+
+    for (int i = 0; i < empty_cnt; ++i) {
+        const auto rand_pick = (rand + i) % empty_cnt;
+        const auto vtx = board_.GetEmpty(rand_pick);
+
+        if (!IsLegalMove(vtx, color)) {
+            continue;
+        }
+
+        if (board_.IsCaptureMove(vtx, color)) {
+            select_move = vtx;
+            break;
+        }
+    }
+
+    for (int i = 0; i < empty_cnt; ++i) {
+        if (select_move != kPass) break;
+
+        const auto rand_pick = (rand + i) % empty_cnt;
+        const auto vtx = board_.GetEmpty(rand_pick);
+
+        if (!IsLegalMove(vtx, color)) {
+            continue;
+        }
+
+        if (board_.IsRealEye(vtx, color)) {
+            continue;
+        }
+
+        if (board_.IsSimpleEye(vtx, color) &&
+                !board_.IsCaptureMove(vtx, color) &&
+                !board_.IsEscapeMove(vtx, color)) {
+            continue;
+        }
+
+        // TODO: check the seki move.
+        auto fork_board = board_;
+        fork_board.PlayMoveAssumeLegal(vtx, color);
+        if (fork_board.GetLiberties(vtx) == 1){
+            continue;
+        }
+
+        select_move = vtx;
+    }
+
+    PlayMoveFast(select_move, color);
+}
+
+void GameState::PlayRandomMove() {
+    auto policy = std::vector<float>{};
+    const auto board_size = GetBoardSize();
+
+    policy = FastPolicy::Get().Forward(*this);
+
+    const auto random_prob_move = [](std::vector<std::pair<float, int>> &list) {
+        float acc = 0.f;
+
+        for (auto &e : list) {
+            acc += e.first;
+            e.first = acc;
+        }
+
+        auto size = list.size();
+        auto rng = Random<RandomType::kXoroShiro128Plus>::Get();
+        auto dis = std::uniform_real_distribution<float>(0, acc);
+        auto p = dis(rng);
+
+        for (size_t i = 1; i < size; ++i) {
+            auto low = list[i-1].first;
+            auto high = list[i].first;
+          
+            if (p >= low && p < high) {
+                return list[i].second;
+            }
+        }
+        return list[0].second;
+    };
+
+    auto simple_ownership = board_.GetSimpleOwnership();
+
+    int color = GetToMove();
+    auto movelist = std::vector<std::pair<float, int>>{};
+    auto acc_prob = 0.f;
+
+    for (int idx = 0; idx < GetNumIntersections(); ++idx) {
+        const auto prob = policy[idx];
+        const auto x = idx % board_size;
+        const auto y = idx / board_size;
+        const auto vtx = GetVertex(x, y);
+
+        if (!IsLegalMove(vtx, color)) {
+            continue;
+        }
+
+        if (board_.IsRealEye(vtx, color)) {
+            continue;
+        }
+
+        acc_prob += prob;
+        movelist.emplace_back(prob, vtx);
+    }
+
+    int select_move = kPass;
+    if (!movelist.empty()) {
+        if (acc_prob == 0.0f) {
+            auto new_prob = 1.f / (float)movelist.size();
+            for (auto &m : movelist) {
+                m.first = new_prob;
+            }
+        }
+
+        auto move = random_prob_move(movelist);
+        select_move = move;
+    }
+    PlayMove(select_move, color);
+}
+
 std::vector<int> GameState::GetOwnershipAndRemovedDeadStrings(int playouts) const {
     auto fork_state = *this;
     fork_state.RemoveDeadStrings(playouts);
@@ -450,19 +493,18 @@ std::vector<int> GameState::MarKDeadStrings(int playouts) const {
     auto num_intersections = GetNumIntersections();
     auto buffer = std::vector<int>(num_intersections, 0);
 
-    static constexpr int kMaxPlayoutsCount = 200;
+    static constexpr int kMaxPlayoutsCount = 32 * 16384;
 
     playouts = std::min(playouts, kMaxPlayoutsCount);
-
-    auto end_game = (GetPasses() >= 2);
 
     for (int p = 0; p < playouts; ++p) {
         int moves = 0;
         auto state = *this;
+        if (p%2==0) {
+            state.board_.SetToMove(!GetToMove());
+        }
         while(true) {
-            if (!state.PlayRandomMove(end_game)) {
-                state.PlayMove(kPass);
-            }
+            state.FillRandomMove();
 
             if (state.GetPasses() >= 4) {
                 break;
@@ -541,20 +583,7 @@ float GameState::GetKomi() const {
 }
 
 int GameState::GetWinner() const {
-    if (winner_ != kUndecide) {
-        return winner_;
-    }
-    if (GetPasses() >= 2) {
-        auto score = GetFinalScore();
-        if (score > (-1e-4) && score < 1e-4) {
-            return kDraw;
-        } else if (score > 0.f){
-            return kBlack;
-        } else {
-            return kWhite;
-        }
-    }
-    return kUndecide;
+    return winner_;
 }
 
 int GameState::GetHandicap() const {

@@ -38,6 +38,8 @@ public:
     int GetState(const int x, const int y) const;
     int GetLiberties(const int vtx) const;
     int GetStones(const int vtx) const;
+    int GetEmptyCount() const;
+    int GetEmpty(const int idx) const;
     std::vector<int> GetStringList(const int vtx) const;
 
     int GetX(const int vtx) const;
@@ -70,6 +72,9 @@ public:
 
     // Reture true if the point is read eye.
     bool IsRealEye(const int vtx, const int color) const;
+
+    // Reture true if the point is eye shape.
+    bool IsSimpleEye(const int vtx, const int color) const;
 
     // Play the move assume the move is legal.
     void PlayMoveAssumeLegal(const int vtx, const int color);
@@ -157,9 +162,6 @@ protected:
 
     // The move number.
     int move_number_;
-
-    // Reture true if the point is eye shape.
-    bool IsSimpleEye(const int vtx, const int color) const;
 
     // Reture true if the move will kill itself.
     bool IsSuicide(const int vtx, const int color) const;

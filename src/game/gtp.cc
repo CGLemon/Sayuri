@@ -196,7 +196,7 @@ std::string GtpLoop::Execute(CommandParser &parser) {
                 color = kWhite;
             }
         }
-        agent_->GetState().SetColor(color);
+        agent_->GetState().SetToMove(color);
         auto move = agent_->GetSearch().ThinkBestMove();
         agent_->GetState().PlayMove(move);
         out << GTPSuccess(agent_->GetState().VertexToText(move));

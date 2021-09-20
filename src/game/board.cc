@@ -148,10 +148,10 @@ std::vector<LadderType> Board::GetLadderPlane() const {
             auto parent = strings_.GetParent(vtx);
 
             if (VectorFind(ladder, parent)) {
-                // Found! It is a ladder.
+                // Be found! It is a ladder.
                 libs = strings_.GetLiberty(parent);
             } else if (!VectorFind(not_ladder, parent)) {
-                // Not found! Now Search it.
+                // Not be found! Now Search it.
                 if (IsLadder(vtx)) {
                     // It is a ladder.
                     ladder.emplace_back(parent);
@@ -306,6 +306,8 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
             auto index = GetIndex(x, y);
             auto vertex = GetVertex(x, y);
             if (pass_alive_groups[vertex] > 0) {
+                result[index] = true;
+            } else if (eyes[vertex]) {
                 result[index] = true;
             }
         }

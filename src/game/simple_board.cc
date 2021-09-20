@@ -1163,6 +1163,14 @@ int SimpleBoard::GetStones(const int vtx) const {
     return strings_.GetStones(strings_.GetParent(vtx));
 }
 
+int SimpleBoard::GetEmptyCount() const {
+    return empty_cnt_;
+}
+
+int SimpleBoard::GetEmpty(const int idx) const {
+    return empty_[idx];
+}
+
 std::vector<int> SimpleBoard::GetStringList(const int vtx) const {
     auto result = std::vector<int>{};
 
