@@ -1,6 +1,7 @@
 #include "game/board.h"
 
 #include <algorithm>
+#include <set>
 
 int Board::ComputeScoreOnBoard(int black_bonus) const {
     const auto black = ComputeReachColor(kBlack);
@@ -220,11 +221,9 @@ std::vector<bool> Board::GetOcupiedPlane(const int color) const {
 }
 
 std::vector<bool> Board::GetPassAlive(const int color) const {
-    auto num_vertices = GetNumVertices();
-
+    const auto num_vertices = GetNumVertices();
+    const auto bsize = GetBoardSize();
     auto ocupied = std::vector<int>(num_vertices, kInvalid);
-    auto eyes = std::vector<bool>(num_vertices, false);
-    auto bsize = GetBoardSize();
 
     for (int y = 0; y < bsize; ++y) {
         for (int x = 0; x < bsize; ++x) {
@@ -235,28 +234,15 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
             } else {
                 ocupied[vertex] = kEmpty;
             }
-
-            if (state == kEmpty && IsSimpleEye(vertex, color)) {
-                eyes[vertex] = true;
-            }
         }
     }
-
+    auto empty_area_groups = std::vector<int>(num_vertices, -1);
     auto pass_alive_groups = std::vector<int>(num_vertices, -1);
     auto group_count = ClassifyGroups(ocupied, pass_alive_groups, color);
 
-        for (int y = 0; y < bsize; ++y) {
-            for (int x = 0; x < bsize; ++x) {
-                auto idx = GetVertex(x,y);
-                printf("%2d ", pass_alive_groups[idx]);
-            }
-            printf("\n");
-        }
-        printf("\n");
-
-
     auto string_linking = std::vector<int>(group_count);
     for (int i = 0; i < group_count; ++i) {
+        // One vertex of string links with list.
         int linking = 0;
 
         for (int v = 0; v < num_vertices; ++v) {
@@ -272,51 +258,51 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
     // https://senseis.xmp.net/?BensonsAlgorithm
     while(true) {
         auto change = false;
-        auto empty_area_groups = std::vector<int>(num_vertices, -1);
         ClassifyGroups(ocupied, empty_area_groups, kEmpty);
-    
-        for (int y = 0; y < bsize; ++y) {
-            for (int x = 0; x < bsize; ++x) {
-                auto idx = GetVertex(x,y);
-                printf("%2d ", empty_area_groups[idx]);
-            }
-            printf("\n");
-        }
-        printf("\n");
-    
-        for (int i = 0; i < group_count; ++i) {
-            auto vertex = string_linking[i];
-            if (vertex == kNullVertex) {
-                // The string is not pass alive.
-                continue;
-            }
 
-            if (IsPassAliveString(vertex, ocupied, pass_alive_groups, empty_area_groups)) {
-                // The string is not pass alive. Remove the string.
+        for (int i = 0; i < group_count; ++i) {
+            const auto vertex = string_linking[i];
+
+            if (!IsPassAliveString(vertex, ocupied, pass_alive_groups, empty_area_groups)) {
+                // The string is not pass alive. Remove the uncertainty life string.
+                const auto string_index = pass_alive_groups[vertex];
                 for (int v = 0; v < num_vertices; ++v) {
                     if (pass_alive_groups[v] == string_index) {
                         pass_alive_groups[v] = 0;
                         ocupied[v] = kEmpty;
                     }
                 }
-                string_linking[i] = kNullVertex;
+
+                // Remove the linking.
+                std::remove(std::begin(string_linking),
+                                std::end(string_linking), vertex);
+                group_count -= 1;
                 change = true;
                 break;
             }
         }
 
+        // The algorithm is over if there is no string removed.
         if (!change) break;
     }
 
-    auto result = std::vector<bool>(GetNumIntersections(), false);
+    auto safe_area = std::vector<int>(num_vertices, 0);
+    for (int i = 0; i < group_count; ++i) {
+        // Mark the pass alive string area.
+        auto vertex = string_linking[i];
+        IsPassAliveString(vertex, ocupied, pass_alive_groups,
+                              empty_area_groups, safe_area.data());
+    }
 
+    // TODO: Mark the pass dead area.
+    auto result = std::vector<bool>(GetNumIntersections(), false);
     for (int y = 0; y < bsize; ++y) {
         for (int x = 0; x < bsize; ++x) {
             auto index = GetIndex(x, y);
             auto vertex = GetVertex(x, y);
             if (pass_alive_groups[vertex] > 0) {
                 result[index] = true;
-            } else if (eyes[vertex]) {
+            } else if (safe_area[vertex]) {
                 result[index] = true;
             }
         }
@@ -328,23 +314,57 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
 bool Board::IsPassAliveString(const int vertex,
                                   std::vector<int> &ocupied,
                                   std::vector<int> &pass_alive_groups,
-                                  std::vector<int> &empty_area_groups) const {
+                                  std::vector<int> &empty_area_groups,
+                                  int *safe_area) const {
+    constexpr bool allow_sucide = false;
+    auto my_color = ocupied[vertex];
     auto string_index = pass_alive_groups[vertex];
-    auto surround = FindStringSurround(pass_alive_groups, string_index);
+    auto surround_vtx = FindStringSurround(pass_alive_groups, string_index);
+    auto surround_area = std::set<int>{};
 
-    const auto NotFound = [](std::vector<int>& arr, int val){
-        auto it = std::find(std::begin(arr), std::end(arr), val));
+    for (const auto v : surround_vtx) {
+        int idx = empty_area_groups[v];
+        // Find all surround area.
+        if (idx > 0)
+            surround_area.insert(empty_area_groups[v]);
+    }
+
+    const auto NotFound = [](std::vector<bool>& arr, bool val){
+        auto it = std::find(std::begin(arr),
+                                std::end(arr), val);
         return it == std::end(arr);
     };
-    auto key_point = std::vector<int>{};
 
-    for (const auto v : surround) {
-        auto empty_index = empty_area_groups[v];
-        if (NotFound(key_point, empty_index)) {
-            key_point.emplace_back(empty_index);
+    int safe_area_cnt = 0;
+    const int num_vertices = ocupied.size();
+    for (const auto i : surround_area) {
+        auto buf = std::vector<bool>(num_vertices, false);
+        for (int v = 0; v < num_vertices; ++v) {
+            if (empty_area_groups[v] == i &&
+                    (GetState(v) != !my_color && !allow_sucide)) {
+                buf[v] = true;
+            }
+        }
+        for (const auto v : surround_vtx) {
+            buf[v] = false;
+        }
+        if (NotFound(buf, true)) {
+            // Not found. It means that the opponent color can't fill all
+            // liberties in this area. We call it safe area. The string is
+            // pass alive if the number of the safe area is greater than 2
+            // (include 2).
+
+            safe_area_cnt++;
+
+            if (safe_area) {
+                for (int v = 0; v < num_vertices; ++v) {
+                    if (empty_area_groups[v] == i) safe_area[v] = 1;
+                }
+            }
         }
     }
-    return false;
+
+    return safe_area_cnt >= 2;
 }
 
 int Board::ClassifyGroups(std::vector<int> &features, std::vector<int> &groups, int target) const {
@@ -375,8 +395,8 @@ int Board::ClassifyGroups(std::vector<int> &features, std::vector<int> &groups, 
 
                 ComputeReachGroup(vtx, target, buf, [&](int v){ return features[v]; });
 
-                auto VertexGroups = GatherVertex(buf);
-                for (const auto v : VertexGroups) {
+                auto vertices = GatherVertices(buf);
+                for (const auto v : vertices) {
                     marked[v] = true;
                     groups[v] = groups_index;
                 }
@@ -406,7 +426,7 @@ std::vector<int> Board::FindStringSurround(std::vector<int> &groups, int index) 
     return result;
 }
 
-std::vector<int> Board::GatherVertex(std::vector<bool> &buf) const {
+std::vector<int> Board::GatherVertices(std::vector<bool> &buf) const {
     auto result = std::vector<int>{};
 
     for (auto vtx = size_t{0}; vtx < buf.size(); ++vtx) {
