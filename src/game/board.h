@@ -30,6 +30,11 @@ public:
 private:
     bool ValidHandicap(int handicap);
 
+    bool IsPassAliveString(const int vertex,
+                               std::vector<int> &ocupied,
+                               std::vector<int> &pass_alive_groups,
+                               std::vector<int> &empty_area_groups) const;
+
     std::vector<int> FindStringSurround(std::vector<int> &groups, int index) const;
 
     std::vector<int> GatherVertex(std::vector<bool> &buf) const;

@@ -245,6 +245,16 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
     auto pass_alive_groups = std::vector<int>(num_vertices, -1);
     auto group_count = ClassifyGroups(ocupied, pass_alive_groups, color);
 
+        for (int y = 0; y < bsize; ++y) {
+            for (int x = 0; x < bsize; ++x) {
+                auto idx = GetVertex(x,y);
+                printf("%2d ", pass_alive_groups[idx]);
+            }
+            printf("\n");
+        }
+        printf("\n");
+
+
     auto string_linking = std::vector<int>(group_count);
     for (int i = 0; i < group_count; ++i) {
         int linking = 0;
@@ -262,37 +272,36 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
     // https://senseis.xmp.net/?BensonsAlgorithm
     while(true) {
         auto change = false;
-
+        auto empty_area_groups = std::vector<int>(num_vertices, -1);
+        ClassifyGroups(ocupied, empty_area_groups, kEmpty);
+    
+        for (int y = 0; y < bsize; ++y) {
+            for (int x = 0; x < bsize; ++x) {
+                auto idx = GetVertex(x,y);
+                printf("%2d ", empty_area_groups[idx]);
+            }
+            printf("\n");
+        }
+        printf("\n");
+    
         for (int i = 0; i < group_count; ++i) {
             auto vertex = string_linking[i];
             if (vertex == kNullVertex) {
                 // The string is not pass alive.
                 continue;
             }
-            auto index = pass_alive_groups[vertex];
-            auto eye_cnt = 0;
-            auto surround = FindStringSurround(pass_alive_groups, index);
-            
-            for (const auto v : surround) {
-                if (eyes[v]) {
-                    eye_cnt++;
-                }
-            }
-            if (eye_cnt < 2) {
-                // If the string doesn't have enough eyes. It is not
-                // a pass alive string.
-                for (auto &idx : pass_alive_groups) {
-                    if (idx == index) idx = 0;
+
+            if (IsPassAliveString(vertex, ocupied, pass_alive_groups, empty_area_groups)) {
+                // The string is not pass alive. Remove the string.
+                for (int v = 0; v < num_vertices; ++v) {
+                    if (pass_alive_groups[v] == string_index) {
+                        pass_alive_groups[v] = 0;
+                        ocupied[v] = kEmpty;
+                    }
                 }
                 string_linking[i] = kNullVertex;
                 change = true;
-
-                // The eyes is broken.
-                for (const auto v : surround) {
-                    if (eyes[v]) {
-                        eyes[v] = false;
-                    }
-                }
+                break;
             }
         }
 
@@ -314,6 +323,28 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
     }
 
     return result;
+}
+
+bool Board::IsPassAliveString(const int vertex,
+                                  std::vector<int> &ocupied,
+                                  std::vector<int> &pass_alive_groups,
+                                  std::vector<int> &empty_area_groups) const {
+    auto string_index = pass_alive_groups[vertex];
+    auto surround = FindStringSurround(pass_alive_groups, string_index);
+
+    const auto NotFound = [](std::vector<int>& arr, int val){
+        auto it = std::find(std::begin(arr), std::end(arr), val));
+        return it == std::end(arr);
+    };
+    auto key_point = std::vector<int>{};
+
+    for (const auto v : surround) {
+        auto empty_index = empty_area_groups[v];
+        if (NotFound(key_point, empty_index)) {
+            key_point.emplace_back(empty_index);
+        }
+    }
+    return false;
 }
 
 int Board::ClassifyGroups(std::vector<int> &features, std::vector<int> &groups, int target) const {
