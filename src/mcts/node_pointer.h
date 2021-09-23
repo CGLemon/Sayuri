@@ -1,6 +1,5 @@
 #pragma once
 
-#include <memory>
 #include <atomic>
 #include <vector>
 #include <cstdint>
@@ -16,7 +15,7 @@ template<typename NodeType, typename DataType>
 class NodePointer {
 public:
     NodePointer() = default;
-    NodePointer(std::shared_ptr<DataType> data);
+    NodePointer(DataType data);
     NodePointer(NodePointer &&n);
     NodePointer(const NodePointer &) = delete;
     NodePointer& operator=(const NodePointer&);
@@ -33,12 +32,12 @@ public:
     bool Inflate();
     bool Release();
 
-    std::shared_ptr<DataType> Data() const;
+    DataType* Data();
 
 private:
     bool AcquireInflating();
 
-    std::shared_ptr<DataType> data_{nullptr};
+    DataType data_;
     std::atomic<std::uint64_t> pointer_{kUninflated};
 
     bool IsPointer(std::uint64_t v) const;
@@ -47,13 +46,14 @@ private:
 };
 
 template<typename NodeType, typename DataType>
-inline NodePointer<NodeType, DataType>::NodePointer(std::shared_ptr<DataType> data) {
+inline NodePointer<NodeType, DataType>::NodePointer(DataType data) {
     data_ = data;
 }
 
 template<typename NodeType, typename DataType>
 inline NodePointer<NodeType, DataType>::NodePointer(NodePointer &&n) {
     data_ = n.data_;
+    pointer_.store(n.pointer_.load(std::memory_order_relaxed), std::memory_order_relaxed);
 }
 
 
@@ -114,22 +114,22 @@ inline bool NodePointer<NodeType, DataType>::AcquireInflating() {
 
 template<typename NodeType, typename DataType>
 inline bool NodePointer<NodeType, DataType>::Inflate() {
-    while (true) {
-        if (IsPointer(pointer_.load())) {
-            return false;
-        }
-        if (!AcquireInflating()) {
-            continue;
-        }
-        auto new_pointer =
-            reinterpret_cast<std::uint64_t>(new NodeType(data_)) | kPointer;
-        auto old_pointer = pointer_.exchange(new_pointer);
-#ifdef NDEBUG
-        (void) old_pointer;
-#endif
-        assert(IsInflating(old_pointer));
-        return true;
+inflate_loop: // try to allocate new memory for this node.
+    if (IsPointer(pointer_.load())) {
+        return false;
     }
+    if (!AcquireInflating()) {
+        goto inflate_loop;
+    }
+    auto new_pointer =
+             reinterpret_cast<std::uint64_t>(new NodeType(&data_)) | kPointer;
+    auto old_pointer = pointer_.exchange(new_pointer);
+#ifdef NDEBUG
+    (void) old_pointer;
+#endif
+    assert(IsInflating(old_pointer));
+    return true;
+
 }
 
 template<typename NodeType, typename DataType>
@@ -148,6 +148,6 @@ inline bool NodePointer<NodeType, DataType>::Release() {
 }
 
 template<typename NodeType, typename DataType>
-inline std::shared_ptr<DataType> NodePointer<NodeType, DataType>::Data() const {
-    return data_;
+inline DataType *NodePointer<NodeType, DataType>::Data() {
+    return &data_;
 }

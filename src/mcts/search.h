@@ -17,15 +17,15 @@ struct SearchResult {
 public:
     SearchResult() = default;
     bool IsValid() const { return nn_evals_ != nullptr; }
-    std::shared_ptr<NodeEvals> GetEvals() const { return nn_evals_; }
+    NodeEvals *GetEvals() const { return nn_evals_.get(); }
 
     void FromNetEvals(NodeEvals nn_evals) { 
-        nn_evals_ = std::make_shared<NodeEvals>(nn_evals);
+        nn_evals_ = std::make_unique<NodeEvals>(nn_evals);
     }
 
     void FromGameover(GameState &state) {
         if (nn_evals_ == nullptr) {
-            nn_evals_ = std::make_shared<NodeEvals>();
+            nn_evals_ = std::make_unique<NodeEvals>();
         }
 
         assert(state.GetPasses() >= 2);
@@ -62,7 +62,7 @@ public:
     }
 
 private:
-    std::shared_ptr<NodeEvals> nn_evals_{nullptr};
+    std::unique_ptr<NodeEvals> nn_evals_{nullptr};
 };
 
 struct ComputationResult {
@@ -141,6 +141,7 @@ private:
 
     Network &network_;
 
+    std::shared_ptr<NodeData> node_data_;
     std::shared_ptr<NodeStats> node_stats_;
     std::shared_ptr<Node> root_node_; 
 

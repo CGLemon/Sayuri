@@ -59,12 +59,12 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
 }
 
 std::vector<float> Search::PrepareRootNode() {
-    auto data = std::make_shared<NodeData>();
+    node_data_ = std::make_shared<NodeData>();
     node_stats_ = std::make_shared<NodeStats>();
 
-    data->parameters = param_;
-    data->node_stats = node_stats_;
-    root_node_ = std::make_shared<Node>(data);
+    node_data_->parameters = param_.get();
+    node_data_->node_stats = node_stats_.get();
+    root_node_ = std::make_shared<Node>(node_data_.get());
 
     playouts_.store(0);
     running_.store(true);
@@ -73,7 +73,7 @@ std::vector<float> Search::PrepareRootNode() {
 
     root_node_->PrepareRootNode(network_, root_state_, root_noise);
     const auto evals = root_node_->GetNodeEvals();
-    root_node_->Update(std::make_shared<NodeEvals>(evals));
+    root_node_->Update(&evals);
 
     const auto color = root_state_.GetToMove();
     const auto winloss = color == kBlack ? evals.black_wl : 1 - evals.black_wl;
@@ -226,7 +226,7 @@ ComputationResult Search::Computation(int playours, bool no_time_limit) {
     auto parentvisits = 0;
     const auto &children = root_node_->GetChildren();
     for (const auto &child : children) {
-        const auto node = child->Get();
+        const auto node = child.Get();
         const auto visits = node->GetVisits();
         const auto vertex = node->GetVertex();
         const auto policy = node->GetPolicy();
@@ -281,9 +281,9 @@ ComputationResult Search::Computation(int playours, bool no_time_limit) {
 
     // Push the data to buffer.
     GatherData(root_state_, computation_result);
-
+    timer.Clock();
     ClearNodes();
-
+    LOGGING << "  clear spent: " << timer.GetDuration() << "(sec)\n";
     return computation_result;
 }
 

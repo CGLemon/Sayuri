@@ -10,7 +10,6 @@
 
 #include <array>
 #include <vector>
-#include <memory>
 #include <atomic>
 #include <string>
 #include <mutex>
@@ -26,8 +25,8 @@ struct NodeData {
     float policy{0.0f};
     int vertex{kNullVertex};
 
-    std::shared_ptr<Parameters> parameters{nullptr};
-    std::shared_ptr<NodeStats> node_stats{nullptr};
+    Parameters *parameters{nullptr};
+    NodeStats *node_stats{nullptr};
 
     Node *parent{nullptr};
 };
@@ -44,7 +43,7 @@ class Node {
 public:
     using Edge = NodePointer<Node, NodeData>;
 
-    Node(std::shared_ptr<NodeData> data);
+    Node(NodeData* data);
     ~Node();
 
     bool ExpendChildren(Network &network,
@@ -61,12 +60,12 @@ public:
     void PolicyTargetPruning();
     int RandomizeFirstProportionally(float random_temp);
 
-    void Update(std::shared_ptr<NodeEvals> evals);
+    void Update(const NodeEvals *evals);
 
     std::vector<std::pair<float, int>> GetLcbList(const int color);
     int GetBestMove();
 
-    const std::vector<std::shared_ptr<Edge>> &GetChildren() const;
+    const std::vector<Edge> &GetChildren() const;
     bool HaveChildren() const;
 
     Node *Get();
@@ -82,11 +81,11 @@ public:
     float GetNetDraw() const;
     float GetDraw() const;
 
-    size_t GetMemoryUsed() const;
+    size_t GetMemoryUsed();
 
     std::array<float, kNumIntersections> GetOwnership(int color) const;
     NodeEvals GetNodeEvals() const;
-    void ApplyEvals(std::shared_ptr<NodeEvals> evals);
+    void ApplyEvals(const NodeEvals *evals);
 
     void IncrementThreads();
     void DecrementThreads();
@@ -108,13 +107,13 @@ private:
     void LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist);
     void LinkNetOutput(const Network::Result &raw_netlist, const int color);
 
-    float GetUctPolicy(std::shared_ptr<Edge>, bool noise);
+    float GetUctPolicy(Edge& child, bool noise);
     float GetScoreUtility(const int color, float factor, float parent_score) const;
     float GetVariance(const float default_var, const int visits) const;
     float GetLcb(const int color) const;
 
-    void Inflate(std::shared_ptr<Edge> child);
-    void Release(std::shared_ptr<Edge> child);
+    void Inflate(Edge& child);
+    void Release(Edge& child);
 
     void InflateAllChildren();
     void ReleaseAllChildren();
@@ -128,8 +127,8 @@ private:
     int GetThreads() const;
     int GetVirtualLoss() const;
 
-    std::shared_ptr<NodeStats> GetStats() const;
-    std::shared_ptr<Parameters> GetParameters() const;
+    NodeStats *GetStats();
+    Parameters *GetParameters();
 
     enum class StatusType : std::uint8_t {
         kInvalid, // kInvalid means that the node is illegal.
@@ -179,6 +178,6 @@ private:
     std::atomic<int> visits_{0};
     std::atomic<int> running_threads_{0};
 
-    std::vector<std::shared_ptr<Edge>> children_;
-    std::shared_ptr<NodeData> data_;
+    std::vector<Edge> children_;
+    NodeData* data_;
 };

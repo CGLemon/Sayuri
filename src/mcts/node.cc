@@ -11,7 +11,7 @@
 
 #define VIRTUAL_LOSS_COUNT (3)
 
-Node::Node(std::shared_ptr<NodeData> data) {
+Node::Node(NodeData* data) {
     assert(data->parameters != nullptr);
     data_ = data;
     IncrementNodes();
@@ -128,15 +128,15 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
     std::stable_sort(std::rbegin(nodelist), std::rend(nodelist));
 
     for (const auto &node : nodelist) {
-        auto data = std::make_shared<NodeData>();
-        data->vertex = node.second;
-        data->policy = node.first;
-        data->parameters = GetParameters();
-        data->node_stats = GetStats();
+        auto data = NodeData{};
+        data.vertex = node.second;
+        data.policy = node.first;
+        data.parameters = GetParameters();
+        data.node_stats = GetStats();
 
-        data->parent = Get();
+        data.parent = Get();
 
-        children_.emplace_back(std::make_shared<Edge>(data));
+        children_.emplace_back(data);
         IncrementEdges();
     }
     assert(!children_.empty());
@@ -180,7 +180,7 @@ void Node::PolicyTargetPruning() {
     int most_visits = 0;
 
     for (const auto &child : children_) {
-        const auto node = child->Get();
+        const auto node = child.Get();
 
         if (!node->IsActive()) {
             continue;
@@ -232,14 +232,14 @@ Node *Node::ProbSelectChild() {
     WaitExpanded();
     assert(HaveChildren());
 
-    std::shared_ptr<Edge> best_node = nullptr;
+    Edge* best_node = nullptr;
     float best_prob = std::numeric_limits<float>::lowest();
 
-    for (const auto &child : children_) {
-        const auto node = child->Get();
+    for (auto &child : children_) {
+        const auto node = child.Get();
         const bool is_pointer = node == nullptr ? false : true;
 
-        auto prob = child->Data()->policy;
+        auto prob = child.Data()->policy;
 
         // The node was pruned. Skip this time.
         if (is_pointer && !node->IsActive()) {
@@ -253,11 +253,11 @@ Node *Node::ProbSelectChild() {
 
         if (prob > best_prob) {
             best_prob = prob;
-            best_node = child;
+            best_node = &child;
         }
     }
 
-    Inflate(best_node);
+    Inflate(*best_node);
     return best_node->Get();
 }
 
@@ -269,7 +269,7 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
     int parentvisits = 0;
     float total_visited_policy = 0.0f;
     for (const auto &child : children_) {
-        const auto node = child->Get();
+        const auto node = child.Get();
         if (!node) {
             continue;
         }    
@@ -296,13 +296,13 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
     const float fpu_value     = GetNetEval(color) - fpu_reduction;
     const float score         = GetFinalScore(color);
 
-    std::shared_ptr<Edge> best_node = nullptr;
+    Edge* best_node = nullptr;
     float best_value = std::numeric_limits<float>::lowest();
 
-    for (const auto &child : children_) {
+    for (auto &child : children_) {
         // Check the node is pointer or not.
         // If not, we can not get most data from child.
-        const auto node = child->Get();
+        const auto node = child.Get();
         const bool is_pointer = node == nullptr ? false : true;
 
         // The node was pruned. Skip this time.
@@ -346,11 +346,11 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
 
         if (value > best_value) {
             best_value = value;
-            best_node = child;
+            best_node = &child;
         }
     }
 
-    Inflate(best_node);
+    Inflate(*best_node);
     return best_node->Get();
 }
 
@@ -360,7 +360,7 @@ int Node::RandomizeFirstProportionally(float random_temp) {
     auto accum_vector = std::vector<std::pair<float, int>>{};
 
     for (const auto &child : children_) {
-        auto node = child->Get();
+        auto node = child.Get();
         const auto visits = node->GetVisits();
         const auto vertex = node->GetVertex();
         if (visits > GetParameters()->random_min_visits) {
@@ -383,7 +383,7 @@ int Node::RandomizeFirstProportionally(float random_temp) {
     return select_vertex;
 }
 
-void Node::Update(std::shared_ptr<NodeEvals> evals) {
+void Node::Update(const NodeEvals *evals) {
     const float eval = evals->black_wl;
     const float old_eval = accumulated_black_wl_.load();
     const float old_visits = visits_.load();
@@ -408,7 +408,7 @@ void Node::Update(std::shared_ptr<NodeEvals> evals) {
     }
 }
 
-void Node::ApplyEvals(std::shared_ptr<NodeEvals> evals) {
+void Node::ApplyEvals(const NodeEvals *evals) {
     black_wl_ = evals->black_wl;
     draw_ = evals->draw;
     black_fs_ = evals->black_final_score;
@@ -457,7 +457,7 @@ float Node::GetLcb(const int color) const {
     return mean - z * stddev;
 }
 
-size_t Node::GetMemoryUsed() const {
+size_t Node::GetMemoryUsed() {
     const auto nodes = GetStats()->nodes.load();
     const auto edges = GetStats()->edges.load();
     const auto node_mem = sizeof(Node) + sizeof(Edge);
@@ -546,7 +546,7 @@ Node *Node::Get() {
 
 Node *Node::GetChild(int vertex) {
     for (const auto & child : children_) {
-        const auto node = child->Get();
+        const auto node = child.Get();
         if (vertex == node->GetVertex()) {
             return node;
         }
@@ -563,7 +563,7 @@ std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
     auto list = std::vector<std::pair<float, int>>{};
 
     for (const auto & child : children_) {
-        const auto node = child->Get();
+        const auto node = child.Get();
         if (node == nullptr || node->IsPruned()) {
             continue;
         }
@@ -623,15 +623,15 @@ NodeEvals Node::GetNodeEvals() const {
     return evals;
 }
 
-const std::vector<std::shared_ptr<Node::Edge>> &Node::GetChildren() const {
+const std::vector<Node::Edge> &Node::GetChildren() const {
     return children_;
 }
 
-std::shared_ptr<NodeStats> Node::GetStats() const {
+NodeStats *Node::GetStats() {
     return data_->node_stats;
 }
 
-std::shared_ptr<Parameters> Node::GetParameters() const {
+Parameters *Node::GetParameters() {
     return data_->parameters;
 }
 
@@ -710,26 +710,26 @@ float Node::GetEval(const int color, const bool use_virtual_loss) const {
 }
 
 void Node::InflateAllChildren() {
-    for (const auto &child : children_) {
+    for (auto &child : children_) {
          Inflate(child);
     }
 }
 
 void Node::ReleaseAllChildren() {
-    for (const auto &child : children_) {
+    for (auto &child : children_) {
          Release(child);
     }
 }
 
-void Node::Inflate(std::shared_ptr<Edge> child) {
-    if (child->Inflate()) {
+void Node::Inflate(Edge& child) {
+    if (child.Inflate()) {
         DecrementEdges();
         IncrementNodes();
     }
 }
 
-void Node::Release(std::shared_ptr<Edge> child) {
-    if (child->Release()) {
+void Node::Release(Edge& child) {
+    if (child.Release()) {
         DecrementNodes();
         IncrementEdges();
     }
@@ -857,15 +857,15 @@ void Node::ApplyDirichletNoise(const float alpha) {
 
     InflateAllChildren();
     for (auto i = size_t{0}; i < child_cnt; ++i) {
-        const auto vertex = children_[i]->Data()->vertex;
+        const auto vertex = children_[i].Data()->vertex;
         dirichlet[vertex] = buffer[i];
     }
 }
 
-float Node::GetUctPolicy(std::shared_ptr<Node::Edge> child, bool noise) {
-    auto policy = child->Data()->policy;
+float Node::GetUctPolicy(Node::Edge& child, bool noise) {
+    auto policy = child.Data()->policy;
     if (noise) {
-        const auto vertex = child->Data()->vertex;
+        const auto vertex = child.Data()->vertex;
         const auto epsilon = GetParameters()->dirichlet_epsilon;
         const auto eta_a = GetParameters()->dirichlet_buffer[vertex];
         policy = policy * (1 - epsilon) + epsilon * eta_a;
