@@ -35,8 +35,6 @@ public:
     DataType* Data();
 
 private:
-    bool AcquireInflating();
-
     DataType data_;
     std::atomic<std::uint64_t> pointer_{kUninflated};
 
@@ -79,17 +77,17 @@ inline bool NodePointer<NodeType, DataType>::IsUninflated(std::uint64_t v) const
 
 template<typename NodeType, typename DataType>
 inline bool NodePointer<NodeType, DataType>::IsPointer() const {
-    return IsPointer(pointer_.load());
+    return IsPointer(pointer_.load(std::memory_order_relaxed));
 }
 
 template<typename NodeType, typename DataType>
 inline bool NodePointer<NodeType, DataType>::IsInflating() const {
-    return IsInflating(pointer_.load());
+    return IsInflating(pointer_.load(std::memory_order_relaxed));
 }
 
 template<typename NodeType, typename DataType>
 inline bool NodePointer<NodeType, DataType>::IsUninflated() const {
-    return IsUninflated(pointer_.load());
+    return IsUninflated(pointer_.load(std::memory_order_relaxed));
 }
 
 template<typename NodeType, typename DataType>
@@ -107,18 +105,18 @@ inline NodeType *NodePointer<NodeType, DataType>::Get() const {
 }
 
 template<typename NodeType, typename DataType>
-inline bool NodePointer<NodeType, DataType>::AcquireInflating() {
-    auto uninflated = kUninflated;
-    return pointer_.compare_exchange_strong(uninflated, kInflating);
-}
-
-template<typename NodeType, typename DataType>
 inline bool NodePointer<NodeType, DataType>::Inflate() {
-inflate_loop: // try to allocate new memory for this node.
+
+inflate_loop: // Try to allocate new memory for this node.
+
     if (IsPointer(pointer_.load())) {
+        // Another thread already inflated the pointer.
         return false;
     }
-    if (!AcquireInflating()) {
+
+    auto uninflated = kUninflated;
+    if (!pointer_.compare_exchange_strong(uninflated, kInflating)) {
+        // Fail to get the owner. Try it next time.
         goto inflate_loop;
     }
     auto new_pointer =
@@ -134,6 +132,7 @@ inflate_loop: // try to allocate new memory for this node.
 
 template<typename NodeType, typename DataType>
 inline bool NodePointer<NodeType, DataType>::Release() {
+    // Only support for one thread to release the node. 
     auto v = pointer_.load();
     if (IsPointer(v)) {
         delete ReadPointer(v);

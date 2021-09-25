@@ -141,10 +141,10 @@ private:
 
     Network &network_;
 
-    std::shared_ptr<NodeData> node_data_;
-    std::shared_ptr<NodeStats> node_stats_;
-    std::shared_ptr<Node> root_node_; 
+    std::unique_ptr<NodeData> node_data_;
+    std::unique_ptr<NodeStats> node_stats_;
+    std::unique_ptr<Node> root_node_; 
 
-    std::shared_ptr<Parameters> param_;
+    std::unique_ptr<Parameters> param_;
     std::unique_ptr<ThreadGroup<void>> group_;
 };

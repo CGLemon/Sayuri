@@ -13,7 +13,7 @@ Search::~Search() {
 }
 
 void Search::Initialize() {
-    param_ = std::make_shared<Parameters>();
+    param_ = std::make_unique<Parameters>();
     param_->Reset();
 
     threads_ = param_->threads;
@@ -27,24 +27,33 @@ void Search::Initialize() {
 void Search::PlaySimulation(GameState &currstate, Node *const node,
                             Node *const root_node, SearchResult &search_result) {
     node->IncrementThreads();
+
+    // Terminate node, try to expand it. 
     if (node->Expandable()) {
         if (currstate.GetPasses() >= 2) {
+            // The game is over, gather the game result value.
             search_result.FromGameover(currstate);
             node->ApplyEvals(search_result.GetEvals());
         } else {
             const bool have_children = node->HaveChildren();
-            const bool success = node->ExpendChildren(network_, currstate, false);
+
+            // If we fail to expand the node, that means another thread
+            // is expanding node. Skip this simulation.
+            const bool success = node->ExpandChildren(network_, currstate, false);
             if (!have_children && success) {
                 search_result.FromNetEvals(node->GetNodeEvals());
             }
         }
     }
+
     if (node->HaveChildren() && !search_result.IsValid()) {
         auto color = currstate.GetToMove();
         Node *next = nullptr;
         if (playouts_.load() < param_->cap_playouts) {
+            // Go to the next node by best polcy.
             next = node->ProbSelectChild();
         } else {
+            // Go to the next node by PUCT algoritim.
             next = node->UctSelectChild(color, node == root_node);
         }
         auto vtx = next->GetVertex();
@@ -52,6 +61,8 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
         currstate.PlayMove(vtx, color);
         PlaySimulation(currstate, next, root_node, search_result);
     }
+
+    // Now Update this node.
     if (search_result.IsValid()) {
         node->Update(search_result.GetEvals());
     }
@@ -59,12 +70,12 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
 }
 
 std::vector<float> Search::PrepareRootNode() {
-    node_data_ = std::make_shared<NodeData>();
-    node_stats_ = std::make_shared<NodeStats>();
+    node_data_ = std::make_unique<NodeData>();
+    node_stats_ = std::make_unique<NodeStats>();
 
     node_data_->parameters = param_.get();
     node_data_->node_stats = node_stats_.get();
-    root_node_ = std::make_shared<Node>(node_data_.get());
+    root_node_ = std::make_unique<Node>(node_data_.get());
 
     playouts_.store(0);
     running_.store(true);
@@ -119,10 +130,12 @@ ComputationResult Search::Computation(int playours, bool no_time_limit) {
     auto computation_result = ComputationResult{};
 
     if (root_state_.IsGameOver()) {
+        // Always reture pass move if the passese number is greater than two.
         computation_result.best_move = kPass;
         return computation_result;
     }
 
+    // The SMP worker run on every threads except main thread.
     const auto Worker = [this]() -> void {
         while(running_.load()) {
             auto currstate = std::make_unique<GameState>(root_state_);
@@ -134,6 +147,7 @@ ComputationResult Search::Computation(int playours, bool no_time_limit) {
         };
     };
 
+    // Prepare some basic information.
     const auto color = root_state_.GetToMove();
     const auto board_size = root_state_.GetBoardSize();
     const auto move_num = root_state_.GetMoveNumber();
@@ -144,6 +158,7 @@ ComputationResult Search::Computation(int playours, bool no_time_limit) {
 
     Timer timer;
 
+    // clock time.
     time_control_.SetLagBuffer(param_->lag_buffer);
     time_control_.Clock();
     timer.Clock();
@@ -159,10 +174,11 @@ ComputationResult Search::Computation(int playours, bool no_time_limit) {
         LOGGING << "Max thinking time: " << thinking_time << "(sec)" << std::endl;
     }
 
-    for (int t = 0; t < param_->threads-1; ++t) {
+    for (int t = 1; t < param_->threads; ++t) {
         group_->AddTask(Worker);
     }
 
+    // Main thread is running.
     auto keep_running = true;
     while (running_.load()) {
         auto currstate = std::make_unique<GameState>(root_state_);
@@ -181,6 +197,7 @@ ComputationResult Search::Computation(int playours, bool no_time_limit) {
         running_.store(keep_running);
     }
 
+    // Wait for all threads to join the main thread.
     group_->WaitToJoin();
 
     if (!no_time_limit) {
@@ -281,9 +298,10 @@ ComputationResult Search::Computation(int playours, bool no_time_limit) {
 
     // Push the data to buffer.
     GatherData(root_state_, computation_result);
-    timer.Clock();
+
+    // Release the tree nodes.
     ClearNodes();
-    LOGGING << "  clear spent: " << timer.GetDuration() << "(sec)\n";
+
     return computation_result;
 }
 

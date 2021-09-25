@@ -30,7 +30,7 @@ NodeEvals Node::PrepareRootNode(Network &network,
                                 GameState &state,
                                 std::vector<float> &dirichlet) {
     const auto is_root = true;
-    const auto success = ExpendChildren(network, state, is_root);
+    const auto success = ExpandChildren(network, state, is_root);
     assert(success);
     assert(HaveChildren());
 
@@ -38,6 +38,7 @@ NodeEvals Node::PrepareRootNode(Network &network,
         InflateAllChildren();
 
         if (GetParameters()->dirichlet_noise) {
+            // Generate dirichlet noise and gather it.
             const auto legal_move = children_.size();
             const auto factor = GetParameters()->dirichlet_factor;
             const auto init = GetParameters()->dirichlet_init;
@@ -61,16 +62,19 @@ NodeEvals Node::PrepareRootNode(Network &network,
     return GetNodeEvals();
 }
 
-bool Node::ExpendChildren(Network &network,
+bool Node::ExpandChildren(Network &network,
                           GameState &state,
                           const bool is_root) {
+    // The node must be the first time to expand and is not the terminate node.
     assert(state.GetPasses() < 2);
     assert(!HaveChildren());
 
+    // First, try to acquire the owner.
     if (!AcquireExpanding()) {
         return false;
     }
 
+    // Second, get network computation result.
     const auto raw_netlist = network.GetOutput(state, Network::kRandom);
     const auto board_size = state.GetBoardSize();
     const auto num_intersections = state.GetNumIntersections();
@@ -82,6 +86,7 @@ bool Node::ExpendChildren(Network &network,
     auto allow_pass = true;
     auto legal_accumulate = 0.0f;
 
+    // Third, remove the illegl moves or some bad move.
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto x = idx % board_size;
         const auto y = idx / board_size;
@@ -109,6 +114,7 @@ bool Node::ExpendChildren(Network &network,
     }
 
     if (legal_accumulate <= 0.0f) {
+        // It will be happened if the policy focus on illegl moves.
         for (auto &node : nodelist) {
             node.first = 1.f/nodelist.size();
         }
@@ -118,13 +124,17 @@ bool Node::ExpendChildren(Network &network,
         }
     }
 
+    // Fourth, append the nodes.
     LinkNodeList(nodelist);
+
+    // Fifth, release the owner.
     ExpandDone();
 
     return true;
 }
 
 void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
+    // Besure that the best policy is on the top.
     std::stable_sort(std::rbegin(nodelist), std::rend(nodelist));
 
     for (const auto &node : nodelist) {
@@ -168,6 +178,8 @@ void Node::LinkNetOutput(const Network::Result &raw_netlist, const int color){
     }
 }
 
+
+// Experiment function.
 void Node::PolicyTargetPruning() {
     WaitExpanded();
     assert(HaveChildren());
@@ -246,7 +258,7 @@ Node *Node::ProbSelectChild() {
             continue;
         }
 
-        // The node was expending.
+        // The node was expending. Give it very bad value.
         if (is_pointer && node->IsExpending()) {
             prob = -1.0f + prob;
         }
@@ -266,11 +278,13 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
     assert(HaveChildren());
     assert(color == color_);
 
+    // Gather all parent's visits.
     int parentvisits = 0;
     float total_visited_policy = 0.0f;
     for (const auto &child : children_) {
         const auto node = child.Get();
         if (!node) {
+            // The (uninflated) node is no visit.
             continue;
         }    
         if (node->IsValid()) {
@@ -300,8 +314,6 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
     float best_value = std::numeric_limits<float>::lowest();
 
     for (auto &child : children_) {
-        // Check the node is pointer or not.
-        // If not, we can not get most data from child.
         const auto node = child.Get();
         const bool is_pointer = node == nullptr ? false : true;
 

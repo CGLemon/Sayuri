@@ -46,23 +46,34 @@ public:
     Node(NodeData* data);
     ~Node();
 
-    bool ExpendChildren(Network &network,
+    // Expand this node.
+    bool ExpandChildren(Network &network,
                         GameState &state,
                         const bool is_root);
 
+    // Expand root node children before starting Tree search.
     NodeEvals PrepareRootNode(Network &network,
                               GameState &state,
                               std::vector<float> &dirichlet);
 
+    // Select the best policy node.
     Node *ProbSelectChild();
+
+    // Select the best PUCT value node.
     Node *UctSelectChild(const int color, const bool is_root);
 
     void PolicyTargetPruning();
+
+    // Randomly select one child by visits. 
     int RandomizeFirstProportionally(float random_temp);
 
+    // Update the node.
     void Update(const NodeEvals *evals);
 
+    // Get children's LCB values. 
     std::vector<std::pair<float, int>> GetLcbList(const int color);
+
+    // Get best move(vertex) by LCB value.
     int GetBestMove();
 
     const std::vector<Edge> &GetChildren() const;
@@ -70,18 +81,19 @@ public:
 
     Node *Get();
     Node *GetChild(int vertex);
+
     int GetVisits() const;
     int GetVertex() const;
     float GetPolicy() const;
 
+    // GetNetxxx will get raw NN eval from this node.
     float GetNetFinalScore(const int color) const;
-    float GetFinalScore(const int color) const;
-    float GetEval(const int color, const bool use_virtual_loss=true) const;
     float GetNetEval(const int color) const;
     float GetNetDraw() const;
-    float GetDraw() const;
 
-    size_t GetMemoryUsed();
+    float GetFinalScore(const int color) const;
+    float GetEval(const int color, const bool use_virtual_loss=true) const;
+    float GetDraw() const;
 
     std::array<float, kNumIntersections> GetOwnership(int color) const;
     NodeEvals GetNodeEvals() const;
@@ -100,6 +112,8 @@ public:
     std::string GetPvString(GameState &state);
 
 private:
+    size_t GetMemoryUsed();
+
     void ApplyDirichletNoise(const float alpha);
     void SetPolicy(float p);
     void SetVisits(int v);
