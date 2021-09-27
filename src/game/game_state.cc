@@ -444,7 +444,7 @@ void GameState::PlayRandomMove() {
         return list[0].second;
     };
 
-    auto simple_ownership = board_.GetSimpleOwnership();
+    auto simple_ownership = GetOwnership();
 
     int color = GetToMove();
     auto movelist = std::vector<std::pair<float, int>>{};
@@ -516,7 +516,7 @@ std::vector<int> GameState::MarKDeadStrings(int playouts) const {
             }
         }
 
-        auto final_ownership = state.board_.GetSimpleOwnership();
+        auto final_ownership = state.GetOwnership();
 
         for (int idx = 0; idx < num_intersections; ++idx) {
             auto owner = final_ownership[idx];

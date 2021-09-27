@@ -15,7 +15,9 @@ public:
     // Compute ownership by Tromp Taylor
     void ComputeSimpleOwnership(std::vector<int> &buffer) const;
 
-    std::vector<int> GetSimpleOwnership() const;
+    void ComputeRemovedOneLibertyOwnership(std::vector<int> &buffer) const; // experiment function
+
+    std::vector<int> GetPassAliveOwnership() const; // experiment function
 
     bool SetFixdHandicap(int handicap);
 
@@ -31,14 +33,23 @@ private:
     bool ValidHandicap(int handicap);
 
     bool IsPassAliveString(const int vertex,
-                               std::vector<int> &ocupied,
-                               std::vector<int> &pass_alive_groups,
-                               std::vector<int> &empty_area_groups,
-                               int *safe_area = nullptr) const;
+                               bool allow_sucide,
+                               const std::vector<bool> &vitals,
+                               const std::vector<int> &features,
+                               const std::vector<int> &regions_index,
+                               const std::vector<int> &regions_next,
+                               const std::vector<int> &strings_index,
+                               const std::vector<int> &strings_next) const;
 
-    std::vector<int> FindStringSurround(std::vector<int> &groups, int index) const;
+    bool IsPassDeadRegion(const int vertex,
+                               const int color,
+                               std::vector<int> &features,
+                               const std::vector<int> &regions_next) const;
 
     std::vector<int> GatherVertices(std::vector<bool> &buf) const;
 
-    int ClassifyGroups(std::vector<int> &features, std::vector<int> &groups, int target) const;
+    std::vector<int> ClassifyGroups(const int target,
+                                        std::vector<int> &features,
+                                        std::vector<int> &regions_index,
+                                        std::vector<int> &regions_next) const;
 };
