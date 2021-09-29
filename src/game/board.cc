@@ -414,7 +414,7 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
         } while(pos != vtx);
     }
 
-    // Re-computation regions for scanning pass dead regions.
+    // Re-compute the regions for scanning pass dead regions.
     regions_head = ClassifyGroups(kEmpty, ocupied, regions_index, regions_next);
 
     // Fill the pass dead regions.
@@ -488,8 +488,8 @@ bool Board::IsPassDeadRegion(const int vtx,
                                  const std::vector<int> &regions_next) const {
     const auto IsPotentialEye = [this](const int vertex,
                                            const int color,
-                                           std::vector<int> &features) {
-
+                                           std::vector<int> &features,
+                                           std::vector<bool> &inner_regions) {
         std::array<int, 4> side_count = {0, 0, 0, 0};
 
         for (int k = 0; k < 4; ++k) {
@@ -497,9 +497,7 @@ bool Board::IsPassDeadRegion(const int vtx,
             side_count[features[avtx]]++;
         }
 
-        if (side_count[kInvalid] +
-                side_count[kEmpty] +
-                side_count[color] != 4) {
+        if (side_count[!color] != 0) {
             return false;
         }
 
@@ -507,7 +505,11 @@ bool Board::IsPassDeadRegion(const int vtx,
 
         for (int k = 4; k < 8; ++k) {
             const auto avtx = vertex + directions_[k];
-            corner_count[features[avtx]]++;
+            if (inner_regions[avtx]) {
+                corner_count[color]++;
+            } else {
+                corner_count[features[avtx]]++;
+            }
         }
         if (corner_count[kInvalid] == 0) {
             if (corner_count[!color] > 1) {
@@ -521,30 +523,86 @@ bool Board::IsPassDeadRegion(const int vtx,
         return true;
     };
 
+    auto inner_regions = std::vector<bool>(features.size(), false);
+    ComputationInnerRegions(vtx, color, regions_next, inner_regions);
+
+
     auto potentia_eyes = std::vector<int>{};
     int pos = vtx;
     do {
-        if (IsPotentialEye(pos, color, features)) {
+        if (IsPotentialEye(pos, color, features, inner_regions)) {
             potentia_eyes.emplace_back(pos);
         }
         pos = regions_next[pos];
     } while(pos != vtx);
 
     int eyes_count = potentia_eyes.size();
-    if (eyes_count > 1) {
-        int another_vtx = potentia_eyes[0];
-        for (int i = 1; i < eyes_count; ++i) {
-            int check_vtx = potentia_eyes[i];
-            if (IsNeighbor(another_vtx, check_vtx)) {
-                std::remove(std::begin(potentia_eyes),
-                                std::end(potentia_eyes), check_vtx);
-                eyes_count -= 1;
-            }
-            another_vtx = check_vtx;
+    if (eyes_count == 2) {
+        if (IsNeighbor(potentia_eyes[0], potentia_eyes[1])) {
+            eyes_count -= 1;
         }
     }
 
     return eyes_count < 2;
+}
+
+void Board::ComputationInnerRegions(const int vtx,
+                                        const int color,
+                                        const std::vector<int> &regions_next,
+                                        std::vector<bool> &inner_regions) const {
+    const auto num_vertices = GetNumVertices();
+    const auto bsize = GetBoardSize();
+    auto surround = std::vector<int>(num_vertices, kInvalid);
+
+    std::fill(std::begin(inner_regions), std::end(inner_regions), false);
+
+    for (int y = 0; y < bsize; ++y) {
+        for (int x = 0; x < bsize; ++x) {
+            surround[GetVertex(x, y)] = kEmpty;
+        }
+    }
+
+    int pos = vtx;
+    do {
+        surround[pos] = !color;
+        pos = regions_next[pos];
+    } while(pos != vtx);
+
+    auto epmty_index = std::vector<int>(num_vertices, -1);
+    auto epmty_next = std::vector<int>(num_vertices, kNullVertex);
+    auto epmty_head = ClassifyGroups(kEmpty, surround, epmty_index, epmty_next);
+
+    int cnt = epmty_head.size();
+    for (int i = 0 ; i < cnt; ++i) {
+        int v = epmty_head[i];
+        pos = v;
+        do {
+            bool success = false;
+            for (int k = 0; k < 4; ++k) {
+                const auto apos = pos + directions_[k];
+                if (surround[apos] == kInvalid) {
+                    success = true;
+                    break;
+                }
+            }
+            if (success) {
+                std::remove(std::begin(epmty_head),
+                                std::end(epmty_head), v);
+                cnt -= 1;
+                break;
+            }
+            pos = epmty_next[pos];
+        } while(pos != v);
+    }
+
+    for (int i = 0 ; i < cnt; ++i) {
+        int v = epmty_head[i];
+        pos = v;
+        do {
+            inner_regions[pos] = true;
+            pos = epmty_next[pos];
+        } while(pos != v);
+    }
 }
 
 std::vector<int> Board::ClassifyGroups(const int target,
@@ -552,12 +610,11 @@ std::vector<int> Board::ClassifyGroups(const int target,
                                            std::vector<int> &regions_index,
                                            std::vector<int> &regions_next) const {
     const auto num_vertices = GetNumVertices();
-    for (int vtx = 0; vtx < num_vertices; ++vtx) {
-        regions_index[vtx] = -1;
-        regions_next[vtx] = kNullVertex;
-    }
-
     auto bsize = GetBoardSize();
+
+    std::fill(std::begin(regions_index), std::end(regions_index), -1);
+    std::fill(std::begin(regions_next), std::end(regions_next), kNullVertex);
+
     for (int y = 0; y < bsize; ++y) {
         for (int x = 0; x < bsize; ++x) {
             const auto vtx = GetVertex(x, y);
