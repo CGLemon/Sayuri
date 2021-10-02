@@ -279,7 +279,3 @@ void Encoder::EncoderFeatures(const GameState &state,
     FillLadder(board, ladder_it);
     FillMisc(board, state.GetKomi(), misc_it);
 }
-
-
-
-

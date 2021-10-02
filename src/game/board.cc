@@ -292,10 +292,12 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
     auto regions_next = std::vector<int>(num_vertices, kNullVertex);
     auto regions_head = ClassifyGroups(kEmpty, ocupied, regions_index, regions_next);
     auto vitals = std::vector<bool>(num_vertices, false);
+
+    // TODO: Do we need to think about sucide?
     constexpr bool allow_sucide = false;
 
-    // Compute the vital regions.
-    // TODO: Do we need to Compute vital regions here? Maybe we can remove it.
+    // Compute the potential vital regions.
+    // TODO: Do we need to compute potential vital regions here?
     for (int vtx : regions_head) {
         bool success = true;
         int pos = vtx;
@@ -321,7 +323,6 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
                 success = false;
                 break;
             }
-
             pos = regions_next[pos];
         } while(pos != vtx);
 
@@ -341,7 +342,7 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
 
     int group_cnt = strings_head.size();
 
-    // Start the Benson algorithm.
+    // Start the Benson's algorithm.
     // https://senseis.xmp.net/?BensonsAlgorithm
     while(true) {
         auto change = false;
@@ -380,7 +381,7 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
             }
         }
 
-        // The algorithm is over if there is no string removed.
+        // The algorithm is over if there is no removed string.
         if (!change) break;
     }
 
@@ -414,7 +415,7 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
         } while(pos != vtx);
     }
 
-    // Re-compute the regions for scanning pass dead regions.
+    // Re-compute the regions for scanning pass-dead regions.
     regions_head = ClassifyGroups(kEmpty, ocupied, regions_index, regions_next);
 
     // Fill the pass dead regions.
@@ -450,6 +451,7 @@ bool Board::IsPassAliveString(const int vtx,
         for (int k = 0; k < 4; ++k) {
             const auto apos = directions_[k] + pos;
             if (vitals[apos]) {
+                // This region is potential vital region. Try to search it.
                 int rpos = apos;
                 bool success = true;
                 do {
@@ -457,6 +459,7 @@ bool Board::IsPassAliveString(const int vtx,
                     int state = allow_sucide == true ? features[rpos] : GetState(rpos);
                     if (state == kEmpty) {
                     for (int k = 0; k < 4; ++k) {
+                            // Check points of adjacent empty.
                             const auto aapos = directions_[k] + rpos;                         
                             if(strings_index[aapos] == my_index) {
                                 is_adjacent = true;
@@ -467,6 +470,8 @@ bool Board::IsPassAliveString(const int vtx,
                         is_adjacent = true;
                     }
                     if (!is_adjacent) {
+                        // Not every empty points are adjacent to my string. The region
+                        // is not vital.
                         success = false;
                         break;
                     }
@@ -490,6 +495,7 @@ bool Board::IsPassDeadRegion(const int vtx,
                                            const int color,
                                            std::vector<int> &features,
                                            std::vector<bool> &inner_regions) {
+        // The potential eye is possible to become the real eye in the region.
         std::array<int, 4> side_count = {0, 0, 0, 0};
 
         for (int k = 0; k < 4; ++k) {
@@ -505,7 +511,7 @@ bool Board::IsPassDeadRegion(const int vtx,
 
         for (int k = 4; k < 8; ++k) {
             const auto avtx = vertex + directions_[k];
-            if (inner_regions[avtx]) {
+            if (inner_regions[avtx]) { // The inner region corner is mine.
                 corner_count[color]++;
             } else {
                 corner_count[features[avtx]]++;
@@ -523,13 +529,18 @@ bool Board::IsPassDeadRegion(const int vtx,
         return true;
     };
 
+    // The inner regions is pass-alive string surrondded by the region which
+    // we want to search.
     auto inner_regions = std::vector<bool>(features.size(), false);
-    ComputationInnerRegions(vtx, color, regions_next, inner_regions);
 
+    // The inner regions may cause the false-eye life. The false will
+    // become the potential eye in this condition.
+    ComputationInnerRegions(vtx, color, regions_next, inner_regions);
 
     auto potentia_eyes = std::vector<int>{};
     int pos = vtx;
     do {
+        // Search all potential eyes in this region.
         if (IsPotentialEye(pos, color, features, inner_regions)) {
             potentia_eyes.emplace_back(pos);
         }
@@ -537,7 +548,10 @@ bool Board::IsPassDeadRegion(const int vtx,
     } while(pos != vtx);
 
     int eyes_count = potentia_eyes.size();
+
     if (eyes_count == 2) {
+        // It is possible to be pass-dead, if there are only two potential eyes. The
+        // case is two eyes are adjacent to each others.
         if (IsNeighbor(potentia_eyes[0], potentia_eyes[1])) {
             eyes_count -= 1;
         }
