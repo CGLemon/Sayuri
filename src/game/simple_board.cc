@@ -283,6 +283,7 @@ int SimpleBoard::ComputeReachGroup(int start_vertex, int spread_color,
 
     buf[start_vertex] = true;
     open.emplace(start_vertex);
+    ++reachable;
 
     while (!open.empty()) {
         const auto vertex = open.front();
@@ -293,7 +294,7 @@ int SimpleBoard::ComputeReachGroup(int start_vertex, int spread_color,
             const auto peek = Peek(neighbor);
 
             if (!buf[neighbor] && peek == spread_color) {
-                reachable++;
+                ++reachable;
                 buf[neighbor] = true;
                 open.emplace(neighbor);
             }
@@ -326,7 +327,7 @@ int SimpleBoard::ComputeReachColor(int color, int spread_color,
             const auto peek = Peek(vertex);
 
             if (peek == color) {
-                reachable++;
+                ++reachable;
                 buf[vertex] = true;
                 open.emplace(vertex);
             } else {
@@ -343,7 +344,7 @@ int SimpleBoard::ComputeReachColor(int color, int spread_color,
             const auto peek = Peek(neighbor);
 
             if (!buf[neighbor] && peek == spread_color) {
-                reachable++;
+                ++reachable;
                 buf[neighbor] = true;
                 open.emplace(neighbor);
             }
