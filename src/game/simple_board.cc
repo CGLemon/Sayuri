@@ -395,6 +395,36 @@ int SimpleBoard::CountPliberties(const int vtx) const {
     return (neighbours_[vtx] >> (kEmptyNeighborShift)) & kNeighborMask;
 }
 
+void SimpleBoard::FindStringSurround(const int vtx,
+                                         const int color,
+                                         std::vector<int>& lib_buf,
+                                         std::vector<int>& index_buf) const {
+    const auto set_insert = [](std::vector<int> &buf, int element){
+        auto begin = std::begin(buf);
+        auto end = std::end(buf);
+        auto res = std::find(begin, end, element);
+        if (res == end) {
+            buf.emplace_back(element);
+        }
+    };
+
+    assert(GetState(avtx) == color);
+    int next = vtx;
+
+    do {
+        for(int k = 0; k < 4; ++k) {
+            const auto avtx = next + directions_[k];
+            const auto state = GetState(avtx);
+            if (state == kEmpty) {
+                set_insert(lib_buf, avtx);
+            } else if (state == !color) {
+                set_insert(index_buf, strings_.GetParent(avtx));
+            }
+        }
+        next = strings_.GetNext(next);
+    } while (next != vtx);
+}
+
 int SimpleBoard::FindStringLiberties(const int vtx,
                                      std::vector<int>& buf) const {
     auto num_found = size_t{0};
@@ -402,7 +432,7 @@ int SimpleBoard::FindStringLiberties(const int vtx,
     do {
         for(int k = 0; k < 4; ++k) {
             const auto avtx = next + directions_[k];
-            if(GetState(avtx) == kEmpty) {
+            if (GetState(avtx) == kEmpty) {
                 auto begin = std::begin(buf);
                 auto end = std::end(buf);
                 auto res = std::find(begin, end, avtx);
@@ -512,7 +542,7 @@ LadderType SimpleBoard::PreySelections(const int prey_color,
 
     num_move += FindStringLibertiesGainingCaptures(ladder_vtx, selections);
 
-    // Must be a legal move.
+    // The moves must be the legal.
     selections.erase(
         std::remove_if(std::begin(selections), std::end(selections),
             [&](int v) { return !IsLegalMove(v, prey_color); 
@@ -856,6 +886,292 @@ bool SimpleBoard::IsSuicide(const int vtx, const int color) const {
     }
 
     return true;
+}
+
+bool SimpleBoard::IsSeki(const int vtx) const {
+    // This function is not always correct. Some cases, like Hanezeki, will be
+    // missed. You can watch the webside to get the more seki information.
+    // https://senseis.xmp.net/?Seki
+
+    int string_parent[2] = {kNullVertex, kNullVertex}; 
+
+    for (auto k = 0; k < 4; ++k) {
+        const auto avtx = vtx + directions_[k];
+        const auto ip = strings_.GetParent(avtx);
+        const auto state = state_[avtx];
+
+        if (state == kEmpty) {
+            return false;
+        }
+
+        if (string_parent[state] == kNullVertex) {
+            string_parent[state] = ip;
+        } else if (string_parent[state] != ip) {
+            // Must be only one string for each color.
+            return false;
+        }
+    }
+
+    for (auto c = 0; c < 2; ++c) {
+        const auto ip = string_parent[c];
+        if (ip == kNullVertex) {
+            // Must be two strings.
+            return false;
+        }
+
+        if (strings_.GetLiberty(ip) != 2) {
+            // Two strings must be 2 liberties.
+            return false;
+        }
+    }
+
+    auto lib_buf = std::vector<int>{};
+    auto black_idx_buf = std::vector<int>{};
+    auto white_idx_buf = std::vector<int>{};
+
+    FindStringSurround(string_parent[kBlack], kBlack, lib_buf, black_idx_buf);
+    FindStringSurround(string_parent[kWhite], kWhite, lib_buf, white_idx_buf);
+ 
+    assert(lib_buf.size() == 2 || lib_buf.size() == 3);
+
+    if (lib_buf.size() == 3) {
+        // We simply think that it is seki in this case. It includes false-seki. The false-seki
+        // string is not alive, but in the most case, we don't need to move the false-seki point
+        // to kill it.
+        //
+        // .x.ox..
+        // oxoox..
+        // .ooxx..
+        // ooxx...
+        // xxx....
+        return true;
+    }
+
+    auto inner_color = kInvalid;
+    if (black_idx_buf.size() == 1) {
+        inner_color = kBlack;
+    } else if (white_idx_buf.size() == 1) {
+        inner_color = kWhite;
+    }
+
+    // The inner mean the potential seki string surrounded by the other string. The
+    // black is inner color in the above case.
+    //
+    // .x.ox..
+    // oxoox..
+    // oooxx..
+    // xxxx...
+    // .......
+
+
+    if (inner_color == kInvalid) {
+        // It is the simple seki (no eyes) case.
+        //
+        // x.ox...
+        // x.ox...
+        // xxox...
+        // ooxx...
+        // .oo....
+        return true;
+    }
+
+    // TODO: How about the seki with double-ko case? We should conside it.
+    // The others are seki with partly filled eye space case.
+
+    auto eye_next = std::vector<int>(num_vertices_, kNullVertex);
+    auto eye_size = 1;
+
+    auto next_pos = string_parent[inner_color];
+    int pos;
+
+    // Mark the eye region as a string.
+    do {
+        pos = next_pos;
+        next_pos = strings_.GetNext(next_pos);
+
+        eye_next[pos] = next_pos;
+        ++eye_size;
+    } while (next_pos != string_parent[inner_color]);
+
+    eye_next[pos] = vtx;
+    eye_next[vtx] = next_pos;
+
+    return !IsKillableSekiEyeShape(vtx, eye_size, eye_next);
+}
+
+bool SimpleBoard::IsBoundary(const int vtx) const {
+    for (int k = 0; k < 4; ++k) {
+        if (state_[vtx + directions_[k]] == kInvalid) return true;
+    }
+    return false;
+}
+
+bool SimpleBoard::IsKillableSekiEyeShape(const int vtx,
+                                             const int eye_size,
+                                             const std::vector<int> &eye_next) const {
+    if (eye_size <= 3) {
+        // It always died.
+        return true;
+    } else if (eye_size >= 7) {
+        // We simply think that it is enogh space to live (include seki);
+        return false;
+    }
+
+    auto eye_region = std::vector<bool>(num_vertices_, false);
+    int boundary_cnt = 0;
+    int pos = vtx;
+
+    // Mark the eye shape region.
+    do {
+        eye_region[pos] = true;
+        if (IsBoundary(pos)) {
+            ++boundary_cnt;
+        }
+        pos = eye_next[pos];
+    } while (pos != vtx);
+
+    auto nakade_vtx = std::vector<int>{};
+    auto potential_eyes = std::vector<std::vector<int>>{};
+    pos = vtx;
+
+    // Mark the nakade moves and its potential eyes.
+    do {
+        int cnt = 0;
+        auto p_eyes = std::vector<int>{};
+
+        for (int k = 0; k < 8; ++k) {
+            const auto apos = pos + directions_[k];
+            if (eye_region[apos]) {
+                ++cnt;
+                if (k >= 4) {
+                    // The potential eyes are in the diagonal.
+                    p_eyes.emplace_back(apos);
+                }
+            }
+        }
+
+        // Nakade move influences all empty point, try to avoid the points to become
+        // the eyes.
+        if (cnt+1 == eye_size && !p_eyes.empty()) {
+            nakade_vtx.emplace_back(pos);
+            potential_eyes.emplace_back(p_eyes);
+        }
+
+        pos = eye_next[pos];
+    } while (pos != vtx);
+
+    const int nakade_cnt = nakade_vtx.size();
+    if (nakade_cnt == 0) {
+        // No nakade move. It is alive.
+        return false;
+    }
+
+    for (const auto &e: potential_eyes) {
+        // No potential eyes. It died.
+        if (e.empty()) return true;
+    }
+
+    const auto GetEmptySideCount = [this](const int eye_vtx,
+                                              std::vector<bool> &eye_region) {
+        int side_cnt = 0;
+        for (int k = 0; k < 4; ++k) {
+            if (eye_region[eye_vtx + directions_[k]])
+                ++side_cnt;
+        }
+        return side_cnt;
+    };
+
+    // Possible eye shape is here: https://senseis.xmp.net/?EyeShape
+    if (eye_size == 4) {
+        assert(nakade_cnt == 1);
+        // Only bent four, Dogleg four and Squared four cases are here.
+
+        if (boundary_cnt == 4) {
+            // Bent four in the corner. It died.
+            //
+            // ...ox..
+            // .ooox..
+            // ooxxx..
+            // xxx....
+            // .......
+
+            return true;
+        }
+
+        const auto eye_cnt = potential_eyes[0].size();
+        const auto eye_vtx = potential_eyes[0][0];
+        if (eye_cnt == 1 && GetEmptySideCount(eye_vtx, eye_region) == 2) {
+            // Squared four. Obviously It died.
+            //
+            // ..ox...
+            // ..ox...
+            // ooox...
+            // xxxx...
+            // .......
+
+            return true;
+        }
+
+        // It is Dogleg four case and is also killable eye shape. But it doesn't exsit.
+        // We donl't need to conside it.
+        //
+        // x..xo..
+        // ..xxo..
+        // xxxoo..
+        // oooo...
+
+        // Other bent four and Dogleg four are always alive.
+    } else if (eye_size == 5) {
+        // Should notice that crossed five case is not here.
+
+        assert(nakade_cnt == 1);
+        const auto eye_cnt = potential_eyes[0].size();
+        const auto eye_vtx = potential_eyes[0][0];
+
+        if (eye_cnt == 1 && GetEmptySideCount(eye_vtx, eye_region) == 2) {
+            // Bulky Five. It died.
+            //
+            // ...ox..
+            // ..oox..
+            // oooxx..
+            // xxxx...
+            // .......
+
+            return true;
+        }
+    } else if (eye_size == 6) {
+        assert(nakade_cnt == 1 || nakade_cnt == 2);
+        if (nakade_cnt == 1) {
+            const auto eye_cnt = potential_eyes[0].size();
+            const auto eye_vtx = potential_eyes[0][0];
+
+            if (eye_cnt == 1 && GetEmptySideCount(eye_vtx, eye_region) == 2) {
+                // Rabbitty six. It died.
+                //
+                // ..oox..
+                // ...ox..
+                // o.oox..
+                // oooxx..
+                // xxxx...
+                // .......
+
+                return true;
+            }
+        } else if (nakade_cnt == 2) {
+            if (boundary_cnt == 4) {
+                // Rectangular six in the corner. It died.
+                //
+                // ...ox..
+                // ...ox..
+                // oooox..
+                // xxxxx..
+                // .......
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 void SimpleBoard::SetToMove(int color) {

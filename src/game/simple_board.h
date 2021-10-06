@@ -76,6 +76,9 @@ public:
     // Reture true if the point is eye shape.
     bool IsSimpleEye(const int vtx, const int color) const;
 
+    // Reture true if the point is seki.
+    bool IsSeki(const int vtx) const;
+
     // Play the move assume the move is legal.
     void PlayMoveAssumeLegal(const int vtx, const int color);
 
@@ -168,6 +171,16 @@ protected:
 
     // Compute the empty count of the point neighbor.
     int CountPliberties(const int vtx) const;
+
+    bool IsBoundary(const int vtx) const;
+    bool IsKillableSekiEyeShape(const int vtx,
+                                    const int eye_size,
+                                    const std::vector<int> &eye_next) const;
+
+    void FindStringSurround(const int vtx,
+                                const int color,
+                                std::vector<int>& lib_buf,
+                                std::vector<int>& index_buf) const;
 
     // Find the liberties of string.
     int FindStringLiberties(const int vtx, std::vector<int>& buf) const;

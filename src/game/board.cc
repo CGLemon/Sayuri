@@ -276,6 +276,7 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
     const auto bsize = GetBoardSize();
     auto ocupied = std::vector<int>(num_vertices, kInvalid);
 
+    // Mark the color.
     for (int y = 0; y < bsize; ++y) {
         for (int x = 0; x < bsize; ++x) {
             const auto vtx = GetVertex(x, y);
