@@ -13,9 +13,9 @@ float Board::ComputeSimpleFinalScore(float komi) const {
     return static_cast<float>(ComputeScoreOnBoard(0)) - komi;
 }
 
-void Board::ComputeSimpleOwnership(std::vector<int> &buffer) const {
-    if (buffer.size() != (size_t) num_intersections_) {
-        buffer.resize(num_intersections_);
+void Board::ComputeSimpleOwnership(std::vector<int> &result) const {
+    if (result.size() != (size_t) num_intersections_) {
+        result.resize(num_intersections_);
     }
     auto black = std::vector<bool>(num_intersections_, false);
     auto white = std::vector<bool>(num_intersections_, false);
@@ -33,73 +33,32 @@ void Board::ComputeSimpleOwnership(std::vector<int> &buffer) const {
             const auto vtx = GetVertex(x, y);
 
             if (black[vtx] && !white[vtx]) {
-                buffer[idx] = kBlack;  
+                result[idx] = kBlack;  
             } else if (white[vtx] && !black[vtx]) {
-                buffer[idx] = kWhite;
+                result[idx] = kWhite;
             } else {
                 //The point belongs to both.
-                buffer[idx] = kEmpty;
+                result[idx] = kEmpty;
             }
        }
     }
 }
 
-void Board::ComputeRemovedOneLibertyOwnership(std::vector<int> &buffer) const {
-    if (buffer.size() != (size_t) num_intersections_) {
-        buffer.resize(num_intersections_);
-    }
-    auto black = std::vector<bool>(num_intersections_, false);
-    auto white = std::vector<bool>(num_intersections_, false);
+void Board::ComputePassAliveOwnership(std::vector<int> &result) const {
 
-    auto pstate = state_;
-    auto PeekState = [&](int vtx) -> int {
-        return pstate[vtx];
-    };
-
-    for (int y = 0; y < board_size_; ++y) {
-        for (int x = 0; x < board_size_; ++x) {
-            const auto vtx = GetVertex(x, y);
-            if (GetLiberties(vtx) == 1) {
-                pstate[vtx] = kEmpty;
-            }
-        }
-    }
-
-    ComputeReachColor(kBlack, kEmpty, black, PeekState);
-    ComputeReachColor(kWhite, kEmpty, white, PeekState);
-
-    for (int y = 0; y < board_size_; ++y) {
-        for (int x = 0; x < board_size_; ++x) {
-            const auto idx = GetIndex(x, y);
-            const auto vtx = GetVertex(x, y);
-
-            if (black[vtx] && !white[vtx]) {
-                buffer[idx] = kBlack;  
-            } else if (white[vtx] && !black[vtx]) {
-                buffer[idx] = kWhite;
-            } else {
-                //The point belongs to both.
-                buffer[idx] = kEmpty;
-            }
-       }
-    }
-}
-
-std::vector<int> Board::GetPassAliveOwnership() const {
-    auto res = std::vector<int>(num_intersections_, kInvalid);
-
-    ComputeRemovedOneLibertyOwnership(res);
+    ComputeSimpleOwnership(result);
 
     for (int c = 0; c < 2; ++c) {
-        auto pass_alive = GetPassAlive(c);
+
+        auto pass_alive = std::vector<bool>(num_intersections_, false);
+        ComputePassAlive(pass_alive, c, true, true);
+
         for (int i = 0; i < num_intersections_; ++i) {
             if (pass_alive[i]) {
-                res[i] = c;
+                result[i] = c;
             }
         }
     }
-
-    return res;
 }
 
 bool Board::ValidHandicap(int handicap) {
@@ -179,7 +138,7 @@ bool Board::SetFreeHandicap(std::vector<int> movelist) {
 }
 
 std::vector<LadderType> Board::GetLadderPlane() const {
-    auto res = std::vector<LadderType>(GetNumIntersections(), LadderType::kNotLadder);
+    auto result = std::vector<LadderType>(GetNumIntersections(), LadderType::kNotLadder);
     auto ladder = std::vector<int>{};
     auto not_ladder = std::vector<int>{};
 
@@ -222,10 +181,10 @@ std::vector<LadderType> Board::GetLadderPlane() const {
             assert(libs == 1 || libs == 2);
             if (libs == 1) {
                 // The ladder string is already death.
-                res[idx] = LadderType::kLadderDeath;
+                result[idx] = LadderType::kLadderDeath;
             } else {
                 // The ladder string has a chance to escape.
-                res[idx] = LadderType::kLadderEscapable;
+                result[idx] = LadderType::kLadderEscapable;
             }
 
             if (first_found) {
@@ -242,17 +201,17 @@ std::vector<LadderType> Board::GetLadderPlane() const {
                     const auto aidx = GetIndex(ax, ay); 
                     if (libs == 1) {
                         // Someone can capture this ladder string.
-                        res[aidx] = LadderType::kLadderTake;
+                        result[aidx] = LadderType::kLadderTake;
                     } else {
                         // Someone can atari this ladder string.
-                        res[aidx] = LadderType::kLadderAtari;
+                        result[aidx] = LadderType::kLadderAtari;
                     }
                 }
             }
         }
     }
 
-    return res;
+    return result;
 }
 
 std::vector<bool> Board::GetOcupiedPlane(const int color) const {
@@ -271,7 +230,35 @@ std::vector<bool> Board::GetOcupiedPlane(const int color) const {
     return res;
 }
 
-std::vector<bool> Board::GetPassAlive(const int color) const {
+void Board::ComputeSekiPoints(std::vector<bool> &result) const {
+    for (int y = 0; y < board_size_; ++y) {
+        for (int x = 0; x < board_size_; ++x) {
+            const auto idx = GetIndex(x, y);
+            const auto vtx = GetVertex(x, y);
+
+            if (IsSeki(vtx)) {
+                result[idx] = true;
+            }
+        }
+    }
+}
+
+void Board::ComputeSafeArea(std::vector<bool> &result) const {
+    if (result.size() != (size_t) num_intersections_) {
+        result.resize(num_intersections_);
+    }
+
+    std::fill(std::begin(result), std::end(result), false);
+
+    ComputePassAlive(result, kBlack, true, true);
+    ComputePassAlive(result, kWhite, true, true);
+    ComputeSekiPoints(result);
+}
+
+void Board::ComputePassAlive(std::vector<bool> &result,
+                                 const int color,
+                                 bool fill_vitals,
+                                 bool fill_pass_dead) const {
     const auto num_vertices = GetNumVertices();
     const auto bsize = GetBoardSize();
     auto ocupied = std::vector<int>(num_vertices, kInvalid);
@@ -386,8 +373,6 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
         if (!change) break;
     }
 
-    auto result = std::vector<bool>(GetNumIntersections(), false);
-
     // Fill the pass alive groups.
     for (int i = 0; i < group_cnt; ++i) {
         const auto vtx = strings_head[i];
@@ -402,39 +387,41 @@ std::vector<bool> Board::GetPassAlive(const int color) const {
     }
 
     // Fill the pass alive vitals.
-    for (int vtx : regions_head) {
-        int pos = vtx;
-        do {
-            if (vitals[pos]) {
-                auto x = GetX(pos);
-                auto y = GetY(pos);
-                auto index = GetIndex(x, y);
-                result[index] = true;
-                ocupied[pos] = color;
-            }
-            pos = regions_next[pos];
-        } while(pos != vtx);
+    if (fill_vitals) {
+        for (int vtx : regions_head) {
+            int pos = vtx;
+            do {
+                if (vitals[pos]) {
+                    auto x = GetX(pos);
+                    auto y = GetY(pos);
+                    auto index = GetIndex(x, y);
+                    result[index] = true;
+                    ocupied[pos] = color;
+                }
+                pos = regions_next[pos];
+            } while(pos != vtx);
+        }
     }
 
-    // Re-compute the regions for scanning pass-dead regions.
-    regions_head = ClassifyGroups(kEmpty, ocupied, regions_index, regions_next);
+    if (fill_pass_dead) {
+        // Re-compute the regions for scanning pass-dead regions.
+        regions_head = ClassifyGroups(kEmpty, ocupied, regions_index, regions_next);
 
-    // Fill the pass dead regions.
-    for (int vtx : regions_head) {
-        int pos = vtx;
-        bool pass_dead = IsPassDeadRegion(pos, !color, ocupied, regions_next);
-        do {
-            if (pass_dead) {
-                auto x = GetX(pos);
-                auto y = GetY(pos);
-                auto index = GetIndex(x, y);
-                result[index] = true;
-            }
-            pos = regions_next[pos];
-        } while(pos != vtx);
+        // Fill the pass dead regions.
+        for (int vtx : regions_head) {
+            int pos = vtx;
+            bool pass_dead = IsPassDeadRegion(pos, !color, ocupied, regions_next);
+            do {
+                if (pass_dead) {
+                    auto x = GetX(pos);
+                    auto y = GetY(pos);
+                    auto index = GetIndex(x, y);
+                    result[index] = true;
+                }
+                pos = regions_next[pos];
+            } while(pos != vtx);
+        }
     }
-
-    return result;
 }
 
 bool Board::IsPassAliveString(const int vtx,

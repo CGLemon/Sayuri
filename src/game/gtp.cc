@@ -153,38 +153,6 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             agent_->GetState() = Sgf::Get().FormFile(filename, movenum);
             out << GTPSuccess("");
         }
-
-        agent_->GetState().ShowBoard();
-
-        auto b_pass_alive = agent_->GetState().board_.GetPassAlive(kBlack);
-        auto w_pass_alive = agent_->GetState().board_.GetPassAlive(kWhite);
-        auto bsize = agent_->GetState().GetBoardSize();
-        for (auto y = 0; y < bsize; ++y) {
-            for (auto x = 0; x < bsize; ++x) {
-                auto idx = agent_->GetState().GetIndex(x,y);
-                if (b_pass_alive[idx]) {
-                    printf("x ");
-                } else {
-                    printf(". ");
-                }
-            }
-            printf("\n");
-        }
-        printf("\n");
-
-        for (auto y = 0; y < bsize; ++y) {
-            for (auto x = 0; x < bsize; ++x) {
-                auto idx = agent_->GetState().GetIndex(x,y);
-                if (w_pass_alive[idx]) {
-                    printf("o ");
-                } else {
-                    printf(". ");
-                }
-            }
-            printf("\n");
-        }
-        printf("\n");
-
     } else if (const auto res = parser.Find("printsgf", 0)) {
         auto filename = std::string{};
         if (const auto input = parser.GetCommand(1)) {

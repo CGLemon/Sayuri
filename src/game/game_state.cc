@@ -354,7 +354,7 @@ std::vector<int> GameState::PlaceFreeHandicap(int handicap) {
 std::vector<int> GameState::GetOwnership() const {
     auto res = std::vector<int>(GetNumIntersections(), kInvalid);
 
-    board_.ComputeSimpleOwnership(res);
+    board_.ComputePassAliveOwnership(res);
 
     return res;
 }
@@ -367,11 +367,20 @@ void GameState::FillRandomMove() {
     const int rand = Random<RandomType::kXoroShiro128Plus>::Get().Generate() % empty_cnt;
     int select_move = kPass;
 
+    auto safe_area = std::vector<bool>(GetNumIntersections(), false);
+    board_.ComputeSafeArea(safe_area);
+
     for (int i = 0; i < empty_cnt; ++i) {
         const auto rand_pick = (rand + i) % empty_cnt;
         const auto vtx = board_.GetEmpty(rand_pick);
 
         if (!IsLegalMove(vtx, color)) {
+            continue;
+        }
+        auto x = GetX(vtx);
+        auto y = GetY(vtx);
+
+        if (safe_area[GetIndex(x, y)]) {
             continue;
         }
 
@@ -395,16 +404,16 @@ void GameState::FillRandomMove() {
             continue;
         }
 
-        if (board_.IsSimpleEye(vtx, color) &&
-                !board_.IsCaptureMove(vtx, color) &&
-                !board_.IsEscapeMove(vtx, color)) {
+        auto x = GetX(vtx);
+        auto y = GetY(vtx);
+
+        if (safe_area[GetIndex(x, y)]) {
             continue;
         }
 
-        // TODO: check the seki move.
-        auto fork_board = board_;
-        fork_board.PlayMoveAssumeLegal(vtx, color);
-        if (fork_board.GetLiberties(vtx) == 1){
+        if (board_.IsSimpleEye(vtx, color) &&
+                !board_.IsCaptureMove(vtx, color) &&
+                !board_.IsEscapeMove(vtx, color)) {
             continue;
         }
 

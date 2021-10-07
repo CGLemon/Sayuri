@@ -894,6 +894,10 @@ bool SimpleBoard::IsSeki(const int vtx) const {
     // missed. You can watch the webside to get the more seki information.
     // https://senseis.xmp.net/?Seki
 
+    if (state_[vtx] != kEmpty) {
+        return false;
+    }
+
     int string_parent[2] = {kNullVertex, kNullVertex}; 
 
     for (auto k = 0; k < 4; ++k) {
@@ -905,11 +909,13 @@ bool SimpleBoard::IsSeki(const int vtx) const {
             return false;
         }
 
-        if (string_parent[state] == kNullVertex) {
-            string_parent[state] = ip;
-        } else if (string_parent[state] != ip) {
-            // Must be only one string for each color.
-            return false;
+        if (state != kInvalid) {
+            if (string_parent[state] == kNullVertex) {
+                string_parent[state] = ip;
+            } else if (string_parent[state] != ip) {
+                // Must be only one string for each color.
+                return false;
+            }
         }
     }
 

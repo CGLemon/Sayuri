@@ -13,11 +13,9 @@ public:
     int ComputeScoreOnBoard(int black_bonus) const;
 
     // Compute ownership by Tromp Taylor
-    void ComputeSimpleOwnership(std::vector<int> &buffer) const;
+    void ComputeSimpleOwnership(std::vector<int> &result) const;
 
-    void ComputeRemovedOneLibertyOwnership(std::vector<int> &buffer) const; // experiment function
-
-    std::vector<int> GetPassAliveOwnership() const; // experiment function
+    void ComputePassAliveOwnership(std::vector<int> &result) const;
 
     bool SetFixdHandicap(int handicap);
 
@@ -27,7 +25,14 @@ public:
 
     std::vector<bool> GetOcupiedPlane(const int color) const;
 
-    std::vector<bool> GetPassAlive(const int color) const;
+    void ComputePassAlive(std::vector<bool> &result,
+                              const int color,
+                              bool fill_vitals,
+                              bool fill_pass_dead) const;
+
+    void ComputeSafeArea(std::vector<bool> &result) const;
+
+    void ComputeSekiPoints(std::vector<bool> &result) const;
 
 private:
     bool ValidHandicap(int handicap);
