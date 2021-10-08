@@ -217,7 +217,7 @@ void Encoder::FillLiberties(std::shared_ptr<const Board> board,
 void Encoder::FillLadder(std::shared_ptr<const Board> board,
                          std::vector<float>::iterator ladder_it) const {
     auto num_intersections = board->GetNumIntersections();
-    auto ladders = board->GetLadderPlane();
+    auto ladders = board->GetLadderMap();
 
     for (int index = 0; index < num_intersections; ++index) {
         auto ladder = ladders[index];

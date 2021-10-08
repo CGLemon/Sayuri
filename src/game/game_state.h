@@ -56,6 +56,8 @@ public:
     // Compute final score by Tromp Taylor
     float GetFinalScore(float bonus = 0) const;
 
+    std::vector<bool> GetStrictSafeArea() const;
+
     bool IsGameOver() const;
     bool IsSuperko() const;
     bool IsLegalMove(const int vertex) const;

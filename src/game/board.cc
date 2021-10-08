@@ -47,10 +47,11 @@ void Board::ComputeSimpleOwnership(std::vector<int> &result) const {
 void Board::ComputePassAliveOwnership(std::vector<int> &result) const {
 
     ComputeSimpleOwnership(result);
+    auto pass_alive = std::vector<bool>(num_intersections_);
 
     for (int c = 0; c < 2; ++c) {
 
-        auto pass_alive = std::vector<bool>(num_intersections_, false);
+        std::fill(std::begin(pass_alive), std::end(pass_alive), false);
         ComputePassAlive(pass_alive, c, true, true);
 
         for (int i = 0; i < num_intersections_; ++i) {
@@ -137,7 +138,7 @@ bool Board::SetFreeHandicap(std::vector<int> movelist) {
     return true;
 }
 
-std::vector<LadderType> Board::GetLadderPlane() const {
+std::vector<LadderType> Board::GetLadderMap() const {
     auto result = std::vector<LadderType>(GetNumIntersections(), LadderType::kNotLadder);
     auto ladder = std::vector<int>{};
     auto not_ladder = std::vector<int>{};
@@ -214,22 +215,6 @@ std::vector<LadderType> Board::GetLadderPlane() const {
     return result;
 }
 
-std::vector<bool> Board::GetOcupiedPlane(const int color) const {
-    auto res = std::vector<bool>(GetNumIntersections(), false);
-    auto bsize = GetBoardSize();
-    for (int y = 0; y < bsize; ++y) {
-        for (int x = 0; x < bsize; ++x) {
-            const auto state = GetState(x, y);
-            const auto index = GetIndex(x, y);
-            if (state == color) {
-                res[index] = true;
-            }
-        }
-    }
-
-    return res;
-}
-
 void Board::ComputeSekiPoints(std::vector<bool> &result) const {
     for (int y = 0; y < board_size_; ++y) {
         for (int x = 0; x < board_size_; ++x) {
@@ -243,7 +228,7 @@ void Board::ComputeSekiPoints(std::vector<bool> &result) const {
     }
 }
 
-void Board::ComputeSafeArea(std::vector<bool> &result) const {
+void Board::ComputeSafeArea(std::vector<bool> &result, bool mark_seki) const {
     if (result.size() != (size_t) num_intersections_) {
         result.resize(num_intersections_);
     }
@@ -252,13 +237,15 @@ void Board::ComputeSafeArea(std::vector<bool> &result) const {
 
     ComputePassAlive(result, kBlack, true, true);
     ComputePassAlive(result, kWhite, true, true);
-    ComputeSekiPoints(result);
+    if (mark_seki) {
+        ComputeSekiPoints(result);
+    }
 }
 
 void Board::ComputePassAlive(std::vector<bool> &result,
                                  const int color,
-                                 bool fill_vitals,
-                                 bool fill_pass_dead) const {
+                                 bool mark_vitals,
+                                 bool mark_pass_dead) const {
     const auto num_vertices = GetNumVertices();
     const auto bsize = GetBoardSize();
     auto ocupied = std::vector<int>(num_vertices, kInvalid);
@@ -281,7 +268,7 @@ void Board::ComputePassAlive(std::vector<bool> &result,
     auto regions_head = ClassifyGroups(kEmpty, ocupied, regions_index, regions_next);
     auto vitals = std::vector<bool>(num_vertices, false);
 
-    // TODO: Do we need to think about sucide?
+    // TODO: Do we need to think about sucide move?
     constexpr bool allow_sucide = false;
 
     // Compute the potential vital regions.
@@ -387,7 +374,7 @@ void Board::ComputePassAlive(std::vector<bool> &result,
     }
 
     // Fill the pass alive vitals.
-    if (fill_vitals) {
+    if (mark_vitals) {
         for (int vtx : regions_head) {
             int pos = vtx;
             do {
@@ -403,7 +390,7 @@ void Board::ComputePassAlive(std::vector<bool> &result,
         }
     }
 
-    if (fill_pass_dead) {
+    if (mark_pass_dead) {
         // Re-compute the regions for scanning pass-dead regions.
         regions_head = ClassifyGroups(kEmpty, ocupied, regions_index, regions_next);
 

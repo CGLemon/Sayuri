@@ -368,7 +368,7 @@ void GameState::FillRandomMove() {
     int select_move = kPass;
 
     auto safe_area = std::vector<bool>(GetNumIntersections(), false);
-    board_.ComputeSafeArea(safe_area);
+    board_.ComputeSafeArea(safe_area, true);
 
     for (int i = 0; i < empty_cnt; ++i) {
         const auto rand_pick = (rand + i) % empty_cnt;
@@ -662,4 +662,10 @@ const std::vector<std::shared_ptr<const Board>>& GameState::GetHistory() const {
 
 std::vector<int> GameState::GetStringList(const int vtx) const {
     return board_.GetStringList(vtx);
+}
+
+std::vector<bool> GameState::GetStrictSafeArea() const {
+    auto result = std::vector<bool>(GetNumIntersections(), false);
+    board_.ComputeSafeArea(result, false);
+    return result;
 }

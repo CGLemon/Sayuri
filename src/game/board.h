@@ -7,12 +7,12 @@
 
 class Board : public SimpleBoard {
 public:
-    // Compute final score by Tromp Taylor
+    // Compute final score by Tromp Taylor rule.
     float ComputeSimpleFinalScore(float komi) const;
 
     int ComputeScoreOnBoard(int black_bonus) const;
 
-    // Compute ownership by Tromp Taylor
+    // Compute ownership by Tromp Taylor rule.
     void ComputeSimpleOwnership(std::vector<int> &result) const;
 
     void ComputePassAliveOwnership(std::vector<int> &result) const;
@@ -21,16 +21,19 @@ public:
 
     bool SetFreeHandicap(std::vector<int> movelist);
 
-    std::vector<LadderType> GetLadderPlane() const;
+    std::vector<LadderType> GetLadderMap() const;
 
-    std::vector<bool> GetOcupiedPlane(const int color) const;
-
+    // Compute all pass-alive string.
+    // Mark all vital regions of pass-alive string if mark_vitals is true.
+    // Mark all pass-dead regions if mark_pass_dead is true.
     void ComputePassAlive(std::vector<bool> &result,
                               const int color,
-                              bool fill_vitals,
-                              bool fill_pass_dead) const;
+                              bool mark_vitals,
+                              bool mark_pass_dead) const;
 
-    void ComputeSafeArea(std::vector<bool> &result) const;
+    // Compute all safe area which both players don't need to play move in.
+    // Mark all seki points if mark_seki is true.
+    void ComputeSafeArea(std::vector<bool> &result, bool mark_seki) const;
 
     void ComputeSekiPoints(std::vector<bool> &result) const;
 

@@ -86,6 +86,8 @@ bool Node::ExpandChildren(Network &network,
     auto allow_pass = true;
     auto legal_accumulate = 0.0f;
 
+    const auto safe_area = state.GetStrictSafeArea();
+
     // Third, remove the illegl moves or some bad move.
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto x = idx % board_size;
@@ -94,6 +96,10 @@ bool Node::ExpandChildren(Network &network,
         const auto policy = raw_netlist.probabilities[idx];
 
         if (!state.IsLegalMove(vtx, color_)) {
+            continue;
+        }
+
+        if (safe_area[idx]) {
             continue;
         }
 
