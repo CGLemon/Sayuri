@@ -29,6 +29,28 @@ void GameState::PlayMoveFast(const int vtx, const int color) {
     }
 }
 
+bool GameState::AppendMove(const int vtx, const int color) {
+    if (vtx == kResign || vtx == kPass) {
+        return false;
+    }
+
+    if (IsLegalMove(vtx, color)) {
+        board_.PlayMoveAssumeLegal(vtx, color);
+        board_.SetToMove(kBlack);
+        board_.SetLastMove(kNullVertex);
+        board_.SetMoveNumber(0);
+
+        ko_hash_history_.clear();
+        game_history_.clear();
+
+        ko_hash_history_.emplace_back(GetKoHash());
+        game_history_.emplace_back(std::make_shared<Board>(board_));
+
+        return true;
+    }
+    return false;
+}
+
 bool GameState::PlayMove(const int vtx) {
     return PlayMove(vtx, GetToMove());
 }
@@ -653,7 +675,7 @@ int GameState::GetLiberties(const int vtx) const {
 
 std::shared_ptr<const Board> GameState::GetPastBoard(unsigned int p) const {
     assert(p <= (unsigned)GetMoveNumber());
-    return game_history_[(unsigned)GetMoveNumber() - p];  
+    return game_history_[(unsigned)GetMoveNumber() - p];
 }
 
 const std::vector<std::shared_ptr<const Board>>& GameState::GetHistory() const {

@@ -16,6 +16,8 @@ public:
     // GTP interface to clear the board.
     void ClearBoard();
 
+    bool AppendMove(const int vtx, const int color);
+
     bool PlayMove(const int vtx);
 
     bool PlayMove(const int vtx, const int color);

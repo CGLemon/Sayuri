@@ -132,14 +132,14 @@ void SgfNode::PopulateState(GameState currstate) {
     for (auto pit = prop_pair_ab.first; pit != prop_pair_ab.second; ++pit) {
         const auto move = pit->second;
         const auto vtx = GetVertexFromString(move);
-        GetState().PlayMove(vtx, kBlack);
+        GetState().AppendMove(vtx, kBlack);
     }
 
     const auto& prop_pair_aw = properties_.equal_range("AW");
     for (auto pit = prop_pair_aw.first; pit != prop_pair_aw.second; ++pit) {
         const auto move = pit->second;
         const auto vtx = GetVertexFromString(move);
-        GetState().PlayMove(vtx, kWhite);
+        GetState().AppendMove(vtx, kWhite);
     }
 
     // result
