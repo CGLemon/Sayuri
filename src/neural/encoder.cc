@@ -173,20 +173,17 @@ void Encoder::FillKoMove(std::shared_ptr<const Board> board,
     ko_it[index] = static_cast<float>(true);
 }
 
-void Encoder::FillCaptureMove(std::shared_ptr<const Board> board,
-                              std::vector<float>::iterator capture_it) const {
-    auto boardsize = board->GetBoardSize();
+void Encoder::FillSafeArea(std::shared_ptr<const Board> board,
+                           std::vector<float>::iterator safearea_it) const {
     auto num_intersections = board->GetNumIntersections();
-    auto color = board->GetToMove();
+
+    auto safe_area = std::vector<bool>(num_intersections, false);
+    board->ComputePassAlive(safe_area, kBlack, true, true);
+    board->ComputePassAlive(safe_area, kWhite, true, true);
 
     for (int index = 0; index < num_intersections; ++index) {
-        auto x = index % boardsize;
-        auto y = index / boardsize;
-        auto vtx = board->GetVertex(x, y);
-        auto state = board->GetState(vtx);
-
-        if (board->IsCaptureMove(vtx, color) && state == kEmpty) {
-            capture_it[index] = static_cast<float>(true);
+        if (safe_area[index]) {
+            safearea_it[index] = static_cast<float>(true);
         }
     }
 }
@@ -268,13 +265,13 @@ void Encoder::EncoderFeatures(const GameState &state,
     auto num_intersections = board->GetNumIntersections();
 
     auto ko_it = it;
-    auto capture_it = it + 1 * num_intersections;
+    auto safearea_it = it + 1 * num_intersections;
     auto liberties_it = it + 2 * num_intersections;
     auto ladder_it = it + 6 * num_intersections;
     auto misc_it = it + 10 * num_intersections;
 
     FillKoMove(board, ko_it);
-    FillCaptureMove(board, capture_it);
+    FillSafeArea(board, safearea_it);
     FillLiberties(board, liberties_it);
     FillLadder(board, ladder_it);
     FillMisc(board, state.GetKomi(), misc_it);

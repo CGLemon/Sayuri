@@ -10,7 +10,8 @@ class Encoder {
 public:
     static constexpr int kPlaneChannels = kInputChannels;
     static constexpr int kHistoryMove = 8;
-    static constexpr int kNumFeatures = 12;
+    static constexpr int kNumFeatures = 14;
+    static_assert(kPlaneChannels == 3*kHistoryMove + kNumFeatures, "");
 
     static Encoder& Get();
 
@@ -37,8 +38,8 @@ private:
     void FillKoMove(std::shared_ptr<const Board> board,
                     std::vector<float>::iterator ko_it) const;
 
-    void FillCaptureMove(std::shared_ptr<const Board> board,
-                         std::vector<float>::iterator capture_it) const;
+    void FillSafeArea(std::shared_ptr<const Board> board,
+                      std::vector<float>::iterator safearea_it) const;
 
     void FillLiberties(std::shared_ptr<const Board> board,
                        std::vector<float>::iterator liberties_it) const;
