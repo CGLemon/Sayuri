@@ -9,9 +9,9 @@
 class Encoder {
 public:
     static constexpr int kPlaneChannels = kInputChannels;
-    static constexpr int kHistoryMove = 8;
+    static constexpr int kHistoryMoves = 8;
     static constexpr int kNumFeatures = 14;
-    static_assert(kPlaneChannels == 3*kHistoryMove + kNumFeatures, "");
+    static_assert(kPlaneChannels == 3*kHistoryMoves + kNumFeatures, "");
 
     static Encoder& Get();
 

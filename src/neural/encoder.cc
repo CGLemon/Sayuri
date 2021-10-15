@@ -31,8 +31,8 @@ std::vector<float> Encoder::GetPlanes(const GameState &state, int symmetry) cons
     auto planes = std::vector<float>(plane_size);
     auto it = std::begin(planes);
 
-    EncoderHistoryMove(state, kHistoryMove, it);
-    it += kHistoryMove * 3 * num_intersections;
+    EncoderHistoryMove(state, kHistoryMoves, it);
+    it += kHistoryMoves * 3 * num_intersections;
 
     EncoderFeatures(state, it);
     it += kNumFeatures * num_intersections;
