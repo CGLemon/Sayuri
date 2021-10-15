@@ -24,30 +24,30 @@ public:
 private:
     void SymmetryPlanes(const GameState &state, std::vector<float> &planes, int symmetry) const;
 
-    void FillColorStones(std::shared_ptr<const Board> board,
+    void FillColorStones(const Board* board,
                          std::vector<float>::iterator black_it,
                          std::vector<float>::iterator white_it) const;
 
-    void FillMove(std::shared_ptr<const Board> board,
+    void FillMove(const Board* board,
                   std::vector<float>::iterator move_it) const;
 
     void EncoderHistoryMove(const GameState &state,
                             int counter,
                             std::vector<float>::iterator it) const;
 
-    void FillKoMove(std::shared_ptr<const Board> board,
+    void FillKoMove(const Board* board,
                     std::vector<float>::iterator ko_it) const;
 
-    void FillSafeArea(std::shared_ptr<const Board> board,
+    void FillSafeArea(const Board* board,
                       std::vector<float>::iterator safearea_it) const;
 
-    void FillLiberties(std::shared_ptr<const Board> board,
+    void FillLiberties(const Board* board,
                        std::vector<float>::iterator liberties_it) const;
 
-    void FillLadder(std::shared_ptr<const Board> board,
+    void FillLadder(const Board* board,
                     std::vector<float>::iterator ladder_it) const;
 
-    void FillMisc(std::shared_ptr<const Board> board,
+    void FillMisc(const Board* board,
                   float komi,
                   std::vector<float>::iterator color_it) const;
 

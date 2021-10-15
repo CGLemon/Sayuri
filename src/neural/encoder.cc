@@ -87,7 +87,7 @@ void Encoder::SymmetryPlanes(const GameState &state, std::vector<float> &planes,
     }
 }
 
-void Encoder::FillColorStones(std::shared_ptr<const Board> board,
+void Encoder::FillColorStones(const Board* board,
                               std::vector<float>::iterator black_it,
                               std::vector<float>::iterator white_it) const {
     auto boardsize = board->GetBoardSize();
@@ -107,7 +107,7 @@ void Encoder::FillColorStones(std::shared_ptr<const Board> board,
     }
 }
 
-void Encoder::FillMove(std::shared_ptr<const Board> board,
+void Encoder::FillMove(const Board* board,
                        std::vector<float>::iterator move_it) const {
     auto boardsize = board->GetBoardSize();
     auto num_intersections = board->GetNumIntersections();
@@ -148,8 +148,8 @@ void Encoder::EncoderHistoryMove(const GameState &state,
 
     for (auto p = 0; p < past; ++p) {
         auto board = state.GetPastBoard(p);
-        FillColorStones(board, black_it, white_it);
-        FillMove(board, move_it);
+        FillColorStones(board.get(), black_it, white_it);
+        FillMove(board.get(), move_it);
 
         if (p != past-1) {
             black_it += 3 * num_intersections;
@@ -159,7 +159,7 @@ void Encoder::EncoderHistoryMove(const GameState &state,
     }
 }
 
-void Encoder::FillKoMove(std::shared_ptr<const Board> board,
+void Encoder::FillKoMove(const Board* board,
                          std::vector<float>::iterator ko_it) const {
     auto ko_move = board->GetKoMove();
 
@@ -173,7 +173,7 @@ void Encoder::FillKoMove(std::shared_ptr<const Board> board,
     ko_it[index] = static_cast<float>(true);
 }
 
-void Encoder::FillSafeArea(std::shared_ptr<const Board> board,
+void Encoder::FillSafeArea(const Board* board,
                            std::vector<float>::iterator safearea_it) const {
     auto num_intersections = board->GetNumIntersections();
 
@@ -188,7 +188,7 @@ void Encoder::FillSafeArea(std::shared_ptr<const Board> board,
     }
 }
 
-void Encoder::FillLiberties(std::shared_ptr<const Board> board,
+void Encoder::FillLiberties(const Board* board,
                             std::vector<float>::iterator liberties_it) const {
     auto boardsize = board->GetBoardSize();
     auto num_intersections = board->GetNumIntersections();
@@ -211,7 +211,7 @@ void Encoder::FillLiberties(std::shared_ptr<const Board> board,
     }
 }
 
-void Encoder::FillLadder(std::shared_ptr<const Board> board,
+void Encoder::FillLadder(const Board* board,
                          std::vector<float>::iterator ladder_it) const {
     auto num_intersections = board->GetNumIntersections();
     auto ladders = board->GetLadderMap();
@@ -231,7 +231,7 @@ void Encoder::FillLadder(std::shared_ptr<const Board> board,
     }
 }
 
-void Encoder::FillMisc(std::shared_ptr<const Board> board,
+void Encoder::FillMisc(const Board* board,
                        float komi,
                        std::vector<float>::iterator misc_it) const {
     auto num_intersections = board->GetNumIntersections();
@@ -270,9 +270,9 @@ void Encoder::EncoderFeatures(const GameState &state,
     auto ladder_it = it + 6 * num_intersections;
     auto misc_it = it + 10 * num_intersections;
 
-    FillKoMove(board, ko_it);
-    FillSafeArea(board, safearea_it);
-    FillLiberties(board, liberties_it);
-    FillLadder(board, ladder_it);
-    FillMisc(board, state.GetKomi(), misc_it);
+    FillKoMove(board.get(), ko_it);
+    FillSafeArea(board.get(), safearea_it);
+    FillLiberties(board.get(), liberties_it);
+    FillLadder(board.get(), ladder_it);
+    FillMisc(board.get(), state.GetKomi(), misc_it);
 }
