@@ -163,31 +163,33 @@ class Data():
         buf[:] = np.unpackbits(self.planes)[:size]
         self.planes = np.reshape(buf, (c, s))
 
-    def dump(self):
-        print("Board size: {}".format(self.board_size))
-        print("Side to move: {}".format(self.to_move))
-        print("Komi: {}".format(self.komi))
-        print("Result: {}".format(self.result))
-        print("Final score: {}".format(self.final_score))
+    def __str__(self):
+        out = str()
+        out += "Board size: {}".format(self.board_size)
+        out += "Side to move: {}".format(self.to_move)
+        out += "Komi: {}".format(self.komi)
+        out += "Result: {}".format(self.result)
+        out += "Final score: {}".format(self.final_score)
 
         self.unpack_planes()
         for p in range(len(self.planes)):
-            print("Plane: {}".format(p+1))
-            print(self.planes[p])
+            out += "Plane: {}".format(p+1)
+            out += str(self.planes[p])
         self.pack_planes()
 
-        print("Probabilities: ")
-        print(self.prob)
+        out += "Probabilities: "
+        out += str(self.prob)
 
-        print("Auxiliary probabilities: ")
-        print(self.aux_prob)
+        out += "Auxiliary probabilities: "
+        out += str(self.aux_prob)
 
-        print("Ownership: ")
-        print(self.ownership)
+        out += "Ownership: "
+        out += str(self.ownership)
+
+        return out
 
 class Loader:
-    def __init__(self, cfg, dirname):
-        self.cfg = cfg
+    def __init__(self, dirname):
         self.dirname = dirname
         self.buffer = []
         self.run()
@@ -214,14 +216,16 @@ class Loader:
                     if self.linesparser(datalines, f) == False:
                         break
 
-    def dump(self):
-        for b, s in self.buffer:
-            data.dump()
-            print()
-        print("----------------------------------------------------------")
-
     def __getitem__(self, idx):
         return self.buffer[idx]
 
     def __len__(self):
-        return len(self.buffer) 
+        return len(self.buffer)
+
+    def __str__(self):
+        out = str()
+        for b, s in self.buffer:
+            out += str(data)
+            out += '\n'
+        out += "----------------------------------------------------------"
+        return out

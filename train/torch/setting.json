@@ -20,10 +20,11 @@
 
     "Train" : {
         "GPUs": null,
-        "Epochs": 5,
-        "Workers": null,
+        "StepPerEpoch" : 2000,
+        "MaxStep": 100000,
+        "Workers": 4,
         "BatchSize": 512,
-        "LearningRate": 5e-7,
+        "LearningRate": 1e-4,
         "WeightDecay": 0.001,
         "TrainDirectory": "train-dir"
     } 

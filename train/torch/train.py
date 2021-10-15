@@ -1,24 +1,24 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
+import random
 
 from symmetry import get_symmetry_plane
 from nnprocess import NNProcess
 from loader import Loader
 
 from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 def dump_dependent_version():
-    print("Name: {name} ->  Version: {ver}".format(name =  "Numpy", ver = np.__version__))
+    print("Name: {name} ->  Version: {ver}".format(name =  "NumPy", ver = np.__version__))
     print("Name: {name} ->  Version: {ver}".format(name =  "Torch", ver = torch.__version__))
 
 class DataSet():
     # The simple DataSet wrapper.
 
     def __init__(self, cfg, dirname):
-        self.data_loader = Loader(cfg, dirname)
-        self.cfg = cfg
+        self.data_loader = Loader(dirname)
         self.board_size = cfg.boardsize
         self.input_channels = cfg.input_channels
 
@@ -107,7 +107,9 @@ class TrainingPipe():
         self.num_workers = cfg.num_workers
         self.train_dir = cfg.train_dir
 
-        self.epochs = cfg.epochs
+        self.step_per_epoch =  cfg.step_per_epoch
+        self.max_step =  cfg.max_step
+
         self.learn_rate = cfg.learn_rate
         self.weight_decay = cfg.weight_decay
 
@@ -135,12 +137,6 @@ class TrainingPipe():
 
     def prepare_data(self):
         self.data_set = DataSet(self.cfg, self.train_dir)
-        self.train_data = DataLoader(
-            self.data_set,
-            num_workers=self.num_workers,
-            shuffle=True,
-            batch_size=self.batchsize
-        )
 
     def fit(self):
         if self.data_set == None:
@@ -153,14 +149,26 @@ class TrainingPipe():
 
         tb_writer = SummaryWriter()
 
+        keep_running = True
         running_loss = 0
         num_step = 0
         verbose_step = 500
 
-        print("max step {}...".format(self.epochs * len(self.train_data)))
+        print("data size {}".format(len(self.data_set)))
+        indics_list = range(len(self.data_set))
 
-        for e in range(self.epochs):
-            for _, batch in enumerate(self.train_data):
+        while keep_running:
+            selections = min(self.step_per_epoch * self.batchsize, len(self.data_set))
+
+            subset = Subset(self.data_set, random.sample(indics_list, selections))
+            train_data = DataLoader(
+                subset,
+                num_workers=self.num_workers,
+                shuffle=True,
+                batch_size=self.batchsize
+            )
+
+            for _, batch in enumerate(train_data):
                 _, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
                 if self.use_gpu:
                     planes = planes.to(self.device)
@@ -177,6 +185,7 @@ class TrainingPipe():
                 running_loss += self.step(planes, target, self.adam_opt)
 
                 num_step += 1
+
                 if num_step % verbose_step == 0:
                     print("step: {} -> loss {:.4f}".format(
                                                         num_step,
@@ -184,7 +193,10 @@ class TrainingPipe():
                                                     ))
                     tb_writer.add_scalar('loss', running_loss/verbose_step, num_step)
                     running_loss = 0
-            print("epoch {} finished...".format(e+1))
+
+                if num_step >= self.max_step:
+                    keep_running = False
+                    break
 
     def step(self, planes, target, opt):
         pred = self.net(planes)

@@ -23,7 +23,8 @@ CONFIG_KEYWOED = [
 
     "Train",            # claiming
     "GPUs",             # number of gpus
-    "Epochs",           # number of training epochs
+    "StepPerEpoch",     # number of training step for each epoch
+    "MaxStep",          # number of total training step
     "LearningRate",     # the learning rate
     "WeightDecay",      # the net weight decay
     "TrainDirectory"    # The training data directory
@@ -39,11 +40,12 @@ class Config:
         self.num_workers = None
         self.gpus = None
         self.use_gpu = None
-        self.epochs = None
         self.batchsize = None
         self.learn_rate = None
         self.weight_decay = None
         self.train_dir = None
+        self.step_per_epoch = None
+        self.max_step = None
 
         # Adjustable values
         self.stack = []
@@ -73,13 +75,13 @@ def trainparser(json_data, config):
     config.weight_decay = train["WeightDecay"]
 
     config.train_dir = train["TrainDirectory"]
-    config.epochs = train["Epochs"]
     config.batchsize = train["BatchSize"]
     config.num_workers = train["Workers"]
+    config.step_per_epoch = train["StepPerEpoch"]
+    config.max_step = train["MaxStep"]
 
-    # Set the default value if we didn't give them any value.
-    if config.epochs == None:
-        config.epochs = 1000
+    assert config.step_per_epoch != None, ""
+    assert config.max_step != None, ""
 
     if config.learn_rate == None:
         config.learn_rate = 1e-4
