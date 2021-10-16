@@ -61,8 +61,8 @@ private:
                                         std::vector<int> &regions_index,
                                         std::vector<int> &regions_next) const;
 
-    void ComputationInnerRegions(const int vtx,
-                                     const int color,
-                                     const std::vector<int> &regions_next,
-                                     std::vector<bool> &inner_regions) const;
+    void ComputeInnerRegions(const int vtx,
+                                 const int color,
+                                 const std::vector<int> &regions_next,
+                                 std::vector<bool> &inner_regions) const;
 };

@@ -510,7 +510,7 @@ bool Board::IsPassDeadRegion(const int vtx,
 
     // The inner regions may cause the false-eye life. The false will
     // become the potential eye in this condition.
-    ComputationInnerRegions(vtx, color, regions_next, inner_regions);
+    ComputeInnerRegions(vtx, color, regions_next, inner_regions);
 
     auto potentia_eyes = std::vector<int>{};
     int pos = vtx;
@@ -535,10 +535,10 @@ bool Board::IsPassDeadRegion(const int vtx,
     return eyes_count < 2;
 }
 
-void Board::ComputationInnerRegions(const int vtx,
-                                        const int color,
-                                        const std::vector<int> &regions_next,
-                                        std::vector<bool> &inner_regions) const {
+void Board::ComputeInnerRegions(const int vtx,
+                                    const int color,
+                                    const std::vector<int> &regions_next,
+                                    std::vector<bool> &inner_regions) const {
     const auto num_vertices = GetNumVertices();
     const auto bsize = GetBoardSize();
     auto surround = std::vector<int>(num_vertices, kInvalid);
