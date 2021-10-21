@@ -40,7 +40,7 @@ void Board::ComputeSimpleOwnership(std::vector<int> &result) const {
                 //The point belongs to both.
                 result[idx] = kEmpty;
             }
-       }
+        }
     }
 }
 
@@ -139,7 +139,7 @@ bool Board::SetFreeHandicap(std::vector<int> movelist) {
 }
 
 std::vector<LadderType> Board::GetLadderMap() const {
-    auto result = std::vector<LadderType>(GetNumIntersections(), LadderType::kNotLadder);
+    auto result = std::vector<LadderType>(num_intersections_, LadderType::kNotLadder);
     auto ladder = std::vector<int>{};
     auto not_ladder = std::vector<int>{};
 
@@ -149,9 +149,8 @@ std::vector<LadderType> Board::GetLadderMap() const {
         return std::find(begin, end, element) != end;
     };
 
-    auto bsize = GetBoardSize();
-    for (int y = 0; y < bsize; ++y) {
-        for (int x = 0; x < bsize; ++x) {
+    for (int y = 0; y < board_size_; ++y) {
+        for (int x = 0; x < board_size_; ++x) {
             const auto idx = GetIndex(x, y);
             const auto vtx = GetVertex(x, y);
 
@@ -246,13 +245,11 @@ void Board::ComputePassAlive(std::vector<bool> &result,
                                  const int color,
                                  bool mark_vitals,
                                  bool mark_pass_dead) const {
-    const auto num_vertices = GetNumVertices();
-    const auto bsize = GetBoardSize();
-    auto ocupied = std::vector<int>(num_vertices, kInvalid);
+    auto ocupied = std::vector<int>(num_vertices_, kInvalid);
 
     // Mark the color.
-    for (int y = 0; y < bsize; ++y) {
-        for (int x = 0; x < bsize; ++x) {
+    for (int y = 0; y < board_size_; ++y) {
+        for (int x = 0; x < board_size_; ++x) {
             const auto vtx = GetVertex(x, y);
             const auto state = GetState(vtx);
             if (state == color) {
@@ -263,10 +260,10 @@ void Board::ComputePassAlive(std::vector<bool> &result,
         }
     }
 
-    auto regions_index = std::vector<int>(num_vertices, -1);
-    auto regions_next = std::vector<int>(num_vertices, kNullVertex);
+    auto regions_index = std::vector<int>(num_vertices_, -1);
+    auto regions_next = std::vector<int>(num_vertices_, kNullVertex);
     auto regions_head = ClassifyGroups(kEmpty, ocupied, regions_index, regions_next);
-    auto vitals = std::vector<bool>(num_vertices, false);
+    auto vitals = std::vector<bool>(num_vertices_, false);
 
     // TODO: Do we need to think about sucide move?
     constexpr bool allow_sucide = false;
@@ -311,8 +308,8 @@ void Board::ComputePassAlive(std::vector<bool> &result,
         }
     }
 
-    auto strings_index = std::vector<int>(num_vertices, -1);
-    auto strings_next = std::vector<int>(num_vertices, kNullVertex);
+    auto strings_index = std::vector<int>(num_vertices_, -1);
+    auto strings_next = std::vector<int>(num_vertices_, kNullVertex);
     auto strings_head = ClassifyGroups(color, ocupied, strings_index, strings_next);
 
     int group_cnt = strings_head.size();
@@ -369,6 +366,7 @@ void Board::ComputePassAlive(std::vector<bool> &result,
             auto y = GetY(pos);
             auto index = GetIndex(x, y);
             result[index] = true;
+
             pos = strings_next[pos];
         } while(pos != vtx);
     }
@@ -397,16 +395,16 @@ void Board::ComputePassAlive(std::vector<bool> &result,
         // Fill the pass dead regions.
         for (int vtx : regions_head) {
             int pos = vtx;
-            bool pass_dead = IsPassDeadRegion(pos, !color, ocupied, regions_next);
-            do {
-                if (pass_dead) {
+            if (IsPassDeadRegion(pos, !color, ocupied, regions_next)) {
+                do {
                     auto x = GetX(pos);
                     auto y = GetY(pos);
                     auto index = GetIndex(x, y);
                     result[index] = true;
-                }
-                pos = regions_next[pos];
-            } while(pos != vtx);
+
+                    pos = regions_next[pos];
+                } while(pos != vtx);
+            }
         }
     }
 }
@@ -433,7 +431,7 @@ bool Board::IsPassAliveString(const int vtx,
                     bool is_adjacent = false;
                     int state = allow_sucide == true ? features[rpos] : GetState(rpos);
                     if (state == kEmpty) {
-                    for (int k = 0; k < 4; ++k) {
+                        for (int k = 0; k < 4; ++k) {
                             // Check points of adjacent empty.
                             const auto aapos = directions_[k] + rpos;                         
                             if(strings_index[aapos] == my_index) {
@@ -539,14 +537,12 @@ void Board::ComputeInnerRegions(const int vtx,
                                     const int color,
                                     const std::vector<int> &regions_next,
                                     std::vector<bool> &inner_regions) const {
-    const auto num_vertices = GetNumVertices();
-    const auto bsize = GetBoardSize();
-    auto surround = std::vector<int>(num_vertices, kInvalid);
+    auto surround = std::vector<int>(num_vertices_, kInvalid);
 
     std::fill(std::begin(inner_regions), std::end(inner_regions), false);
 
-    for (int y = 0; y < bsize; ++y) {
-        for (int x = 0; x < bsize; ++x) {
+    for (int y = 0; y < board_size_; ++y) {
+        for (int x = 0; x < board_size_; ++x) {
             surround[GetVertex(x, y)] = kEmpty;
         }
     }
@@ -557,8 +553,8 @@ void Board::ComputeInnerRegions(const int vtx,
         pos = regions_next[pos];
     } while(pos != vtx);
 
-    auto epmty_index = std::vector<int>(num_vertices, -1);
-    auto epmty_next = std::vector<int>(num_vertices, kNullVertex);
+    auto epmty_index = std::vector<int>(num_vertices_, -1);
+    auto epmty_next = std::vector<int>(num_vertices_, kNullVertex);
     auto epmty_head = ClassifyGroups(kEmpty, surround, epmty_index, epmty_next);
 
     int cnt = epmty_head.size();
@@ -598,14 +594,11 @@ std::vector<int> Board::ClassifyGroups(const int target,
                                            std::vector<int> &features,
                                            std::vector<int> &regions_index,
                                            std::vector<int> &regions_next) const {
-    const auto num_vertices = GetNumVertices();
-    auto bsize = GetBoardSize();
-
     std::fill(std::begin(regions_index), std::end(regions_index), -1);
     std::fill(std::begin(regions_next), std::end(regions_next), kNullVertex);
 
-    for (int y = 0; y < bsize; ++y) {
-        for (int x = 0; x < bsize; ++x) {
+    for (int y = 0; y < board_size_; ++y) {
+        for (int x = 0; x < board_size_; ++x) {
             const auto vtx = GetVertex(x, y);
             regions_index[vtx] = 0;
             regions_next[vtx] = vtx;
@@ -613,14 +606,14 @@ std::vector<int> Board::ClassifyGroups(const int target,
     }
 
     auto head_list = std::vector<int>{};
-    auto marked = std::vector<bool>(num_vertices, false);
+    auto marked = std::vector<bool>(num_vertices_, false);
     auto groups_index = 1;
-    for (int y = 0; y < bsize; ++y) {
-        for (int x = 0; x < bsize; ++x) {
+    for (int y = 0; y < board_size_; ++y) {
+        for (int x = 0; x < board_size_; ++x) {
             const auto vtx = GetVertex(x, y);
 
             if (!marked[vtx] && features[vtx] == target) {
-                auto buf = std::vector<bool>(num_vertices, false);
+                auto buf = std::vector<bool>(num_vertices_, false);
 
                 ComputeReachGroup(vtx, target, buf, [&](int v){ return features[v]; });
 
