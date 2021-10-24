@@ -307,7 +307,8 @@ ComputationResult Search::Computation(int playours, bool no_time_limit) {
 
 int Search::ThinkBestMove() {
     auto result = Computation(max_playouts_);
-    if (result.root_eval < param_->resign_threshold) {
+    if ( result.root_eval < param_->resign_threshold &&
+            !(result.best_move == kPass && root_state_.IsGameOver())) {
         return kResign;
     }
 
