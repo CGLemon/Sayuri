@@ -270,6 +270,8 @@ std::string GtpLoop::Execute(CommandParser &parser) {
         auto result = agent_->GetSearch().Computation(400, true);
         auto bsize = agent_->GetState().GetBoardSize();
         auto color = agent_->GetState().GetToMove();
+        auto safe_ownership = agent_->GetState().GetOwnership();
+        auto safe_area = agent_->GetState().GetStrictSafeArea();
 
         auto alive = std::vector<std::vector<int>>{};
         auto dead = std::vector<std::vector<int>>{};
@@ -278,7 +280,8 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             auto x = idx % bsize;
             auto y = idx / bsize;
             auto vtx = agent_->GetState().GetVertex(x,y);
-            auto owner = result.root_ownership[idx];
+            auto owner = safe_area[idx] == true ?
+                             2 * (float)(safe_ownership[idx] == color) - 1 : result.root_ownership[idx];
             auto state = agent_->GetState().GetState(vtx);
 
             if (owner > kOwnshipThreshold) {
