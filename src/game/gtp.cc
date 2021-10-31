@@ -27,6 +27,7 @@ void GtpLoop::Loop() {
 
             auto out = std::string{};
             auto stop = false;
+            auto try_ponder = false;
 
             if (parser.GetCount() == 1 && parser.Find("quit")) {
                 agent_->Quit();
@@ -35,21 +36,23 @@ void GtpLoop::Loop() {
             }
 
             if (out.empty()) {
-                out = Execute(parser);
+                out = Execute(parser, try_ponder);
             }
 
             WRITING << out;
-            std::cout << out;
+            std::cout << out << std::flush;
 
             if (stop) {
                 break;
             }
-            agent_->GetSearch().TryPonder();
+            if (try_ponder) {
+                agent_->GetSearch().TryPonder();
+            }
         }
     }
 }
 
-std::string GtpLoop::Execute(CommandParser &parser) {
+std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
     if (!agent_) {
         return std::string{};
     }
@@ -201,6 +204,7 @@ std::string GtpLoop::Execute(CommandParser &parser) {
         auto move = agent_->GetSearch().ThinkBestMove();
         agent_->GetState().PlayMove(move);
         out << GTPSuccess(agent_->GetState().VertexToText(move));
+        try_ponder = true;
     } else if (const auto res = parser.Find("kgs-game_over", 0)) {
         agent_->GetNetwork().ClearCache();
         out << GTPSuccess("");

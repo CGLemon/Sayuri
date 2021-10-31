@@ -68,7 +68,7 @@ private:
     std::string GTPSuccess(std::string);
     std::string GTPFail(std::string);
 
-    std::string Execute(CommandParser &parser);
+    std::string Execute(CommandParser &parser, bool &try_ponder);
 
     std::unique_ptr<Agent> agent_{nullptr};
 };
