@@ -45,19 +45,17 @@ OPTIONS_SET_EXPASSION(char)
 
 
 void InitOptionsMap() {
-    options_map["name"] << Option::setoption(kProgram);
-    options_map["version"] << Option::setoption(kVersion);
     options_map["help"] << Option::setoption(false);
     options_map["quiet"] << Option::setoption(false);
-
+    options_map["ponder"] << Option::setoption(false);
     options_map["analysis_verbose"] << Option::setoption(false);
     options_map["mode"] << Option::setoption("gtp");
 
     options_map["defualt_boardsize"] << Option::setoption(kDefaultBoardSize);
     options_map["defualt_komi"] << Option::setoption(kDefaultKomi);
 
+    options_map["cache_buffer_factor"] << Option::setoption(30);
     options_map["playouts"] << Option::setoption(1600);
-    options_map["visits"] << Option::setoption(1600);
     options_map["batch_size"] << Option::setoption(1);
     options_map["threads"] << Option::setoption(1);
 
@@ -138,6 +136,11 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         parser.RemoveCommand(res->Index());
     }
 
+    if (const auto res = parser.Find("--ponder")) {
+        SetOption("ponder", true);
+        parser.RemoveCommand(res->Index());
+    }
+
     if (const auto res = parser.FindNext({"--resign_threshold", "-r"})) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("resign_threshold", res->Get<float>());
@@ -179,6 +182,13 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext({"--batch-size", "-b"})) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("batch_size", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--cache-buffer-factor")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("cache_buffer_factor", res->Get<int>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -321,6 +331,7 @@ void ArgsParser::DumpHelper() const {
     ERROR << "Arguments:" << std::endl
               << "\t--quiet, -q" << std::endl
               << "\t--analysis-verbose, -a" << std::endl
+              << "\t--ponder" << std::endl
               << "\t--playouts, -p <integer>" << std::endl
               << "\t--threads, -t <integer>" << std::endl
               << "\t--batch-size, -b <integer>" << std::endl

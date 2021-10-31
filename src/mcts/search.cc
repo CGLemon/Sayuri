@@ -8,6 +8,12 @@
 #include "neural/encoder.h"
 #include "utils/log.h"
 
+#ifdef WIN32
+#include <windows.h>
+#else
+#include <sys/select.h>
+#endif
+
 Search::~Search() {
     group_->WaitToJoin();
 }
@@ -126,7 +132,50 @@ void Search::TimeLeft(const int color, const int time, const int stones) {
     time_control_.TimeLeft(color, time, stones);
 }
 
-ComputationResult Search::Computation(int playours, bool no_time_limit) {
+bool Search::InputPending(Search::SearchTag tag) const {
+    if (tag != kPonder) {
+        return false;
+    }
+#ifdef WIN32
+    static int init = 0, pipe;
+    static HANDLE inh;
+    DWORD dw;
+
+    if (!init) {
+        init = 1;
+        inh = GetStdHandle(STD_INPUT_HANDLE);
+        pipe = !GetConsoleMode(inh, &dw);
+        if (!pipe) {
+            SetConsoleMode(inh, dw & ~(ENABLE_MOUSE_INPUT | ENABLE_WINDOW_INPUT));
+            FlushConsoleInputBuffer(inh);
+        }
+    }
+
+    if (pipe) {
+        if (!PeekNamedPipe(inh, nullptr, 0, nullptr, &dw, nullptr)) {
+            exit(EXIT_FAILURE);
+        }
+
+        return dw;
+    } else {
+        if (!GetNumberOfConsoleInputEvents(inh, &dw)) {
+            exit(EXIT_FAILURE);
+        }
+
+        return dw > 1;
+    }
+    return false;
+#else 
+    fd_set read_fds;
+    FD_ZERO(&read_fds);
+    FD_SET(0,&read_fds);
+    struct timeval timeout{0,0};
+    select(1,&read_fds,nullptr,nullptr,&timeout);
+    return FD_ISSET(0, &read_fds);
+#endif
+}
+
+ComputationResult Search::Computation(int playours, Search::SearchTag tag) {
     auto computation_result = ComputationResult{};
 
     if (root_state_.IsGameOver()) {
@@ -180,7 +229,7 @@ ComputationResult Search::Computation(int playours, bool no_time_limit) {
 
     // Main thread is running.
     auto keep_running = true;
-    while (running_.load()) {
+    do {
         auto currstate = std::make_unique<GameState>(root_state_);
         auto result = SearchResult{};
 
@@ -188,19 +237,19 @@ ComputationResult Search::Computation(int playours, bool no_time_limit) {
         if (result.IsValid()) {
             playouts_.fetch_add(1);
         }
-        const auto elapsed = no_time_limit ?
-                                 std::numeric_limits<float>::lowest() : timer.GetDuration();
+        const auto elapsed = tag == kThinking ?
+                                 timer.GetDuration() : std::numeric_limits<float>::lowest();
 
         keep_running &= (elapsed < thinking_time);
         keep_running &= (playouts_.load() < playours);
         keep_running &= running_.load();
         running_.store(keep_running);
-    }
+    } while (!InputPending(tag) && keep_running);
 
     // Wait for all threads to join the main thread.
     group_->WaitToJoin();
 
-    if (!no_time_limit) {
+    if (tag == kThinking) {
         time_control_.TookTime(color);
     }
     if (GetOption<bool>("analysis_verbose")) {
@@ -296,9 +345,6 @@ ComputationResult Search::Computation(int playours, bool no_time_limit) {
         prob /= tot_target_policy;
     }
 
-    // Push the data to buffer.
-    GatherData(root_state_, computation_result);
-
     // Release the tree nodes.
     ClearNodes();
 
@@ -306,7 +352,7 @@ ComputationResult Search::Computation(int playours, bool no_time_limit) {
 }
 
 int Search::ThinkBestMove() {
-    auto result = Computation(max_playouts_);
+    auto result = Computation(max_playouts_, kThinking);
     if ( result.root_eval < param_->resign_threshold &&
             !(result.best_move == kPass && root_state_.IsGameOver())) {
         return kResign;
@@ -316,13 +362,24 @@ int Search::ThinkBestMove() {
 }
 
 int Search::GetSelfPlayMove() {
-    auto result = Computation(max_playouts_);
+    auto result = Computation(max_playouts_, kThinking);
     int move = result.best_move;
     if (param_->random_moves_cnt > result.movenum) {
         move = result.random_move;
     }
 
+    // Push the data to buffer.
+    GatherData(root_state_, result);
+
     return move;
+}
+
+void Search::TryPonder() {
+    if (param_->ponder) {
+        int ponder_playouts = std::max(max_playouts_,
+                                           max_playouts_ * (param_->cache_buffer_factor/2));
+        Computation(ponder_playouts, kPonder);
+    }
 }
 
 void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {

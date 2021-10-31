@@ -12,7 +12,6 @@ public:
     void Reset() {
         threads = GetOption<int>("threads");
         playouts = GetOption<int>("playouts");
-        visits = GetOption<int>("visits");
 
         resign_threshold = GetOption<float>("resign_threshold");
         lcb_reduction = GetOption<float>("lcb_reduction");
@@ -41,10 +40,11 @@ public:
         cap_playouts = GetOption<float>("cap_playouts");
 
         lag_buffer = GetOption<int>("lag_buffer");
+        ponder = GetOption<bool>("ponder");
+        cache_buffer_factor = GetOption<int>("cache_buffer_factor");
     }
 
     int threads;
-    int visits;
     int playouts;
     int random_min_visits;
     int random_moves_cnt;
@@ -71,6 +71,9 @@ public:
 
     int cap_playouts;
     int lag_buffer;
+    int cache_buffer_factor;
+
+    bool ponder;
 
     std::array<float, kNumVertices + 10> dirichlet_buffer;
 };

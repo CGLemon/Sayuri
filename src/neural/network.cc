@@ -72,7 +72,7 @@ void Network::Initialize(const std::string &weightsfile) {
 }
 
 void Network::SetCacheSize(int playouts) {
-    nn_cache_.SetCapacity(playouts * 20);
+    nn_cache_.SetCapacity(playouts * GetOption<int>("cache_buffer_factor"));
 }
 
 void Network::ClearCache() {

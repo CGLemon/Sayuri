@@ -44,6 +44,7 @@ void GtpLoop::Loop() {
             if (stop) {
                 break;
             }
+            agent_->GetSearch().TryPonder();
         }
     }
 }
@@ -165,7 +166,7 @@ std::string GtpLoop::Execute(CommandParser &parser) {
             Sgf::Get().ToFile(filename, agent_->GetState());
         }
     } else if (const auto res = parser.Find("final_score", 0)) {
-        auto result = agent_->GetSearch().Computation(400, true);
+        auto result = agent_->GetSearch().Computation(400, Search::kNoTimeLimit);
         auto color = agent_->GetState().GetToMove();
         auto final_score = result.root_final_score;
 
@@ -200,12 +201,6 @@ std::string GtpLoop::Execute(CommandParser &parser) {
         auto move = agent_->GetSearch().ThinkBestMove();
         agent_->GetState().PlayMove(move);
         out << GTPSuccess(agent_->GetState().VertexToText(move));
-
-    //} else if (const auto res = parser.Find("kgs-genmove_cleanup", 0)) {
-    //    out << GTPFail("");
-    //} else if (const auto res = parser.Find("kgs-time_settings", 0)) {
-    //    out << GTPFail("");
-
     } else if (const auto res = parser.Find("kgs-game_over", 0)) {
         agent_->GetNetwork().ClearCache();
         out << GTPSuccess("");
@@ -267,7 +262,7 @@ std::string GtpLoop::Execute(CommandParser &parser) {
         }
 
         constexpr float kOwnshipThreshold = 0.75f;
-        auto result = agent_->GetSearch().Computation(400, true);
+        auto result = agent_->GetSearch().Computation(400, Search::kNoTimeLimit);
         auto bsize = agent_->GetState().GetBoardSize();
         auto color = agent_->GetState().GetToMove();
         auto safe_ownership = agent_->GetState().GetOwnership();
