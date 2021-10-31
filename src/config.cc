@@ -76,7 +76,7 @@ void InitOptionsMap() {
     options_map["cpuct_root_base"] << Option::setoption(19652.f);
     options_map["draw_factor"] << Option::setoption(0.f);
     options_map["draw_root_factor"] << Option::setoption(0.f);
-    options_map["score_utility_factor"] << Option::setoption(0.15f);
+    options_map["score_utility_factor"] << Option::setoption(0.05f);
 
     options_map["random_min_visits"] << Option::setoption(1);
     options_map["random_moves_cnt"] << Option::setoption(0);
