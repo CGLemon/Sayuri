@@ -258,6 +258,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         auto move = agent_->GetSearch().Analyze(interval, false);
         agent_->GetState().PlayMove(move);
         DUMPING << "play " << agent_->GetState().VertexToText(move) << "\n\n";
+        try_ponder = true;
     } else if (const auto res = parser.Find("undo", 0)) {
         if (agent_->GetState().UndoMove()) {
             out << GTPSuccess("");
