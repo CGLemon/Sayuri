@@ -13,6 +13,8 @@ void GameState::Reset(const int boardsize, const float komi) {
     SetKomi(komi);
     ko_hash_history_.clear();
     game_history_.clear();
+    append_moves_.clear();
+
     ko_hash_history_.emplace_back(GetKoHash());
     game_history_.emplace_back(std::make_shared<Board>(board_));
 
@@ -33,6 +35,9 @@ bool GameState::AppendMove(const int vtx, const int color) {
     if (vtx == kResign || vtx == kPass) {
         return false;
     }
+    if (GetMoveNumber() != 0) {
+        ClearBoard(); // Besure sure that it is the first move.
+    }
 
     if (IsLegalMove(vtx, color)) {
         board_.PlayMoveAssumeLegal(vtx, color);
@@ -45,6 +50,7 @@ bool GameState::AppendMove(const int vtx, const int color) {
 
         ko_hash_history_.emplace_back(GetKoHash());
         game_history_.emplace_back(std::make_shared<Board>(board_));
+        append_moves_.emplace_back(vtx, color);
 
         return true;
     }
@@ -250,7 +256,7 @@ void GameState::SetWinner(GameResult result) {
     winner_ = result;
 }
 
-void GameState::SetFinalScore(float score) {
+void GameState::SetBlackScore(float score) {
     black_score_ = score;
 }
 
@@ -319,17 +325,62 @@ bool GameState::IsLegalMove(const int vertex, const int color,
 }
 
 bool GameState::SetFixdHandicap(int handicap) {
-    if (board_.SetFixdHandicap(handicap)) {
-        SetHandicap(handicap);
-
-        ko_hash_history_.clear();
-        game_history_.clear();
-
-        ko_hash_history_.emplace_back(GetKoHash());
-        game_history_.emplace_back(std::make_shared<Board>(board_));
+    const auto ValidHandicap = [](int bsize, int handicap) {
+        if (handicap < 2 || handicap > 9) {
+            return false;
+        }
+        if (bsize % 2 == 0 && handicap > 4) {
+            return false;
+        }
+        if (bsize == 7 && handicap > 4) {
+            return false;
+        }
+        if (bsize < 7 && handicap > 0) {
+            return false;
+        }
         return true;
+    };
+
+    const int board_size = GetBoardSize();
+    const int high = board_size >= 13 ? 3 : 2;
+    const int mid = board_size / 2;
+    const int low = board_size - 1 - high;
+
+    if (!ValidHandicap(board_size, handicap)) {
+        return false;
     }
-    return false;
+
+    if (handicap >= 2) {
+        AppendMove(GetVertex(low, low),  kBlack);
+        AppendMove(GetVertex(high, high),  kBlack);
+    }
+
+    if (handicap >= 3) {
+        AppendMove(GetVertex(high, low), kBlack);
+    }
+
+    if (handicap >= 4) {
+        AppendMove(GetVertex(low, high), kBlack);
+    }
+
+    if (handicap >= 5 && handicap % 2 == 1) {
+        AppendMove(GetVertex(mid, mid), kBlack);
+    }
+
+    if (handicap >= 6) {
+        AppendMove(GetVertex(low, mid), kBlack);
+        AppendMove(GetVertex(high, mid), kBlack);
+    }
+
+    if (handicap >= 8) {
+        AppendMove(GetVertex(mid, low), kBlack);
+        AppendMove(GetVertex(mid, high), kBlack);
+    }
+
+    SetHandicap(handicap);
+    SetToMove(kWhite);
+
+    return true;
 }
 
 bool GameState::SetFreeHandicap(std::vector<std::string> movelist) {
@@ -340,35 +391,30 @@ bool GameState::SetFreeHandicap(std::vector<std::string> movelist) {
                        }
                    );
 
-    if (board_.SetFreeHandicap(movelist_vertex)) {
-        SetHandicap(movelist.size());
+    auto fork_state = *this;
 
-        ko_hash_history_.clear();
-        game_history_.clear();
-
-        ko_hash_history_.emplace_back(GetKoHash());
-        game_history_.emplace_back(std::make_shared<Board>(board_));
-        return true;
+    for (const auto vtx : movelist_vertex) {
+        if (fork_state.IsLegalMove(vtx, kBlack)) {
+            fork_state.AppendMove(vtx, kBlack);
+        } else {
+            return false;
+        }
     }
-    return false;
+
+    *this = fork_state;
+
+    SetHandicap(movelist.size());
+    SetToMove(kWhite);
+
+    return true;
 }
 
 std::vector<int> GameState::PlaceFreeHandicap(int handicap) {
     auto stone_list = std::vector<int>{};
-    if (board_.SetFixdHandicap(handicap)) {
-        SetHandicap(handicap);
-
-        for (auto vtx = 0; vtx < board_.GetNumVertices(); ++vtx) {
-            if (GetState(vtx) == kBlack) {
-                stone_list.emplace_back(vtx);
-            }
+    if (SetFixdHandicap(handicap)) {
+        for (auto m : append_moves_) {
+            stone_list.emplace_back(m.first);
         }
-
-        ko_hash_history_.clear();
-        game_history_.clear();
-
-        ko_hash_history_.emplace_back(GetKoHash());
-        game_history_.emplace_back(std::make_shared<Board>(board_));
     }
     return stone_list;
 }
@@ -671,6 +717,14 @@ int GameState::GetState(const int x, const int y) const {
 
 int GameState::GetLiberties(const int vtx) const {
     return board_.GetLiberties(vtx);
+}
+
+std::vector<int> GameState::GetAppendMoves(int color) const {
+    auto move_list = std::vector<int>{};
+    for (const auto &m : append_moves_) {
+        if (m.second == color) move_list.emplace_back(m.first);
+    }
+    return move_list;
 }
 
 std::shared_ptr<const Board> GameState::GetPastBoard(unsigned int p) const {

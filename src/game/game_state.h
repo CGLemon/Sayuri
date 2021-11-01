@@ -30,7 +30,7 @@ public:
 
     void SetWinner(GameResult result);
 
-    void SetFinalScore(float score);
+    void SetBlackScore(float score);
 
     int TextToVertex(std::string text);
 
@@ -97,12 +97,13 @@ public:
     int GetLiberties(const int vtx) const;
     std::vector<int> GetStringList(const int vtx) const;
 
+    std::vector<int> GetAppendMoves(int color) const;
     std::shared_ptr<const Board> GetPastBoard(unsigned int p) const;
     const std::vector<std::shared_ptr<const Board>>& GetHistory() const;
 
-    float black_score_;
-
 private:
+    using VertexColor = std::pair<int, int>;
+
     void PlayMoveFast(const int vtx, const int color);
     void FillRandomMove();
     void PlayRandomMove();
@@ -112,6 +113,8 @@ private:
     std::vector<std::shared_ptr<const Board>> game_history_;
 
     std::vector<std::uint64_t> ko_hash_history_;
+
+    std::vector<VertexColor> append_moves_;
 
     // The board handicap.
     int handicap_;
@@ -123,6 +126,8 @@ private:
     bool komi_half_;
 
     bool komi_negative_;
+
+    float black_score_;
 
     std::uint64_t komi_hash_;
 

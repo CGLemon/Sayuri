@@ -17,10 +17,6 @@ public:
 
     void ComputePassAliveOwnership(std::vector<int> &result) const;
 
-    bool SetFixdHandicap(int handicap);
-
-    bool SetFreeHandicap(std::vector<int> movelist);
-
     std::vector<LadderType> GetLadderMap() const;
 
     // Compute all pass-alive string.
@@ -38,8 +34,6 @@ public:
     void ComputeSekiPoints(std::vector<bool> &result) const;
 
 private:
-    bool ValidHandicap(int handicap);
-
     bool IsPassAliveString(const int vertex,
                                bool allow_sucide,
                                const std::vector<bool> &vitals,

@@ -170,7 +170,7 @@ void SgfNode::PopulateState(GameState currstate) {
                 }
             }
         }
-        GetState().SetFinalScore(black_final_score);
+        GetState().SetBlackScore(black_final_score);
     }
 
     if (const auto res = GetPropertyValue("PL")) {
@@ -476,9 +476,20 @@ GameState Sgf::FormString(std::string sgfstring, unsigned int movenum) {
 }
 
 template<typename T>
-std::string MakePropertyToString(std::string property, T value) {
+std::string MakePropertyString(std::string property, T value) {
     auto out = std::ostringstream{};
     out << property << '[' << value << ']';
+    return out.str();
+}
+
+std::string MakePropertyVetexListString(std::string property, std::vector<int> vertex_list, GameState &state) {
+    auto out = std::ostringstream{};
+    if (vertex_list.empty()) return out.str();
+
+    out << property;
+    for (const auto vtx : vertex_list) {
+        out << '[' << state.VertexToSgf(vtx) << ']';
+    }
     return out.str();
 }
 
@@ -487,26 +498,44 @@ std::string Sgf::ToString(GameState &state) {
     auto &history = state.GetHistory();
 
     out << '(' << ';';
-    out << MakePropertyToString("GM", 1);
-    out << MakePropertyToString("FF", 4);
-    out << MakePropertyToString("SZ", state.GetBoardSize());
-    out << MakePropertyToString("KM", state.GetKomi());
-    out << MakePropertyToString("RU", "chinese");
-    out << MakePropertyToString("PB", "black bot");
-    out << MakePropertyToString("PW", "white bot");
-    out << MakePropertyToString("DT", CurrentDateTime());
+    out << MakePropertyString("GM", 1);
+    out << MakePropertyString("FF", 4);
+    out << MakePropertyString("SZ", state.GetBoardSize());
+    out << MakePropertyString("KM", state.GetKomi());
+    out << MakePropertyString("RU", "chinese");
+    out << MakePropertyString("PB", "black bot");
+    out << MakePropertyString("PW", "white bot");
+    out << MakePropertyString("DT", CurrentDateTime());
+    if (state.GetHandicap() != 0) {
+        out << MakePropertyString("HA", state.GetHandicap());
+    }
+    out << MakePropertyVetexListString("AB", state.GetAppendMoves(kBlack), state);
+    out << MakePropertyVetexListString("AW", state.GetAppendMoves(kWhite), state);
+
+
 
     auto fork_state = state;
+
     fork_state.RemoveDeadStrings(200);
+    auto score = fork_state.GetFinalScore();
+
+    if (fork_state.GetPasses() >= 2) {
+        if (score > 1e-4) {
+            fork_state.SetWinner(kBlackWon);
+        } else if (score < -1e-4) {
+            fork_state.SetWinner(kWhiteWon);
+        } else {
+            fork_state.SetWinner(kDraw);
+        }
+    }
     if (fork_state.GetWinner() != kUndecide) {
         out << "RE" << '[';
-        auto score = fork_state.GetFinalScore();
         if (fork_state.GetWinner() == kBlackWon) {
             out << "B+";
-            if (state.GetPasses() >= 2) out << score;
+            if (fork_state.GetPasses() >= 2) out << score;
         } else if (fork_state.GetWinner() == kWhiteWon) {
             out << "W+";
-            if (state.GetPasses() >= 2) out << -score;
+            if (fork_state.GetPasses() >= 2) out << -score;
         } else if (fork_state.GetWinner() == kDraw) {
             out << "0";
         }
