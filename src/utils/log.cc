@@ -46,14 +46,15 @@ void LogOptions::SetQuiet(bool q) {
     quiet_ = q;
 }
 
-Logging::Logging(const char* file, int line, bool write_only) {
+Logging::Logging(const char* file, int line, bool write_only, bool use_options) {
     file_ = std::string{file};
     line_ = line;
     write_only_ = write_only;
+    use_options_ = use_options;
 }
 
 Logging::~Logging() {
-    if (!write_only_ && !LogOptions::Get().quiet_) {
+    if (!write_only_ && (!use_options_ || !LogOptions::Get().quiet_)) {
         std::cout << str() << std::flush;
     }
     LogWriter::Get().WriteString(str());

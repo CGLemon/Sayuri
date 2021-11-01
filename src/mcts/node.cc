@@ -483,9 +483,8 @@ size_t Node::GetMemoryUsed() {
     return nodes * node_mem + edges * edge_mem;
 }
 
-std::string Node::ToString(GameState &state) {
+std::string Node::ToVerboseString(GameState &state, const int color) {
     auto out = std::ostringstream{};
-    const auto color = color_;
     const auto lcblist = GetLcbList(color);
     const auto parentvisits = static_cast<float>(GetVisits());
 
@@ -541,6 +540,35 @@ std::string Node::ToString(GameState &state) {
     return out.str();
 }
 
+std::string Node::ToAnalyzeString(GameState &state, const int color) {
+    // https://github.com/SabakiHQ/Sabaki/blob/master/docs/guides/engine-analysis-integration.md
+
+    auto out = std::ostringstream{};
+    const auto lcblist = GetLcbList(color);
+
+    int i = 0;
+
+    for (auto &lcb : lcblist) {
+        const auto vertex = lcb.second;
+
+        auto child = GetChild(vertex);
+        const auto winrate = std::min(10000, (int)(10000 * child->GetEval(color, false)));
+        const auto visits = child->GetVisits();
+        const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
+
+        out << "info "
+                << "move " << state.VertexToText(vertex) << ' '
+                << "visits " << visits << ' '
+                << "winrate " << winrate << ' '
+                << "order " << i++ << ' '
+                << "pv " << pv_string;
+    }
+
+    out << std::endl;
+
+    return out.str();
+}
+
 std::string Node::GetPvString(GameState &state) {
     auto pvlist = std::vector<int>{};
     auto *next = this;
@@ -587,11 +615,10 @@ std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
         }
 
         const auto visits = node->GetVisits();
-        const auto vertex = node->GetVertex();
-        const auto lcb = node->GetLcb(color) * (1.f - lcb_reduction) + 
-                             lcb_reduction * ((float)visits/max_playouts);
         if (visits > 0) {
-            list.emplace_back(lcb, vertex);
+            const auto lcb = node->GetLcb(color) * (1.f - lcb_reduction) + 
+                                 lcb_reduction * ((float)visits/max_playouts);
+            list.emplace_back(lcb, node->GetVertex());
         }
     }
 

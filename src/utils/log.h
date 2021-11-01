@@ -39,11 +39,12 @@ private:
 
 class Logging : public std::ostringstream {
 public:
-    Logging(const char* file, int line, bool write_only);
+    Logging(const char* file, int line, bool write_only, bool use_options);
     ~Logging();
 
 private:
     bool write_only_;
+    bool use_options_;
     std::string file_;
     int line_;
 };
@@ -58,6 +59,7 @@ private:
     int line_;
 };
 
-#define LOGGING (::Logging(__FILE__, __LINE__, false))
-#define WRITING (::Logging(__FILE__, __LINE__, true))
+#define LOGGING (::Logging(__FILE__, __LINE__, false, true))
+#define WRITING (::Logging(__FILE__, __LINE__, true, true))
+#define DUMPING (::Logging(__FILE__, __LINE__, false, false))
 #define ERROR (::StandError(__FILE__, __LINE__))

@@ -132,8 +132,8 @@ void Search::TimeLeft(const int color, const int time, const int stones) {
     time_control_.TimeLeft(color, time, stones);
 }
 
-bool Search::InputPending(Search::SearchTag tag) const {
-    if (tag != kPonder) {
+bool Search::InputPending(Search::OptionTag tag) const {
+    if (!(tag & kPonder)) {
         return false;
     }
 #ifdef WIN32
@@ -175,8 +175,9 @@ bool Search::InputPending(Search::SearchTag tag) const {
 #endif
 }
 
-ComputationResult Search::Computation(int playours, Search::SearchTag tag) {
+ComputationResult Search::Computation(int playours, int interval, Search::OptionTag tag) {
     auto computation_result = ComputationResult{};
+    playours = std::min(playours, kMaxPlayouts);
 
     if (root_state_.IsGameOver()) {
         // Always reture pass move if the passese number is greater than two.
@@ -206,11 +207,13 @@ ComputationResult Search::Computation(int playours, Search::SearchTag tag) {
     computation_result.movenum = root_state_.GetMoveNumber();
 
     Timer timer;
+    Timer analyze_timer;
 
     // clock time.
     time_control_.SetLagBuffer(param_->lag_buffer);
     time_control_.Clock();
     timer.Clock();
+    analyze_timer.Clock();
 
     const auto thinking_time = time_control_.GetThinkingTime(color, board_size, move_num);
     const auto root_noise = PrepareRootNode();
@@ -237,7 +240,13 @@ ComputationResult Search::Computation(int playours, Search::SearchTag tag) {
         if (result.IsValid()) {
             playouts_.fetch_add(1);
         }
-        const auto elapsed = tag == kThinking ?
+
+        if ((tag & kAnalyze) && analyze_timer.GetDurationMilliseconds() > interval * 10) {
+            analyze_timer.Clock();
+            DUMPING << root_node_->ToAnalyzeString(root_state_, color);
+        }
+
+        const auto elapsed = (tag & kThinking) ?
                                  timer.GetDuration() : std::numeric_limits<float>::lowest();
 
         keep_running &= (elapsed < thinking_time);
@@ -249,11 +258,14 @@ ComputationResult Search::Computation(int playours, Search::SearchTag tag) {
     // Wait for all threads to join the main thread.
     group_->WaitToJoin();
 
-    if (tag == kThinking) {
+    if (tag & kThinking) {
         time_control_.TookTime(color);
     }
+    if (tag & kAnalyze) {
+        DUMPING << root_node_->ToAnalyzeString(root_state_, color);
+    }
     if (GetOption<bool>("analysis_verbose")) {
-        LOGGING << root_node_->ToString(root_state_);
+        LOGGING << root_node_->ToVerboseString(root_state_, color);
         LOGGING << "Time:\n";
         LOGGING << "  " << time_control_.ToString();
         LOGGING << "  spent: " << timer.GetDuration() << "(sec)\n";
@@ -352,7 +364,7 @@ ComputationResult Search::Computation(int playours, Search::SearchTag tag) {
 }
 
 int Search::ThinkBestMove() {
-    auto result = Computation(max_playouts_, kThinking);
+    auto result = Computation(max_playouts_, 0, kThinking);
     if ( result.root_eval < param_->resign_threshold &&
             !(result.best_move == kPass && root_state_.IsGameOver())) {
         return kResign;
@@ -362,7 +374,7 @@ int Search::ThinkBestMove() {
 }
 
 int Search::GetSelfPlayMove() {
-    auto result = Computation(max_playouts_, kThinking);
+    auto result = Computation(max_playouts_, 0, kThinking);
     int move = result.best_move;
     if (param_->random_moves_cnt > result.movenum) {
         move = result.random_move;
@@ -378,8 +390,19 @@ void Search::TryPonder() {
     if (param_->ponder) {
         int ponder_playouts = std::max(max_playouts_,
                                            max_playouts_ * (param_->cache_buffer_factor/2));
-        Computation(ponder_playouts, kPonder);
+        Computation(ponder_playouts, 0, kPonder);
     }
+}
+
+int Search::Analyze(int interval, bool ponder) {
+    auto tag = ponder ? (kAnalyze | kPonder) : (kAnalyze | kThinking);
+    auto result = Computation(max_playouts_, interval, (OptionTag)tag);
+    if ( result.root_eval < param_->resign_threshold &&
+            !(result.best_move == kPass && root_state_.IsGameOver())) {
+        return kResign;
+    }
+
+    return result.best_move;
 }
 
 void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {

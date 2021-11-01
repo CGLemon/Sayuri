@@ -2,7 +2,7 @@
 
 static constexpr auto kProtocolVerion = 2;
 
-static const std::array<std::string, 23> kGtpCommandsList = {
+static const std::array<std::string, 25> kGtpCommandsList = {
     // Part of GTP version 2 standard command
     "protocol_version",
 
@@ -68,9 +68,10 @@ static const std::array<std::string, 23> kGtpCommandsList = {
 
     "printsgf",
 
-    // Kgs commands
-    //"kgs-genmove_cleanup",
-    //"kgs-time_settings",
+    "analyze",
+
+    "genmove_analyze",
+
     "kgs-game_over"
 };
 

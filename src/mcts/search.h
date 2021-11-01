@@ -91,10 +91,11 @@ class Search {
 public:
     static constexpr int kMaxPlayouts = 15000000;
 
-    enum SearchTag : int {
-        kThinking,
-        kPonder,
-        kNoTimeLimit,
+    enum OptionTag : int {
+        kNullTag  = 0,
+        kThinking = 1 << 1,
+        kPonder   = 1 << 2,
+        kAnalyze  = 1 << 3
     };
 
     Search(GameState &state, Network &network) : root_state_(state), network_(network) {
@@ -105,13 +106,15 @@ public:
     void Initialize();
 
     // Compute the result by monte carlo tree search.
-    ComputationResult Computation(int playouts, SearchTag);
+    ComputationResult Computation(int playouts, int interval, OptionTag tag);
 
     // Get the best move.
     int ThinkBestMove();
 
     // Get the self play move.
     int GetSelfPlayMove();
+
+    int Analyze(int interval, bool ponder);
 
     void TryPonder();
 
@@ -126,7 +129,7 @@ public:
     void SaveTrainingBuffer(std::string filename, GameState &state);
 
 private:
-    bool InputPending(Search::SearchTag tag) const;
+    bool InputPending(Search::OptionTag tag) const;
 
     void GatherData(const GameState &state, ComputationResult &result);
 

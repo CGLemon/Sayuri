@@ -108,7 +108,8 @@ public:
 
     bool IsPruned() const;
 
-    std::string ToString(GameState &state);
+    std::string ToAnalyzeString(GameState &state, const int color);
+    std::string ToVerboseString(GameState &state, const int color);
     std::string GetPvString(GameState &state);
 
 private:

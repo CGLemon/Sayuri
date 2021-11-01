@@ -39,8 +39,9 @@ void GtpLoop::Loop() {
                 out = Execute(parser, try_ponder);
             }
 
-            WRITING << out;
-            std::cout << out << std::flush;
+            if (!out.empty()) {
+                DUMPING << out;
+            }
 
             if (stop) {
                 break;
@@ -169,7 +170,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             Sgf::Get().ToFile(filename, agent_->GetState());
         }
     } else if (const auto res = parser.Find("final_score", 0)) {
-        auto result = agent_->GetSearch().Computation(400, Search::kNoTimeLimit);
+        auto result = agent_->GetSearch().Computation(400, 0, Search::kNullTag);
         auto color = agent_->GetState().GetToMove();
         auto final_score = result.root_final_score;
 
@@ -208,12 +209,50 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
     } else if (const auto res = parser.Find("kgs-game_over", 0)) {
         agent_->GetNetwork().ClearCache();
         out << GTPSuccess("");
+    } else if (const auto res = parser.Find("analyze", 0)) {
+        auto color = agent_->GetState().GetToMove();
+        auto interval = 100;
+        if (const auto input = parser.GetCommand(1)) {
+            auto color_str = input->Get<std::string>();
+            if (color_str == "b" || color_str == "B" || color_str == "black") {
+                color = kBlack;
+            } else if (color_str == "w" || color_str == "W" || color_str == "white") {
+                color = kWhite;
+            }
+        }
+        if (const auto input = parser.GetCommand(2)) {
+            interval = input->Get<int>();
+        }
+        DUMPING << "=\n";
+        agent_->GetState().SetToMove(color);
+        agent_->GetSearch().Analyze(interval, true);
+        DUMPING << "\n";
+    } else if (const auto res = parser.Find("genmove_analyze", 0)) {
+        auto color = agent_->GetState().GetToMove();
+        auto interval = 100;
+        if (const auto input = parser.GetCommand(1)) {
+            auto color_str = input->Get<std::string>();
+            if (color_str == "b" || color_str == "B" || color_str == "black") {
+                color = kBlack;
+            } else if (color_str == "w" || color_str == "W" || color_str == "white") {
+                color = kWhite;
+            }
+        }
+        if (const auto input = parser.GetCommand(2)) {
+            interval = input->Get<int>();
+        }
+        DUMPING << "=\n";
+        agent_->GetState().SetToMove(color);
+        auto move = agent_->GetSearch().Analyze(interval, false);
+        agent_->GetState().PlayMove(move);
+        DUMPING << "play " << agent_->GetState().VertexToText(move) << "\n\n";
     } else if (const auto res = parser.Find("undo", 0)) {
         if (agent_->GetState().UndoMove()) {
             out << GTPSuccess("");
         } else {
             out << GTPFail("");
         }
+        DUMPING << GTPSuccess("");
     } else if (const auto res = parser.Find("time_settings", 0)) {
         int main_time = -1, byo_yomi_time = -1, byo_yomi_stones = -1;
 
@@ -266,7 +305,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         }
 
         constexpr float kOwnshipThreshold = 0.75f;
-        auto result = agent_->GetSearch().Computation(400, Search::kNoTimeLimit);
+        auto result = agent_->GetSearch().Computation(400, 0, Search::kNullTag);
         auto bsize = agent_->GetState().GetBoardSize();
         auto color = agent_->GetState().GetToMove();
         auto safe_ownership = agent_->GetState().GetOwnership();
