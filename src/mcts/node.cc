@@ -591,10 +591,10 @@ Node *Node::Get() {
 }
 
 Node *Node::GetChild(int vertex) {
-    for (const auto & child : children_) {
-        const auto node = child.Get();
-        if (vertex == node->GetVertex()) {
-            return node;
+    for (auto & child : children_) {
+        if (vertex == child.Data()->vertex) {
+            Inflate(child);
+            return child.Get();
         }
     }
     return nullptr;
@@ -629,8 +629,6 @@ std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
 int Node::GetBestMove() {
     WaitExpanded();
     assert(HaveChildren());
-
-    InflateAllChildren();
 
     auto lcblist = GetLcbList(color_);
     float best_value = std::numeric_limits<float>::lowest();
