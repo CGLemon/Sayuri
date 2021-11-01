@@ -209,6 +209,18 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
     } else if (const auto res = parser.Find("kgs-game_over", 0)) {
         agent_->GetNetwork().ClearCache();
         out << GTPSuccess("");
+    } else if (const auto res = parser.Find("kgs-chat", 0)) {
+        auto type = std::string{};
+        auto name = std::string{};
+        auto message = std::string{};
+        if (parser.GetCount() < 3) {
+            out << GTPFail("");
+        } else {
+            type = parser.GetCommand(1)->Get<std::string>();
+            name = parser.GetCommand(2)->Get<std::string>();
+            message = parser.GetCommands(3)->Get<std::string>();
+            out << GTPSuccess("I'm a go bot, not a chat bot.");
+        }
     } else if (const auto res = parser.Find("analyze", 0)) {
         auto color = agent_->GetState().GetToMove();
         auto interval = 100;

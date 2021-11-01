@@ -114,7 +114,7 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         for (auto i = size_t{0}; i < cnt; ++i) {
             const auto command = parser.GetCommand(i)->Get<std::string>();
             if (!IsParameter(command)) {
-                ERROR << " " << t << command << std::endl;
+                ERROR << " " << t << ". " << command << std::endl;
             }
         }
         ERROR << " are not understood." << std::endl;
