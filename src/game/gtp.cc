@@ -265,7 +265,6 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         } else {
             out << GTPFail("");
         }
-        DUMPING << GTPSuccess("");
     } else if (const auto res = parser.Find("time_settings", 0)) {
         int main_time = -1, byo_yomi_time = -1, byo_yomi_stones = -1;
 
