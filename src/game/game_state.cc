@@ -631,7 +631,7 @@ void GameState::RemoveDeadStrings(int playouts) {
 }
 
 float GameState::GetFinalScore(float bonus) const {
-    return board_.ComputeSimpleFinalScore(GetKomi() + GetHandicap() - bonus);
+    return board_.ComputeSimpleFinalScore(GetKomi() - bonus);
 }
 
 int GameState::GetVertex(const int x, const int y) const {
