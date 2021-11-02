@@ -252,8 +252,9 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
         keep_running &= (elapsed < thinking_time);
         keep_running &= (playouts_.load() < playours);
         keep_running &= running_.load();
-        running_.store(keep_running);
     } while (!InputPending(tag) && keep_running);
+
+    running_.store(false, std::memory_order_release);
 
     // Wait for all threads to join the main thread.
     group_->WaitToJoin();
