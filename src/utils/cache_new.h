@@ -13,12 +13,12 @@ public:
     }
 
     HashKeyCache(size_t capacity) {
-        capacity_ = capacity;
+        SetCapacity(capacity);
         generation_ = 0;
     }
 
     HashKeyCache(HashKeyCache&& cache) {
-        capacity_ = cache.capacity_;
+        SetCapacity(cache.capacity_);
         generation_ = cache.generation_;
     }
 
@@ -26,7 +26,7 @@ public:
     void SetCapacity(size_t size);
 
     // Insert the new item to the cache.
-    void Insert(std::uint64_t key, V value);
+    void Insert(std::uint64_t key, const V &value);
 
     // Lookup the item.
     V* LookupItem(std::uint64_t key);
@@ -69,11 +69,11 @@ void HashKeyCache<V>::SetCapacity(size_t size) {
 }
 
 template<typename V>
-void HashKeyCache<V>::Insert(std::uint64_t key, V value) {
-    SpinLock::Lock lock(mutex_);
-
+void HashKeyCache<V>::Insert(std::uint64_t key, const V &value) {
     const auto idx = (key % blocks_) * kClusterSize;
     Entry *entry = table_.data() + idx;
+
+    SpinLock::Lock lock(mutex_);
 
     size_t min_i = 0;
     size_t min_g = entry->generation;
@@ -95,10 +95,10 @@ void HashKeyCache<V>::Insert(std::uint64_t key, V value) {
 
 template<typename V>
 V* HashKeyCache<V>::LookupItem(std::uint64_t key) {
-    SpinLock::Lock lock(mutex_);
-
     const auto idx = (key % blocks_) * kClusterSize;
     Entry *entry = table_.data() + idx;
+
+    SpinLock::Lock lock(mutex_);
 
     for (size_t offset = 0; offset < kClusterSize; ++offset) {
         Entry *e = entry + offset;
