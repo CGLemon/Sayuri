@@ -7,6 +7,7 @@
 #include "mcts/search.h"
 #include "neural/encoder.h"
 #include "utils/log.h"
+#include "utils/format.h"
 
 #ifdef WIN32
 #include <windows.h>
@@ -99,10 +100,9 @@ std::vector<float> Search::PrepareRootNode() {
 
     if (GetOption<bool>("analysis_verbose")) {
         LOGGING << "Raw NN output:" << std::endl
-                    << std::fixed << std::setprecision(2)
-                    << std::setw(7) << "eval:" << ' ' << winloss * 100.f << "%" << std::endl
-                    << std::setw(7) << "draw:" << ' ' << evals.draw * 100.f << "%" << std::endl
-                    << std::setw(7) << "final score:" << ' ' << final_score << std::endl;
+                    << Format("       eval: %.2f%\n", winloss * 100.f)
+                    << Format("       draw: %.2f%\n", evals.draw * 100.f)
+                    << Format("final score: %.2f\n", final_score);
     }
 
     return root_noise;

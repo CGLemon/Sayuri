@@ -118,7 +118,7 @@ void HashKeyCache<V>::Clear() {
     std::for_each(std::begin(table_), std::end(table_),
                      [](auto &e){
                          e.generation = 0;
-                         e.value.reset();
+                         e.value.reset(nullptr);
                      }
                  );
     

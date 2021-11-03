@@ -1,4 +1,6 @@
 #include "neural/encoder.h"
+#include "utils/format.h"
+
 #include <sstream>
 #include <iomanip>
 
@@ -59,10 +61,10 @@ std::string Encoder::GetPlanesString(const GameState &state, int symmetry) const
                 auto idx = state.GetIndex(x, y);
                 auto offset = p * num_intersections;
 
-                if (planes[offset + idx] == 0)
-                    out << std::setw(6) << 'x';
+                if (planes[offset + idx] < std::abs(1e-4))
+                    out << Format("%6c", 'x');
                 else 
-                    out << std::setw(6) << std::fixed << std::setprecision(2) << planes[offset + idx];
+                    out << Format("%6.2f", planes[offset + idx]);
             }
             out << std::endl;
         }

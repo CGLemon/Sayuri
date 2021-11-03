@@ -2,6 +2,7 @@
 #include "mcts/lcb.h"
 #include "utils/atomic.h"
 #include <utils/random.h>
+#include <utils/format.h>
 
 #include <cassert>
 #include <algorithm>
@@ -549,19 +550,26 @@ std::string Node::ToAnalyzeString(GameState &state, const int color) {
     int i = 0;
 
     for (auto &lcb : lcblist) {
+        const auto lcb_value = lcb.first > 0.0f ? lcb.first : 0.0f;
         const auto vertex = lcb.second;
 
         auto child = GetChild(vertex);
+        const auto final_score = child->GetFinalScore(color);
         const auto winrate = std::min(10000, (int)(10000 * child->GetEval(color, false)));
         const auto visits = child->GetVisits();
+        const auto prior = std::min(10000, (int)(10000 * child->GetPolicy()));
         const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
 
-        out << "info "
-                << "move " << state.VertexToText(vertex) << ' '
-                << "visits " << visits << ' '
-                << "winrate " << winrate << ' '
-                << "order " << i++ << ' '
-                << "pv " << pv_string;
+        out << Format("info move %s visits %d winrate %d scoreLead %f prior %d lcb %d order %d pv %s",
+                         state.VertexToText(vertex).c_str(),
+                         visits,
+                         winrate,
+                         final_score,
+                         prior,
+                         std::min(10000, (int)(10000 * lcb_value)),
+                         i++,
+                         pv_string.c_str()
+                     );
     }
 
     out << std::endl;

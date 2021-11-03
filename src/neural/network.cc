@@ -24,6 +24,7 @@
 #include "neural/encoder.h"
 #include "utils/log.h"
 #include "utils/random.h"
+#include "utils/format.h"
 
 #include <random>
 #include <sstream>
@@ -239,19 +240,16 @@ std::string Network::GetOutputString(const GameState &state,
     out << "probabilities: " << std::endl;
     for (int y = 0; y < bsize; ++y) {
         for (int x = 0; x < bsize; ++x) {
-            auto idx = state.GetIndex(x,y);
-            out << std::setw(9) << std::fixed << std::setprecision(6) << result.probabilities[idx] << " ";
+            out << Format(" %.6f ", result.probabilities[state.GetIndex(x,y)]);
         }
         out << std::endl;
     }
-    out << "pass probabilities: " << std::setw(9) << std::fixed << std::setprecision(6) << result.pass_probability << std::endl;
-    out << std::endl;
+    out << Format("pass probabilities: %.6f\n", result.pass_probability) << std::endl;
 
     out << "ownership: " << std::endl;
     for (int y = 0; y < bsize; ++y) {
         for (int x = 0; x < bsize; ++x) {
-            auto idx = state.GetIndex(x,y);
-            out << std::setw(9) << std::fixed << std::setprecision(6) << result.ownership[idx] << " ";
+            out << Format(" %.6f ", result.ownership[state.GetIndex(x,y)]);
         }
         out << std::endl;
     }
