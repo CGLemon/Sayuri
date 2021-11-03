@@ -397,7 +397,10 @@ void Search::TryPonder() {
 
 int Search::Analyze(int interval, bool ponder) {
     auto tag = ponder ? (kAnalyze | kPonder) : (kAnalyze | kThinking);
-    auto result = Computation(max_playouts_, interval, (OptionTag)tag);
+    int playouts = ponder == true ? std::max(max_playouts_,
+                                                 max_playouts_ * (param_->cache_buffer_factor/2))
+                                      : max_playouts_;
+    auto result = Computation(playouts, interval, (OptionTag)tag);
     if ( result.root_eval < param_->resign_threshold &&
             !(result.best_move == kPass && root_state_.IsGameOver())) {
         return kResign;
