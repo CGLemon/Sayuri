@@ -45,6 +45,7 @@ private:
 
     bool IsPassDeadRegion(const int vertex,
                                const int color,
+                               bool allow_sucide,
                                std::vector<int> &features,
                                const std::vector<int> &regions_next) const;
 

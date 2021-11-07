@@ -319,7 +319,7 @@ void Board::ComputePassAlive(std::vector<bool> &result,
         // Fill the pass dead regions.
         for (int vtx : regions_head) {
             int pos = vtx;
-            if (IsPassDeadRegion(pos, !color, ocupied, regions_next)) {
+            if (IsPassDeadRegion(pos, !color, allow_sucide, ocupied, regions_next)) {
                 do {
                     auto x = GetX(pos);
                     auto y = GetY(pos);
@@ -386,12 +386,18 @@ bool Board::IsPassAliveString(const int vtx,
 
 bool Board::IsPassDeadRegion(const int vtx,
                                  const int color,
+                                 bool allow_sucide,
                                  std::vector<int> &features,
                                  const std::vector<int> &regions_next) const {
     const auto IsPotentialEye = [this](const int vertex,
                                            const int color,
+                                           bool allow_sucide,
                                            std::vector<int> &features,
                                            std::vector<bool> &inner_regions) {
+        if (!allow_sucide && GetState(vertex) == color) {
+            return false;
+        }
+
         // The potential eye is possible to become the real eye in the region.
         std::array<int, 4> side_count = {0, 0, 0, 0};
 
@@ -438,7 +444,7 @@ bool Board::IsPassDeadRegion(const int vtx,
     int pos = vtx;
     do {
         // Search all potential eyes in this region.
-        if (IsPotentialEye(pos, color, features, inner_regions)) {
+        if (IsPotentialEye(pos, color, allow_sucide, features, inner_regions)) {
             potentia_eyes.emplace_back(pos);
         }
         pos = regions_next[pos];
