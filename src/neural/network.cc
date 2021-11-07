@@ -179,7 +179,7 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
 
 bool Network::ProbeCache(const GameState &state,
                          Network::Result &result) {
-    // TODO: Cache the all symmetry board in early game.
+    // TODO: Cache all symmetry board hash in early game.
 
     if (LookupCache(nn_cache_, state.GetHash(), result)) {
         if (result.board_size == state.GetBoardSize()) {
@@ -205,7 +205,7 @@ Network::GetOutput(const GameState &state,
         symmetry = rng.RandFix<Symmetry::kNumSymmetris>();
     }
 
-    // Get result from cache, if the it is in the cache memory.
+    // Get result from cache, if it is in the cache memory.
     if (read_cache) {
         if (ProbeCache(state, result)) {
             return result;
@@ -214,7 +214,7 @@ Network::GetOutput(const GameState &state,
 
     result = GetOutputInternal(state, symmetry);
 
-    // Write result to cache, if the it is not in the cache memory.
+    // Write result to cache, if it is not in the cache memory.
     if (write_cache) {
         nn_cache_.Insert(state.GetHash(), result);
     }
@@ -240,7 +240,7 @@ std::string Network::GetOutputString(const GameState &state,
     out << "probabilities: " << std::endl;
     for (int y = 0; y < bsize; ++y) {
         for (int x = 0; x < bsize; ++x) {
-            out << Format(" %.6f ", result.probabilities[state.GetIndex(x,y)]);
+            out << Format("%10.6f", result.probabilities[state.GetIndex(x,y)]);
         }
         out << std::endl;
     }
@@ -249,7 +249,7 @@ std::string Network::GetOutputString(const GameState &state,
     out << "ownership: " << std::endl;
     for (int y = 0; y < bsize; ++y) {
         for (int x = 0; x < bsize; ++x) {
-            out << Format(" %.6f ", result.ownership[state.GetIndex(x,y)]);
+            out << Format("%10.6f", result.ownership[state.GetIndex(x,y)]);
         }
         out << std::endl;
     }

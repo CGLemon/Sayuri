@@ -55,13 +55,13 @@ std::string Encoder::GetPlanesString(const GameState &state, int symmetry) const
     auto planes = GetPlanes(state, symmetry);
 
     for (int p = 0; p < kPlaneChannels; ++p) {
-        out << "plane: " << p << std::endl;
+        out << "plane: " << (p+1) << std::endl;
         for (int y = 0; y < boardsize; ++y) {
             for (int x = 0; x < boardsize; ++x) {
                 auto idx = state.GetIndex(x, y);
                 auto offset = p * num_intersections;
 
-                if (planes[offset + idx] < std::abs(1e-4))
+                if (std::abs(planes[offset + idx]) < std::abs(1e-4))
                     out << Format("%6c", 'x');
                 else 
                     out << Format("%6.2f", planes[offset + idx]);
