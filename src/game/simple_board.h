@@ -31,8 +31,8 @@ public:
     int GetLastMove() const;
     int GetKoMove() const;
     int GetPasses() const;
-    int GetKoHash() const;
-    int GetHash() const;
+    std::uint64_t GetKoHash() const;
+    std::uint64_t GetHash() const;
     int GetPrisoner(const int color) const;
     int GetState(const int vtx) const;
     int GetState(const int x, const int y) const;

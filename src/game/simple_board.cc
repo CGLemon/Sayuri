@@ -1462,11 +1462,11 @@ int SimpleBoard::GetPasses() const {
     return passes_;
 }
 
-int SimpleBoard::GetKoHash() const {
+std::uint64_t SimpleBoard::GetKoHash() const {
     return ko_hash_;
 }
 
-int SimpleBoard::GetHash() const {
+std::uint64_t SimpleBoard::GetHash() const {
     return hash_;
 }
 

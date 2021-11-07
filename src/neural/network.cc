@@ -148,7 +148,6 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
     probabilities_buffer[num_intersections] = result.pass_probability;
     probabilities_buffer = Softmax(probabilities_buffer, 1);
 
-
     // Probabilities, ownership
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto symm_index = Symmetry::Get().TransformIndex(symmetry, idx);
@@ -179,12 +178,39 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
 
 bool Network::ProbeCache(const GameState &state,
                          Network::Result &result) {
-    // TODO: Cache all symmetry board hash in early game.
-
     if (LookupCache(nn_cache_, state.GetHash(), result)) {
         if (result.board_size == state.GetBoardSize()) {
             return true;
         }
+    }
+
+    if (state.GetBoardSize() >= state.GetMoveNumber() &&
+            GetOption<bool>("early_symm_cache")) {
+        for (int symm = Symmetry::kIdentitySymmetry+1; symm < Symmetry::kNumSymmetris; ++symm) {
+            if (LookupCache(nn_cache_, state.ComputeSymmetryHash(symm), result)) {
+                if (result.board_size != state.GetBoardSize()) {
+                    break;
+                }
+                const int num_intersections = state.GetNumIntersections();
+                    
+                auto probabilities_buffer = std::vector<float>(num_intersections);
+                auto ownership_buffer = std::vector<float>(num_intersections);
+
+                // copy result to buffer
+                std::copy(std::begin(result.probabilities),
+                              std::end(result.probabilities), std::begin(probabilities_buffer));
+                std::copy(std::begin(result.ownership),
+                              std::end(result.ownership), std::begin(ownership_buffer));
+
+                // transfer them
+                for (int idx = 0; idx < num_intersections; ++idx) {
+                    const auto symm_index = Symmetry::Get().TransformIndex(symm, idx);
+                    result.probabilities[idx] = probabilities_buffer[symm_index];
+                    result.ownership[idx] = ownership_buffer[symm_index];
+                }
+                return true;
+            }
+        }         
     }
     return false;
 }

@@ -87,6 +87,7 @@ void InitOptionsMap() {
     options_map["forced_policy_factor"] << Option::setoption(0.f);
     options_map["cap_playouts"] << Option::setoption(0);
     options_map["lag_buffer"] << Option::setoption(0);
+    options_map["early_symm_cache"] << Option::setoption(false);
 }
 
 void InitBasicParameters() {
@@ -138,6 +139,11 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 
     if (const auto res = parser.Find("--ponder")) {
         SetOption("ponder", true);
+        parser.RemoveCommand(res->Index());
+    }
+
+    if (const auto res = parser.Find("--early-symm-cache")) {
+        SetOption("early_symm_cache", true);
         parser.RemoveCommand(res->Index());
     }
 

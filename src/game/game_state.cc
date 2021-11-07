@@ -699,11 +699,11 @@ int GameState::GetPasses() const {
     return board_.GetPasses();
 }
 
-int GameState::GetKoHash() const {
+std::uint64_t GameState::GetKoHash() const {
     return board_.GetKoHash();
 }
 
-int GameState::GetHash() const {
+std::uint64_t GameState::GetHash() const {
     return board_.GetHash() ^ komi_hash_;
 }
 
@@ -744,4 +744,8 @@ std::vector<bool> GameState::GetStrictSafeArea() const {
     auto result = std::vector<bool>(GetNumIntersections(), false);
     board_.ComputeSafeArea(result, false);
     return result;
+}
+
+std::uint64_t GameState::ComputeSymmetryHash(const int symm) const {
+    return board_.ComputeSymmetryHash(board_.GetKoMove(), symm) ^ komi_hash_;
 }
