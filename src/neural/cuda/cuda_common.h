@@ -17,7 +17,7 @@
 
 namespace CUDA {
 
-static constexpr auto MAX_SUPPORT_GPUS = 64;
+static constexpr int kMaxSupportCPUs = 256; // Give it a large value.
 
 #define KBLOCKSIZE 256
 
@@ -28,25 +28,29 @@ void CudnnError(cudnnStatus_t status);
 void CublasError(cublasStatus_t status);
 void CudaError(cudaError_t status);
 
-
 #define ReportCUBLASErrors(status) CublasError(status)
 #define ReportCUDAErrors(status) CudaError(status)
-
 
 int GetDeviceCount();
 int GetDevice();
 void SetDevice(int n);
+void WaitToFinish(cudaStream_t s);
 
 inline static int DivUp(int a, int b) { return (a + b - 1) / b; }
 bool IsUsingCuDNN();
 
-struct CudaHandel {
+struct CudaHandles {
 #ifdef USE_CUDNN
-    cudnnHandle_t cudnn_handel;
+    cudnnHandle_t cudnn_handle;
 #endif
-    cublasHandle_t cublas_handel;
+    cublasHandle_t cublas_handle;
+
+    cudaStream_t stream;
+
+    int gpu_id;
 
     void ApplyOnCurrentDevice();
+    void Release();
 };
 
 std::string GetDevicesInfo();

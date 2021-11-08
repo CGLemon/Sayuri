@@ -31,34 +31,35 @@ public:
     virtual void Destroy();
 
 private:
-   struct Graph {
-        // intput
-        CUDA::Convolution input_conv;
-        CUDA::Batchnorm input_bnorm;
-
-        // residual towers
-        std::vector<CUDA::Convolution> tower_conv;
-        std::vector<CUDA::Batchnorm> tower_bnorm;
-        std::vector<CUDA::SEUnit> tower_se;
-
-        // policy head 
-        CUDA::Convolution p_ex_conv;
-        CUDA::Batchnorm p_ex_bnorm;
-
-        CUDA::Convolution p_prob;
-        CUDA::GlobalAvgPool p_pool;
-        CUDA::FullyConnect p_prob_pass;
-
-        // value head
-        CUDA::Convolution v_ex_conv;
-        CUDA::Batchnorm v_ex_bnorm;
-
-        CUDA::Convolution v_ownership;
-        CUDA::GlobalAvgPool v_pool;
-        CUDA::FullyConnect v_misc;
-    };
 
     class NNGraph {
+        struct Graph {
+            // intput
+            CUDA::Convolution input_conv;
+            CUDA::Batchnorm input_bnorm;
+
+            // residual towers
+            std::vector<CUDA::Convolution> tower_conv;
+            std::vector<CUDA::Batchnorm> tower_bnorm;
+            std::vector<CUDA::SEUnit> tower_se;
+
+            // policy head 
+            CUDA::Convolution p_ex_conv;
+            CUDA::Batchnorm p_ex_bnorm;
+
+            CUDA::Convolution p_prob;
+            CUDA::GlobalAvgPool p_pool;
+            CUDA::FullyConnect p_prob_pass;
+
+            // value head
+            CUDA::Convolution v_ex_conv;
+            CUDA::Batchnorm v_ex_bnorm;
+
+            CUDA::Convolution v_ownership;
+            CUDA::GlobalAvgPool v_pool;
+            CUDA::FullyConnect v_misc;
+        };
+
     public:
         ~NNGraph();
         void BuildGraph(const int gpu, 
@@ -71,10 +72,9 @@ private:
         void DestroyGraph();
 
     private:
-        CUDA::CudaHandel handel_;
+        CUDA::CudaHandles handles_;
 
         int board_size_;
-        int gpu_;
         int max_batch_;
 
         std::unique_ptr<Graph> graph_{nullptr};

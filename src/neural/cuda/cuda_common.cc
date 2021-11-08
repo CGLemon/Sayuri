@@ -43,6 +43,17 @@ void CudaError(cudaError_t status) {
   }
 }
 
+#ifdef USE_CUDNN
+void CudnnError(cudnnStatus_t status) {
+    if (status != CUDNN_STATUS_SUCCESS) {
+        const char *s = cudnnGetErrorString(status);
+        auto err = std::ostringstream{};
+        err << "CUDA Error: " << cause;
+        throw std::runtime_error(err.str());
+    }
+}
+#endif
+
 int GetDeviceCount() {
     int n = 0;
     ReportCUDAErrors(cudaGetDeviceCount(&n));
@@ -56,46 +67,43 @@ int GetDevice() {
 }
 
 void SetDevice(int n) {
-    cudaSetDevice(n);
+    ReportCUDAErrors(cudaSetDevice(n));
 }
 
-#ifdef USE_CUDNN
-void CudnnError(cudnnStatus_t status) {
-    if (status != CUDNN_STATUS_SUCCESS) {
-        const char *s = cudnnGetErrorString(status);
-        std::cerr << "CUDA Error: " << s << "\n";
-        exit(-1);
-    }
+void WaitToFinish(cudaStream_t s) {
+    ReportCUDAErrors(cudaStreamSynchronize(s));
 }
 
-cudnnHandle_t GetCudnnHandle() {
-    static bool init[MAX_SUPPORT_GPUS] = {false};
-    static cudnnHandle_t handle[MAX_SUPPORT_GPUS];
+static bool handles_init[kMaxSupportCPUs] = {false};
+
+void CudaHandles::ApplyOnCurrentDevice() {
     int i = GetDevice();
-    if(!init[i]) {
-        cudnnCreate(&handle[i]);
-        init[i] = true;
-    }
-    return handle[i];
-}
-#endif
 
-cublasHandle_t GetBlasHandle() {
-    static bool init[MAX_SUPPORT_GPUS] = {false};
-    static cublasHandle_t handle[MAX_SUPPORT_GPUS];
-    int i = GetDevice();
-    if (!init[i]) {
-        cublasCreate(&handle[i]);
-        init[i] = true;
+    if (i >= kMaxSupportCPUs) {
+        throw std::runtime_error("Out of supported GPU number.");
     }
-    return handle[i];
-}
 
-void CudaHandel::ApplyOnCurrentDevice() {
+    if (handles_init[i]) {
+        return;
+    }
+
+    ReportCUBLASErrors(cublasCreate(&cublas_handle));
 #ifdef USE_CUDNN
-    cudnn_handel = GetCudnnHandle();
+    ReportCUDNNErrors(cudnnCreate(&cudnn_handle));
 #endif
-    cublas_handel = GetBlasHandle();
+    ReportCUDAErrors(cudaStreamCreate(&stream));
+
+    gpu_id = i;
+    handles_init[i] = true;
+}
+
+void CudaHandles::Release() {
+    if (handles_init[gpu_id]) {
+        cudaStreamDestroy(stream);
+        cublasDestroy(cublas_handle);
+        cudnnDestroy(cudnn_handle);
+        handles_init[gpu_id] = false;
+    }
 }
 
 bool IsUsingCuDNN() {
@@ -167,7 +175,7 @@ std::string GetDevicesInfo() {
     out << "Number of CUDA devices: " << devicecount << '\n';
 
     for(int i = 0; i < devicecount; ++i) {
-        out << "=== Device " << i <<"===\n";
+        out << "=== Device " << i <<" ===\n";
         cudaDeviceProp device_prop;
         cudaGetDeviceProperties(&device_prop, i);
         out << OutputSpec(device_prop);
