@@ -147,7 +147,7 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         parser.RemoveCommand(res->Index());
     }
 
-    if (const auto res = parser.FindNext({"--resign_threshold", "-r"})) {
+    if (const auto res = parser.FindNext({"--resign-threshold", "-r"})) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("resign_threshold", res->Get<float>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
@@ -336,13 +336,31 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 void ArgsParser::DumpHelper() const {
     ERROR << "Arguments:" << std::endl
               << "\t--quiet, -q" << std::endl
+              << "\t\t Disable all diagnostic verbose." << std::endl
+
               << "\t--analysis-verbose, -a" << std::endl
+              << "\t\t Dump search verbose." << std::endl
+
               << "\t--ponder" << std::endl
+              << "\t\t Thinking on opponent's time." << std::endl
+
+              << "\t--resign-threshold, -r <float>" << std::endl
+              << "\t\t Resign when winrate is less than x. Defulat is 0.1." << std::endl
+
               << "\t--playouts, -p <integer>" << std::endl
+              << "\t\t Number of playouts." << std::endl
+
               << "\t--threads, -t <integer>" << std::endl
+              << "\t\t Number of threads." << std::endl
+
               << "\t--batch-size, -b <integer>" << std::endl
+              << "\t\t Number of batch size." << std::endl
+
               << "\t--logfile, -l <log file name>" << std::endl
+              << "\t\t File to log input/output to." << std::endl
+
               << "\t--weights, -w <weight file name>" << std::endl
+              << "\t\t File with network weights" << std::endl
         ;
     exit(-1);
 }

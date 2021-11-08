@@ -13,8 +13,6 @@ T GetOption(std::string name);
 template<typename T>
 bool SetOption(std::string name, T val);
 
-void InitBasicParameters();
-
 class ArgsParser {
 public:
     ArgsParser() = delete;

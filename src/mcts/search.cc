@@ -364,10 +364,41 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
     return computation_result;
 }
 
+bool ShouldResign(GameState &state, ComputationResult &result, float resign_threshold) {
+    const int handicap = state.GetHandicap();
+    const int movenum = state.GetMoveNumber();
+    const int num_intersections = state.GetNumIntersections();
+
+    const auto move_threshold = num_intersections / 8;
+    if (movenum <= move_threshold) {
+        // Too early to resign.
+        return false;
+    }
+
+    if (state.IsGameOver()) {
+        return false;
+    }
+
+    if ((handicap > 0) && (state.GetToMove() == kWhite)) {
+        const auto handicap_resign_threshold =
+            resign_threshold / (1 + handicap);
+
+        auto blend_ratio = std::min(1.0f, movenum / (0.6f * num_intersections));
+        auto blended_resign_threshold = blend_ratio * resign_threshold
+            + (1 - blend_ratio) * handicap_resign_threshold;
+        if (result.root_eval > blended_resign_threshold) {
+            // Allow lower eval for white in handicap games
+            // where opp may fumble.
+            return false;
+        }
+    }
+
+    return true;
+}
+
 int Search::ThinkBestMove() {
     auto result = Computation(max_playouts_, 0, kThinking);
-    if ( result.root_eval < param_->resign_threshold &&
-            !(result.best_move == kPass && root_state_.IsGameOver())) {
+    if (ShouldResign(root_state_, result, param_->resign_threshold)) {
         return kResign;
     }
 
@@ -401,8 +432,7 @@ int Search::Analyze(int interval, bool ponder) {
                                                  max_playouts_ * (param_->cache_buffer_factor/2))
                                       : max_playouts_;
     auto result = Computation(playouts, interval, (OptionTag)tag);
-    if ( result.root_eval < param_->resign_threshold &&
-            !(result.best_move == kPass && root_state_.IsGameOver())) {
+    if (ShouldResign(root_state_, result, param_->resign_threshold)) {
         return kResign;
     }
 
