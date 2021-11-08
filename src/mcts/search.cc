@@ -369,7 +369,7 @@ bool ShouldResign(GameState &state, ComputationResult &result, float resign_thre
     const int movenum = state.GetMoveNumber();
     const int num_intersections = state.GetNumIntersections();
 
-    const auto move_threshold = num_intersections / 8;
+    const auto move_threshold = num_intersections / 4;
     if (movenum <= move_threshold) {
         // Too early to resign.
         return false;
