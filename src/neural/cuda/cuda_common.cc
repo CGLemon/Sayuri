@@ -43,6 +43,17 @@ void CudaError(cudaError_t status) {
   }
 }
 
+#ifdef USE_CUDNN
+void CudnnError(cudnnStatus_t status) {
+    if (status != CUDNN_STATUS_SUCCESS) {
+        const char *s = cudnnGetErrorString(status);
+        auto err = std::ostringstream{};
+        err << "CUDA Error: " << cause;
+        throw std::runtime_error(err.str());
+    }
+}
+#endif
+
 int GetDeviceCount() {
     int n = 0;
     ReportCUDAErrors(cudaGetDeviceCount(&n));
@@ -63,30 +74,23 @@ void WaitToFinish(cudaStream_t s) {
     ReportCUDAErrors(cudaStreamSynchronize(s));
 }
 
-#ifdef USE_CUDNN
-void CudnnError(cudnnStatus_t status) {
-    if (status != CUDNN_STATUS_SUCCESS) {
-        const char *s = cudnnGetErrorString(status);
-        std::cerr << "CUDA Error: " << s << "\n";
-        exit(-1);
-    }
-}
-#endif
-
-static bool handles_init[MAX_SUPPORT_GPUS] = {false};
+static bool handles_init[kMaxSupportCPUs] = {false};
 
 void CudaHandles::ApplyOnCurrentDevice() {
     int i = GetDevice();
 
+    if (i >= kMaxSupportCPUs) {
+        throw std::runtime_error("Out of supported GPU number.");
+    }
+
     if (handles_init[i]) {
         return;
     }
-    ReportCUBLASErrors(cublasCreate(&cublas_handle));
 
+    ReportCUBLASErrors(cublasCreate(&cublas_handle));
 #ifdef USE_CUDNN
     ReportCUDNNErrors(cudnnCreate(&cudnn_handle));
 #endif
-
     ReportCUDAErrors(cudaStreamCreate(&stream));
 
     gpu_id = i;

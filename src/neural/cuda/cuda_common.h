@@ -17,7 +17,7 @@
 
 namespace CUDA {
 
-static constexpr auto MAX_SUPPORT_GPUS = 256; // Give it a large value.
+static constexpr int kMaxSupportCPUs = 256; // Give it a large value.
 
 #define KBLOCKSIZE 256
 
@@ -27,7 +27,6 @@ void CudnnError(cudnnStatus_t status);
 #endif
 void CublasError(cublasStatus_t status);
 void CudaError(cudaError_t status);
-
 
 #define ReportCUBLASErrors(status) CublasError(status)
 #define ReportCUDAErrors(status) CudaError(status)

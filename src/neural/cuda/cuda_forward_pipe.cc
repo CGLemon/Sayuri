@@ -85,10 +85,9 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
         return;
     }
     graph_ = std::make_unique<Graph>();
-    gpu_ = gpu;
     weights_ = weights;
 
-    CUDA::SetDevice(gpu_);
+    CUDA::SetDevice(gpu);
     handles_.ApplyOnCurrentDevice();
 
     board_size_ = board_size;
@@ -577,7 +576,7 @@ void CudaForwardPipe::Worker(int gpu) {
     };
 
     while (true) {
-        if (!worker_running_) return;
+        if (!worker_running_.load()) return;
 
         auto entries = gether_batches();
         const auto batch_size = entries.size();
@@ -607,10 +606,7 @@ void CudaForwardPipe::Worker(int gpu) {
 }
 
 void CudaForwardPipe::QuitWorkers() {
-    {
-        std::lock_guard<std::mutex> queue_lock(queue_mutex_);
-        worker_running_.store(false);
-    }
+    worker_running_.store(false);
     cv_.notify_all();
     for (auto &t : workers_) {
         t.join();
