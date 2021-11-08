@@ -38,7 +38,7 @@ void CudaError(cudaError_t status) {
   if (status != cudaSuccess) {
         const char *cause = cudaGetErrorString(status);
         auto err = std::ostringstream{};
-        err << "CUDA Error: " << cause;
+        err << "CUDA error: " << cause;
         throw std::runtime_error(err.str());
   }
 }
@@ -46,9 +46,9 @@ void CudaError(cudaError_t status) {
 #ifdef USE_CUDNN
 void CudnnError(cudnnStatus_t status) {
     if (status != CUDNN_STATUS_SUCCESS) {
-        const char *s = cudnnGetErrorString(status);
+        const char *cause = cudnnGetErrorString(status);
         auto err = std::ostringstream{};
-        err << "CUDA Error: " << cause;
+        err << "CUDNN error: " << cause;
         throw std::runtime_error(err.str());
     }
 }
