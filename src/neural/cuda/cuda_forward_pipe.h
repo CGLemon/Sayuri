@@ -71,7 +71,7 @@ private:
         void DestroyGraph();
 
     private:
-        CUDA::CudaHandel handel_;
+        CUDA::CudaHandles handles_;
 
         int board_size_;
         int gpu_;
@@ -79,6 +79,7 @@ private:
 
         std::unique_ptr<Graph> graph_{nullptr};
 
+        
         float *cuda_scratch_;
         float *cuda_input_planes_;
         float *cuda_output_prob_;

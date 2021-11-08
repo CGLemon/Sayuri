@@ -56,7 +56,11 @@ int GetDevice() {
 }
 
 void SetDevice(int n) {
-    cudaSetDevice(n);
+    ReportCUDAErrors(cudaSetDevice(n));
+}
+
+void WaitToFinish(cudaStream_t s) {
+    ReportCUDAErrors(cudaStreamSynchronize(s));
 }
 
 #ifdef USE_CUDNN
@@ -67,35 +71,35 @@ void CudnnError(cudnnStatus_t status) {
         exit(-1);
     }
 }
-
-cudnnHandle_t GetCudnnHandle() {
-    static bool init[MAX_SUPPORT_GPUS] = {false};
-    static cudnnHandle_t handle[MAX_SUPPORT_GPUS];
-    int i = GetDevice();
-    if(!init[i]) {
-        cudnnCreate(&handle[i]);
-        init[i] = true;
-    }
-    return handle[i];
-}
 #endif
 
-cublasHandle_t GetBlasHandle() {
-    static bool init[MAX_SUPPORT_GPUS] = {false};
-    static cublasHandle_t handle[MAX_SUPPORT_GPUS];
-    int i = GetDevice();
-    if (!init[i]) {
-        cublasCreate(&handle[i]);
-        init[i] = true;
-    }
-    return handle[i];
-}
+static bool handles_init[MAX_SUPPORT_GPUS] = {false};
 
-void CudaHandel::ApplyOnCurrentDevice() {
+void CudaHandles::ApplyOnCurrentDevice() {
+    int i = GetDevice();
+
+    if (handles_init[i]) {
+        return;
+    }
+    ReportCUBLASErrors(cublasCreate(&cublas_handle));
+
 #ifdef USE_CUDNN
-    cudnn_handel = GetCudnnHandle();
+    ReportCUDNNErrors(cudnnCreate(&cudnn_handle));
 #endif
-    cublas_handel = GetBlasHandle();
+
+    ReportCUDAErrors(cudaStreamCreate(&stream));
+
+    gpu_id = i;
+    handles_init[i] = true;
+}
+
+void CudaHandles::Release() {
+    if (handles_init[gpu_id]) {
+        cudaStreamDestroy(stream);
+        cublasDestroy(cublas_handle);
+        cudnnDestroy(cudnn_handle);
+        handles_init[gpu_id] = false;
+    }
 }
 
 bool IsUsingCuDNN() {
@@ -167,7 +171,7 @@ std::string GetDevicesInfo() {
     out << "Number of CUDA devices: " << devicecount << '\n';
 
     for(int i = 0; i < devicecount; ++i) {
-        out << "=== Device " << i <<"===\n";
+        out << "=== Device " << i <<" ===\n";
         cudaDeviceProp device_prop;
         cudaGetDeviceProperties(&device_prop, i);
         out << OutputSpec(device_prop);
