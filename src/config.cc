@@ -339,10 +339,13 @@ void ArgsParser::DumpHelper() const {
               << "\t\t Disable all diagnostic verbose." << std::endl
 
               << "\t--analysis-verbose, -a" << std::endl
-              << "\t\t Dump search verbose." << std::endl
+              << "\t\t Dump the search verbose." << std::endl
 
               << "\t--ponder" << std::endl
               << "\t\t Thinking on opponent's time." << std::endl
+
+              << "\t--early-symm-cache" << std::endl
+              << "\t\t Accelerate search at the early step." << std::endl
 
               << "\t--resign-threshold, -r <float>" << std::endl
               << "\t\t Resign when winrate is less than x. Defulat is 0.1." << std::endl

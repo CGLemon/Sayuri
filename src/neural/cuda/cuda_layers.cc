@@ -152,7 +152,7 @@ void Convolution::Forward(const int batch, float *input, float *output,
         float *input_ptr = input + b * input_shift;
         float *output_ptr = output + b * output_shift;
         if (filters_ != 1) {
-            im2col(filters_, in_channels_, height_, width_, input_ptr, op_scratch);
+            im2col(filters_, in_channels_, height_, width_, input_ptr, op_scratch, handles_->stream);
             gemm(false, false, out_channels_, spatial_size_, filter_dim_, 1.0f,
                  cuda_weights_, filter_dim_, op_scratch, spatial_size_,
                  0.0f, output_ptr, spatial_size_, handles_->cublas_handle, handles_->stream);

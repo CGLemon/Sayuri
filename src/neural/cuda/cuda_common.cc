@@ -101,7 +101,9 @@ void CudaHandles::Release() {
     if (handles_init[gpu_id]) {
         cudaStreamDestroy(stream);
         cublasDestroy(cublas_handle);
+#ifdef USE_CUDNN
         cudnnDestroy(cudnn_handle);
+#endif
         handles_init[gpu_id] = false;
     }
 }
