@@ -28,7 +28,7 @@ void Search::Initialize() {
     group_ = std::make_unique<ThreadGroup<void>>(&ThreadPool::Get());
 
     max_playouts_ = param_->playouts;
-    playouts_.store(0);
+    playouts_.store(0, std::memory_order_relaxed);
 }
 
 void Search::PlaySimulation(GameState &currstate, Node *const node,
@@ -56,7 +56,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
     if (node->HaveChildren() && !search_result.IsValid()) {
         auto color = currstate.GetToMove();
         Node *next = nullptr;
-        if (playouts_.load() < param_->cap_playouts) {
+        if (playouts_.load(std::memory_order_relaxed) < param_->cap_playouts) {
             // Go to the next node by best polcy.
             next = node->ProbSelectChild();
         } else {
@@ -84,8 +84,8 @@ std::vector<float> Search::PrepareRootNode() {
     node_data_->node_stats = node_stats_.get();
     root_node_ = std::make_unique<Node>(node_data_.get());
 
-    playouts_.store(0);
-    running_.store(true);
+    playouts_.store(0, std::memory_order_relaxed);
+    running_.store(true, std::memory_order_relaxed);
 
     auto root_noise = std::vector<float>{};
 
@@ -114,8 +114,8 @@ void Search::ClearNodes() {
         root_node_ = nullptr;
     }
     if (node_stats_) {
-        assert(node_stats_->nodes.load() == 0);
-        assert(node_stats_->edges.load() == 0);
+        assert(node_stats_->nodes.load(std::memory_order_relaxed) == 0);
+        assert(node_stats_->edges.load(std::memory_order_relaxed) == 0);
 
         node_stats_.reset();
         node_stats_ = nullptr;
@@ -187,12 +187,12 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
 
     // The SMP worker run on every threads except main thread.
     const auto Worker = [this]() -> void {
-        while(running_.load()) {
+        while(running_.load(std::memory_order_relaxed)) {
             auto currstate = std::make_unique<GameState>(root_state_);
             auto result = SearchResult{};
             PlaySimulation(*currstate, root_node_.get(), root_node_.get(), result);
             if (result.IsValid()) {
-                playouts_.fetch_add(1);
+                playouts_.fetch_add(1, std::memory_order_relaxed);
             }
         };
     };
@@ -219,7 +219,7 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
     const auto root_noise = PrepareRootNode();
 
     if (thinking_time < timer.GetDuration()) {
-        running_.store(false);
+        running_.store(false, std::memory_order_relaxed);
     }
 
     if (GetOption<bool>("analysis_verbose")) {
@@ -238,7 +238,7 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
 
         PlaySimulation(*currstate, root_node_.get(), root_node_.get(), result);
         if (result.IsValid()) {
-            playouts_.fetch_add(1);
+            playouts_.fetch_add(1, std::memory_order_relaxed);
         }
 
         if ((tag & kAnalyze) && analyze_timer.GetDurationMilliseconds() > interval * 10) {
@@ -250,8 +250,8 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
                                  timer.GetDuration() : std::numeric_limits<float>::lowest();
 
         keep_running &= (elapsed < thinking_time);
-        keep_running &= (playouts_.load() < playours);
-        keep_running &= running_.load();
+        keep_running &= (playouts_.load(std::memory_order_relaxed) < playours);
+        keep_running &= running_.load(std::memory_order_relaxed);
     } while (!InputPending(tag) && keep_running);
 
     running_.store(false, std::memory_order_release);
@@ -270,7 +270,8 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
         LOGGING << "Time:\n";
         LOGGING << "  " << time_control_.ToString();
         LOGGING << "  spent: " << timer.GetDuration() << "(sec)\n";
-        LOGGING << "  speed: " << (float)playouts_.load() / timer.GetDuration() << "(p/sec)\n";
+        LOGGING << "  speed: " << (float)playouts_.load(std::memory_order_relaxed) /
+                                      timer.GetDuration() << "(p/sec)\n";
     }
 
     // Fill side to move, moves, root eval and score.
@@ -345,7 +346,7 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
         }
 
         auto node = root_node_->GetChild(vertex);
-        if (node && !node->IsPruned()) {
+        if (node && node->IsActive()) {
             const auto prob = computation_result.root_probabilities[idx];
             computation_result.root_target_probabilities[idx] = prob;
             tot_target_policy += prob;

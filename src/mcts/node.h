@@ -2,11 +2,10 @@
 
 #include "game/game_state.h"
 #include "game/types.h"
-
 #include "mcts/node_pointer.h"
 #include "mcts/parameters.h"
-
 #include "neural/network.h"
+#include "utils/mutex.h"
 
 #include <array>
 #include <vector>
@@ -107,6 +106,10 @@ public:
     bool IsExpended() const;
 
     bool IsPruned() const;
+    void SetActive(const bool active);
+    void InvaliNode();
+    bool IsActive() const;
+    bool IsValid() const;
 
     std::string ToAnalyzeString(GameState &state, const int color);
     std::string ToVerboseString(GameState &state, const int color);
@@ -151,11 +154,6 @@ private:
         kActive
     };
     std::atomic<StatusType> status_{StatusType::kActive};
-
-    void SetActive(const bool active);
-    void InvaliNode();
-    bool IsActive() const;
-    bool IsValid() const;
 
     enum class ExpandState : std::uint8_t {
         kInitial = 0,

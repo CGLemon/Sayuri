@@ -185,7 +185,6 @@ void Node::LinkNetOutput(const Network::Result &raw_netlist, const int color){
     }
 }
 
-
 // Experiment function.
 void Node::PolicyTargetPruning() {
     WaitExpanded();
@@ -244,7 +243,6 @@ void Node::PolicyTargetPruning() {
         const auto vertex = x.second;
         GetChild(vertex)->SetVisits(visits);
     }
-
 }
 
 Node *Node::ProbSelectChild() {
@@ -404,8 +402,8 @@ int Node::RandomizeFirstProportionally(float random_temp) {
 
 void Node::Update(const NodeEvals *evals) {
     const float eval = evals->black_wl;
-    const float old_eval = accumulated_black_wl_.load();
-    const float old_visits = visits_.load();
+    const float old_eval = accumulated_black_wl_.load(std::memory_order_relaxed);
+    const float old_visits = visits_.load(std::memory_order_relaxed);
 
     const float old_delta = old_visits > 0 ? eval - old_eval / old_visits : 0.0f;
     const float new_delta = eval - (old_eval + eval) / (old_visits + 1);
@@ -413,7 +411,7 @@ void Node::Update(const NodeEvals *evals) {
     // Welford's online algorithm for calculating variance.
     const float delta = old_delta * new_delta;
 
-    visits_.fetch_add(1);
+    visits_.fetch_add(1, std::memory_order_relaxed);
     AtomicFetchAdd(squared_eval_diff_, delta);
     AtomicFetchAdd(accumulated_black_wl_, eval);
     AtomicFetchAdd(accumulated_draw_, evals->draw);
@@ -455,7 +453,7 @@ float Node::GetScoreUtility(const int color, float factor, float parent_score) c
 }
 
 float Node::GetVariance(const float default_var, const int visits) const {
-    return visits > 1 ? squared_eval_diff_.load() / (visits - 1) : default_var;
+    return visits > 1 ? squared_eval_diff_.load(std::memory_order_relaxed) / (visits - 1) : default_var;
 }
 
 float Node::GetLcb(const int color) const {
@@ -477,8 +475,8 @@ float Node::GetLcb(const int color) const {
 }
 
 size_t Node::GetMemoryUsed() {
-    const auto nodes = GetStats()->nodes.load();
-    const auto edges = GetStats()->edges.load();
+    const auto nodes = GetStats()->nodes.load(std::memory_order_relaxed);
+    const auto edges = GetStats()->edges.load(std::memory_order_relaxed);
     const auto node_mem = sizeof(Node) + sizeof(Edge);
     const auto edge_mem = sizeof(Edge);
     return nodes * node_mem + edges * edge_mem;
@@ -531,8 +529,8 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     }
 
     const auto mem_used = static_cast<double>(GetMemoryUsed()) / (1024.f * 1024.f);
-    const auto nodes = GetStats()->nodes.load();
-    const auto edges = GetStats()->edges.load();
+    const auto nodes = GetStats()->nodes.load(std::memory_order_relaxed);
+    const auto edges = GetStats()->edges.load(std::memory_order_relaxed);
     out << "Tree Status:" << std::endl
             << std::setw(9) << "nodes:" << ' ' << nodes  << std::endl
             << std::setw(9) << "edges:" << ' ' << edges  << std::endl
@@ -618,7 +616,7 @@ std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
 
     for (const auto & child : children_) {
         const auto node = child.Get();
-        if (node == nullptr || node->IsPruned()) {
+        if (node == nullptr || !node->IsActive()) {
             continue;
         }
 
@@ -687,7 +685,7 @@ Parameters *Node::GetParameters() {
 }
 
 int Node::GetThreads() const {
-    return running_threads_.load();
+    return running_threads_.load(std::memory_order_relaxed);
 }
 
 int Node::GetVirtualLoss() const {
@@ -703,7 +701,7 @@ float Node::GetPolicy() const {
 }
 
 int Node::GetVisits() const {
-    return visits_.load();
+    return visits_.load(std::memory_order_relaxed);
 }
 
 float Node::GetNetFinalScore(const int color) const {
@@ -714,7 +712,7 @@ float Node::GetNetFinalScore(const int color) const {
 }
 
 float Node::GetFinalScore(const int color) const {
-    auto score = accumulated_black_fs_.load() / GetVisits();
+    auto score = accumulated_black_fs_.load(std::memory_order_relaxed) / GetVisits();
 
     if (color == kBlack) {
         return score;
@@ -727,7 +725,7 @@ float Node::GetNetDraw() const {
 }
 
 float Node::GetDraw() const {
-    return accumulated_draw_.load() / GetVisits();
+    return accumulated_draw_.load(std::memory_order_relaxed) / GetVisits();
 }
 
 float Node::GetNetEval(const int color) const {
@@ -741,14 +739,14 @@ float Node::GetEval(const int color, const bool use_virtual_loss) const {
     auto virtual_loss = 0;
 
     if (use_virtual_loss) {
-        // If this node is seaching, punish this node.
+        // If the node is seaching, punish it.
         virtual_loss = GetVirtualLoss();
     }
 
     auto visits = GetVisits() + virtual_loss;
     assert(visits >= 0);
 
-    auto accumulated_wl = accumulated_black_wl_.load();
+    auto accumulated_wl = accumulated_black_wl_.load(std::memory_order_relaxed);
     if (color == kWhite && use_virtual_loss) {
         accumulated_wl += static_cast<float>(virtual_loss);
     }
@@ -791,61 +789,62 @@ bool Node::HaveChildren() const {
 }
 
 void Node::IncrementThreads() {
-    running_threads_.fetch_add(1);
+    running_threads_.fetch_add(1, std::memory_order_relaxed);
 }
 
 void Node::DecrementThreads() {
-    running_threads_.fetch_sub(1);
+    running_threads_.fetch_sub(1, std::memory_order_relaxed);
 }
 
 void Node::IncrementNodes() {
-    GetStats()->nodes.fetch_add(1);
+    GetStats()->nodes.fetch_add(1, std::memory_order_relaxed);
 }
 
 void Node::DecrementNodes() {
-    GetStats()->nodes.fetch_sub(1); 
+    GetStats()->nodes.fetch_sub(1, std::memory_order_relaxed); 
 }
 
 void Node::IncrementEdges() {
-    GetStats()->edges.fetch_add(1); 
+    GetStats()->edges.fetch_add(1, std::memory_order_relaxed); 
 }
 
 void Node::DecrementEdges() {
-    GetStats()->edges.fetch_sub(1); 
+    GetStats()->edges.fetch_sub(1, std::memory_order_relaxed); 
 }
 
 void Node::SetActive(const bool active) {
     if (IsValid()) {
-        status_ = active ? StatusType::kActive : StatusType::kPruned;
+        StatusType v = active ? StatusType::kActive : StatusType::kPruned;
+        status_.store(v, std::memory_order_relaxed);
     }
 }
 
 void Node::InvaliNode() {
     if (IsValid()) {
-        status_ = StatusType::kInvalid;
+        status_.store(StatusType::kInvalid, std::memory_order_relaxed);
     }
 }
 
 bool Node::IsPruned() const {
-    return status_.load() == StatusType::kPruned;
+    return status_.load(std::memory_order_relaxed) == StatusType::kPruned;
 }
 
 bool Node::IsActive() const {
-    return status_.load() == StatusType::kActive;
+    return status_.load(std::memory_order_relaxed) == StatusType::kActive;
 }
 
 bool Node::IsValid() const {
-    return status_.load() != StatusType::kInvalid;
+    return status_.load(std::memory_order_relaxed) != StatusType::kInvalid;
 }
 
 bool Node::AcquireExpanding() {
     auto expected = ExpandState::kInitial;
     auto newval = ExpandState::kExpanding;
-    return expand_state_.compare_exchange_strong(expected, newval);
+    return expand_state_.compare_exchange_strong(expected, newval, std::memory_order_acquire);
 }
 
 void Node::ExpandDone() {
-    auto v = expand_state_.exchange(ExpandState::kExpanded);
+    auto v = expand_state_.exchange(ExpandState::kExpanded, std::memory_order_release);
 #ifdef NDEBUG
     (void) v;
 #endif
@@ -853,7 +852,7 @@ void Node::ExpandDone() {
 }
 
 void Node::ExpandCancel() {
-    auto v = expand_state_.exchange(ExpandState::kInitial);
+    auto v = expand_state_.exchange(ExpandState::kInitial, std::memory_order_release);
 #ifdef NDEBUG
     (void) v;
 #endif
@@ -862,7 +861,7 @@ void Node::ExpandCancel() {
 
 void Node::WaitExpanded() const {
     while (true) {
-        auto v = expand_state_.load();
+        auto v = expand_state_.load(std::memory_order_acquire);
         if (v == ExpandState::kExpanded) {
             break;
         }
@@ -870,15 +869,15 @@ void Node::WaitExpanded() const {
 }
 
 bool Node::Expandable() const {
-    return expand_state_.load() == ExpandState::kInitial;
+    return expand_state_.load(std::memory_order_relaxed) == ExpandState::kInitial;
 }
 
 bool Node::IsExpending() const {
-    return expand_state_.load() == ExpandState::kExpanding;
+    return expand_state_.load(std::memory_order_relaxed) == ExpandState::kExpanding;
 }
 
 bool Node::IsExpended() const {
-    return expand_state_.load() == ExpandState::kExpanded;
+    return expand_state_.load(std::memory_order_relaxed) == ExpandState::kExpanded;
 }
 
 void Node::ApplyDirichletNoise(const float alpha) {
@@ -925,7 +924,7 @@ float Node::GetUctPolicy(Node::Edge& child, bool noise) {
 }
 
 void Node::SetVisits(int v) {
-    visits_.store(v);
+    visits_.store(v, std::memory_order_relaxed);
 }
 
 void Node::SetPolicy(float p) {
