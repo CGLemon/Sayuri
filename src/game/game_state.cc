@@ -19,6 +19,7 @@ void GameState::Reset(const int boardsize, const float komi) {
     game_history_.emplace_back(std::make_shared<Board>(board_));
 
     winner_ = kUndecide;
+    handicap_ = 0;
 }
 
 void GameState::ClearBoard() {
@@ -89,6 +90,8 @@ bool GameState::PlayMove(const int vtx, const int color) {
 bool GameState::UndoMove() {
     const auto move_number = GetMoveNumber();
     if (move_number >= 1) {
+        winner_ = kUndecide;
+
         // Cut off unused history.
         ko_hash_history_.resize(move_number);
         game_history_.resize(move_number);

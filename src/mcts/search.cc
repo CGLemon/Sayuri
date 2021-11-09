@@ -365,9 +365,9 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
 }
 
 bool ShouldResign(GameState &state, ComputationResult &result, float resign_threshold) {
-    const int handicap = state.GetHandicap();
-    const int movenum = state.GetMoveNumber();
-    const int num_intersections = state.GetNumIntersections();
+    const auto handicap = state.GetHandicap();
+    const auto movenum = state.GetMoveNumber();
+    const auto num_intersections = state.GetNumIntersections();
 
     const auto move_threshold = num_intersections / 4;
     if (movenum <= move_threshold) {
@@ -379,18 +379,22 @@ bool ShouldResign(GameState &state, ComputationResult &result, float resign_thre
         return false;
     }
 
-    if ((handicap > 0) && (state.GetToMove() == kWhite)) {
+    if (handicap > 0 && state.GetToMove() == kWhite) {
         const auto handicap_resign_threshold =
-            resign_threshold / (1 + handicap);
+                       resign_threshold / (1 + handicap);
 
         auto blend_ratio = std::min(1.0f, movenum / (0.6f * num_intersections));
-        auto blended_resign_threshold = blend_ratio * resign_threshold
-            + (1 - blend_ratio) * handicap_resign_threshold;
+        auto blended_resign_threshold = blend_ratio * resign_threshold +
+                                            (1 - blend_ratio) * handicap_resign_threshold;
         if (result.root_eval > blended_resign_threshold) {
             // Allow lower eval for white in handicap games
             // where opp may fumble.
             return false;
         }
+    }
+
+    if (result.root_eval > resign_threshold) {
+        return false;
     }
 
     return true;
