@@ -1,12 +1,10 @@
 # Sayuri
 
-## Let's ROCK
-
-Sayuri is a super human level 9x9 go bot.
-
 ![step_one](https://github.com/CGLemon/Sayuri/blob/master/img/sayuri-art.jpg)
 
-[https://medibang.com/picture/r32007181509071270014632767/?locale=zh_TW](https://medibang.com/picture/r32007181509071270014632767/?locale=zh_TW)
+## Let's ROCK
+
+Sayuri is a super human level 9x9 go bot and supports for full GTP protocol.
 
 ## Prepare
 
@@ -94,16 +92,19 @@ Here are some useful options which you may set.
 
 ## Features
 
-1. Support for sabaki analyzing mode.
-2. Support for handicap game.
-3. Support for variant komi.
-4. Support for different board size(but much weaker).
-5. Lock-free SMP MCTS.
-6. Acceleration by mutil-CPU and Nvidia GPU.
-7. Predict current side winrate.
-8. Predict current score lead.
-9. Predict the death strings.
+* Support for sabaki analyzing mode.
+* Support for handicap game.
+* Support for variant komi.
+* Support for different board size(but much weaker).
+* Lock-free SMP MCTS.
+* Acceleration by mutil-CPU and Nvidia GPU.
+* Predict current side winrate.
+* Predict current score lead.
+* Predict the death strings.
 
 ## LICENSE
 
 GNU GPL version 3 section 7
+
+## Other
+* The picture is from [here](https://medibang.com/picture/r32007181509071270014632767/?locale=zh_TW).
