@@ -2,7 +2,7 @@
 
 ![step_one](https://github.com/CGLemon/Sayuri/blob/master/img/sayuri-art.jpg)
 
-## Let's ROCK
+## Let's ROCK!
 
 Sayuri is a super human level 9x9 go bot and supports for full GTP protocol.
 
@@ -28,7 +28,7 @@ The program is only available on Ubuntu/MacOS.
     $ cmake ..
     $ make -j
 
-## Optinal Building
+## Optional Building
 
 Accelerate the network on CPU. OpenBlas is required. OpenBlas is significantly faster than built-in blas.
 
@@ -97,7 +97,7 @@ Here are some useful options which you may set.
 * Support for variant komi.
 * Support for different board size(but much weaker).
 * Lock-free SMP MCTS.
-* Acceleration by mutil-CPU and Nvidia GPU.
+* Acceleration by multi-CPU and Nvidia GPU.
 * Predict current side winrate.
 * Predict current score lead.
 * Predict the death strings.
