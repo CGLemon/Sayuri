@@ -9,21 +9,21 @@
 #include <deque>
 #include <unordered_map>
 
-// Generic LRU cache. Thread-safe.
+// Generic FIFO cache. Thread-safe.
 template<typename V>
-class LruCache {
+class FifoCache {
 public:
-    LruCache() {
+    FifoCache() {
         capacity_ = 0;
         allocated_ = 0;
     }
 
-    LruCache(size_t capacity) {
+    FifoCache(size_t capacity) {
         capacity_ = capacity;
         allocated_ = 0;
     }
 
-    LruCache(LruCache&& cache) {
+    FifoCache(FifoCache&& cache) {
         capacity_ = cache.capacity_;
         allocated_ = cache.allocated_;
     }
@@ -64,7 +64,7 @@ private:
 };
 
 template<typename V>
-void LruCache<V>::SetCapacity(size_t size) {
+void FifoCache<V>::SetCapacity(size_t size) {
     SpinLock::Lock lock(mutex_);
 
     capacity_ = size;
@@ -74,7 +74,7 @@ void LruCache<V>::SetCapacity(size_t size) {
 }
 
 template<typename V>
-void LruCache<V>::Insert(std::uint64_t key, V value) {
+void FifoCache<V>::Insert(std::uint64_t key, V value) {
     SpinLock::Lock lock(mutex_);
 
     auto it = lookup_.find(key);
@@ -96,7 +96,7 @@ void LruCache<V>::Insert(std::uint64_t key, V value) {
 }
 
 template<typename V>
-V* LruCache<V>::LookupAndPin(std::uint64_t key) {
+V* FifoCache<V>::LookupAndPin(std::uint64_t key) {
     SpinLock::Lock lock(mutex_);
 
     auto it = lookup_.find(key);
@@ -111,7 +111,7 @@ V* LruCache<V>::LookupAndPin(std::uint64_t key) {
 }
 
 template<typename V>
-V* LruCache<V>::LookupItem(std::uint64_t key) {
+V* FifoCache<V>::LookupItem(std::uint64_t key) {
     SpinLock::Lock lock(mutex_);
 
     auto it = lookup_.find(key);
@@ -125,7 +125,7 @@ V* LruCache<V>::LookupItem(std::uint64_t key) {
 }
 
 template<typename V>
-void LruCache<V>::Unpin(std::uint64_t key) {
+void FifoCache<V>::Unpin(std::uint64_t key) {
     SpinLock::Lock lock(mutex_);
 
     auto it = lookup_.find(key);
@@ -146,7 +146,7 @@ void LruCache<V>::Unpin(std::uint64_t key) {
 }
 
 template<typename V>
-void LruCache<V>::Evict() {
+void FifoCache<V>::Evict() {
     if (allocated_ == 0) return;
 
     auto key = order_.front();
@@ -163,14 +163,14 @@ void LruCache<V>::Evict() {
 }
 
 template<typename V>
-void LruCache<V>::Clear() {
+void FifoCache<V>::Clear() {
     while (allocated_ > 0) {
         Evict();
     }
 }
 
 template<typename V>
-bool LookupCache(LruCache<V> &cache, std::uint64_t key, V& val) {
+bool LookupCache(FifoCache<V> &cache, std::uint64_t key, V& val) {
     auto result = cache.LookupItem(key);
     if (result) {
         val = *result;

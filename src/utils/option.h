@@ -53,7 +53,10 @@ private:
     template<typename T>
     void Adjust();
 
+    // Return true if the max and min are valid.
     bool BoundaryValid() const;
+
+    // Throw error if the max and min are not accept.
     void OptionHandle() const;
 
 public:
@@ -82,9 +85,9 @@ void Option::Adjust() {
         return;
     }
 
-    const auto upper = static_cast<T>(max_);
-    const auto lower = static_cast<T>(min_);
-    const auto val = (T)*this;
+    const T upper = static_cast<T>(max_);
+    const T lower = static_cast<T>(min_);
+    const T val = static_cast<T>(*this);
 
     if (val > upper) {
         Set<T>(upper);
