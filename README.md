@@ -49,7 +49,7 @@ You may download the weights from my [google drive](https://drive.google.com/fil
 
 ## Engine Options
 
-Here are some useful options which you may set.
+Here are some useful options which you may need.
 
     --weights, -w: File with network weights.
     
@@ -61,14 +61,19 @@ Here are some useful options which you may set.
     $ ./Sayuri -p 1600
     
     
-    --threads, -t: Set the search threads. Bigger is faster.
+    --threads, -t: Set the search threads. Bigger is faster (the number is better to be large than batch size).
     
     $ ./Sayuri -t 4
     
     
-    --batchzie, -b: Set the network batch size. Bigger is faster.
+    --batch-size, -b: Set the network batch size. Bigger is faster.
     
     $ ./Sayuri -b 2
+    
+    
+    --resign-threshold, -r: Resign when winrate is less than x.
+    
+    $ ./Sayuri -r 2
     
     
     --analysis-verbose, -a: Output more search verbose.
@@ -76,30 +81,40 @@ Here are some useful options which you may set.
     $ ./Sayuri --analysis-verbose
     
     
-    --quiet, -q: Disable all diagnostic verbose.
-
+    --quiet, -q: Disable all diagnostic verbose (some GTP GUI need to disable them)
+    
     $ ./Sayuri --quiet
     
     
+    --ponder: Thinking on opponent's time.
+    
+    $ ./Sayuri --ponder
+    
+    
     --help, -h: Display the more options.
-
+    
     $ ./Sayuri --help
+    
     
     
     Exmaple:
     
     $ ./Sayuri -w <weights file> -t 4 -b 2 -p 1600
 
+## User Interface
+
+Sayuri supports for any GTP interface application. [Sabaki](https://sabaki.yichuanshen.de/) is recommended.
+
 ## Features
 
 * Support for sabaki analyzing mode.
 * Support for handicap game.
 * Support for variant komi.
-* Support for different board size(but much weaker).
+* Support for small board size(but much weaker).
 * Lock-free SMP MCTS.
 * Acceleration by multi-CPU and Nvidia GPU.
 * Predict current side winrate.
-* Predict current score lead.
+* Predict current side score lead.
 * Predict the death strings.
 
 ## LICENSE
@@ -107,4 +122,4 @@ Here are some useful options which you may set.
 GNU GPL version 3 section 7
 
 ## Other
-* The picture is from [here](https://medibang.com/picture/r32007181509071270014632767/?locale=zh_TW).
+* The picture is from [here](https://www.sayuri-official.com/en/discography/huraregai-girl-limited-B/).

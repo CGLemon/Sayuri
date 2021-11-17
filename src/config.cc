@@ -68,8 +68,8 @@ void InitOptionsMap() {
     options_map["lcb_reduction"] << Option::setoption(0.02f);
     options_map["fpu_reduction"] << Option::setoption(0.25f);
     options_map["fpu_root_reduction"] << Option::setoption(0.25f);
-    options_map["cpuct_init"] << Option::setoption(2.5f);
-    options_map["cpuct_root_init"] << Option::setoption(2.5f);
+    options_map["cpuct_init"] << Option::setoption(1.9f);
+    options_map["cpuct_root_init"] << Option::setoption(1.9f);
     options_map["cpuct_base"] << Option::setoption(19652.f);
     options_map["cpuct_root_base"] << Option::setoption(19652.f);
     options_map["draw_factor"] << Option::setoption(0.f);
