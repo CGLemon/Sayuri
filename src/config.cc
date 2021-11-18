@@ -60,7 +60,7 @@ void InitOptionsMap() {
     options_map["threads"] << Option::setoption(1);
 
     options_map["weights_file"] << Option::setoption(std::string{});
-    options_map["gpu"] << Option::setoption(0);
+    options_map["gpu"] << Option::setoption(-1);
     options_map["gpu_waittime"] << Option::setoption(2);
 
     options_map["resign_threshold"] << Option::setoption(0.1f, 1.f, 0.f);
@@ -174,6 +174,13 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext("--gpu-waittime")) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("gpu_waittime", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext({"--gpu", "-g"})) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("gpu", res->Get<int>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

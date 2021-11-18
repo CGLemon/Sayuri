@@ -52,12 +52,12 @@ void CudaForwardPipe::Reload(int board_size) {
     const auto d_cnt = CUDA::GetDeviceCount();
 
     if (GetOption<int>("gpu") >= 0) {
-        nngraphs_.emplace_back(std::make_unique<NNGraph>());
+        nngraphs_.emplace_back(std::make_unique<NNGraph>(io_mutex_));
         const auto gpu = GetOption<int>("gpu") >= d_cnt ? 0 : GetOption<int>("gpu");
         nngraphs_[0]->BuildGraph(gpu, max_batch_, board_size, weights_);
     } else {
         for (int i = 0; i < d_cnt; ++i) {
-            nngraphs_.emplace_back(std::make_unique<NNGraph>());
+            nngraphs_.emplace_back(std::make_unique<NNGraph>(io_mutex_));
         }
         for (int i = 0; i < d_cnt; ++i) {
             nngraphs_[i]->BuildGraph(i, max_batch_, board_size, weights_);
@@ -364,10 +364,14 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         }
     }
 
+    io_mutex_.lock();
+    // copy the inputs to device
+    CUDA::SetDevice(handles_.gpu_id);
     CUDA::ReportCUDAErrors(cudaMemcpy(cuda_input_planes_,
                                       batch_planes.data(),
                                       batch_planes.size() * sizeof(float),
                                       cudaMemcpyHostToDevice));
+    io_mutex_.unlock();
 
     graph_->input_conv.Forward(batch_size,
                                cuda_input_planes_, cuda_conv_op_[0],
@@ -440,6 +444,9 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
     CUDA::WaitToFinish(handles_.stream);
 
+    io_mutex_.lock();
+    // copy the results to memory
+    CUDA::SetDevice(handles_.gpu_id);
     CUDA::ReportCUDAErrors(cudaMemcpy(batch_prob.data(), cuda_output_prob_,
                                       batch_prob.size() * sizeof(float),
                                       cudaMemcpyDeviceToHost));
@@ -455,6 +462,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     CUDA::ReportCUDAErrors(cudaMemcpy(batch_ownership.data(), cuda_output_ownership_,
                                       batch_ownership.size() * sizeof(float),
                                       cudaMemcpyDeviceToHost));
+    io_mutex_.unlock();
 
     for (int b = 0; b < batch_size; ++b) {
         auto &output_result = bactch_output_result[b];

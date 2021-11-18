@@ -61,6 +61,7 @@ private:
         };
 
     public:
+        NNGraph(std::mutex &mtx) : io_mutex_(mtx) {}
         ~NNGraph();
         void BuildGraph(const int gpu, 
                         const int max_batch_size,
@@ -90,6 +91,8 @@ private:
         std::array<float*, 2> cuda_pol_op_;
         std::array<float*, 2> cuda_val_op_;
 
+        std::mutex &io_mutex_;
+
         size_t scratch_size_;
         std::shared_ptr<DNNWeights> weights_{nullptr};
     };
@@ -112,6 +115,8 @@ private:
     std::list<std::shared_ptr<ForwawrdEntry>> entry_queue_;
     std::mutex worker_mutex_;
     std::mutex queue_mutex_;
+    std::mutex io_mutex_;
+
     std::condition_variable cv_;
 
     std::atomic<int> waittime_{20};

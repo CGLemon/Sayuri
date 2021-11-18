@@ -141,7 +141,7 @@ if(_USE_CUDA)
 
     set(CUDA_STANDARD 14)
     set(CMAKE_CUDA_FLAGS
-        "-gencode arch=compute_53,code=sm_53 -gencode arch=compute_70,code=sm_70 -gencode  arch=compute_75,code=compute_75"
+        "-gencode arch=compute_30,code=sm_30 -gencode arch=compute_30,code=compute_30 -gencode arch=compute_37,code=sm_37 -gencode arch=compute_53,code=sm_53 -gencode arch=compute_53,code=compute_53 -gencode arch=compute_70,code=sm_70 -gencode arch=compute_70,code=compute_70 -gencode  arch=compute_75,code=compute_75"
     )
     set(CMAKE_CUDA_FLAGS "-Xptxas -O3 -Xcompiler -fPIC ${CMAKE_CUDA_FLAGS}")
 else()
