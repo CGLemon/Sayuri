@@ -1,6 +1,7 @@
 #include "utils/option.h"
 #include "utils/parser.h"
 #include "utils/log.h"
+#include "utils/mutex.h"
 #include "game/zobrist.h"
 #include "game/symmetry.h"
 #include "game/types.h"
@@ -56,8 +57,8 @@ void InitOptionsMap() {
 
     options_map["cache_buffer_factor"] << Option::setoption(30);
     options_map["playouts"] << Option::setoption(1600);
-    options_map["batch_size"] << Option::setoption(1);
-    options_map["threads"] << Option::setoption(1);
+    options_map["batch_size"] << Option::setoption(0);
+    options_map["threads"] << Option::setoption(0);
 
     options_map["weights_file"] << Option::setoption(std::string{});
     options_map["gpu"] << Option::setoption(-1);
@@ -94,6 +95,21 @@ void InitBasicParameters() {
     Zobrist::Initialize();
     Symmetry::Get().Initialize(GetOption<int>("defualt_boardsize"));
     LogOptions::Get().SetQuiet(GetOption<bool>("quiet"));
+
+    bool already_set_thread = GetOption<int>("threads") > 0;
+    bool already_set_batchsize= GetOption<int>("batch_size") > 0;
+
+    if (!already_set_thread && !already_set_batchsize) {
+        SetOption("threads", 2 * (int)SMP::GetNumberOfCores());
+        SetOption("batch_size", GetOption<int>("threads")/2);
+    }
+
+    if (!already_set_thread && already_set_batchsize) {
+        SetOption("threads", 2 * GetOption<int>("batch_size"));
+    }
+    if (!already_set_batchsize) {
+        SetOption("batch_size", GetOption<int>("threads")/2);
+    }
 }
 
 ArgsParser::ArgsParser(int argc, char** argv) {
@@ -343,34 +359,37 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 void ArgsParser::DumpHelper() const {
     ERROR << "Arguments:" << std::endl
               << "\t--quiet, -q" << std::endl
-              << "\t\t Disable all diagnostic verbose." << std::endl
+              << "\t\tDisable all diagnostic verbose." << std::endl
 
               << "\t--analysis-verbose, -a" << std::endl
-              << "\t\t Dump the search verbose." << std::endl
+              << "\t\tDump the search verbose." << std::endl
 
               << "\t--ponder" << std::endl
-              << "\t\t Thinking on opponent's time." << std::endl
+              << "\t\tThinking on opponent's time." << std::endl
 
               << "\t--early-symm-cache" << std::endl
-              << "\t\t Accelerate search at the early step." << std::endl
+              << "\t\tAccelerate search at the early step." << std::endl
 
               << "\t--resign-threshold, -r <float>" << std::endl
-              << "\t\t Resign when winrate is less than x. Defulat is 0.1." << std::endl
+              << "\t\tResign when winrate is less than x. Defulat is 0.1." << std::endl
 
               << "\t--playouts, -p <integer>" << std::endl
-              << "\t\t Number of playouts." << std::endl
+              << "\t\tNumber of playouts. Defulat is 1600" << std::endl
+
+              << "\t--gpu, -g <integer>" << std::endl
+              << "\t\tSelect a specific gpu device." << std::endl
 
               << "\t--threads, -t <integer>" << std::endl
-              << "\t\t Number of threads." << std::endl
+              << "\t\tNumber of threads. Set 0 will select a reasonable number" << std::endl
 
               << "\t--batch-size, -b <integer>" << std::endl
-              << "\t\t Number of batch size." << std::endl
+              << "\t\tNumber of batch size. Set 0 will select a reasonable number" << std::endl
 
               << "\t--logfile, -l <log file name>" << std::endl
-              << "\t\t File to log input/output to." << std::endl
+              << "\t\tFile to log input/output to." << std::endl
 
               << "\t--weights, -w <weight file name>" << std::endl
-              << "\t\t File with network weights" << std::endl
+              << "\t\tFile with network weights" << std::endl
         ;
     exit(-1);
 }

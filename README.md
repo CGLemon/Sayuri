@@ -10,7 +10,7 @@ Sayuri is a super human level 9x9 go bot and supports for full GTP protocol.
 
 Following library is required.
 
-1. CMake(>=3.9)
+1. CMake(>=3.15)
 
 Following library are optional.
 
@@ -112,7 +112,7 @@ Sayuri supports for any GTP interface application. [Sabaki](https://sabaki.yichu
 * Support for variant komi.
 * Support for small board size(but much weaker).
 * Lock-free SMP MCTS.
-* Acceleration by multi-CPU and Nvidia GPU.
+* Acceleration by multi-CPU and multi-Nvidia-GPU.
 * Predict current side winrate.
 * Predict current side score lead.
 * Predict the death strings.
@@ -122,4 +122,4 @@ Sayuri supports for any GTP interface application. [Sabaki](https://sabaki.yichu
 GNU GPL version 3 section 7
 
 ## Other
-* The picture is from [here](https://www.sayuri-official.com/en/discography/huraregai-girl-limited-B/).
+* The picture is from [here](https://i.ytimg.com/vi/EzgE7CbTs3o/maxresdefault.jpg).

@@ -89,6 +89,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
     if (graph_ != nullptr) {
         return;
     }
+
     graph_ = std::make_unique<Graph>();
     weights_ = weights;
 
