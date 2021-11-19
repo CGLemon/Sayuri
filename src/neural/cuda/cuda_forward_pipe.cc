@@ -59,6 +59,11 @@ void CudaForwardPipe::Reload(int board_size) {
         for (int i = 0; i < d_cnt; ++i) {
             nngraphs_.emplace_back(std::make_unique<NNGraph>(io_mutex_));
         }
+
+        // Resize the the batch for each netork.
+        max_batch_ = GetOption<int>("batch_size");
+        max_batch_ = (max_batch_/d_cnt) + bool(max_batch_%d_cnt);
+
         for (int i = 0; i < d_cnt; ++i) {
             nngraphs_[i]->BuildGraph(i, max_batch_, board_size, weights_);
         }
@@ -443,7 +448,6 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     auto batch_value_misc = std::vector<float>(batch_size * kOuputValueMisc);
 
     CUDA::WaitToFinish(handles_.stream);
-
     io_mutex_.lock();
     // copy the results to memory
     CUDA::SetDevice(handles_.gpu_id);
