@@ -1,10 +1,10 @@
 # Sayuri
 
-![step_one](https://github.com/CGLemon/Sayuri/blob/master/img/sayuri-art.jpg)
+![picture](https://github.com/CGLemon/Sayuri/blob/master/img/sayuri-art.jpg)
 
 ## Let's ROCK!
 
-Sayuri is a super human level 9x9 go bot and supports for full GTP protocol.
+Sayuri is a super human level 9x9 GTP go engine. Based on Deep Neural Network, Monte Carlo Tree Search and other powerful skills.
 
 ## Prepare
 
@@ -30,22 +30,21 @@ The program is only available on Ubuntu/MacOS.
 
 ## Optional Building
 
-Accelerate the network on CPU. OpenBlas is required. OpenBlas is significantly faster than built-in blas.
+Accelerate the network by CPU. OpenBlas is required. OpenBlas is significantly faster than built-in blas. OpenBlas is recommended on MacOS.
 
     $ cmake .. -DBLAS_BACKEND=OPENBLAS
 
-Accelerate the network by GPU. CUDA is required. It will be faster than cuDNN in only one batch size.
+Accelerate the network by GPUs. CUDA is required. It will be faster than cuDNN in only one batch size.
 
     $ cmake .. -DBLAS_BACKEND=CUDA
 
-Accelerate the network by GPU. CUDA and cuDNN are required. It will be faster than CUDA-only in large batch size.
+Accelerate the network by GPUs. CUDA and cuDNN are required. It will be faster than CUDA-only in multi batch size.
 
     $ cmake .. -DBLAS_BACKEND=CUDNN
 
 ## Weights
 
 You may download the weights from my [google drive](https://drive.google.com/file/d/1tZJ_9ZY_OMDZHDxaELTtPa1bmvIQFGtk/view?usp=sharing). The weights size is 15 blocks and 192 filters(around 155MB).
-
 
 ## Engine Options
 
@@ -73,15 +72,15 @@ Here are some useful options which you may need.
     
     --resign-threshold, -r: Resign when winrate is less than x.
     
-    $ ./Sayuri -r 2
+    $ ./Sayuri -r 0.2
     
     
-    --analysis-verbose, -a: Output more search verbose.
+    --analysis-verbose, -a: Output more search diagnostic verbose.
     
     $ ./Sayuri --analysis-verbose
     
     
-    --quiet, -q: Disable all diagnostic verbose (some GTP GUI need to disable them)
+    --quiet, -q: Disable all diagnostic verbose (some GTP GUI need to disable them).
     
     $ ./Sayuri --quiet
     

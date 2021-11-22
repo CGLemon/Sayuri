@@ -61,6 +61,7 @@ void InitOptionsMap() {
     options_map["threads"] << Option::setoption(0);
 
     options_map["weights_file"] << Option::setoption(std::string{});
+    options_map["use_gpu"] << Option::setoption(false);
     options_map["gpu"] << Option::setoption(-1);
     options_map["gpu_waittime"] << Option::setoption(2);
 
@@ -97,15 +98,21 @@ void InitBasicParameters() {
     LogOptions::Get().SetQuiet(GetOption<bool>("quiet"));
 
     bool already_set_thread = GetOption<int>("threads") > 0;
-    bool already_set_batchsize= GetOption<int>("batch_size") > 0;
+    bool already_set_batchsize = GetOption<int>("batch_size") > 0;
+    bool use_gpu = GetOption<bool>("use_gpu");
+    int cores = SMP::GetNumberOfCores();
 
     if (!already_set_thread && !already_set_batchsize) {
-        SetOption("threads", 2 * (int)SMP::GetNumberOfCores());
+        SetOption("threads", (1 + (int)use_gpu) * cores);
         SetOption("batch_size", GetOption<int>("threads")/2);
     }
 
     if (!already_set_thread && already_set_batchsize) {
-        SetOption("threads", 2 * GetOption<int>("batch_size"));
+        if (use_gpu) {
+            SetOption("threads", 2 * GetOption<int>("batch_size"));
+        } else {
+            SetOption("threads", cores);
+        }
     }
     if (!already_set_batchsize) {
         SetOption("batch_size", GetOption<int>("threads")/2);
@@ -349,6 +356,10 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
+#ifdef USE_CUDA
+    SetOption("use_gpu", true);
+#endif
+
     if (ErrorCommands(parser) || GetOption<bool>("help")) {
         DumpHelper();
     }
@@ -377,19 +388,22 @@ void ArgsParser::DumpHelper() const {
               << "\t\tNumber of playouts. Defulat is 1600" << std::endl
 
               << "\t--gpu, -g <integer>" << std::endl
-              << "\t\tSelect a specific gpu device." << std::endl
+              << "\t\tSelect a specific gpu device. Defaul is all devices." << std::endl
 
               << "\t--threads, -t <integer>" << std::endl
-              << "\t\tNumber of threads. Set 0 will select a reasonable number" << std::endl
+              << "\t\tNumber of threads. Set 0 will select a reasonable number." << std::endl
 
               << "\t--batch-size, -b <integer>" << std::endl
-              << "\t\tNumber of batch size. Set 0 will select a reasonable number" << std::endl
+              << "\t\tNumber of batch size. Set 0 will select a reasonable number." << std::endl
 
               << "\t--logfile, -l <log file name>" << std::endl
               << "\t\tFile to log input/output to." << std::endl
 
+              << "\t--lag-buffer <integer>" << std::endl
+              << "\t\tSafety margin for time usage in seconds." << std::endl
+
               << "\t--weights, -w <weight file name>" << std::endl
-              << "\t\tFile with network weights" << std::endl
+              << "\t\tFile with network weights." << std::endl
         ;
     exit(-1);
 }
