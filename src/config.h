@@ -5,7 +5,7 @@
 
 const std::string kProgram = "Sayuri";
 
-const std::string kVersion = "pre-alpha";
+const std::string kVersion = "beta";
 
 template<typename T>
 T GetOption(std::string name);
