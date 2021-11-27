@@ -8,11 +8,11 @@
 #include "utils/log.h"
 
 void CudaForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
-    LOGGING << CUDA::GetDevicesInfo();
+    LOGGING << CUDA::GetBackendInfo();
 
-    max_batch_ = GetOption<int>("batch_size");
-    Load(weights);
-    PrepareWorkers();
+    Load(weights); // Will select max batch size.
+
+    PrepareWorkers(); // Run the batch forwarding worker.
 }
 
 OutputResult CudaForwardPipe::Forward(const InputData &inpnt) {
@@ -20,14 +20,15 @@ OutputResult CudaForwardPipe::Forward(const InputData &inpnt) {
     auto entry = std::make_shared<ForwawrdEntry>(inpnt, output);
     std::unique_lock<std::mutex> lock(entry->mutex);
     {
+        // Push the entry.
         std::lock_guard<std::mutex> queue_lock(queue_mutex_);
         entry_queue_.emplace_back(entry);
     }
 
     if (entry_queue_.size() >= (size_t)max_batch_) {
-        cv_.notify_one();
+        cv_.notify_one(); // Wake up one worker if there are enough batch size.
     }
-    entry->cv.wait(lock);
+    entry->cv.wait(lock); // Wait for batch forwarding worker.
     entry->done.store(true);
 
     return output;
@@ -49,6 +50,7 @@ void CudaForwardPipe::Reload(int board_size) {
         return;
     }
 
+    max_batch_ = GetOption<int>("batch_size");
     const auto d_cnt = CUDA::GetDeviceCount();
 
     if (GetOption<int>("gpu") >= 0) {
@@ -59,10 +61,11 @@ void CudaForwardPipe::Reload(int board_size) {
         for (int i = 0; i < d_cnt; ++i) {
             nngraphs_.emplace_back(std::make_unique<NNGraph>(io_mutex_));
         }
+        // TODO: Assign different batch size by device computing capability.
 
         // Resize the the batch for each netork.
-        max_batch_ = GetOption<int>("batch_size");
         max_batch_ = (max_batch_/d_cnt) + bool(max_batch_%d_cnt);
+        max_batch_ = std::max(max_batch_, 1);
 
         for (int i = 0; i < d_cnt; ++i) {
             nngraphs_[i]->BuildGraph(i, max_batch_, board_size, weights_);
@@ -95,6 +98,8 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
 
     CUDA::SetDevice(gpu);
     handles_.ApplyOnCurrentDevice();
+
+    LOGGING << CUDA::GetCurrentDeviceInfo();
 
     board_size_ = board_size;
     scratch_size_ = 0;
@@ -319,7 +324,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
     graph_->v_misc.LoadingWeight(
         weights_->v_misc.GetWeights(), weights_->v_misc.GetBiases());
 
-    // Allocate some buffers.
+    // Allocate all buffers.
     const size_t factor = max_batch_ * sizeof(float);
     const size_t num_intersections = board_size_ * board_size_;
 
@@ -535,6 +540,8 @@ void CudaForwardPipe::Worker(int gpu) {
     const auto gether_batches = [this](){
         const auto gpu_waittime = GetOption<int>("gpu_waittime");
         auto entries = std::vector<std::shared_ptr<ForwawrdEntry>>{};
+
+        // Running the loop until there are enough entry size.
         while(true) {
             if (!worker_running_.load()) {
                 return entries;
@@ -544,26 +551,32 @@ void CudaForwardPipe::Worker(int gpu) {
             int waittime = waittime_.load();
 
             if ((int)entry_queue_.size() >= max_batch_) {
-                break;
+                break; // Out of the loop.
             }
 
+            // Wait some time in order to avoid busy waiting.
             std::unique_lock<std::mutex> lock(worker_mutex_);
             bool timeout = !cv_.wait_for(lock, std::chrono::milliseconds(waittime),
                                              [this](){ return !((int)entry_queue_.size() < max_batch_); }
                                          );
 
+            // Reset the waiting time.
             if (!entry_queue_.empty()) {
                 waittime = std::min(waittime, gpu_waittime);
 
                 if (timeout && narrow_pipe) {
+                    // Set zero if there still some(small than max batch size) entry in
+                    // the queue.
                     waittime = 0;
                 } else if (waittime > 0) {
+                    // Decreese waiting time if it is time out.
                     waittime -= 2;
                 }
 
-                waittime = std::max(waittime, 0);
-                waittime_.store(waittime);
+                // Set next waiting time.
+                waittime_.store(std::max(waittime, 0));
 
+                // Out of the loop.
                 break;
             } else {
                 if (waittime < gpu_waittime) {
@@ -574,6 +587,7 @@ void CudaForwardPipe::Worker(int gpu) {
             }
         }
 
+        // Gather entries.
         std::lock_guard<std::mutex> queue_lock(queue_mutex_);
         auto count = entry_queue_.size();
         if (count > (size_t)max_batch_) {

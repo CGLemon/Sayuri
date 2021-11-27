@@ -37,7 +37,6 @@ void SetDevice(int n);
 void WaitToFinish(cudaStream_t s);
 
 inline static int DivUp(int a, int b) { return (a + b - 1) / b; }
-bool IsUsingCuDNN();
 
 struct CudaHandles {
 #ifdef USE_CUDNN
@@ -53,7 +52,8 @@ struct CudaHandles {
     void Release();
 };
 
-std::string GetDevicesInfo();
+std::string GetBackendInfo();
+std::string GetCurrentDeviceInfo();
 
 } // namespace CUDA
 

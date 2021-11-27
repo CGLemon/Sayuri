@@ -100,23 +100,27 @@ void InitBasicParameters() {
     bool already_set_thread = GetOption<int>("threads") > 0;
     bool already_set_batchsize = GetOption<int>("batch_size") > 0;
     bool use_gpu = GetOption<bool>("use_gpu");
-    int cores = SMP::GetNumberOfCores();
 
+    int cores = std::max((int)std::thread::hardware_concurrency(), 1);
+    int select_threads = GetOption<int>("threads");
+    int select_batchsize = GetOption<int>("batch_size");
+
+    // try to select a reasonable number
     if (!already_set_thread && !already_set_batchsize) {
-        SetOption("threads", (1 + (int)use_gpu) * cores);
-        SetOption("batch_size", GetOption<int>("threads")/2);
+        select_threads = (1 + (int)use_gpu) * cores;
+        select_batchsize = select_threads/2;
+    } else if (!already_set_thread && already_set_batchsize) {
+        if (use_gpu) {
+            select_threads = 2 * select_batchsize; 
+        } else {
+            select_threads = cores;
+        }
+    } else if (already_set_thread && !already_set_batchsize) {
+        select_batchsize = select_threads/2;
     }
 
-    if (!already_set_thread && already_set_batchsize) {
-        if (use_gpu) {
-            SetOption("threads", 2 * GetOption<int>("batch_size"));
-        } else {
-            SetOption("threads", cores);
-        }
-    }
-    if (!already_set_batchsize) {
-        SetOption("batch_size", GetOption<int>("threads")/2);
-    }
+    SetOption("threads", std::max(select_threads, 1));
+    SetOption("batch_size", std::max(select_batchsize, 1));
 }
 
 ArgsParser::ArgsParser(int argc, char** argv) {

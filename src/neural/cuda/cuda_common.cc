@@ -108,7 +108,7 @@ void CudaHandles::Release() {
     }
 }
 
-bool IsUsingCuDNN() {
+bool UseCuDNN() {
 #ifdef USE_CUDNN
     return true;
 #else
@@ -141,7 +141,7 @@ std::string OutputSpec(const cudaDeviceProp &dev_prop) {
     return out.str();
 }
 
-std::string GetDevicesInfo() {
+std::string GetBackendInfo() {
     auto out = std::stringstream{};
 
     int devicecount = GetDeviceCount();
@@ -154,19 +154,19 @@ std::string GetDevicesInfo() {
     {
         const auto major = cuda_version/1000;
         const auto minor = (cuda_version - major * 1000)/10;
-        out << "CUDA version: "
+        out << "CUDA version:"
                 << " Major " << major
                 << ", Minor " << minor << '\n';
     }
 
-    out << "Using cuDNN: ";
-    if (IsUsingCuDNN()) {
+    out << "Use cuDNN: ";
+    if (UseCuDNN()) {
         out << "Yes\n";
 #ifdef USE_CUDNN
         const auto cudnn_version = cudnnGetVersion();
         const auto major = cudnn_version/1000;
         const auto minor = (cudnn_version -  major * 1000)/100;
-        out << "cuDNN version: "
+        out << "cuDNN version:"
                 << " Major " << major
                 << ", Minor " << minor << '\n';
 #endif
@@ -176,15 +176,20 @@ std::string GetDevicesInfo() {
 
     out << "Number of CUDA devices: " << devicecount << '\n';
 
-    for(int i = 0; i < devicecount; ++i) {
-        out << "=== Device " << i <<" ===\n";
-        cudaDeviceProp device_prop;
-        cudaGetDeviceProperties(&device_prop, i);
-        out << OutputSpec(device_prop);
-    }
+    return out.str();
+}
+
+std::string GetCurrentDeviceInfo() {
+    auto out = std::stringstream{};
+
+    cudaDeviceProp dev_prop;
+    ReportCUDAErrors(cudaGetDeviceProperties(&dev_prop, GetDevice()));
+    out << "=== Device: " << GetDevice() <<" ===\n";
+    out << OutputSpec(dev_prop);
 
     return out.str();
 }
+
 } // namespace CUDA
 
 #endif

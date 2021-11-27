@@ -12,14 +12,6 @@
 #include <emmintrin.h>
 #endif
 
-class SMP {
-public:
-    // Get number of cpu cores.
-    static size_t GetNumberOfCores() {
-        return std::thread::hardware_concurrency();
-    }
-};
-
 // A very simple mutex lock.
 class CAPABILITY("mutex") Mutex {
 public:
