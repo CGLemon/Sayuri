@@ -90,6 +90,12 @@ void InitOptionsMap() {
     options_map["cap_playouts"] << Option::setoption(0);
     options_map["lag_buffer"] << Option::setoption(0);
     options_map["early_symm_cache"] << Option::setoption(false);
+
+    options_map["num_games"] << Option::setoption(0);
+    options_map["parallel_games"] << Option::setoption(1);
+    options_map["komi_mean"] << Option::setoption(0.f);
+    options_map["komi_variant"] << Option::setoption(0.f);
+    options_map["target_directory"] << Option::setoption(std::string{});
 }
 
 void InitBasicParameters() {
@@ -153,6 +159,13 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 
     const auto name = parser.RemoveCommand(0);
     (void) name;
+
+    if (const auto res = parser.FindNext({"--mode", "-m"})) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("mode", res->Get<std::string>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
 
     if (const auto res = parser.Find({"--help", "-h"})) {
         SetOption("help", true);
@@ -356,6 +369,41 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext("--lag-buffer")) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("lag_buffer", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--num-games")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("num_games", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--parallel-games")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("parallel_games", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--komi-mean")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("komi_mean", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--komi-variant")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("komi_variant", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--target-directory")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("target_directory", res->Get<std::string>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

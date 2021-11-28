@@ -4,7 +4,11 @@
 #include "include.h"
 
 static void StartGtpLoop() {
-    auto gtp_loop = std::make_shared<GtpLoop>();
+    auto gtp_loop = std::make_unique<GtpLoop>();
+}
+
+static void StartSelfplayLoop() {
+    auto selfplay_loop = std::make_unique<SelfPlayPipe>();
 }
 
 int main(int argc, char **argv) {
@@ -12,7 +16,10 @@ int main(int argc, char **argv) {
 
     ThreadPool::Get(0);
 
-    StartGtpLoop();
-
+    if (GetOption<std::string>("mode") == "gtp") {
+        StartGtpLoop();
+    } else if (GetOption<std::string>("mode") == "selfplay") {
+        StartSelfplayLoop();
+    }
     return 0;
 }
