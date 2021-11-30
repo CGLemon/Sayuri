@@ -94,8 +94,6 @@ class DNNWeights {
 public:
     bool loaded{false};
     bool winograd{false};
-    bool use_ownership{false};
-    bool use_final_score{false};
 
     int input_channels{0};
 

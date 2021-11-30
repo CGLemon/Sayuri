@@ -122,9 +122,6 @@ class TrainingPipe():
         self.net.trainable(True)
         self.data_set = None
 
-        if self.cfg.misc_verbose:
-            dump_dependent_version()
-
     def setup(self):
         if self.use_gpu:
             self.net = self.net.to(self.device)
@@ -144,6 +141,8 @@ class TrainingPipe():
 
         # Be sure the network is on the right device.
         self.setup()
+        if self.cfg.misc_verbose:
+            self.net.dump_info()
 
         print("start training...")
 

@@ -24,11 +24,16 @@ def main(args, cfg):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--dummy", help="Genrating the dummy network.", action="store_true")
-    parser.add_argument("-j", "--json", help="The json file name", type=str)
-    parser.add_argument("-v", "--verbose", help="", type=int, choices=[0, 1, 2], default=0)
-    parser.add_argument("-o", "--output", help="the ouput weights prefix name ", type=str)
-    parser.add_argument("-i", "--input", help="the intput weights prefix name ", type=str)
+    parser.add_argument("-d", "--dummy", help="Genrate a dummy network.", action="store_true")
+    parser.add_argument("-j", "--json", metavar="<string>",
+                        help="The json file name.", type=str)
+    parser.add_argument("-v", "--verbose", metavar="[0, 1, 2]",
+                        help="The diagnostic verbose level. Set 0 will close all verbose.",
+                        type=int, choices=[0, 1, 2], default=1)
+    parser.add_argument("-o", "--output", metavar="<string>",
+                        help="The ouput weights prefix name.", type=str)
+    parser.add_argument("-i", "--input", metavar="<string>",
+                        help="The intput weights prefix name.", type=str)
     args = parser.parse_args()
 
     cfg = gather_config(args.json)

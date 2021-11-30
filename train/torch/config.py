@@ -53,11 +53,6 @@ class Config:
         self.policy_extract = None
         self.value_extract = None
 
-        # Options, alwayls true
-        self.use_ownership = True
-        self.use_finalscore = True
-        self.use_auxiliary_policy = True
-
         # Fixed values but flexible
         self.nntype = None
         self.input_channels = None
@@ -105,9 +100,6 @@ def nnparser(json_data, config):
     resnet = json_data["NeuralNetwork"]
 
     config.boardsize = resnet["DefaultBoardSize"]
-    # config.use_ownership = resnet["UseOwnership"]
-    # config.use_finalscore = resnet["UseFinalScore"]
-    # config.use_auxiliary_policy = resnet["UseAuxiliaryPolicy"]
     
     config.nntype = resnet["NNType"]
     config.input_channels = resnet["InputChannels"]

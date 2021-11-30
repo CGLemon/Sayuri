@@ -148,12 +148,6 @@ void DNNLoder::ParseInfo(NetInfo &netinfo, std::istream &buffer) const {
     if (NotFound(netinfo, "ValueExtract")) {
         throw "ValueExtract must be provided";
     }
-    if (NotFound(netinfo, "UseOwnership")) {
-        throw "UseOwnership must be provided";
-    }
-    if (NotFound(netinfo, "UseFinalScore")) {
-        throw "UseFinalScore must be provided";
-    }
 }
 
 void DNNLoder::ParseStruct(NetStruct &netstruct, std::istream &buffer) const {
@@ -227,13 +221,6 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
 
     weights->policy_extract_channels = std::stoi(netinfo["PolicyExtract"]);
     weights->value_extract_channels = std::stoi(netinfo["ValueExtract"]);
-
-    if (netinfo["UseOwnership"] == "True") {
-        weights->use_ownership = true;
-    }
-    if (netinfo["UseFinalScore"] == "True") {
-        weights->use_final_score = true;
-    }
 
     if (weights->input_channels != kInputChannels) {
         throw "The number of input channels is wrong.";

@@ -157,10 +157,6 @@ class NNProcess(nn.Module):
         self.cfg = cfg
         self.nntype = cfg.nntype
 
-        self.use_ownership = cfg.use_ownership
-        self.use_finalscore = cfg.use_finalscore
-        self.use_auxiliary_policy = cfg.use_auxiliary_policy
-
         self.input_channels = cfg.input_channels
         self.residual_channels = cfg.residual_channels
         self.xsize = cfg.boardsize
@@ -313,9 +309,6 @@ class NNProcess(nn.Module):
         self.load_state_dict(torch.load(filename))
 
     def dump_info(self):
-        print("Use Ownership: {ownership}".format(ownership=self.use_ownership))
-        print("Use Final Score: {finalscore}".format(finalscore=self.use_finalscore))
-        print("Use Auxiliary Policy: {auxpolicy}".format(auxpolicy=self.use_auxiliary_policy))
         print("NN Type: {type}".format(type=self.nntype))
         print("Plane size [x,y]: [{xsize}, {ysize}] ".format(xsize=self.xsize, ysize=self.ysize))
         print("Input channels: {channels}".format(channels=self.input_channels))
@@ -339,9 +332,6 @@ class NNProcess(nn.Module):
             f.write("PolicyExtract {}\n".format(self.policy_extract))
             f.write("ValueExtract {}\n".format(self.value_extract))
             f.write("ValueMisc {}\n".format(self.value_misc))
-            f.write("UseOwnership {}\n".format(self.use_ownership))
-            f.write("UseFinalScore {}\n".format(self.use_finalscore))
-            f.write("UseAuxiliaryPolicy {}\n".format(self.use_auxiliary_policy))
             f.write("end info\n")
 
             f.write("get struct\n")
