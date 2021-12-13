@@ -28,8 +28,30 @@ struct Training {
 
     int result;
 
-    float final_score;
+    float q_value;
 
+    float final_score;
+ /*
+    Output format is here. EEvery data package are 45 lines .
+
+    ------- claiming -------
+     L1       : Version
+     L2       : Mode
+     
+     ------- Inputs data -------
+     L3       : Board size
+     L4       : Komi
+     L5  - L38: Binary features
+     L39      : Current Player
+    
+     ------- Prediction data -------
+     L40      : Probabilities
+     L41      : Auxiliary probabilities
+     L42      : Ownership
+     L43      : Result
+     L44      : Q value
+     L45      : Final score
+  */
     void StreamOut(std::ostream &out) const;
 };
 

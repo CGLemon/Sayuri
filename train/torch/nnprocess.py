@@ -80,9 +80,10 @@ class ConvBlock(nn.Module):
         nn.init.kaiming_normal_(self.conv.weight,
                                 mode="fan_out",
                                 nonlinearity="relu")
-    def forward(self, x):
+    def forward(self, x, mask):
         x = self.conv(x)
         x = self.bn(x)
+        x = x * mask
         return F.relu(x, inplace=True) if self.relu else x
 
 class ResBlock(nn.Module):
@@ -121,15 +122,16 @@ class ResBlock(nn.Module):
                 collector=collector
             )
 
-    def forward(self, x):
+    def forward(self, inputs):
+        x, mask, mask_factor = inputs
         identity = x
 
-        out = self.conv1(x)
-        out = self.conv2(out)
+        out = self.conv1(x, mask)
+        out = self.conv2(out, mask)
         
         if self.with_se:
             b, c, _, _ = out.size()
-            seprocess = self.avg_pool(out)
+            seprocess = self.avg_pool(out * mask_factor)
             seprocess = torch.flatten(seprocess, start_dim=1, end_dim=3)
             seprocess = self.extend(seprocess)
             seprocess = self.squeeze(seprocess)
@@ -141,7 +143,7 @@ class ResBlock(nn.Module):
             
         out += identity
 
-        return F.relu(out, inplace=True)
+        return F.relu(out, inplace=True), mask, mask_factor
 
 
 class NNProcess(nn.Module):
@@ -254,40 +256,57 @@ class NNProcess(nn.Module):
             collector=self.tensor_collector
         )
 
-    def forward(self, planes):
-        x = self.input_conv(planes)
+    def forward(self, planes, board_size_list = None):
+        # mask buffer
+        batch, _, _, _ = planes.size()
+        mask = torch.zeros((batch, 1, self.xsize, self.ysize))
+        mask_factor = torch.zeros((batch, 1, self.xsize, self.ysize))
+
+        if board_size_list == None:
+            mask[:, :, 0:self.xsize, 0:self.ysize] = 1
+            mask_factor[:, :, 0:self.xsize, 0:self.ysize] = 1
+        else:
+            for i in range(batch):
+                bsize = board_size_list[i]
+                mask[i, :, 0:bsize, 0:bsize] = 1
+                mask_factor[i, :, 0:bsize, 0:bsize] = (self.xsize * self.ysize) / (bsize * bsize)
+
+        device = planes.get_device()
+        mask = mask.to(device)
+        mask_factor = mask_factor.to(device)
+
+        # input layer
+        x = self.input_conv(planes, mask)
 
         # residual tower
-        x = self.residual_tower(x)
+        x, mask, mask_factor = self.residual_tower((x, mask, mask_factor))
 
         # policy head
-        pol = self.policy_conv(x)
+        pol = self.policy_conv(x, mask)
 
-        prob_without_pass = self.prob(pol)
+        prob_without_pass = self.prob(pol) * mask
         prob_without_pass = torch.flatten(prob_without_pass, start_dim=1, end_dim=3)
-        pol_gpool = self.avg_pool(pol)
+        pol_gpool = self.avg_pool(pol * mask_factor)
         pol_gpool = torch.flatten(pol_gpool, start_dim=1, end_dim=3)
         prob_pass = self.prob_pass_fc(pol_gpool)
-
         prob = torch.cat((prob_without_pass, prob_pass), 1)
 
         # auxiliary policy
-        aux_prob_without_pass = self.aux_prob(pol)
+        aux_prob_without_pass = self.aux_prob(pol) * mask
         aux_prob_without_pass = torch.flatten(aux_prob_without_pass, start_dim=1, end_dim=3)
-        aux_pol_gpool = self.avg_pool(pol)
+        aux_pol_gpool = self.avg_pool(pol * mask_factor)
         aux_pol_gpool = torch.flatten(aux_pol_gpool, start_dim=1, end_dim=3)
         aux_prob_pass = self.aux_prob_pass_fc(aux_pol_gpool)
-
         aux_prob = torch.cat((aux_prob_without_pass, aux_prob_pass), 1)
 
         # value head
-        val = self.value_conv(x)
+        val = self.value_conv(x, mask)
 
-        ownership = self.ownership_conv(val)
+        ownership = self.ownership_conv(val) * mask
         ownership = torch.flatten(ownership, start_dim=1, end_dim=3)
         ownership = torch.tanh(ownership)
 
-        val_gpool = self.avg_pool(val)
+        val_gpool = self.avg_pool(val * mask_factor)
         val_gpool = torch.flatten(val_gpool, start_dim=1, end_dim=3)
         val_misc = self.value_misc_fc(val_gpool)
 
@@ -310,16 +329,16 @@ class NNProcess(nn.Module):
 
     def dump_info(self):
         print("NN Type: {type}".format(type=self.nntype))
-        print("Plane size [x,y]: [{xsize}, {ysize}] ".format(xsize=self.xsize, ysize=self.ysize))
+        print("NN size [x,y]: [{xsize}, {ysize}] ".format(xsize=self.xsize, ysize=self.ysize))
         print("Input channels: {channels}".format(channels=self.input_channels))
         print("Residual channels: {channels}".format(channels=self.residual_channels))
         print("Residual tower: size -> {s} [".format(s=len(self.stack)))
         for s in self.stack:
             print("  {}".format(s))
         print("]")
-        print("Policy Extract: {policyextract}".format(policyextract=self.policy_extract))
-        print("Value Extract: {valueextract}".format(valueextract=self.value_extract))
-        print("Value Misc: {valuemisc}".format(valuemisc=self.value_misc))
+        print("Policy extract channels: {policyextract}".format(policyextract=self.policy_extract))
+        print("Value extract channels: {valueextract}".format(valueextract=self.value_extract))
+        print("Value misc size: {valuemisc}".format(valuemisc=self.value_misc))
 
     def transfer2text(self, filename):
         with open(filename, 'w') as f:

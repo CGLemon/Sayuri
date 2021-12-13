@@ -1,7 +1,7 @@
 import numpy as np
 import glob, os, random
 
-FIXED_DATA_VERSION = 0
+FIXED_DATA_VERSION = 1
 
 '''
 ------- claiming -------
@@ -19,7 +19,8 @@ FIXED_DATA_VERSION = 0
  L41      : Auxiliary probabilities
  L42      : Ownership
  L43      : Result
- L44      : Final score
+ L44      : Q value
+ L45      : Final score
 
 '''
 
@@ -37,6 +38,7 @@ class Data():
         self.ownership = []
 
         self.result = None
+        self.q_value = None
         self.final_score = None
 
     def hex_to_int(self, h):
@@ -118,10 +120,9 @@ class Data():
     def fill_v1(self, linecnt, readline):
         if linecnt == 0:
             v = int(readline)
-            assert v == 1 or v == 0, "The data is not correct version."
+            assert v == FIXED_DATA_VERSION, "The data is not correct version."
         elif linecnt == 1:
             m = int(readline)
-            assert m == 0, ""
         elif linecnt == 2:
             self.board_size = int(readline)
         elif linecnt == 3:
@@ -141,12 +142,14 @@ class Data():
         elif linecnt == 42:
             self.result = int(readline)
         elif linecnt == 43:
+            self.q_value = float(readline)
+        elif linecnt == 44:
             self.final_score = float(readline)
 
     @staticmethod
     def get_datalines(version):
-        if version == 0:
-            return 44
+        if version == 1:
+            return 45
         return -1
 
     def pack_planes(self):
@@ -169,6 +172,7 @@ class Data():
         out += "Side to move: {}".format(self.to_move)
         out += "Komi: {}".format(self.komi)
         out += "Result: {}".format(self.result)
+        out += "Q value: {}".format(self.q_value)
         out += "Final score: {}".format(self.final_score)
 
         self.unpack_planes()

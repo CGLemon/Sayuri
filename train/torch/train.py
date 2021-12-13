@@ -19,7 +19,8 @@ class DataSet():
 
     def __init__(self, cfg, dirname):
         self.data_loader = Loader(dirname)
-        self.board_size = cfg.boardsize
+        self.nn_board_size = cfg.boardsize
+        self.nn_num_intersections = self.nn_board_size * self.nn_board_size
         self.input_channels = cfg.input_channels
 
     def __getitem__(self, idx):
@@ -27,61 +28,72 @@ class DataSet():
         data.unpack_planes()
 
         symm = int(np.random.choice(8, 1)[0])
+
+        nn_board_size = self.nn_board_size
+        nn_num_intersections = self.nn_num_intersections
+
+        board_size = data.board_size
         num_intersections = data.board_size * data.board_size
 
-        input_planes = np.zeros((self.input_channels, num_intersections))
-        prob = np.zeros(num_intersections+1)
-        aux_prob = np.zeros(num_intersections+1)
-        ownership = np.zeros(num_intersections)
+
+        # allocate all buffers
+        input_planes = np.zeros((self.input_channels, nn_board_size, nn_board_size))
+        prob = np.zeros(nn_num_intersections+1)
+        aux_prob = np.zeros(nn_num_intersections+1)
+        ownership = np.zeros((nn_board_size, nn_board_size))
         wdl = np.zeros(3)
         stm = np.zeros(1)
         final_score = np.zeros(1)
 
         buf = np.zeros(num_intersections)
+        sqr_buf = np.zeros((nn_board_size, nn_board_size))
 
-        # fill input planes
+        # input planes
         for p in range(self.input_channels-4):
             buf[:] = data.planes[p][:]
             buf = get_symmetry_plane(symm, buf, data.board_size)
-            input_planes[p][:] = buf[:]
+            input_planes[p, 0:board_size, 0:board_size] = np.reshape(buf, (board_size, board_size))[:, :]
 
         if data.to_move == 1:
-            input_planes[self.input_channels-4][:] = data.komi/10
+            input_planes[self.input_channels-4, 0:board_size, 0:board_size] = data.komi/10
         else:
-            input_planes[self.input_channels-4][:] = -data.komi/10
+            input_planes[self.input_channels-4, 0:board_size, 0:board_size] = -data.komi/10
 
-        input_planes[self.input_channels-3][:] = data.board_size/10
+        input_planes[self.input_channels-3, 0:board_size, 0:board_size] = data.board_size/10
 
         if data.to_move == 1:
-            input_planes[self.input_channels-2][:] = 1
+            input_planes[self.input_channels-2, 0:board_size, 0:board_size] = 1
         else:
-            input_planes[self.input_channels-1][:] = 1
+            input_planes[self.input_channels-1, 0:board_size, 0:board_size] = 1
 
-        # fill probabilities
+        # probabilities
         buf[:] = data.prob[0:num_intersections]
         buf = get_symmetry_plane(symm, buf, data.board_size)
+        sqr_buf[0:board_size, 0:board_size] = np.reshape(buf, (board_size, board_size))[:, :]
 
-        prob[0:num_intersections] = buf[:]
-        prob[num_intersections] = data.prob[num_intersections]
+        prob[0:nn_num_intersections] = np.reshape(sqr_buf, (nn_num_intersections))[:]
+        prob[nn_num_intersections] = data.prob[num_intersections]
 
-        # fill auxiliary probabilities
+        # auxiliary probabilities
         buf[:] = data.aux_prob[0:num_intersections]
         buf = get_symmetry_plane(symm, buf, data.board_size)
+        sqr_buf[0:board_size, 0:board_size] = np.reshape(buf, (board_size, board_size))[:, :]
 
-        aux_prob[0:num_intersections] = buf[:]
-        aux_prob[num_intersections] = data.aux_prob[num_intersections]
+        aux_prob[0:nn_num_intersections] = np.reshape(sqr_buf, (nn_num_intersections))[:]
+        aux_prob[nn_num_intersections] = data.aux_prob[num_intersections]
 
-        # fill ownership
+        # ownership
         buf[:] = data.ownership[:]
         buf = get_symmetry_plane(symm, buf, data.board_size)
-        ownership[:] = buf[:]
 
-        # fill winrate
+        ownership[0:board_size, 0:board_size] = np.reshape(buf, (board_size, board_size))[:, :]
+        ownership = np.reshape(ownership, (nn_num_intersections))
+
+        # winrate
         wdl[1 - data.result] = 1
-        stm[0] = data.result
+        stm[0] = data.q_value
         final_score[0] = data.final_score
 
-        input_planes = np.reshape(input_planes, (self.input_channels, data.board_size, data.board_size))
         data.pack_planes()
 
         return (
@@ -168,7 +180,7 @@ class TrainingPipe():
             )
 
             for _, batch in enumerate(train_data):
-                _, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
+                board_size_list, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
                 if self.use_gpu:
                     planes = planes.to(self.device)
                     target_prob = target_prob.to(self.device)
@@ -181,7 +193,7 @@ class TrainingPipe():
                 target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score)
 
                 # update network
-                running_loss += self.step(planes, target, self.adam_opt)
+                running_loss += self.step(board_size_list, planes, target, self.adam_opt)
 
                 num_step += 1
 
@@ -197,8 +209,8 @@ class TrainingPipe():
                     keep_running = False
                     break
 
-    def step(self, planes, target, opt):
-        pred = self.net(planes)
+    def step(self, board_size_list, planes, target, opt):
+        pred = self.net(planes, board_size_list)
 
         loss = self.compute_loss(pred, target)
 

@@ -514,7 +514,7 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
 }
 
 void Search::GatherData(const GameState &state, ComputationResult &result) {
-    if (training_buffer_.size() > 999) {
+    if (training_buffer_.size() > 9999) {
         // To many data in the buffer.
         return;
     }
@@ -527,6 +527,7 @@ void Search::GatherData(const GameState &state, ComputationResult &result) {
     data.komi = result.komi;
     data.side_to_move = result.to_move;
 
+    data.q_value = result.root_eval;
     data.planes = Encoder::Get().GetPlanes(state);
     data.probabilities = result.root_target_probabilities;
 

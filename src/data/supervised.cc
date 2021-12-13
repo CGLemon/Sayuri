@@ -144,9 +144,11 @@ void Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
         assert(winner != kUndecide);
         if (winner == kDraw) {
             buf.final_score = 0;
+            buf.q_value = 0;
             buf.result = 0;
         } else {
             buf.result = (int)winner == (int)buf.side_to_move ? 1 : -1;
+            buf.q_value = buf.result;
             buf.final_score = buf.side_to_move == kBlack ? black_final_score : -black_final_score;
         }
 

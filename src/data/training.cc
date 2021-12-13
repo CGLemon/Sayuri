@@ -79,11 +79,12 @@ void Training::StreamOut(std::ostream &out) const {
     OwnershipStreamOut(out, ownership);
 
     out << result << std::endl;
+    out << q_value << std::endl;
     out << final_score << std::endl;
 }
 
 int GetTrainigVersion() {
-    return 0;
+    return 1;
 }
 
 int GetTrainigMode() {
