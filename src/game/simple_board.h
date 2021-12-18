@@ -7,7 +7,7 @@
 #include <memory>
 #include <functional>
 
-#include "game/string.h"
+#include "game/strings.h"
 #include "game/types.h"
 #include "game/zobrist.h"
 
@@ -125,7 +125,7 @@ protected:
     std::array<std::uint16_t, kNumVertices> empty_idx_;
 
     // The board strings.
-    String strings_;
+    Strings strings_;
 
     // The Prisoners per color
     std::array<int, 2> prisoners_;

@@ -4,7 +4,7 @@
 
 #include "game/types.h"
 
-struct String {
+struct Strings {
     // The next stone in string.
     std::array<std::uint16_t, kNumVertices+1> next_;
 
@@ -25,21 +25,21 @@ struct String {
     void Reset();
     void AddStone(const int vtx, const int lib);
 
-    std::string GetDebugString(int boardsize) const;
+    std::string GetDebugString(const int boardsize) const;
 };
 
-inline int String::GetNext(int vtx) const {
+inline int Strings::GetNext(int vtx) const {
     return next_[vtx];
 }
 
-inline int String::GetParent(int vtx) const {
+inline int Strings::GetParent(int vtx) const {
     return parent_[vtx];
 }
 
-inline int String::GetLiberty(int vtx) const {
+inline int Strings::GetLiberty(int vtx) const {
     return liberties_[vtx];
 }
 
-inline int String::GetStones(int vtx) const {
+inline int Strings::GetStones(int vtx) const {
     return stones_[vtx];
 }

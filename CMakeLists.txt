@@ -23,7 +23,7 @@ set(GAME_SOURCES
     ${GAME_SOURCES_DIR}/board.cc
     ${GAME_SOURCES_DIR}/simple_board.cc
     ${GAME_SOURCES_DIR}/game_state.cc
-    ${GAME_SOURCES_DIR}/string.cc
+    ${GAME_SOURCES_DIR}/strings.cc
     ${GAME_SOURCES_DIR}/sgf.cc
     ${GAME_SOURCES_DIR}/zobrist.cc
     ${GAME_SOURCES_DIR}/symmetry.cc

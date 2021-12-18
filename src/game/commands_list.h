@@ -75,7 +75,6 @@ static const std::array<std::string, 25> kGtpCommandsList = {
     "kgs-game_over"
 };
 
-
 static const std::array<std::string, 3> kExtendCommandsList = {
     "supervised",
     "planes",
