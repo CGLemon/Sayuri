@@ -180,8 +180,7 @@ void Encoder::FillSafeArea(const Board* board,
     auto num_intersections = board->GetNumIntersections();
 
     auto safe_area = std::vector<bool>(num_intersections, false);
-    board->ComputePassAlive(safe_area, kBlack, true, true);
-    board->ComputePassAlive(safe_area, kWhite, true, true);
+    board->ComputeSafeArea(safe_area, false);
 
     for (int index = 0; index < num_intersections; ++index) {
         if (safe_area[index]) {

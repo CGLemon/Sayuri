@@ -425,7 +425,7 @@ std::vector<int> GameState::PlaceFreeHandicap(int handicap) {
 std::vector<int> GameState::GetOwnership() const {
     auto res = std::vector<int>(GetNumIntersections(), kInvalid);
 
-    board_.ComputePassAliveOwnership(res);
+    board_.ComputeScoreArea(res);
 
     return res;
 }
@@ -523,8 +523,6 @@ void GameState::PlayRandomMove() {
         }
         return list[0].second;
     };
-
-    auto simple_ownership = GetOwnership();
 
     int color = GetToMove();
     auto movelist = std::vector<std::pair<float, int>>{};
@@ -634,7 +632,7 @@ void GameState::RemoveDeadStrings(int playouts) {
 }
 
 float GameState::GetFinalScore(float bonus) const {
-    return board_.ComputeSimpleFinalScore(GetKomi() - bonus);
+    return board_.ComputeFinalScore(GetKomi() - bonus);
 }
 
 int GameState::GetVertex(const int x, const int y) const {

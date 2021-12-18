@@ -1202,7 +1202,7 @@ void SimpleBoard::AddStone(const int vtx, const int color) {
     // Set board content.
     state_[vtx] = static_cast<VertexType>(color);
 
-    // Updata zobrist key.
+    // Update zobrist key.
     UpdateZobrist(vtx, color, kEmpty);
 
     for (int k = 0; k < 4; ++k) {
@@ -1235,7 +1235,7 @@ void SimpleBoard::RemoveStone(const int vtx, const int color) {
     // Set board content.
     state_[vtx] = kEmpty;
 
-    // Updata zobrist key.
+    // Update zobrist key.
     UpdateZobrist(vtx, kEmpty, color);
 
     for (int k = 0; k < 4; ++k) {

@@ -3,17 +3,30 @@
 #include <algorithm>
 #include <set>
 
-int Board::ComputeScoreOnBoard(int black_bonus) const {
-    const auto black = ComputeReachColor(kBlack);
-    const auto white = ComputeReachColor(kWhite);
-    return black - white + black_bonus;
+int Board::ComputeScoreOnBoard() const {
+    auto score_area = std::vector<int>(GetNumIntersections(), kInvalid);
+    int black_score_lead = 0;
+
+    ComputeScoreArea(score_area);
+
+    for (int y = 0; y < board_size_; ++y) {
+        for (int x = 0; x < board_size_; ++x) {
+            const auto idx = GetIndex(x, y);
+            if (score_area[idx] == kBlack) {
+                ++black_score_lead;
+            } else if (score_area[idx] == kWhite) {
+                --black_score_lead;
+            }
+        }
+    }
+    return black_score_lead;
 }
 
-float Board::ComputeSimpleFinalScore(float komi) const {
-    return static_cast<float>(ComputeScoreOnBoard(0)) - komi;
+float Board::ComputeFinalScore(float komi) const {
+    return static_cast<float>(ComputeScoreOnBoard()) - komi;
 }
 
-void Board::ComputeSimpleOwnership(std::vector<int> &result) const {
+void Board::ComputeReachArea(std::vector<int> &result) const {
     if (result.size() != (size_t) num_intersections_) {
         result.resize(num_intersections_);
     }
@@ -44,15 +57,15 @@ void Board::ComputeSimpleOwnership(std::vector<int> &result) const {
     }
 }
 
-void Board::ComputePassAliveOwnership(std::vector<int> &result) const {
+void Board::ComputeScoreArea(std::vector<int> &result) const {
 
-    ComputeSimpleOwnership(result);
+    ComputeReachArea(result);
     auto pass_alive = std::vector<bool>(num_intersections_);
 
     for (int c = 0; c < 2; ++c) {
 
         std::fill(std::begin(pass_alive), std::end(pass_alive), false);
-        ComputePassAlive(pass_alive, c, true, true);
+        ComputePassAliveArea(pass_alive, c, true, true);
 
         for (int i = 0; i < num_intersections_; ++i) {
             if (pass_alive[i]) {
@@ -158,17 +171,17 @@ void Board::ComputeSafeArea(std::vector<bool> &result, bool mark_seki) const {
 
     std::fill(std::begin(result), std::end(result), false);
 
-    ComputePassAlive(result, kBlack, true, true);
-    ComputePassAlive(result, kWhite, true, true);
+    ComputePassAliveArea(result, kBlack, true, true);
+    ComputePassAliveArea(result, kWhite, true, true);
     if (mark_seki) {
         ComputeSekiPoints(result);
     }
 }
 
-void Board::ComputePassAlive(std::vector<bool> &result,
-                                 const int color,
-                                 bool mark_vitals,
-                                 bool mark_pass_dead) const {
+void Board::ComputePassAliveArea(std::vector<bool> &result,
+                                     const int color,
+                                     bool mark_vitals,
+                                     bool mark_pass_dead) const {
     auto ocupied = std::vector<int>(num_vertices_, kInvalid);
 
     // Mark the color.
