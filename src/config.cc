@@ -5,6 +5,7 @@
 #include "game/zobrist.h"
 #include "game/symmetry.h"
 #include "game/types.h"
+#include "mcts/lcb.h"
 #include "config.h"
 
 std::unordered_map<std::string, Option> options_map;
@@ -67,6 +68,7 @@ void InitOptionsMap() {
 
     options_map["resign_threshold"] << Option::setoption(0.1f, 1.f, 0.f);
 
+    options_map["ci_alpha"] << Option::setoption(1e-5f, 1.f, 0.f);
     options_map["lcb_reduction"] << Option::setoption(0.02f);
     options_map["fpu_reduction"] << Option::setoption(0.25f);
     options_map["fpu_root_reduction"] << Option::setoption(0.25f);
@@ -101,6 +103,7 @@ void InitOptionsMap() {
 void InitBasicParameters() {
     Zobrist::Initialize();
     Symmetry::Get().Initialize(GetOption<int>("defualt_boardsize"));
+    LcbEntries::Get().Initialize(GetOption<float>("ci_alpha"));
     LogOptions::Get().SetQuiet(GetOption<bool>("quiet"));
 
     bool already_set_thread = GetOption<int>("threads") > 0;
@@ -271,6 +274,13 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext({"--komi", "-k"})) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("defualt_komi", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--ci-alpha")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("ci_alpha", res->Get<float>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

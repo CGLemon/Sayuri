@@ -469,7 +469,7 @@ float Node::GetLcb(const int color) const {
 
     const auto variance = GetVariance(1.0f, visits);
     const auto stddev = std::sqrt(variance / float(visits));
-    const auto z = cached_t_quantile(visits - 1);
+    const auto z = LcbEntries::Get().CachedTQuantile(visits - 1);
     
     return mean - z * stddev;
 }
