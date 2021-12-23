@@ -35,12 +35,13 @@ static double NormalCdfInverse(double p) {
 }
 
 // From the: https://github.com/lightvector/KataGo/blob/master/cpp/core/fancymath.h
-static double NormToTApprox(double z, double n) {
-    constexpr double a = 0.853999327911;
-    constexpr double b = 1.044042304114;
-    constexpr double c = 0.954115472059;
-
-    return std::sqrt(n * std::exp(z * z * (n-a) / ((n-b) * (n-c))) - n);
+static double NormToTApprox(double z, double degrees_of_freedom) {
+    double n = degrees_of_freedom + 2;
+    if (degrees_of_freedom > 8) {
+        n-=1;
+        return std::sqrt(n * std::exp(z * z * (n-1.5) / ((n-1) * (n-1))) - n);
+    }
+    return std::sqrt(n * std::exp(z * z * (n-0.853999327911) / ((n-1.044042304114) * (n-0.954115472059))) - n);
 }
 
 class LcbEntries {
@@ -68,7 +69,7 @@ inline void LcbEntries::Initialize(float complement_probability) {
     const double z = NormalCdfInverse(1.f - complement_probability);
 
     for (int i = 0; i < kEntrySize; ++i) {
-        z_lookup_table_[i] = NormToTApprox(z, i+2);
+        z_lookup_table_[i] = NormToTApprox(z, i);
     }
 }
 
