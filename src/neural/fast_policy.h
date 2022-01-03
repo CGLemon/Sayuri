@@ -3,8 +3,6 @@
 #include "game/game_state.h"
 #include "utils/cache.h"
 
-#include "fast_policy_model"
-
 #include <vector>
 #include <algorithm>
 #include <string>
@@ -13,7 +11,7 @@ class FastPolicy {
 public:
     static FastPolicy &Get();
 
-    void LoaderFile();
+    void LoadWeights();
 
     std::vector<float> Forward(const GameState &state);
 

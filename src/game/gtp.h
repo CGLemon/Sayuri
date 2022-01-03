@@ -55,7 +55,7 @@ public:
 
 
         ThreadPool::Get(GetOption<int>("threads")-1); // one thread is main thread.
-        FastPolicy::Get().LoaderFile();
+        FastPolicy::Get().LoadWeights();
 
         Loop();
     }

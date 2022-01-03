@@ -1,7 +1,9 @@
 #include "neural/fast_policy.h"
 #include "neural/blas/convolution.h"
 #include "neural/blas/biases.h"
+#include "neural/fast_policy_model"
 #include "utils/log.h"
+
 
 #include <fstream>
 #include <iostream>
@@ -12,7 +14,7 @@ FastPolicy &FastPolicy::Get() {
     return fp;
 }
 
-void FastPolicy::LoaderFile() {
+void FastPolicy::LoadWeights() {
     auto line = std::string{};
     auto weights = std::stringstream(kFastPolicyWeights);
 
