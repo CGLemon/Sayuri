@@ -360,7 +360,7 @@ std::uint64_t SimpleBoard::ComputeHash(int komove) const {
 
 std::uint64_t SimpleBoard::ComputeSymmetryHash(int komove, int symmetry) const {
     return ComputeHash(komove, [this, symmetry](const auto vertex) {
-        return Symmetry::Get().TransformVertex(symmetry, vertex);
+        return Symmetry::Get().TransformVertex(board_size_, symmetry, vertex);
     });
 }
 

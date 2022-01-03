@@ -150,7 +150,7 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
 
     // Probabilities, ownership
     for (int idx = 0; idx < num_intersections; ++idx) {
-        const auto symm_index = Symmetry::Get().TransformIndex(symmetry, idx);
+        const auto symm_index = Symmetry::Get().TransformIndex(boardsize, symmetry, idx);
         out_result.probabilities[symm_index] = probabilities_buffer[idx];
         out_result.ownership[symm_index] = std::tanh(ownership_buffer[idx]);
     }
@@ -191,6 +191,7 @@ bool Network::ProbeCache(const GameState &state,
                 if (result.board_size != state.GetBoardSize()) {
                     break;
                 }
+                const int boardsize = result.board_size;
                 const int num_intersections = state.GetNumIntersections();
                     
                 auto probabilities_buffer = std::vector<float>(num_intersections);
@@ -204,7 +205,7 @@ bool Network::ProbeCache(const GameState &state,
 
                 // transfer them
                 for (int idx = 0; idx < num_intersections; ++idx) {
-                    const auto symm_index = Symmetry::Get().TransformIndex(symm, idx);
+                    const auto symm_index = Symmetry::Get().TransformIndex(boardsize, symm, idx);
                     result.probabilities[idx] = probabilities_buffer[symm_index];
                     result.ownership[idx] = ownership_buffer[symm_index];
                 }

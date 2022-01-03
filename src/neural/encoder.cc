@@ -27,7 +27,6 @@ InputData Encoder::GetInputs(const GameState &state, int symmetry) const {
 }
 
 std::vector<float> Encoder::GetPlanes(const GameState &state, int symmetry) const {
-    auto boardsize = state.GetBoardSize();
     auto num_intersections = state.GetNumIntersections();
     auto plane_size = num_intersections * kPlaneChannels;
     auto planes = std::vector<float>(plane_size);
@@ -41,7 +40,6 @@ std::vector<float> Encoder::GetPlanes(const GameState &state, int symmetry) cons
 
     assert(it == std::end(planes));
 
-    Symmetry::Get().Initialize(boardsize);
     SymmetryPlanes(state, planes, symmetry);
 
     return planes;
@@ -74,13 +72,14 @@ std::string Encoder::GetPlanesString(const GameState &state, int symmetry) const
 }
 
 void Encoder::SymmetryPlanes(const GameState &state, std::vector<float> &planes, int symmetry) const {
+    auto boardsize = state.GetBoardSize();
     auto num_intersections = state.GetNumIntersections();
     auto buffer = std::vector<float>(num_intersections);
     auto planes_it = std::begin(planes);
 
     for (int p = 0; p < kPlaneChannels; ++p) {
         for (int index = 0; index < num_intersections; ++index) {
-            auto symm_index = Symmetry::Get().TransformIndex(symmetry, index);
+            auto symm_index = Symmetry::Get().TransformIndex(boardsize, symmetry, index);
             buffer[index] = planes_it[symm_index];
         }
 

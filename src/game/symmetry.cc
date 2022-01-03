@@ -12,18 +12,18 @@ Symmetry& Symmetry::Get() {
     return symmetry;
 }
 
-void Symmetry::Initialize(int boardsize) {
-    InnerInitialize(boardsize);
+void Symmetry::Initialize() {
+    if (initialized_) return;
+
+    for (int bsize = kMinGTPBoardSize; bsize <= kBoardSize; ++bsize) {
+        PartInitialize(bsize);
+    }
+    initialized_ = true;
 }
 
-void Symmetry::InnerInitialize(int boardsize) {
+void Symmetry::PartInitialize(int boardsize) {
     assert(boardsize >= kMinGTPBoardSize);
     assert(boardsize <= kBoardSize);
-
-    if (board_size_ == boardsize) {
-        return;
-    }
-    board_size_ = boardsize;
 
     const auto GetVertex = [boardsize](int x, int y) -> int {
         return (y + 1) * (boardsize+2) + (x + 1);
@@ -33,42 +33,35 @@ void Symmetry::InnerInitialize(int boardsize) {
         return y * boardsize + x;
     };
 
+    int bsize = boardsize;
+
     for (int symm = 0; symm < kNumSymmetris; ++symm) {
         for (int vtx = 0; vtx < kNumVertices; ++vtx) {
-            symmetry_nn_vtx_table_[symm][vtx] = 0;
+            symmetry_nn_vtx_tables_[bsize][symm][vtx] = 0;
         }
         for (int idx = 0; idx < kNumIntersections; ++idx) {
-            symmetry_nn_idx_table_[symm][idx] = 0;
+            symmetry_nn_idx_tables_[bsize][symm][idx] = 0;
         }
     }
 
     for (int symm = 0; symm < kNumSymmetris; ++symm) {
-        for (int y = 0; y < board_size_; y++) {
-            for (int x = 0; x < board_size_; x++) {
-                const auto symm_idx = GetSymmetry(x, y, symm, board_size_);
+        for (int y = 0; y < bsize; y++) {
+            for (int x = 0; x < bsize; x++) {
+                const auto symm_idx = GetSymmetry(x, y, symm, bsize);
                 const auto vtx = GetVertex(x, y);
                 const auto idx = GetIndex(x, y);
 
-                symmetry_nn_idx_table_[symm][idx] =
+                symmetry_nn_idx_tables_[bsize][symm][idx] =
                     GetIndex(symm_idx.first, symm_idx.second);
 
-                symmetry_nn_vtx_table_[symm][vtx] =
+                symmetry_nn_vtx_tables_[bsize][symm][vtx] =
                     GetVertex(symm_idx.first, symm_idx.second);
             }
         }
     }
 }
 
-int Symmetry::TransformIndex(int symmetry, int idx) const {
-    return symmetry_nn_idx_table_[symmetry][idx];
-}
-
-int Symmetry::TransformVertex(int symmetry, int vtx) const {
-    return symmetry_nn_vtx_table_[symmetry][vtx];
-}
-
-std::string Symmetry::GetDebugString() const {
-    auto boardsize = board_size_;
+std::string Symmetry::GetDebugString(int boardsize) const {
     const auto GetVertex = [boardsize](int x, int y) -> int {
         return (y + 1) * (boardsize+2) + (x + 1);
     };
@@ -80,10 +73,10 @@ std::string Symmetry::GetDebugString() const {
     auto out = std::ostringstream{};
     for (int symm = 0; symm < kNumSymmetris; ++symm) {
         out << "Vertex Symmetry " << symm+1 << ':' << std::endl;
-        for (int y = 0; y < board_size_; y++) {
-            for (int x = 0; x < board_size_; x++) {
+        for (int y = 0; y < boardsize; y++) {
+            for (int x = 0; x < boardsize; x++) {
                 const auto vtx = GetVertex(x, y);
-                out << std::setw(4) << TransformVertex(symm, vtx);
+                out << std::setw(4) << TransformVertex(boardsize, symm, vtx);
             }
             out << std::endl;
         }
@@ -92,10 +85,10 @@ std::string Symmetry::GetDebugString() const {
 
     for (int symm = 0; symm < kNumSymmetris; ++symm) {
         out << "Index Symmetry " << symm+1 << ':' << std::endl;
-        for (int y = 0; y < board_size_; y++) {
-            for (int x = 0; x < board_size_; x++) {
+        for (int y = 0; y < boardsize; y++) {
+            for (int x = 0; x < boardsize; x++) {
                 const auto idx = GetIndex(x, y);
-                out << std::setw(4) << TransformIndex(symm, idx);
+                out << std::setw(4) << TransformIndex(boardsize, symm, idx);
             }
             out << std::endl;
         }
@@ -105,8 +98,8 @@ std::string Symmetry::GetDebugString() const {
 }
 
 std::pair<int, int> Symmetry::GetSymmetry(const int x, const int y,
-                                          const int symmetry,
-                                          const int boardsize)  const {
+                                              const int symmetry,
+                                              const int boardsize)  const {
     assert(x >= 0 && x < boardsize);
     assert(y >= 0 && y < boardsize);
     assert(symmetry >= 0 && symmetry < kNumSymmetris);
@@ -132,4 +125,3 @@ std::pair<int, int> Symmetry::GetSymmetry(const int x, const int y,
 
     return {idx_x, idx_y};
 }
-

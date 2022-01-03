@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <string>
 
 #include "game/types.h"
@@ -13,20 +12,30 @@ public:
 
     static Symmetry& Get();
 
-    void Initialize(int boardsize);
+    void Initialize();
 
-    int TransformIndex(int symmetry, int idx) const;
-    int TransformVertex(int symmetry, int vtx) const;
-    std::string GetDebugString() const ;
+    int TransformIndex(int boardsize, int symmetry, int idx) const;
+    int TransformVertex(int boardsize, int symmetry, int vtx) const;
+    std::string GetDebugString(int boardsize) const;
 
 private:
-    void InnerInitialize(int boardsize);
+    static constexpr int kTableSize = kBoardSize + 1; // Allocate big enough tables.
+
+    void PartInitialize(int boardsize);
 
     std::pair<int, int> GetSymmetry(const int x, const int y,
-                                    const int symmetry, const int boardsize) const;
+                                        const int symmetry, const int boardsize) const;
 
-    std::array<std::array<int, kNumVertices>, kNumSymmetris> symmetry_nn_vtx_table_;
-    std::array<std::array<int, kNumIntersections>, kNumSymmetris> symmetry_nn_idx_table_;
+    int symmetry_nn_vtx_tables_[kTableSize][kNumSymmetris][kNumVertices];
+    int symmetry_nn_idx_tables_[kTableSize][kNumSymmetris][kNumIntersections];
 
-    int board_size_{0};
+    bool initialized_{false};
 };
+
+inline int Symmetry::TransformIndex(int boardsize, int symmetry, int idx) const {
+    return symmetry_nn_idx_tables_[boardsize][symmetry][idx];
+}
+
+inline int Symmetry::TransformVertex(int boardsize, int symmetry, int vtx) const {
+    return symmetry_nn_vtx_tables_[boardsize][symmetry][vtx];
+}

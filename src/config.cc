@@ -102,7 +102,7 @@ void InitOptionsMap() {
 
 void InitBasicParameters() {
     Zobrist::Initialize();
-    Symmetry::Get().Initialize(GetOption<int>("defualt_boardsize"));
+    Symmetry::Get().Initialize();
     LcbEntries::Get().Initialize(GetOption<float>("ci_alpha"));
     LogOptions::Get().SetQuiet(GetOption<bool>("quiet"));
 
