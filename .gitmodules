@@ -1,0 +1,6 @@
+[submodule "third_party/Eigen"]
+	path = third_party/Eigen
+	url = https://github.com/eigenteam/eigen-git-mirror
+[submodule "third_party/fast_float"]
+	path = third_party/fast_float
+	url = https://github.com/fastfloat/fast_float.git
