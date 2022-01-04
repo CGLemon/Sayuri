@@ -7,14 +7,14 @@ void LinearLayer::Set(int inputs, int outputs) {
 
 void LinearLayer::LoadWeights(std::vector<float> &load_weights) {
     if ((int)load_weights.size() != GetInputs() * GetOutputs()) {
-        throw "The linear layer is not acceptable";
+        throw "The weights size of linear layer is not acceptable";
     }
     weights_ = std::move(load_weights);
 }
 
 void LinearLayer::LoadBiases(std::vector<float> &load_weights) {
     if ((int)load_weights.size() != GetOutputs()) {
-        throw "The linear layer is not acceptable";
+        throw "The biases size of linear layer are is acceptable";
     }
     biases_ = std::move(load_weights);
 }
@@ -41,14 +41,14 @@ void BatchNormLayer::Set(int channels) {
 
 void BatchNormLayer::LoadMeans(std::vector<float> &load_weights){
     if ((int)load_weights.size() != GetChannels()) {
-        throw "The Batch Normal layer is not acceptable";
+        throw "The means size of batch normallayer are not acceptable";
     }
     means_ = std::move(load_weights);
 }
 
 void BatchNormLayer::LoadStddevs(std::vector<float> &load_weights){
     if ((int)load_weights.size() != GetChannels()) {
-        throw "The linear layer is not acceptable";
+        throw "The StdDevs size of batch normallayer are not acceptable";
     }
     ProcessVariant(load_weights);
     stddevs_ = std::move(load_weights);
@@ -74,14 +74,14 @@ void ConvLayer::Set(int inputs, int outputs, int filter) {
 
 void ConvLayer::LoadWeights(std::vector<float> &load_weights) {
     if ((int)load_weights.size() != GetInputs() * GetOutputs() * GetFilter() * GetFilter()) {
-        throw "The one of Convolutional Layers weights size is not acceptable";
+        throw "The weights size of convolutional layer is not acceptable";
     }
     weights_ = std::move(load_weights);
 }
 
 void ConvLayer::LoadBiases(std::vector<float> &load_weights) {
     if ((int)load_weights.size() != GetOutputs()) {
-        throw "The linear layer is not acceptable";
+        throw "The biases size of convolutional layer is not acceptable";
     }
     biases_ = std::move(load_weights);
 }
