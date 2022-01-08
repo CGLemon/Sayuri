@@ -25,17 +25,12 @@ void im2col(int filter_size, int channels, int H, int W,
             T *data_im, T *data_col, cudaStream_t stream);
 
 template<typename T>
-void global_avg_pool(T *input, T *output, int batch,
-                     int channels, int spatial_size, cudaStream_t stream);
+void global_pool(T *input, T *output, T b_coeff, int batch,
+                 int channels, int spatial_size, cudaStream_t stream);
 
 template<typename T>
 void se_scale(const T *input, const T* se_bias, T* data,
               int batch, int channels, int spatial_size, cudaStream_t stream);
-
-// template<typename T>
-// void input_pool(const T *bias, T *data,
-//                 int batch, int channels, int spatial_size);
-
 
 void gemm(bool TA, bool TB, int M, int N, int K, float ALPHA,
           const float *A_gpu, int lda, const float *B_gpu, int ldb,

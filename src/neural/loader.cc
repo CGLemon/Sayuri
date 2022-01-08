@@ -308,11 +308,10 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
                                   se_squeeze_shape[1]);
 
             if (se_extend_shape[1] != se_squeeze_shape[0]) {
-                throw "The SE Unit size is wrong.";
+                throw "The SE Unit size is wrong 1.";
             }
-            if (2 * se_extend_shape[0] != se_squeeze_shape[1] ||
-                se_extend_shape[0] != weights->residual_channels) {
-                throw "The SE Unit size is wrong.";
+            if (se_extend_shape[0] != 3 * weights->residual_channels) {
+                throw "The SE Unit size is wrong 2.";
             }
                 
             tower_ptr->se_size = se_extend_shape[1];

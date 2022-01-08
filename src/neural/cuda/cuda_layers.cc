@@ -326,23 +326,40 @@ void FullyConnect::Forward(const int batch, float *input, float *output) {
                 outputs_ * batch, outputs_, outputs_ * batch, relu_, handles_->stream );
 }
 
-GlobalAvgPool::GlobalAvgPool(CudaHandles *handles,
-                             const int max_batch,
-                             const size_t board_size,
-                             const size_t channels) {
+GlobalPool::GlobalPool(CudaHandles *handles,
+                       bool is_value_head,
+                       const int max_batch,
+                       const size_t board_size,
+                       const size_t channels) {
     width_ = board_size;
     height_ = board_size;
     spatial_size_ = width_ * height_;
+    is_value_head_ = is_value_head;
 
     maxbatch_ = max_batch;
     channels_ = channels;
     handles_ = handles;
 }
 
-void GlobalAvgPool::Forward(const int batch, float *input, float *output) {
-    global_avg_pool(input, output, batch,
-                    channels_, spatial_size_, handles_->stream);
+void GlobalPool::Forward(const int batch, float *input, float *output) {
+    float b_coeff = 0;
+    const int board_size = (width_ + height_) / 2;
+
+    if (is_value_head_) {
+        float bsize_varaint = 0;
+        for (auto b = kMinBSize; b <= kMaxBSize; ++b) {
+            bsize_varaint += ((b - kAvgBSize) * (b - kAvgBSize));
+        }
+        bsize_varaint /= (kMaxBSize - kMinBSize + 1);
+        b_coeff = (std::pow((float)board_size - kAvgBSize, 2) - bsize_varaint) * kFactorPow;
+
+    } else {
+        b_coeff = ((float)board_size - kAvgBSize) * kFactor;
+    }
+    global_pool(input, output, b_coeff, batch,
+                channels_, spatial_size_, handles_->stream);
 }
+
 
 SEUnit::SEUnit(CudaHandles *handles, const int max_batch,
                const size_t board_size, const size_t channels, const size_t se_size) {
@@ -382,7 +399,7 @@ void SEUnit::LoadingWeight(const std::vector<float> &weights_w1,
 
     const size_t fc1_scratch_size = type_size * maxbatch_ * se_size_;
     const size_t fc2_scratch_size = type_size * 2 * maxbatch_ * channels_;
-    const size_t pool_scratch_size = type_size * maxbatch_ * channels_;
+    const size_t pool_scratch_size = type_size * maxbatch_ * 3 * channels_;
 
     ReportCUDAErrors(cudaMalloc(&cuda_op_[0], pool_scratch_size));
     ReportCUDAErrors(cudaMalloc(&cuda_op_[1], fc1_scratch_size));
@@ -401,9 +418,11 @@ void SEUnit::LoadingWeight(const std::vector<float> &weights_w1,
 }
 
 void SEUnit::Forward(const int batch, float *input, float *ouput) {
-    global_avg_pool(input, cuda_op_[0], batch, channels_, spatial_size_, handles_->stream);
+    const int board_size = (width_ + height_) / 2;
+    const float b_coeff = ((float)board_size - kAvgBSize) * kFactor;
+    global_pool(input, cuda_op_[0], b_coeff, batch, channels_, spatial_size_, handles_->stream);
 
-    const size_t fc1_input_size = channels_;
+    const size_t fc1_input_size = 3 * channels_;
     const size_t fc1_output_size = se_size_;
     const bool fc1_relu = true;
     gemm(false, true,

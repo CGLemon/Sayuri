@@ -3,6 +3,42 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+class GlobalPool(nn.Module):
+    def __init__(self, b_max=19,
+                       b_min=7,
+                       is_value_head=False):
+        super().__init__()
+        self.b_avg = (b_max + b_min) / 2
+        self.b_factor = 0.1
+        self.b_factor_pow = self.b_factor * self.b_factor
+        self.b_varinat = np.mean(np.power(np.arange(b_min, b_max+1, 1) - self.b_avg, 2))
+
+        self.is_value_head = is_value_head
+
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+
+    def forward(self, x, mask, mask_factor):
+        avg_part = self.avg_pool(x * mask_factor)
+        avg_part = torch.flatten(avg_part, start_dim=1, end_dim=3)
+
+        max_part = self.max_pool(x)
+        max_part = F.relu(torch.flatten(max_part, start_dim=1, end_dim=3), inplace=True)
+
+        _, _, h, w = mask_factor.size()
+        spatial = h * w
+        b_coeff = torch.sqrt(self.max_pool(mask_factor) * spatial)
+        b_coeff = torch.flatten(b_coeff, start_dim=1, end_dim=3)
+        b_coeff = b_coeff - self.b_avg
+
+        if self.is_value_head:
+            b_coeff = (torch.pow(b_coeff, 2) - self.b_varinat) * self.b_factor_pow
+        else:
+            b_coeff = b_coeff * self.b_factor
+        b_coeff = torch.zeros(avg_part.size()) + b_coeff
+
+        return torch.cat((avg_part, max_part, b_coeff), 1)
+
 class FullyConnect(nn.Module):
     def __init__(self, in_size,
                        out_size,
@@ -18,7 +54,7 @@ class FullyConnect(nn.Module):
 
     def forward(self, x):
         x = self.linear(x)
-        return F.relu(x, inplace=True) if self.relu else x 
+        return F.relu(x, inplace=True) if self.relu else x
 
 
 class Convolve(nn.Module):
@@ -108,9 +144,10 @@ class ResBlock(nn.Module):
 
         if se_size != None:
             self.with_se = True
-            self.avg_pool = nn.AdaptiveAvgPool2d(1)
+            self.global_pool = GlobalPool(is_value_head=False)
+
             self.extend = FullyConnect(
-                in_size=channels,
+                in_size=3*channels,
                 out_size=se_size,
                 relu=True,
                 collector=collector
@@ -131,8 +168,7 @@ class ResBlock(nn.Module):
         
         if self.with_se:
             b, c, _, _ = out.size()
-            seprocess = self.avg_pool(out * mask_factor)
-            seprocess = torch.flatten(seprocess, start_dim=1, end_dim=3)
+            seprocess = self.global_pool(out, mask, mask_factor)
             seprocess = self.extend(seprocess)
             seprocess = self.squeeze(seprocess)
 
@@ -172,7 +208,9 @@ class NNProcess(nn.Module):
         self.set_layers()
 
     def set_layers(self):
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        # self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.global_pool = GlobalPool(is_value_head=False)
+        self.global_pool_val = GlobalPool(is_value_head=True)
 
         self.input_conv = ConvBlock(
             in_channels=self.input_channels,
@@ -211,7 +249,7 @@ class NNProcess(nn.Module):
             collector=self.tensor_collector
         )
         self.prob_pass_fc = FullyConnect(
-            in_size=self.policy_extract,
+            in_size=self.policy_extract * 3,
             out_size=1,
             relu=False,
             collector=self.tensor_collector
@@ -227,7 +265,7 @@ class NNProcess(nn.Module):
 
         # Ingnore auxiliary pass policy.
         self.aux_prob_pass_fc = FullyConnect(
-            in_size=self.policy_extract,
+            in_size=self.policy_extract * 3,
             out_size=1,
             relu=False,
         )
@@ -250,7 +288,7 @@ class NNProcess(nn.Module):
         )
 
         self.value_misc_fc = FullyConnect(
-            in_size=self.value_extract,
+            in_size=self.value_extract * 3,
             out_size=self.value_misc,
             relu=False,
             collector=self.tensor_collector
@@ -272,31 +310,31 @@ class NNProcess(nn.Module):
                 mask_factor[i, :, 0:bsize, 0:bsize] = (self.xsize * self.ysize) / (bsize * bsize)
 
         device = planes.get_device()
-        mask = mask.to(device)
-        mask_factor = mask_factor.to(device)
+        if device >= 0:
+            mask = mask.to(device)
+            mask_factor = mask_factor.to(device)
 
         # input layer
         x = self.input_conv(planes, mask)
 
         # residual tower
-        x, mask, mask_factor = self.residual_tower((x, mask, mask_factor))
+        x, _, _ = self.residual_tower((x, mask, mask_factor))
 
         # policy head
         pol = self.policy_conv(x, mask)
 
         prob_without_pass = self.prob(pol) * mask
         prob_without_pass = torch.flatten(prob_without_pass, start_dim=1, end_dim=3)
-        pol_gpool = self.avg_pool(pol * mask_factor)
-        pol_gpool = torch.flatten(pol_gpool, start_dim=1, end_dim=3)
+
+        pol_gpool = self.global_pool(pol, mask, mask_factor)
+
         prob_pass = self.prob_pass_fc(pol_gpool)
         prob = torch.cat((prob_without_pass, prob_pass), 1)
 
         # auxiliary policy
         aux_prob_without_pass = self.aux_prob(pol) * mask
         aux_prob_without_pass = torch.flatten(aux_prob_without_pass, start_dim=1, end_dim=3)
-        aux_pol_gpool = self.avg_pool(pol * mask_factor)
-        aux_pol_gpool = torch.flatten(aux_pol_gpool, start_dim=1, end_dim=3)
-        aux_prob_pass = self.aux_prob_pass_fc(aux_pol_gpool)
+        aux_prob_pass = self.aux_prob_pass_fc(pol_gpool)
         aux_prob = torch.cat((aux_prob_without_pass, aux_prob_pass), 1)
 
         # value head
@@ -306,8 +344,8 @@ class NNProcess(nn.Module):
         ownership = torch.flatten(ownership, start_dim=1, end_dim=3)
         ownership = torch.tanh(ownership)
 
-        val_gpool = self.avg_pool(val * mask_factor)
-        val_gpool = torch.flatten(val_gpool, start_dim=1, end_dim=3)
+        val_gpool = self.global_pool_val(val, mask, mask_factor)
+
         val_misc = self.value_misc_fc(val_gpool)
 
         wdl, stm, score = torch.split(val_misc, [3, 1, 1], dim=1)
@@ -364,21 +402,21 @@ class NNProcess(nn.Module):
                     f.write(NNProcess.conv2text(self.residual_channels, self.residual_channels, 3))
                     f.write(NNProcess.bn2text(self.residual_channels))
                     if s == "ResidualBlock-SE":
-                        f.write(NNProcess.fullyconnect2text(self.residual_channels * 1, self.residual_channels * 4))
+                        f.write(NNProcess.fullyconnect2text(self.residual_channels * 3, self.residual_channels * 4))
                         f.write(NNProcess.fullyconnect2text(self.residual_channels * 4, self.residual_channels * 2))
 
             # policy head
             f.write(NNProcess.conv2text(self.residual_channels, self.policy_extract, 1))
             f.write(NNProcess.bn2text(self.policy_extract))
             f.write(NNProcess.conv2text(self.policy_extract, 1, 1))
-            f.write(NNProcess.fullyconnect2text(self.policy_extract, 1))
+            f.write(NNProcess.fullyconnect2text(self.policy_extract * 3, 1))
 
             # value head
             f.write(NNProcess.conv2text(self.residual_channels, self.value_extract, 1))
             f.write(NNProcess.bn2text(self.value_extract))
             f.write(NNProcess.conv2text(self.value_extract, 1, 1))
 
-            f.write(NNProcess.fullyconnect2text(self.value_extract, self.value_misc))
+            f.write(NNProcess.fullyconnect2text(self.value_extract * 3, self.value_misc))
             f.write("end struct\n")
             f.write("get parameters\n")
             for tensor in self.tensor_collector:

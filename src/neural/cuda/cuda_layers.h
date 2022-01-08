@@ -100,16 +100,26 @@ private:
     float *cuda_biases_;
 };
 
-class GlobalAvgPool: public LayerBasic {
+class GlobalPool : public LayerBasic {
 public:
-    GlobalAvgPool() = default; 
-    GlobalAvgPool(CudaHandles *handles,
-                  const int batch,
-                  const size_t board_size,
-                  const size_t channels);
+    GlobalPool() = default; 
+    GlobalPool(CudaHandles *handles,
+               bool is_value_head,
+               const int batch,
+               const size_t board_size,
+               const size_t channels);
 
     void Forward(const int batch, float *input, float *output);
+
+private:
+    bool is_value_head_; 
+    static constexpr size_t kMaxBSize = 19;
+    static constexpr size_t kMinBSize = 7;
+    static constexpr float kAvgBSize = (kMaxBSize + kMinBSize) / 2.f;
+    static constexpr float kFactor = 0.1f;
+    static constexpr float kFactorPow = kFactor * kFactor;
 };
+
 
 class SEUnit : public LayerBasic {
 public:
@@ -134,6 +144,11 @@ private:
     float *cuda_weights_b1_;
     float *cuda_weights_w2_;
     float *cuda_weights_b2_;
+
+    static constexpr size_t kMaxBSize = 19;
+    static constexpr size_t kMinBSize = 7;
+    static constexpr float kAvgBSize = (kMaxBSize + kMinBSize) / 2.f;
+    static constexpr float kFactor = 0.1f;
 };
 } // namespace CUDA
 

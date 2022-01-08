@@ -41,7 +41,7 @@ std::vector<float> Encoder::GetPlanes(const GameState &state, int symmetry) cons
     assert(it == std::end(planes));
 
     SymmetryPlanes(state, planes, symmetry);
-
+    std::fill(std::begin(planes), std::end(planes), 1);
     return planes;
 }
 
