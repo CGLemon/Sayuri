@@ -41,7 +41,7 @@ std::vector<float> Encoder::GetPlanes(const GameState &state, int symmetry) cons
     assert(it == std::end(planes));
 
     SymmetryPlanes(state, planes, symmetry);
-    std::fill(std::begin(planes), std::end(planes), 1);
+
     return planes;
 }
 
@@ -235,7 +235,6 @@ void Encoder::FillMisc(const Board* board,
                        float komi,
                        std::vector<float>::iterator misc_it) const {
     auto num_intersections = board->GetNumIntersections();
-    auto boardsize = board->GetBoardSize();
     auto side_to_move = board->GetToMove();
     if (side_to_move == kWhite) {
         komi = 0.0f - komi;
@@ -245,9 +244,9 @@ void Encoder::FillMisc(const Board* board,
     std::fill(misc_it+ 0 * num_intersections,
                   misc_it+ 1 * num_intersections, komi/10.f);
 
-    // board size
+    // intersections
     std::fill(misc_it+ 1 * num_intersections,
-                  misc_it+ 2 * num_intersections, float(boardsize)/10.f);
+                  misc_it+ 2 * num_intersections, static_cast<float>(num_intersections)/100.f);
 
     // side to move
     if (side_to_move == kBlack) {
