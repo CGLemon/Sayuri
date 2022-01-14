@@ -32,9 +32,6 @@ CONFIG_KEYWOED = [
 
 class Config:
     def __init__(self):
-        # Verbose option  
-        self.debug_verbose = False
-        self.misc_verbose = False
 
         # Training option
         self.num_workers = None

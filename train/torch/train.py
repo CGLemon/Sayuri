@@ -59,7 +59,7 @@ class DataSet():
         else:
             input_planes[self.input_channels-4, 0:board_size, 0:board_size] = -data.komi/10
 
-        input_planes[self.input_channels-3, 0:board_size, 0:board_size] = data.board_size/10
+        input_planes[self.input_channels-3, 0:board_size, 0:board_size] = (data.board_size**2)/10
 
         if data.to_move == 1:
             input_planes[self.input_channels-2, 0:board_size, 0:board_size] = 1
@@ -153,8 +153,6 @@ class TrainingPipe():
 
         # Be sure the network is on the right device.
         self.setup()
-        if self.cfg.misc_verbose:
-            self.net.dump_info()
 
         print("start training...")
 
