@@ -1,7 +1,7 @@
 import argparse
 
-from train import *
-from config import *
+from train import TrainingPipe
+from config import gather_config
 
 def main(args, cfg):
     pipe = TrainingPipe(cfg)
