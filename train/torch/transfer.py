@@ -1,6 +1,6 @@
 import argparse
 
-from nnprocess import NNProcess
+from network import Network
 from config import gather_config
 
 if __name__ == "__main__":
@@ -12,6 +12,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     cfg = gather_config(args.json)
-    net = NNProcess(cfg)
+    net = Network(cfg)
     net.load_pt(args.network + ".pt")
     net.transfer2text(args.network + ".txt")

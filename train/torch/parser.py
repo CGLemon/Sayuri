@@ -3,7 +3,6 @@ import argparse
 from train import *
 from config import *
 
-
 def main(args, cfg):
     pipe = TrainingPipe(cfg)
 

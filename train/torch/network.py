@@ -182,7 +182,7 @@ class ResBlock(nn.Module):
         return F.relu(out, inplace=True), mask, mask_factor
 
 
-class NNProcess(nn.Module):
+class Network(nn.Module):
     def __init__(self, cfg):
         super().__init__()
 
@@ -392,35 +392,35 @@ class NNProcess(nn.Module):
             f.write("end info\n")
 
             f.write("get struct\n")
-            f.write(NNProcess.conv2text(self.input_channels, self.residual_channels, 3))
-            f.write(NNProcess.bn2text(self.residual_channels))
+            f.write(Network.conv2text(self.input_channels, self.residual_channels, 3))
+            f.write(Network.bn2text(self.residual_channels))
 
             for s in self.stack:
                 if s == "ResidualBlock" or s == "ResidualBlock-SE":
-                    f.write(NNProcess.conv2text(self.residual_channels, self.residual_channels, 3))
-                    f.write(NNProcess.bn2text(self.residual_channels))
-                    f.write(NNProcess.conv2text(self.residual_channels, self.residual_channels, 3))
-                    f.write(NNProcess.bn2text(self.residual_channels))
+                    f.write(Network.conv2text(self.residual_channels, self.residual_channels, 3))
+                    f.write(Network.bn2text(self.residual_channels))
+                    f.write(Network.conv2text(self.residual_channels, self.residual_channels, 3))
+                    f.write(Network.bn2text(self.residual_channels))
                     if s == "ResidualBlock-SE":
-                        f.write(NNProcess.fullyconnect2text(self.residual_channels * 3, self.residual_channels * 4))
-                        f.write(NNProcess.fullyconnect2text(self.residual_channels * 4, self.residual_channels * 2))
+                        f.write(Network.fullyconnect2text(self.residual_channels * 3, self.residual_channels * 4))
+                        f.write(Network.fullyconnect2text(self.residual_channels * 4, self.residual_channels * 2))
 
             # policy head
-            f.write(NNProcess.conv2text(self.residual_channels, self.policy_extract, 1))
-            f.write(NNProcess.bn2text(self.policy_extract))
-            f.write(NNProcess.conv2text(self.policy_extract, 1, 1))
-            f.write(NNProcess.fullyconnect2text(self.policy_extract * 3, 1))
+            f.write(Network.conv2text(self.residual_channels, self.policy_extract, 1))
+            f.write(Network.bn2text(self.policy_extract))
+            f.write(Network.conv2text(self.policy_extract, 1, 1))
+            f.write(Network.fullyconnect2text(self.policy_extract * 3, 1))
 
             # value head
-            f.write(NNProcess.conv2text(self.residual_channels, self.value_extract, 1))
-            f.write(NNProcess.bn2text(self.value_extract))
-            f.write(NNProcess.conv2text(self.value_extract, 1, 1))
+            f.write(Network.conv2text(self.residual_channels, self.value_extract, 1))
+            f.write(Network.bn2text(self.value_extract))
+            f.write(Network.conv2text(self.value_extract, 1, 1))
 
-            f.write(NNProcess.fullyconnect2text(self.value_extract * 3, self.value_misc))
+            f.write(Network.fullyconnect2text(self.value_extract * 3, self.value_misc))
             f.write("end struct\n")
             f.write("get parameters\n")
             for tensor in self.tensor_collector:
-                f.write(NNProcess.tensor2text(tensor))
+                f.write(Network.tensor2text(tensor))
             f.write("end parameters\n")
             f.write("end main")
 

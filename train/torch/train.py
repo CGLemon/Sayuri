@@ -4,7 +4,7 @@ import numpy as np
 import random
 
 from symmetry import get_symmetry_plane
-from nnprocess import NNProcess
+from network import Network
 from loader import Loader
 
 from torch.utils.tensorboard import SummaryWriter
@@ -130,7 +130,7 @@ class TrainingPipe():
         if self.use_gpu:
             self.device = torch.device('cuda:0')
 
-        self.net = NNProcess(self.cfg)
+        self.net = Network(self.cfg)
         self.net.trainable(True)
         self.data_set = None
 
