@@ -56,21 +56,21 @@ void TimeControl::TookTime(int color) {
     }
 
     assert(!IsTimeOver(color));
-    float remaing_took_time = timer_.GetDuration();
+    float remaining_took_time = timer_.GetDuration();
 
     if (!in_byo_[color]) {
-        if (maintime_left_[color] >= remaing_took_time) {
-            maintime_left_[color] -= remaing_took_time;
-            remaing_took_time = 0.0f;
+        if (maintime_left_[color] >= remaining_took_time) {
+            maintime_left_[color] -= remaining_took_time;
+            remaining_took_time = 0.0f;
         } else {
-            remaing_took_time -= maintime_left_[color];
+            remaining_took_time -= maintime_left_[color];
             maintime_left_[color] = 0.0f;
             in_byo_[color] = true;
         }
     }
 
-    if (in_byo_[color] && remaing_took_time > 0.0f) {
-        byotime_left_[color] -= remaing_took_time;
+    if (in_byo_[color] && remaining_took_time > 0.0f) {
+        byotime_left_[color] -= remaining_took_time;
         stones_left_[color] --;
 
         if (stones_left_[color] == 0) {
@@ -85,8 +85,7 @@ void TimeControl::TookTime(int color) {
 }
 
 void TimeControl::SetLagBuffer(int lag_buffer) {
-    lag_buffer_cs_ = lag_buffer < 0 ? 0.0f :
-                         (float)lag_buffer;
+    lag_buffer_ = lag_buffer < 0 ? 0.0f : (float)lag_buffer;
 }
 
 void TimeControl::Reset() {
@@ -180,9 +179,9 @@ float TimeControl::GetThinkingTime(int color, int boardsize, int move_num) const
         extra_time_per_move = byo_extra;
     }
 
-    auto base_time = std::max(time_remaining - lag_buffer_cs_, 0.f) /
+    auto base_time = std::max(time_remaining - lag_buffer_, 0.f) /
                          std::max(moves_remaining, 1);
-    auto inc_time = std::max(extra_time_per_move - lag_buffer_cs_, 0.f);
+    auto inc_time = std::max(extra_time_per_move - lag_buffer_, 0.f);
 
     return base_time + inc_time;
 }

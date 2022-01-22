@@ -44,7 +44,7 @@ private:
     std::array<int,   2> periods_left_;
     std::array<bool,  2> in_byo_;
 
-    float lag_buffer_cs_{0};
+    float lag_buffer_{0};
 
     Timer timer_;
 
