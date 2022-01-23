@@ -1,5 +1,11 @@
 # SGF DownLoader
 
+The tool to download SGF file from katago server.
+
+## Requirements
+
+* requests
+
 ## Usage
 
 | Parameter      | Type              | Description                 |

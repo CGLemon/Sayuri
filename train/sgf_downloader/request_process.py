@@ -1,15 +1,60 @@
 import requests, os
 from parser import PageParser, get_games_page_url 
 
+class GameState:
+    def __init__(self, sgf):
+        self.board_size = '19'
+        self.ko = 'simple'
+        self.score = 'area'
+        self.suicide = False
+        self.handicap = '0'
+
+        self._parse(sgf)
+
+    def _parse(self, sgf):
+        begin = sgf.find('SZ[')+3
+        self.borad_size = sgf[begin : sgf.find(']', begin)]
+
+        begin = sgf.find('RU[')+3
+        rule = sgf[begin : sgf.find(']', begin)]
+        self._parse_rule(rule)
+
+        begin = sgf.find('HA[')+3
+        self.handicap = sgf[begin : sgf.find(']', begin)]
+
+    def _parse_rule(self, rule):
+        if rule.find('koSIMPLE') >= 0:
+            self.ko = 'simple'
+        elif rule.find('koSITUATIONAL') >= 0:
+            self.ko = 'situation'
+        elif rule.find('koPOSITIONAL') >= 0:
+            self.ko = 'position'
+
+        if rule.find('scoreAREA') >= 0:
+            self.score = 'area'
+        elif rule.find('scoreTERRITORY') >= 0:
+            self.score = 'territory'
+
+        if rule.find('sui0') >= 0:
+            self.suicide = False
+        elif rule.find('sui1') >= 0:
+            self.suicide = True
+
+
 class RequestProcess:
     def __init__(self, root_dir, num_games):
         self.root_url = 'https://katagotraining.org/games/'
         self.root_dir = root_dir
         self.num_games = num_games
+        self.saved_game_states = list()
 
     def run(self):
         network_games_urls = self._gather_network_games_urls()
-        network_games_urls.pop(0)
+
+        for nn_url in network_games_urls:
+            if nn_url.find('kata1-b60c320') >= 0:
+                network_games_urls.remove(nn_url)
+        network_games_urls.pop(0) # discard the last one
 
         if not os.path.isdir(self.root_dir):
             os.mkdir(self.root_dir)
@@ -67,21 +112,18 @@ class RequestProcess:
         r = requests.get(url=url)    
         sgf = r.text
 
-        begin = sgf.find('SZ[')+3
-        borad_size = sgf[begin : sgf.find(']', begin)]
-
-        begin = sgf.find('RU[')+3
-        rule = sgf[begin : sgf.find(']', begin)]
-
-        if borad_size.find(':') >= 0:
+        state = GameState(sgf)
+        if state.board_size.find(':') >= 0:
+            return False
+        if state.suicide:
+            return False
+        if state.score.find('area') < 0:
+            return False
+        if state.ko.find('position') < 0:
             return False
 
-        if rule.find('scoreAREA') < 0:
-            return False
-
-        if rule.find('sui0') < 0:
-            return False
-
+        self.saved_game_states.append(state)
         with open(filename, 'w') as f:
             f.write(sgf)
+
         return True
