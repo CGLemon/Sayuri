@@ -18,7 +18,7 @@ public:
 
     std::shared_ptr<SgfNode> GetChild(unsigned int index);
 
-    GameState GetMainlineState(unsigned int movenum);
+    GameState GetMainLineState(unsigned int movenum);
 
 private:
     GameState& GetState();
@@ -39,8 +39,8 @@ class SgfParser {
 public:
     static SgfParser& Get();
 
-    std::shared_ptr<SgfNode> ParseFormFile(std::string filename, size_t index=0) const;
-    std::shared_ptr<SgfNode> ParseFormString(std::string sgfstring) const;
+    std::shared_ptr<SgfNode> ParseFromFile(std::string filename, size_t index=0) const;
+    std::shared_ptr<SgfNode> ParseFromString(std::string sgfstring) const;
 
     std::vector<std::string> ChopAll(std::string filename) const;
 
@@ -59,9 +59,9 @@ class Sgf {
 public:
     static Sgf& Get();
 
-    GameState FormFile(std::string filename, unsigned int movenum);
+    GameState FromFile(std::string filename, unsigned int movenum);
 
-    GameState FormString(std::string sgfstring, unsigned int movenum);
+    GameState FromString(std::string sgfstring, unsigned int movenum);
 
     std::string ToString(GameState &state);
 

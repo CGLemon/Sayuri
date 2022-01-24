@@ -3,6 +3,7 @@
 #include "game/commands_list.h"
 #include "utils/log.h"
 #include "utils/komi.h"
+#include "utils/format.h"
 
 #include "data/supervised.h"
 #include "neural/encoder.h"
@@ -152,11 +153,13 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         if (const auto input = parser.GetCommand(2)) {
             movenum = input->Get<int>();
         }
-        if (filename.empty()) {
-            out << GTPFail("");
-        } else {
-            agent_->GetState() = Sgf::Get().FormFile(filename, movenum);
+        try {
+            agent_->GetState() = Sgf::Get().FromFile(filename, movenum);
             out << GTPSuccess("");
+        } catch (const char *err) {
+            ERROR << "Fail to load the SGF file!" << std::endl
+                      << Format("    Cause: %s.", err) << std::endl;
+            out << GTPFail("");
         }
     } else if (const auto res = parser.Find("printsgf", 0)) {
         auto filename = std::string{};

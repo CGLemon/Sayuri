@@ -62,11 +62,6 @@ enum GameResult : std::uint8_t {
     kUndecide = INVAL_NUMBER,
 };
 
-enum RuleType {
-    KTrompTaylor,
-    kJappenese,
-};
-
 static constexpr int kMaxLadderNodes = 2000;
 
 enum LadderType {

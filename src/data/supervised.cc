@@ -5,12 +5,11 @@
 #include "game/types.h"
 #include "neural/encoder.h"
 #include "utils/log.h"
+#include "utils/format.h"
 
 #include <fstream>
 #include <cassert>
-
 #include <cmath>
-#include "utils/log.h"
 
 Supervised &Supervised::Get() {
     static Supervised supervised;
@@ -30,15 +29,25 @@ void Supervised::FromSgf(std::string sgf_name, std::string out_name) {
 
     int games = 0;
     for (auto &sgf : sgfs) {
-        if (++games % 200 == 0) {
-            LOGGING << "Process games: " << games << std::endl;
+        if (games % 200 == 0) {
+            LOGGING << Format("Process games: %d.", games) << std::endl;
         }
-        SgfProcess(sgf, file);
+        if (SgfProcess(sgf, file)) {
+            games += 1;
+        }
     }
 }
 
-void Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
-    GameState state = Sgf::Get().FormString(sgfstring, 9999);
+bool Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
+    GameState state;
+
+    try {
+        state = Sgf::Get().FromString(sgfstring, 9999);
+    } catch (const char *err) {
+        ERROR << "Fail to load the SGF file! Discard it." << std::endl
+                  << Format("    Cause: %s.", err) << std::endl;
+        return false;
+    }
 
     auto ownership = state.GetOwnershipAndRemovedDeadStrings(200);
 
@@ -159,4 +168,6 @@ void Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
     for (const auto &buf : train_datas) {
         buf.StreamOut(out_file);
     }
+
+    return true;
 }

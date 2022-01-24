@@ -2,6 +2,7 @@
 #include "neural/network_basic.h"
 #include "utils/parser.h"
 #include "utils/log.h"
+#include "utils/format.h"
 #include "config.h"
 
 #include <iostream>
@@ -44,10 +45,11 @@ void DNNLoder::FromFile(std::shared_ptr<DNNWeights> weights, std::string filenam
     
     try {
         Parse(weights, buffer);
-    } catch (const char* err) {
+    } catch (const char *err) {
         // Should be not happned.
-        ERROR << "Loading network file fail!" << std::endl
-                 << "    Cause:" << ' ' << err << '.' << std::endl;
+
+        ERROR << "Fail to load the network file!" << std::endl
+                  << Format("    Cause: %s.", err) << std::endl;
     }
 }
 
