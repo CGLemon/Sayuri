@@ -26,9 +26,9 @@ class GameState:
         if rule.find('koSIMPLE') >= 0:
             self.ko = 'simple'
         elif rule.find('koSITUATIONAL') >= 0:
-            self.ko = 'situation'
+            self.ko = 'situational'
         elif rule.find('koPOSITIONAL') >= 0:
-            self.ko = 'position'
+            self.ko = 'positional'
 
         if rule.find('scoreAREA') >= 0:
             self.score = 'area'
@@ -114,12 +114,6 @@ class RequestProcess:
 
         state = GameState(sgf)
         if state.board_size.find(':') >= 0:
-            return False
-        if state.suicide:
-            return False
-        if state.score.find('area') < 0:
-            return False
-        if state.ko.find('position') < 0:
             return False
 
         self.saved_game_states.append(state)
