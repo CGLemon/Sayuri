@@ -7,12 +7,13 @@
 
 class Board : public SimpleBoard {
 public:
-    // Compute final score by Tromp Taylor rule.
+    // Compute final score with Tromp Taylor rule.
     float ComputeFinalScore(float komi) const;
 
+    // Compute score on board(without komi) with Tromp Taylor rule.
     int ComputeScoreOnBoard() const;
 
-    // Compute final score by Tromp Taylor rule.
+    // Compute score area with Tromp Taylor rule.
     void ComputeScoreArea(std::vector<int> &result) const;
 
     // Get ladder type map.
@@ -26,6 +27,7 @@ public:
     // Mark all seki points if mark_seki is true.
     void ComputeSafeArea(std::vector<bool> &result, bool mark_seki) const;
 
+    // Compute seki area.
     void ComputeSekiPoints(std::vector<bool> &result) const;
 
 private:

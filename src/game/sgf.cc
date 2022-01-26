@@ -58,7 +58,7 @@ int SgfNode::GetVertexFromString(const std::string& movestring) {
     }
 
     if (movestring.size() != 2) {
-        throw "Illegal SGF move";
+        throw "Illegal SGF move format";
     }
 
     char c1 = movestring[0];
@@ -81,7 +81,7 @@ int SgfNode::GetVertexFromString(const std::string& movestring) {
     // catch illegal SGF
     if (cc1 < 0 || cc1 >= bsize
         || cc2 < 0 || cc2 >= bsize) {
-        throw "Illegal SGF move";
+        throw "Illegal SGF move format";
     }
 
     int vtx = GetState().GetVertex(cc1, cc2);
@@ -512,33 +512,32 @@ std::string Sgf::ToString(GameState &state) {
     out << MakePropertyVetexListString("AB", state.GetAppendMoves(kBlack), state);
     out << MakePropertyVetexListString("AW", state.GetAppendMoves(kWhite), state);
 
+    const auto score = state.GetFinalScore();
+    const auto pass_end = state.GetPasses() >= 2;
 
-
-    auto fork_state = state;
-
-    fork_state.RemoveDeadStrings(200);
-    auto score = fork_state.GetFinalScore();
-
-    if (fork_state.GetPasses() >= 2) {
+    if (pass_end) {
         if (score > 1e-4) {
-            fork_state.SetWinner(kBlackWon);
+            state.SetWinner(kBlackWon);
         } else if (score < -1e-4) {
-            fork_state.SetWinner(kWhiteWon);
+            state.SetWinner(kWhiteWon);
         } else {
-            fork_state.SetWinner(kDraw);
+            state.SetWinner(kDraw);
         }
     }
-    if (fork_state.GetWinner() != kUndecide) {
+
+    if (state.GetWinner() != kUndecide) {
         out << "RE" << '[';
-        if (fork_state.GetWinner() == kBlackWon) {
+        if (state.GetWinner() == kBlackWon) {
             out << "B+";
-            if (fork_state.GetPasses() >= 2) out << score;
-        } else if (fork_state.GetWinner() == kWhiteWon) {
+            if (pass_end) out << score;
+        } else if (state.GetWinner() == kWhiteWon) {
             out << "W+";
-            if (fork_state.GetPasses() >= 2) out << -score;
-        } else if (fork_state.GetWinner() == kDraw) {
+            if (pass_end) out << -score;
+        } else if (state.GetWinner() == kDraw) {
             out << "0";
         }
+        if (!pass_end && state.GetWinner() != kDraw) out << "Resign";
+
         out << ']';
     }
 
