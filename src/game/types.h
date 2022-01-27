@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#define MAX_BOARD_SIZE (9)
+#define MAX_BOARD_SIZE (19)
 
 static constexpr int kDefaultBoardSize = 9;
 static constexpr float kDefaultKomi = 7.f;
