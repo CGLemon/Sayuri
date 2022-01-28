@@ -78,11 +78,8 @@ class RequestProcess:
                         print('saved {s} games, discarded {d} games.'.format(s=saved_games,d=discarded_games))
 
                     if saved_games >= self.num_games:
-                        break
-                if saved_games >= self.num_games:
-                    break
-            if saved_games >= self.num_games:
-                break
+                        self._dump_stats()
+                        return
 
     def _gather_network_games_urls(self):
         r = requests.get(url=self.root_url)
@@ -121,3 +118,31 @@ class RequestProcess:
             f.write(sgf)
 
         return True
+
+    def _dump_stats(self):
+        max_bsize = 25
+        bsize_list = [0] * (max_bsize+1)
+        handicap_list = [0] * 20
+        tot_games = len(self.saved_game_states)
+
+        print('Games: {}'.format(tot_games))
+
+        for game in self.saved_game_states:
+            bsize = int(game.board_size)
+            handicap = int(game.handicap)
+
+            bsize_list[bsize] += 1
+            handicap_list[handicap] += 1
+
+        print('Board Size Stats')
+        for bsize in range(max_bsize):
+            val = bsize_list[bsize]
+            if val != 0:
+                print ('\tsize {b}: {p}%'.format(b=bsize, p=100 * val/tot_games))
+
+            
+        print('Handicap Stats')
+        for handicap in range(20):
+            val = handicap_list[handicap]
+            if val != 0:
+                print ('\tsize {h}: {v}%'.format(h=handicap, p=100 * val/tot_games))
