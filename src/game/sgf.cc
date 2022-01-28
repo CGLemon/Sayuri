@@ -101,6 +101,10 @@ void SgfNode::PopulateState(GameState currstate) {
 
     // board size
     if (const auto res = GetPropertyValue("SZ")) {
+        for (const char c : *res) {
+            if (!std::isspace(c) && !std::isdigit(c)) throw "It is not a square board";
+        }
+
         const auto bsize = std::stoi(*res);
         GetState().Reset(bsize, GetState().GetKomi());
     }

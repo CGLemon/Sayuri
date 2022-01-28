@@ -13,7 +13,7 @@ class GameState:
 
     def _parse(self, sgf):
         begin = sgf.find('SZ[')+3
-        self.borad_size = sgf[begin : sgf.find(']', begin)]
+        self.board_size = sgf[begin : sgf.find(']', begin)]
 
         begin = sgf.find('RU[')+3
         rule = sgf[begin : sgf.find(']', begin)]
