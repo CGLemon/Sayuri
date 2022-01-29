@@ -76,6 +76,7 @@ class RequestProcess:
 
                     if (saved_games + discarded_games) % 100 == 0:
                         print('saved {s} games, discarded {d} games.'.format(s=saved_games,d=discarded_games))
+                        self._dump_stats()
 
                     if saved_games >= self.num_games:
                         self._dump_stats()
@@ -138,11 +139,10 @@ class RequestProcess:
         for bsize in range(max_bsize):
             val = bsize_list[bsize]
             if val != 0:
-                print ('\tsize {b}: {p}%'.format(b=bsize, p=100 * val/tot_games))
+                print ('\tsize {}: {:.2f}%'.format(bsize, 100 * val/tot_games))
 
-            
         print('Handicap Stats')
         for handicap in range(20):
             val = handicap_list[handicap]
             if val != 0:
-                print ('\tsize {h}: {v}%'.format(h=handicap, p=100 * val/tot_games))
+                print ('\tsize {}: {:.2f}%'.format(handicap, 100 * val/tot_games))
