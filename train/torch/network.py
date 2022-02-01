@@ -27,7 +27,7 @@ class GlobalPool(nn.Module):
 
         _, _, h, w = mask_factor.size()
         spatial = h * w
-        b_coeff = torch.sqrt(self.max_pool(mask_factor) * spatial)
+        b_coeff = torch.sqrt(spatial / self.max_pool(mask_factor))
         b_coeff = torch.flatten(b_coeff, start_dim=1, end_dim=3)
         b_coeff = b_coeff - self.b_avg
 
@@ -35,7 +35,8 @@ class GlobalPool(nn.Module):
             b_coeff = (torch.pow(b_coeff, 2) - self.b_varinat) * self.b_factor_pow
         else:
             b_coeff = b_coeff * self.b_factor
-        b_coeff = torch.zeros(avg_part.size()) + b_coeff
+
+        b_coeff = b_coeff.expand((avg_part.size()))
 
         return torch.cat((avg_part, max_part, b_coeff), 1)
 
@@ -154,7 +155,7 @@ class ResBlock(nn.Module):
             )
             self.squeeze = FullyConnect(
                 in_size=se_size,
-                out_size=2 * channels,
+                out_size=2*channels,
                 relu=False,
                 collector=collector
             )
@@ -176,7 +177,8 @@ class ResBlock(nn.Module):
             gammas = torch.reshape(gammas, (b, c, 1, 1))
             betas = torch.reshape(betas, (b, c, 1, 1))
             out = torch.sigmoid(gammas) * out + betas
-            
+            out = out * mask
+
         out += identity
 
         return F.relu(out, inplace=True), mask, mask_factor
