@@ -6,6 +6,7 @@
 #include "neural/encoder.h"
 #include "utils/log.h"
 #include "utils/format.h"
+#include "utils/random.h"
 
 #include <fstream>
 #include <cassert>
@@ -16,7 +17,10 @@ Supervised &Supervised::Get() {
     return supervised;
 }
 
-void Supervised::FromSgf(std::string sgf_name, std::string out_name) {
+void Supervised::FromSgf(std::string sgf_name,
+                             std::string out_name,
+                             float cutoff_games_prob,
+                             float cutoff_moves_rate) const {
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
     auto file = std::ofstream{};
 
@@ -26,19 +30,36 @@ void Supervised::FromSgf(std::string sgf_name, std::string out_name) {
         ERROR << "Fail to create the file: " << out_name << '!' << std::endl; 
         return;
     }
+    // TODO: Multi-thread to product training data.
+
+
+    const auto Clamp = [](float val) {
+        val = std::max(val, 0.f);
+        val = std::min(val, 1.f);
+        return val; 
+    };
+
+    cutoff_games_prob = Clamp(cutoff_games_prob);
+    cutoff_moves_rate = Clamp(cutoff_moves_rate);
 
     int games = 0;
     for (auto &sgf : sgfs) {
         if (games % 200 == 0) {
             LOGGING << Format("Process games: %d.", games) << std::endl;
         }
-        if (SgfProcess(sgf, file)) {
+
+        bool cutoff = Random<RandomType::kXoroShiro128Plus>::Get().Roulette<10000>(1.0f - cutoff_games_prob);
+
+        if (SgfProcess(sgf, file, cutoff, cutoff_moves_rate)) {
             games += 1;
         }
     }
 }
 
-bool Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
+bool Supervised::SgfProcess(std::string &sgfstring,
+                                std::ostream &out_file,
+                                bool cut_off,
+                                float cutoff_moves_rate) const {
     GameState state;
 
     try {
@@ -114,7 +135,13 @@ bool Supervised::SgfProcess(std::string &sgfstring, std::ostream &out_file) {
         return state.GetIndex(x, y);
     };
 
+    const int cutoff_moves = (1.f - cutoff_moves_rate) * num_intersections;
+
     for (auto i = size_t{0}; i < movelist.size(); ++i) {
+
+        if (cut_off && (i >= (size_t)cutoff_moves)) break;
+
+
         auto vtx = movelist[i];
         auto aux_vtx = kPass;
 
