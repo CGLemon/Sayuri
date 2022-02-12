@@ -59,7 +59,7 @@ class DataSet():
         else:
             input_planes[self.input_channels-4, 0:board_size, 0:board_size] = -data.komi/10
 
-        input_planes[self.input_channels-3, 0:board_size, 0:board_size] = (data.board_size**2)/10
+        input_planes[self.input_channels-3, 0:board_size, 0:board_size] = (data.board_size**2)/100
 
         if data.to_move == 1:
             input_planes[self.input_channels-2, 0:board_size, 0:board_size] = 1
