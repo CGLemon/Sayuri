@@ -51,9 +51,6 @@ class RequestProcess:
     def run(self):
         network_games_urls = self._gather_network_games_urls()
 
-        for nn_url in network_games_urls:
-            if nn_url.find('kata1-b60c320') >= 0:
-                network_games_urls.remove(nn_url)
         network_games_urls.pop(0) # discard the last one
 
         if not os.path.isdir(self.root_dir):
