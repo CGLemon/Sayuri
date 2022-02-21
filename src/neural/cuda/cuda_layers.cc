@@ -212,6 +212,9 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
                                                  CUDNN_DATA_FLOAT,
                                                  1, out_channels_, height_, width_));
 
+#if CUDNN_MAJOR == 8
+    conv_algo_ = CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD_NONFUSED;
+#else
     ReportCUDNNErrors(cudnnGetConvolutionForwardAlgorithm(handles_->cudnn_handle,
                                                           in_tensor_desc_,
                                                           filter_desc_,
@@ -220,6 +223,7 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
                                                           CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,
                                                           0,
                                                           &conv_algo_));
+#endif
 
     ReportCUDNNErrors(cudnnGetConvolutionForwardWorkspaceSize(handles_->cudnn_handle,
                                                               in_tensor_desc_,
