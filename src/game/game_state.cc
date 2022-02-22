@@ -435,7 +435,7 @@ std::vector<int> GameState::GetOwnership() const {
 void GameState::FillRandomMove() {
     const int color = GetToMove();
     const int empty_cnt = board_.GetEmptyCount();
-    const int rand = Random<RandomType::kXoroShiro128Plus>::Get().Generate() % empty_cnt;
+    const int rand = Random<kXoroShiro128Plus>::Get().Generate() % empty_cnt;
     int select_move = kPass;
 
     auto safe_area = std::vector<bool>(GetNumIntersections(), false);
@@ -509,9 +509,8 @@ void GameState::PlayRandomMove() {
         }
 
         auto size = list.size();
-        auto rng = Random<RandomType::kXoroShiro128Plus>::Get();
         auto dis = std::uniform_real_distribution<float>(0, acc);
-        auto p = dis(rng);
+        auto p = dis(Random<kXoroShiro128Plus>::Get());
 
         for (size_t i = 1; i < size; ++i) {
             auto low = list[i-1].first;

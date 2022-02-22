@@ -48,7 +48,7 @@ void Supervised::FromSgf(std::string sgf_name,
             LOGGING << Format("Process games: %d.", games) << std::endl;
         }
 
-        bool cutoff = Random<RandomType::kXoroShiro128Plus>::Get().Roulette<10000>(1.0f - cutoff_games_prob);
+        bool cutoff = Random<kXoroShiro128Plus>::Get().Roulette<10000>(1.0f - cutoff_games_prob);
 
         if (SgfProcess(sgf, file, cutoff, cutoff_moves_rate)) {
             games += 1;
