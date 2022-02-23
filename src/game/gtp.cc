@@ -395,6 +395,9 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
     } else if (const auto res = parser.Find({"help", "list_commands"}, 0)) {
         auto list_commands = std::ostringstream{};
         auto idx = size_t{0};
+
+        std::sort(std::begin(kGtpCommandsList), std::end(kGtpCommandsList));
+
         for (const auto &cmd : kGtpCommandsList) {
             list_commands << cmd;
             if (++idx != kGtpCommandsList.size()) list_commands << std::endl;
