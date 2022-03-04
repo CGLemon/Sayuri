@@ -221,7 +221,7 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
                                                           filter_desc_,
                                                           conv_desc_,
                                                           out_tensor_desc_,
-                                                          2,
+                                                          1,
                                                           &returned_cnt,
                                                           &conv_perf));
     conv_algo_ = conv_perf.algo;
