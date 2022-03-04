@@ -205,25 +205,26 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
     ReportCUDNNErrors(cudnnSetTensor4dDescriptor(in_tensor_desc_,
                                                  CUDNN_TENSOR_NCHW,
                                                  CUDNN_DATA_FLOAT,
-                                                 1, in_channels_, height_, width_));
+                                                 maxbatch_, in_channels_, height_, width_));
 
     ReportCUDNNErrors(cudnnSetTensor4dDescriptor(out_tensor_desc_,
                                                  CUDNN_TENSOR_NCHW,
                                                  CUDNN_DATA_FLOAT,
-                                                 1, out_channels_, height_, width_));
+                                                 maxbatch_, out_channels_, height_, width_));
 
-#if CUDNN_MAJOR == 8
-    cudnnConvolutionFwdAlgoPerfStruct  conv_perf;
+    ReportCUDNNErrors(cudnnSetConvolutionMathType(conv_desc_, CUDNN_DEFAULT_MATH));
+
+#if CUDNN_MAJOR >= 8
+    cudnnConvolutionFwdAlgoPerf_t  conv_perf;
     int returned_cnt;
-
     ReportCUDNNErrors(cudnnFindConvolutionForwardAlgorithm(handles_->cudnn_handle,
-                                                          in_tensor_desc_,
-                                                          filter_desc_,
-                                                          conv_desc_,
-                                                          out_tensor_desc_,
-                                                          1,
-                                                          &returned_cnt,
-                                                          &conv_perf));
+                                                           in_tensor_desc_,
+                                                           filter_desc_,
+                                                           conv_desc_,
+                                                           out_tensor_desc_,
+                                                           1,
+                                                           &returned_cnt,
+                                                           &conv_perf));
     conv_algo_ = conv_perf.algo;
 #else
     ReportCUDNNErrors(cudnnGetConvolutionForwardAlgorithm(handles_->cudnn_handle,
@@ -235,7 +236,6 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
                                                           0,
                                                           &conv_algo_));
 #endif
-
     ReportCUDNNErrors(cudnnGetConvolutionForwardWorkspaceSize(handles_->cudnn_handle,
                                                               in_tensor_desc_,
                                                               filter_desc_,
@@ -246,6 +246,7 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
 
     const size_t max_scratch_size = std::max(apply_scratch_size, scratch_size);
     scratch_size = max_scratch_size;
+
 #else
     apply_scratch_size = weights_size * filters_ * filters_;
     const size_t max_scratch_size = std::max(apply_scratch_size, scratch_size);
