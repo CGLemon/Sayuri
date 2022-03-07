@@ -62,6 +62,7 @@ private:
                     std::vector<float>::iterator ladder_it) const;
 
     void FillMisc(const Board* board,
+                  const int color,
                   float komi,
                   std::vector<float>::iterator color_it) const;
 
