@@ -28,14 +28,12 @@ class DataSet():
         data.unpack_planes()
 
         symm = int(np.random.choice(8, 1)[0])
-        inv = int(np.random.choice(2, 1)[0])
 
         nn_board_size = self.nn_board_size
         nn_num_intersections = self.nn_num_intersections
 
         board_size = data.board_size
         num_intersections = data.board_size * data.board_size
-
 
         # allocate all buffers
         input_planes = np.zeros((self.input_channels, nn_board_size, nn_board_size))
@@ -55,25 +53,14 @@ class DataSet():
             buf = get_symmetry_plane(symm, buf, data.board_size)
             input_planes[p, 0:board_size, 0:board_size] = np.reshape(buf, (board_size, board_size))[:, :]
 
-        # inverse the side to move
-        if inv == 1:
-            for m in range(8):
-                sqr_buf[:, :] = input_planes[3*m, :, :]
-                input_planes[3*m, :, :] = input_planes[3*m+1, :, :]
-                input_planes[3*m+1, :, :] = sqr_buf[:, :]
-
-        if data.to_move is not inv:
-            # (to_move == 1 and inv == 0)
-            # or (to_move == 0 and inv == 1)
+        if data.to_move == 1:
             input_planes[self.input_channels-4, 0:board_size, 0:board_size] = data.komi/10
-            input_planes[self.input_channels-2, 0:board_size, 0:board_size] = 1
         else:
-            # (to_move == 1 and inv == 1)
-            # or (to_move == 0 and inv == 0)
             input_planes[self.input_channels-4, 0:board_size, 0:board_size] = -data.komi/10
-            input_planes[self.input_channels-1, 0:board_size, 0:board_size] = 1
 
         input_planes[self.input_channels-3, 0:board_size, 0:board_size] = (data.board_size**2)/100
+        # input_planes[self.input_channels-2, 0:board_size, 0:board_size] = 0 # fill zeros
+        input_planes[self.input_channels-1, 0:board_size, 0:board_size] = 1 # fill ones
 
         # probabilities
         buf[:] = data.prob[0:num_intersections]
@@ -97,18 +84,11 @@ class DataSet():
 
         ownership[0:board_size, 0:board_size] = np.reshape(buf, (board_size, board_size))[:, :]
         ownership = np.reshape(ownership, (nn_num_intersections))
-        if inv == 1:
-            ownership = -ownership;
 
         # winrate
-        if inv == 1:
-            wdl[1 + data.result] = 1
-            stm[0] = -data.q_value
-            final_score[0] = -data.final_score
-        else:
-            wdl[1 - data.result] = 1
-            stm[0] = data.q_value
-            final_score[0] = data.final_score
+        wdl[1 - data.result] = 1
+        stm[0] = data.q_value
+        final_score[0] = data.final_score
 
         data.pack_planes()
 

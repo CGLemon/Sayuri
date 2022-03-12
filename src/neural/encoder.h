@@ -28,7 +28,7 @@ public:
      * planes 31-34 : ladder features
      * plane     35 : komi/10
      * plane     36 : intersections/100
-     * planes 37-38 : side to move
+     * planes 37-38 : fill zeros, ones
      *
      */
     std::vector<float> GetPlanes(const GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
