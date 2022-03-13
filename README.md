@@ -4,9 +4,9 @@
 
 ## Let's ROCK!
 
-Sayuri is a super human level 9x9 GTP go engine. Based on Deep Neural Network, Monte Carlo Tree Search and other powerful skills.
+Sayuri is a super human level 9x9 GTP go engine. Strongly inspired by Leela Zero and Kata Go. Based on Deep Neural Network, Monte Carlo Tree Search and other powerful skills.
 
-## Prepare
+## Requirements
 
 Following library is required.
 
@@ -14,15 +14,17 @@ Following library is required.
 
 Following library are optional.
 
-1. OpenBLAS
-2. CUDA
-3. cuDNN
+1. Eigen
+2. OpenBLAS
+3. CUDA(<=10.x)
+4. cuDNN(<=8.x)
 
 ## Build(Ubuntu/MacOS)
 
 The program is only available on Ubuntu/MacOS.
 
     $ git clone https://github.com/CGLemon/Sayuri
+    $ git submodule update --init --recursive
     $ cd Sayuri
     $ mkdir build && cd build
     $ cmake ..
@@ -30,9 +32,13 @@ The program is only available on Ubuntu/MacOS.
 
 ## Optional Building
 
-Accelerate the network by CPU. OpenBlas is required. OpenBlas is significantly faster than built-in blas. OpenBlas is recommended on MacOS.
+Accelerate the network by CPU. OpenBlas and Eigen are required. OpenBlas and Eigen are significantly faster than built-in blas. OpenBlas is recommended on MacOS.
 
     $ cmake .. -DBLAS_BACKEND=OPENBLAS
+
+or
+
+    $ cmake .. -DBLAS_BACKEND=EIGEN
 
 Accelerate the network by GPUs. CUDA is required. It will be faster than cuDNN in only one batch size.
 
@@ -44,11 +50,11 @@ Accelerate the network by GPUs. CUDA and cuDNN are required. It will be faster t
 
 ## Weights
 
-You may download the weights from my [google drive](https://drive.google.com/file/d/1tZJ_9ZY_OMDZHDxaELTtPa1bmvIQFGtk/view?usp=sharing). The weights size is 15 blocks and 192 filters(around 155MB).
+You may download the weights from my [google drive](https://drive.google.com/file/d/1vkx886BV55ujwJatuzVm19Jok18M-3Jj/view?usp=sharing). The weights size is 15 blocks and 192 filters(around 170MB).
 
-## Engine Options
+## Engine Arguments
 
-Here are some useful options which you may need.
+Here are some useful arguments which you may need.
 
     --weights, -w: File with network weights.
     
@@ -60,12 +66,12 @@ Here are some useful options which you may need.
     $ ./Sayuri -p 1600
     
     
-    --threads, -t: Set the search threads. Bigger is faster (the number is better to be large than batch size).
+    --threads, -t: Set the search threads. Bigger is faster. The default setting will select a reasonable number.
     
     $ ./Sayuri -t 4
     
     
-    --batch-size, -b: Set the network batch size. Bigger is faster.
+    --batch-size, -b: Set the network batch size. Bigger is faster. The default setting will select a reasonable number.
     
     $ ./Sayuri -b 2
     
@@ -109,12 +115,22 @@ Sayuri supports for any GTP interface application. [Sabaki](https://sabaki.yichu
 * Support for sabaki analyzing mode.
 * Support for handicap game.
 * Support for variant komi.
-* Support for small board size(but much weaker).
+* Support for variant board size.
 * Lock-free SMP MCTS.
-* Acceleration by multi-CPU and multi-Nvidia-GPU.
+* Acceleration by multi-core processor and multi-Nvidia GPU.
 * Predict current side winrate.
 * Predict current side score lead.
 * Predict the death strings.
+
+## Todo
+
+* Reuse the tree.
+* optimize the training pipe.
+* Support for half-float.
+* Support for NHWC format.
+* Support for distributed computation.
+* Including pattern system.
+* Training bigger size network.
 
 ## LICENSE
 
