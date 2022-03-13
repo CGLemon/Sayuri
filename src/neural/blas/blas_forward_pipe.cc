@@ -19,7 +19,6 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
 
     using Convolution3 = Convolution<3>;
     using Convolution1 = Convolution<1>;
-    using Pooling = GlobalAvgPool;
 
     // Some useful information for network.
     const auto board_size = inpnts.board_size;
@@ -114,7 +113,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     // policy head
     const auto policy_extract_channels = weights_->policy_extract_channels;
     auto policy_conv = std::vector<float>(policy_extract_channels * num_intersections);
-    auto policy_layer = std::vector<float>(policy_extract_channels);
+    auto policy_layer = std::vector<float>(3 * policy_extract_channels);
 
     Convolution1::Forward(board_size, output_channels, policy_extract_channels,
                           conv_out,
@@ -134,9 +133,10 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     AddSpatialBiases::Forward(board_size, 1,
                               output_prob,
                               weights_->prob_conv.GetBiases(), false);
-    Pooling::Forward(board_size, policy_extract_channels, policy_conv, policy_layer);
 
-    FullyConnect::Forward(policy_extract_channels, kOuputPassProbability,
+    GlobalPool<false>::Forward(board_size, policy_extract_channels, policy_conv, policy_layer);
+
+    FullyConnect::Forward(3 * policy_extract_channels, kOuputPassProbability,
                           policy_layer,
                           weights_->pass_fc.GetWeights(),
                           weights_->pass_fc.GetBiases(),
@@ -145,7 +145,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     // value head
     const auto value_extract_channels = weights_->value_extract_channels;
     auto value_conv = std::vector<float>(value_extract_channels * num_intersections);
-    auto value_layer = std::vector<float>(value_extract_channels);
+    auto value_layer = std::vector<float>(3 * value_extract_channels);
     
     Convolution1::Forward(board_size, output_channels, value_extract_channels,
                           conv_out,
@@ -163,13 +163,13 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                           workspace, output_ownership);
     
     AddSpatialBiases::Forward(board_size, 1,
-                                  output_ownership,
-                                  weights_->v_ownership.GetBiases(), false);
+                              output_ownership,
+                              weights_->v_ownership.GetBiases(), false);
 
 
-    Pooling::Forward(board_size, value_extract_channels, value_conv, value_layer);
+    GlobalPool<true>::Forward(board_size, value_extract_channels, value_conv, value_layer);
 
-    FullyConnect::Forward(value_extract_channels, kOuputValueMisc,
+    FullyConnect::Forward(3 * value_extract_channels, kOuputValueMisc,
                           value_layer,
                           weights_->v_misc.GetWeights(),
                           weights_->v_misc.GetBiases(),

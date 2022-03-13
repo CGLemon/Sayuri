@@ -8,9 +8,15 @@ class Supervised {
 public:
     static Supervised &Get();
 
-    void FromSgf(std::string sgf_name, std::string out_name);
+    void FromSgf(std::string sgf_name,
+                     std::string out_name,
+                     float cutoff_games_prob,
+                     float cutoff_moves_rate) const;
 
 private:
-   void SgfProcess(std::string &sgfstring, std::ostream &out_file);
+    bool SgfProcess(std::string &sgfstring,
+                        std::ostream &out_file,
+                        bool cut_off,
+                        float cutoff_moves_rate) const;
 
 };

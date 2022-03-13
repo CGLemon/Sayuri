@@ -205,13 +205,28 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
     ReportCUDNNErrors(cudnnSetTensor4dDescriptor(in_tensor_desc_,
                                                  CUDNN_TENSOR_NCHW,
                                                  CUDNN_DATA_FLOAT,
-                                                 1, in_channels_, height_, width_));
+                                                 maxbatch_, in_channels_, height_, width_));
 
     ReportCUDNNErrors(cudnnSetTensor4dDescriptor(out_tensor_desc_,
                                                  CUDNN_TENSOR_NCHW,
                                                  CUDNN_DATA_FLOAT,
-                                                 1, out_channels_, height_, width_));
+                                                 maxbatch_, out_channels_, height_, width_));
 
+    ReportCUDNNErrors(cudnnSetConvolutionMathType(conv_desc_, CUDNN_DEFAULT_MATH));
+
+#if CUDNN_MAJOR >= 8
+    cudnnConvolutionFwdAlgoPerf_t  conv_perf;
+    int returned_cnt;
+    ReportCUDNNErrors(cudnnFindConvolutionForwardAlgorithm(handles_->cudnn_handle,
+                                                           in_tensor_desc_,
+                                                           filter_desc_,
+                                                           conv_desc_,
+                                                           out_tensor_desc_,
+                                                           1,
+                                                           &returned_cnt,
+                                                           &conv_perf));
+    conv_algo_ = conv_perf.algo;
+#else
     ReportCUDNNErrors(cudnnGetConvolutionForwardAlgorithm(handles_->cudnn_handle,
                                                           in_tensor_desc_,
                                                           filter_desc_,
@@ -220,7 +235,7 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
                                                           CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,
                                                           0,
                                                           &conv_algo_));
-
+#endif
     ReportCUDNNErrors(cudnnGetConvolutionForwardWorkspaceSize(handles_->cudnn_handle,
                                                               in_tensor_desc_,
                                                               filter_desc_,
@@ -231,6 +246,7 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
 
     const size_t max_scratch_size = std::max(apply_scratch_size, scratch_size);
     scratch_size = max_scratch_size;
+
 #else
     apply_scratch_size = weights_size * filters_ * filters_;
     const size_t max_scratch_size = std::max(apply_scratch_size, scratch_size);
@@ -326,23 +342,40 @@ void FullyConnect::Forward(const int batch, float *input, float *output) {
                 outputs_ * batch, outputs_, outputs_ * batch, relu_, handles_->stream );
 }
 
-GlobalAvgPool::GlobalAvgPool(CudaHandles *handles,
-                             const int max_batch,
-                             const size_t board_size,
-                             const size_t channels) {
+GlobalPool::GlobalPool(CudaHandles *handles,
+                       bool is_value_head,
+                       const int max_batch,
+                       const size_t board_size,
+                       const size_t channels) {
     width_ = board_size;
     height_ = board_size;
     spatial_size_ = width_ * height_;
+    is_value_head_ = is_value_head;
 
     maxbatch_ = max_batch;
     channels_ = channels;
     handles_ = handles;
 }
 
-void GlobalAvgPool::Forward(const int batch, float *input, float *output) {
-    global_avg_pool(input, output, batch,
-                    channels_, spatial_size_, handles_->stream);
+void GlobalPool::Forward(const int batch, float *input, float *output) {
+    float b_coeff = 0;
+    const int board_size = (width_ + height_) / 2;
+
+    if (is_value_head_) {
+        float bsize_varaint = 0;
+        for (auto b = kMinBSize; b <= kMaxBSize; ++b) {
+            bsize_varaint += ((b - kAvgBSize) * (b - kAvgBSize));
+        }
+        bsize_varaint /= (kMaxBSize - kMinBSize + 1);
+        b_coeff = (std::pow((float)board_size - kAvgBSize, 2) - bsize_varaint) * kFactorPow;
+
+    } else {
+        b_coeff = ((float)board_size - kAvgBSize) * kFactor;
+    }
+    global_pool(input, output, b_coeff, batch,
+                channels_, spatial_size_, handles_->stream);
 }
+
 
 SEUnit::SEUnit(CudaHandles *handles, const int max_batch,
                const size_t board_size, const size_t channels, const size_t se_size) {
@@ -382,7 +415,7 @@ void SEUnit::LoadingWeight(const std::vector<float> &weights_w1,
 
     const size_t fc1_scratch_size = type_size * maxbatch_ * se_size_;
     const size_t fc2_scratch_size = type_size * 2 * maxbatch_ * channels_;
-    const size_t pool_scratch_size = type_size * maxbatch_ * channels_;
+    const size_t pool_scratch_size = type_size * maxbatch_ * 3 * channels_;
 
     ReportCUDAErrors(cudaMalloc(&cuda_op_[0], pool_scratch_size));
     ReportCUDAErrors(cudaMalloc(&cuda_op_[1], fc1_scratch_size));
@@ -401,9 +434,11 @@ void SEUnit::LoadingWeight(const std::vector<float> &weights_w1,
 }
 
 void SEUnit::Forward(const int batch, float *input, float *ouput) {
-    global_avg_pool(input, cuda_op_[0], batch, channels_, spatial_size_, handles_->stream);
+    const int board_size = (width_ + height_) / 2;
+    const float b_coeff = ((float)board_size - kAvgBSize) * kFactor;
+    global_pool(input, cuda_op_[0], b_coeff, batch, channels_, spatial_size_, handles_->stream);
 
-    const size_t fc1_input_size = channels_;
+    const size_t fc1_input_size = 3 * channels_;
     const size_t fc1_output_size = se_size_;
     const bool fc1_relu = true;
     gemm(false, true,

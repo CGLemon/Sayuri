@@ -26,7 +26,7 @@ void SelfPlayPipe::Initialize() {
     played_games_.store(0);
 
     auto ss = std::ostringstream();
-    ss << std::hex << Random<RandomType::kXoroShiro128Plus>::Get().Generate() << std::dec;
+    ss << std::hex << Random<kXoroShiro128Plus>::Get().Generate() << std::dec;
 
     filename_hash_ = ss.str();
     sgf_filename_ = ConnectPath(target_directory_, filename_hash_ + ".sgf");

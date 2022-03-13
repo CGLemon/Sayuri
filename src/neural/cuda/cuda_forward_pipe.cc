@@ -188,37 +188,38 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
     const auto policy_extract_channels = weights_->policy_extract_channels;
     graph_->p_ex_conv = CUDA::Convolution(
         &handles_,
-        max_batch_,             // max batch size
-        board_size_,            // board size
-        1,                      // kernel size
-        output_channels,        // input channels
-        policy_extract_channels // output channels
+        max_batch_,              // max batch size
+        board_size_,             // board size
+        1,                       // kernel size
+        output_channels,         // input channels
+        policy_extract_channels  // output channels
     );
     graph_->p_ex_bnorm = CUDA::Batchnorm(
         &handles_,
-        max_batch_,             // max batch size
-        board_size_,            // board size
-        policy_extract_channels // channels
+        max_batch_,              // max batch size
+        board_size_,             // board size
+        policy_extract_channels  // channels
     );
     graph_->p_prob = CUDA::Convolution(
         &handles_,
-        max_batch_,             // max batch size
-        board_size_,            // board size
-        1,                      // kernel size
-        policy_extract_channels,// input channels
-        1                       // output channels
-    );
-    graph_->p_pool = CUDA::GlobalAvgPool(
-        &handles_,
         max_batch_,              // max batch size
         board_size_,             // board size
-        policy_extract_channels  // input channels
+        1,                       // kernel size
+        policy_extract_channels, // input channels
+        1                        // output channels
+    );
+    graph_->p_pool = CUDA::GlobalPool(
+        &handles_,
+        false,
+        max_batch_,               // max batch size
+        board_size_,              // board size
+        policy_extract_channels   // input channels
     );
     graph_->p_prob_pass = CUDA::FullyConnect(
         &handles_,
-        max_batch_,              // max batch size
-        policy_extract_channels, // input sizes
-        1,                       // outpur size
+        max_batch_,               // max batch size
+        3*policy_extract_channels,// input sizes
+        1,                        // outpur size
         false
     );
 
@@ -226,38 +227,39 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
     const auto value_extract_channels = weights_->value_extract_channels;
     graph_->v_ex_conv = CUDA::Convolution(
         &handles_,
-        max_batch_,              // max batch size
-        board_size_,             // board size
-        1,                       // kernel size
-        output_channels,         // input channels
-        value_extract_channels   // output channels
+        max_batch_,               // max batch size
+        board_size_,              // board size
+        1,                        // kernel size
+        output_channels,          // input channels
+        value_extract_channels    // output channels
     );
     graph_->v_ex_bnorm = CUDA::Batchnorm(
         &handles_,
-        max_batch_,              // max batch size
-        board_size_,             // board size
-        value_extract_channels   // channels
+        max_batch_,               // max batch size
+        board_size_,              // board size
+        value_extract_channels    // channels
     );
     graph_->v_ownership  = CUDA::Convolution(
         &handles_,
-        max_batch_,              // max batch size
-        board_size_,             // board size
-        1,                       // kernel size
-        value_extract_channels,  // input channels
-        1                        // output channels
+        max_batch_,               // max batch size
+        board_size_,              // board size
+        1,                        // kernel size
+        value_extract_channels,   // input channels
+        1                         // output channels
     ); 
-    graph_->v_pool = CUDA::GlobalAvgPool(
+    graph_->v_pool = CUDA::GlobalPool(
         &handles_,
-        max_batch_,              // max batch size
-        board_size_,             // board size
-        value_extract_channels   // input channels
+        true,
+        max_batch_,               // max batch size
+        board_size_,              // board size
+        value_extract_channels    // input channels
     );
     graph_->v_misc = CUDA::FullyConnect(
         &handles_,
-        max_batch_,              // max batch size
-        value_extract_channels,  // input size
-        kOuputValueMisc,         // output size
-        false                    // relu
+        max_batch_,               // max batch size
+        3*value_extract_channels, // input size
+        kOuputValueMisc,          // output size
+        false                     // relu
     );
     // Now fill the parameters.
 
@@ -335,10 +337,10 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
     const size_t conv_op_size = factor * weights_->residual_channels * num_intersections;
 
     const size_t pol_op1_size = factor * policy_extract_channels * num_intersections;
-    const size_t pol_op2_size = factor * policy_extract_channels;
+    const size_t pol_op2_size = factor * policy_extract_channels * 3;
 
     const size_t val_op1_size = factor * value_extract_channels * num_intersections;
-    const size_t val_op2_size = factor * value_extract_channels;
+    const size_t val_op2_size = factor * value_extract_channels* 3;
 
     CUDA::ReportCUDAErrors(cudaMalloc(&cuda_scratch_, scratch_size_));
     CUDA::ReportCUDAErrors(cudaMalloc(&cuda_input_planes_, planes_size));
@@ -420,13 +422,13 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
     // policy head
     graph_->p_ex_conv.Forward(batch_size,
-                               cuda_conv_op_[0], cuda_pol_op_[0],
-                               cuda_scratch_, scratch_size_);
+                              cuda_conv_op_[0], cuda_pol_op_[0],
+                              cuda_scratch_, scratch_size_);
     graph_->p_ex_bnorm.Forward(batch_size, cuda_pol_op_[0]);
 
     graph_->p_prob.Forward(batch_size,
-                            cuda_pol_op_[0], cuda_output_prob_,
-                            cuda_scratch_, scratch_size_);
+                           cuda_pol_op_[0], cuda_output_prob_,
+                           cuda_scratch_, scratch_size_);
 
     graph_->p_pool.Forward(batch_size,
                            cuda_pol_op_[0], cuda_pol_op_[1]);

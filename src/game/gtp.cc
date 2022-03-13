@@ -3,6 +3,7 @@
 #include "game/commands_list.h"
 #include "utils/log.h"
 #include "utils/komi.h"
+#include "utils/format.h"
 
 #include "data/supervised.h"
 #include "neural/encoder.h"
@@ -152,11 +153,13 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         if (const auto input = parser.GetCommand(2)) {
             movenum = input->Get<int>();
         }
-        if (filename.empty()) {
-            out << GTPFail("");
-        } else {
-            agent_->GetState() = Sgf::Get().FormFile(filename, movenum);
+        try {
+            agent_->GetState() = Sgf::Get().FromFile(filename, movenum);
             out << GTPSuccess("");
+        } catch (const char *err) {
+            ERROR << "Fail to load the SGF file!" << std::endl
+                      << Format("    Cause: %s.", err) << std::endl;
+            out << GTPFail("");
         }
     } else if (const auto res = parser.Find("printsgf", 0)) {
         auto filename = std::string{};
@@ -392,6 +395,9 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
     } else if (const auto res = parser.Find({"help", "list_commands"}, 0)) {
         auto list_commands = std::ostringstream{};
         auto idx = size_t{0};
+
+        std::sort(std::begin(kGtpCommandsList), std::end(kGtpCommandsList));
+
         for (const auto &cmd : kGtpCommandsList) {
             list_commands << cmd;
             if (++idx != kGtpCommandsList.size()) list_commands << std::endl;
@@ -411,6 +417,8 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
     } else if (const auto res = parser.Find("supervised", 0)) {
         auto sgf_file = std::string{};
         auto data_file = std::string{};
+        auto cutoff_games_prob = 0.f;
+        auto cutoff_moves_rate = 0.f;
 
         if (const auto sgf = parser.GetCommand(1)) {
             sgf_file = sgf->Get<std::string>();
@@ -418,9 +426,18 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         if (const auto data = parser.GetCommand(2)) {
             data_file = data->Get<std::string>();
         }
+        if (const auto prob = parser.GetCommand(3)) {
+            cutoff_games_prob = prob->Get<float>();
+        }
+        if (const auto rate = parser.GetCommand(4)) {
+            cutoff_moves_rate = rate->Get<float>();
+        }
 
         if (!sgf_file.empty() && !data_file.empty()) {
-            Supervised::Get().FromSgf(sgf_file, data_file);
+            Supervised::Get().FromSgf(sgf_file,
+                                          data_file,
+                                          cutoff_games_prob,
+                                          cutoff_moves_rate);
             out << GTPSuccess("");
         } else {
             out << GTPFail("");

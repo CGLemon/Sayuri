@@ -16,7 +16,7 @@ enum RandomType {
     kXoroShiro128Plus
 };
 
-template<RandomType RandomType>
+template<RandomType>
 class Random {
 public:
     Random() = delete;
@@ -28,21 +28,18 @@ public:
     // Generate the random number
     std::uint64_t Generate();
 
-    template<int Range>
+    template<std::uint32_t Range>
     std::uint32_t RandFix() {
         static_assert(0 < Range && Range < std::numeric_limits<std::uint32_t>::max(),
                           "randfix out of range?\n");
         return static_cast<std::uint32_t>(Generate()) % Range;
     }
 
-    template<int Precision>
+    template<std::uint32_t Precision>
     bool Roulette(float threshold) {
         const int res = RandFix<Precision>();
         const int thres = (float)Precision * threshold;
-        if (thres < res) {
-            return true;
-        }
-        return false;
+        return thres < res;
     }
 
     // The interface for STL.

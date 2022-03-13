@@ -54,11 +54,11 @@ int SgfNode::GetVertexFromString(const std::string& movestring) {
     }
 
     if (bsize <= 0) {
-        throw std::runtime_error("Node has 0 sized board");
+        throw "Node has 0 sized board";
     }
 
     if (movestring.size() != 2) {
-        throw std::runtime_error("Illegal SGF move");
+        throw "Illegal SGF move format";
     }
 
     char c1 = movestring[0];
@@ -81,7 +81,7 @@ int SgfNode::GetVertexFromString(const std::string& movestring) {
     // catch illegal SGF
     if (cc1 < 0 || cc1 >= bsize
         || cc2 < 0 || cc2 >= bsize) {
-        throw std::runtime_error("Illegal SGF move");
+        throw "Illegal SGF move format";
     }
 
     int vtx = GetState().GetVertex(cc1, cc2);
@@ -95,12 +95,16 @@ void SgfNode::PopulateState(GameState currstate) {
     // first check for go game setup in properties
     if (const auto res = GetPropertyValue("GM")) {
         if (std::stoi(*res) != 1) {
-            throw std::runtime_error("SGF Game is not a Go game");
+            throw "SGF Game is not a Go game";
         }
     }
 
     // board size
     if (const auto res = GetPropertyValue("SZ")) {
+        for (const char c : *res) {
+            if (!std::isspace(c) && !std::isdigit(c)) throw "It is not a square board";
+        }
+
         const auto bsize = std::stoi(*res);
         GetState().Reset(bsize, GetState().GetKomi());
     }
@@ -205,7 +209,7 @@ std::shared_ptr<SgfNode> SgfNode::GetChild(unsigned int index) {
 // This follows the entire line, and doesn't really need the intermediate
 // states, just the moves. As a consequence, states that contain more than
 // just moves won't have any effect.
-GameState SgfNode::GetMainlineState(unsigned int movenum) {
+GameState SgfNode::GetMainLineState(unsigned int movenum) {
     auto link = std::make_shared<SgfNode>(*this);
 
     // This initializes a starting state from a KoState and
@@ -227,7 +231,7 @@ GameState SgfNode::GetMainlineState(unsigned int movenum) {
 
             if (vtx != kNullVertex && color != kInvalid) {
                 if (!main_state.PlayMove(vtx, color)) {
-                    return main_state;
+                    throw "Illegal SGF move";
                 }
             } else {
                 return main_state;
@@ -421,7 +425,7 @@ std::vector<std::string> SgfParser::ChopAll(std::string filename,
     std::ifstream ins(filename.c_str(), std::ifstream::binary | std::ifstream::in);
 
     if (ins.fail()) {
-        throw std::runtime_error("Error opening file");
+        throw "Error opening file";
     }
 
     auto result = ChopStream(ins, stopat);
@@ -445,13 +449,13 @@ SgfParser& SgfParser::Get() {
     return parser;
 }
 
-std::shared_ptr<SgfNode> SgfParser::ParseFormFile(std::string filename, size_t index) const {
+std::shared_ptr<SgfNode> SgfParser::ParseFromFile(std::string filename, size_t index) const {
     auto sgfstring = ChopFromFile(filename, index);
-    auto node = ParseFormString(sgfstring);
+    auto node = ParseFromString(sgfstring);
     return node;
 }
 
-std::shared_ptr<SgfNode> SgfParser::ParseFormString(std::string sgfstring) const {
+std::shared_ptr<SgfNode> SgfParser::ParseFromString(std::string sgfstring) const {
     auto node = std::make_shared<SgfNode>();
     auto rootnode = node;
     auto gamebuff = std::istringstream{sgfstring};
@@ -465,14 +469,14 @@ Sgf& Sgf::Get() {
     return sgf;
 }
 
-GameState Sgf::FormFile(std::string filename, unsigned int movenum) {
-    auto node = SgfParser::Get().ParseFormFile(filename);
-    return node->GetMainlineState(movenum);
+GameState Sgf::FromFile(std::string filename, unsigned int movenum) {
+    auto node = SgfParser::Get().ParseFromFile(filename);
+    return node->GetMainLineState(movenum);
 }
 
-GameState Sgf::FormString(std::string sgfstring, unsigned int movenum) {
-    auto node = SgfParser::Get().ParseFormString(sgfstring);
-    return node->GetMainlineState(movenum);
+GameState Sgf::FromString(std::string sgfstring, unsigned int movenum) {
+    auto node = SgfParser::Get().ParseFromString(sgfstring);
+    return node->GetMainLineState(movenum);
 }
 
 template<typename T>
@@ -512,33 +516,32 @@ std::string Sgf::ToString(GameState &state) {
     out << MakePropertyVetexListString("AB", state.GetAppendMoves(kBlack), state);
     out << MakePropertyVetexListString("AW", state.GetAppendMoves(kWhite), state);
 
+    const auto score = state.GetFinalScore();
+    const auto pass_end = state.GetPasses() >= 2;
 
-
-    auto fork_state = state;
-
-    fork_state.RemoveDeadStrings(200);
-    auto score = fork_state.GetFinalScore();
-
-    if (fork_state.GetPasses() >= 2) {
+    if (pass_end) {
         if (score > 1e-4) {
-            fork_state.SetWinner(kBlackWon);
+            state.SetWinner(kBlackWon);
         } else if (score < -1e-4) {
-            fork_state.SetWinner(kWhiteWon);
+            state.SetWinner(kWhiteWon);
         } else {
-            fork_state.SetWinner(kDraw);
+            state.SetWinner(kDraw);
         }
     }
-    if (fork_state.GetWinner() != kUndecide) {
+
+    if (state.GetWinner() != kUndecide) {
         out << "RE" << '[';
-        if (fork_state.GetWinner() == kBlackWon) {
+        if (state.GetWinner() == kBlackWon) {
             out << "B+";
-            if (fork_state.GetPasses() >= 2) out << score;
-        } else if (fork_state.GetWinner() == kWhiteWon) {
+            if (pass_end) out << score;
+        } else if (state.GetWinner() == kWhiteWon) {
             out << "W+";
-            if (fork_state.GetPasses() >= 2) out << -score;
-        } else if (fork_state.GetWinner() == kDraw) {
+            if (pass_end) out << -score;
+        } else if (state.GetWinner() == kDraw) {
             out << "0";
         }
+        if (!pass_end && state.GetWinner() != kDraw) out << "Resign";
+
         out << ']';
     }
 

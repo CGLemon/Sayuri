@@ -55,7 +55,7 @@ public:
 
     void SetHandicap(int handicap);
 
-    // Compute final score by Tromp Taylor
+    // Compute final score with Tromp Taylor rule.
     float GetFinalScore(float bonus = 0) const;
 
     std::vector<bool> GetStrictSafeArea() const;
@@ -67,7 +67,7 @@ public:
     bool IsLegalMove(const int vertex, const int color,
                      std::function<bool(int, int)> AvoidToMove) const;
 
-    // Compute ownership by Tromp Taylor.
+    // Compute ownership with Tromp Taylor rule.
     std::vector<int> GetOwnership() const;
 
     std::vector<int> GetOwnershipAndRemovedDeadStrings(int playouts) const;

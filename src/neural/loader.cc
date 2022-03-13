@@ -2,6 +2,7 @@
 #include "neural/network_basic.h"
 #include "utils/parser.h"
 #include "utils/log.h"
+#include "utils/format.h"
 #include "config.h"
 
 #include <iostream>
@@ -44,10 +45,11 @@ void DNNLoder::FromFile(std::shared_ptr<DNNWeights> weights, std::string filenam
     
     try {
         Parse(weights, buffer);
-    } catch (const char* err) {
+    } catch (const char *err) {
         // Should be not happned.
-        ERROR << "Loading network file fail!" << std::endl
-                 << "    Cause:" << ' ' << err << '.' << std::endl;
+
+        ERROR << "Fail to load the network file!" << std::endl
+                  << Format("    Cause: %s.", err) << std::endl;
     }
 }
 
@@ -308,11 +310,10 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
                                   se_squeeze_shape[1]);
 
             if (se_extend_shape[1] != se_squeeze_shape[0]) {
-                throw "The SE Unit size is wrong.";
+                throw "The SE Unit size is wrong 1.";
             }
-            if (2 * se_extend_shape[0] != se_squeeze_shape[1] ||
-                se_extend_shape[0] != weights->residual_channels) {
-                throw "The SE Unit size is wrong.";
+            if (se_extend_shape[0] != 3 * weights->residual_channels) {
+                throw "The SE Unit size is wrong 2.";
             }
                 
             tower_ptr->se_size = se_extend_shape[1];

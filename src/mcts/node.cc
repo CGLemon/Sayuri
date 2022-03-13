@@ -387,7 +387,7 @@ int Node::RandomizeFirstProportionally(float random_temp) {
     }
 
     auto distribution = std::uniform_real_distribution<float>{0.0, accum};
-    auto pick = distribution(Random<RandomType::kXoroShiro128Plus>::Get());
+    auto pick = distribution(Random<kXoroShiro128Plus>::Get());
     auto size = accum_vector.size();
 
     for (auto idx = size_t{0}; idx < size; ++idx) {
@@ -886,7 +886,7 @@ void Node::ApplyDirichletNoise(const float alpha) {
     auto gamma = std::gamma_distribution<float>(alpha, 1.0f);
 
     std::generate(std::begin(buffer), std::end(buffer),
-                      [&gamma] () { return gamma(Random<RandomType::kXoroShiro128Plus>::Get()); });
+                      [&gamma] () { return gamma(Random<kXoroShiro128Plus>::Get()); });
 
     auto sample_sum =
         std::accumulate(std::begin(buffer), std::end(buffer), 0.0f);

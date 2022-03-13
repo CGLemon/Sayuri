@@ -48,7 +48,7 @@ private:
             CUDA::Batchnorm p_ex_bnorm;
 
             CUDA::Convolution p_prob;
-            CUDA::GlobalAvgPool p_pool;
+            CUDA::GlobalPool p_pool;
             CUDA::FullyConnect p_prob_pass;
 
             // value head
@@ -56,7 +56,7 @@ private:
             CUDA::Batchnorm v_ex_bnorm;
 
             CUDA::Convolution v_ownership;
-            CUDA::GlobalAvgPool v_pool;
+            CUDA::GlobalPool v_pool;
             CUDA::FullyConnect v_misc;
         };
 

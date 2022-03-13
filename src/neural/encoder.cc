@@ -232,12 +232,12 @@ void Encoder::FillLadder(const Board* board,
 }
 
 void Encoder::FillMisc(const Board* board,
+                       const int to_move,
                        float komi,
                        std::vector<float>::iterator misc_it) const {
     auto num_intersections = board->GetNumIntersections();
-    auto boardsize = board->GetBoardSize();
-    auto side_to_move = board->GetToMove();
-    if (side_to_move == kWhite) {
+
+    if (to_move == kWhite) {
         komi = 0.0f - komi;
     }
 
@@ -245,18 +245,14 @@ void Encoder::FillMisc(const Board* board,
     std::fill(misc_it+ 0 * num_intersections,
                   misc_it+ 1 * num_intersections, komi/10.f);
 
-    // board size
+    // intersections
     std::fill(misc_it+ 1 * num_intersections,
-                  misc_it+ 2 * num_intersections, float(boardsize)/10.f);
+                  misc_it+ 2 * num_intersections, static_cast<float>(num_intersections)/100.f);
 
-    // side to move
-    if (side_to_move == kBlack) {
-        std::fill(misc_it+ 2 * num_intersections,
-                      misc_it+ 3 * num_intersections, static_cast<float>(true));
-    } else {
-        std::fill(misc_it+ 3 * num_intersections,
-                      misc_it+ 4 * num_intersections, static_cast<float>(true));
-    }
+    std::fill(misc_it+ 2 * num_intersections,
+                  misc_it+ 3 * num_intersections, static_cast<float>(false));
+    std::fill(misc_it+ 3 * num_intersections,
+                  misc_it+ 4 * num_intersections, static_cast<float>(true));
 }
 
 void Encoder::EncoderFeatures(const GameState &state,
@@ -274,5 +270,5 @@ void Encoder::EncoderFeatures(const GameState &state,
     FillSafeArea(board.get(), safearea_it);
     FillLiberties(board.get(), liberties_it);
     FillLadder(board.get(), ladder_it);
-    FillMisc(board.get(), state.GetKomi(), misc_it);
+    FillMisc(board.get(), state.GetToMove(), state.GetKomi(), misc_it);
 }

@@ -3,7 +3,7 @@
 
 namespace random_utils {
 
-static inline std::uint64_t SplitMix64(std::uint64_t z) {
+inline std::uint64_t SplitMix64(std::uint64_t z) {
     // The detail of parameteres are from
     // https://github.com/lemire/testingRNG/blob/master/source/splitmix64.h
 
@@ -13,11 +13,11 @@ static inline std::uint64_t SplitMix64(std::uint64_t z) {
     return z ^ (z >> 31);
 }
 
-static inline std::uint64_t rotl(const std::uint64_t x, const int k) {
+inline std::uint64_t rotl(const std::uint64_t x, const int k) {
     return (x << k) | (x >> (64 - k));
 }
 
-static inline std::uint64_t GetSeed(std::uint64_t seed) {
+inline std::uint64_t GetSeed(std::uint64_t seed) {
     if (seed == kThreadSeed) {
         // Get the seed from thread id.
         auto thread_id = std::hash<std::thread::id>()(std::this_thread::get_id());
@@ -43,7 +43,6 @@ void Random<TYPE__>::InitSeed(std::uint64_t seed) { \
         seeds_[i] = seed;                           \
     }                                               \
 }
-
 
 template<RandomType T>
 thread_local std::uint64_t 

@@ -4,7 +4,7 @@ import numpy as np
 import random
 
 from symmetry import get_symmetry_plane
-from nnprocess import NNProcess
+from network import Network
 from loader import Loader
 
 from torch.utils.tensorboard import SummaryWriter
@@ -35,7 +35,6 @@ class DataSet():
         board_size = data.board_size
         num_intersections = data.board_size * data.board_size
 
-
         # allocate all buffers
         input_planes = np.zeros((self.input_channels, nn_board_size, nn_board_size))
         prob = np.zeros(nn_num_intersections+1)
@@ -59,12 +58,9 @@ class DataSet():
         else:
             input_planes[self.input_channels-4, 0:board_size, 0:board_size] = -data.komi/10
 
-        input_planes[self.input_channels-3, 0:board_size, 0:board_size] = data.board_size/10
-
-        if data.to_move == 1:
-            input_planes[self.input_channels-2, 0:board_size, 0:board_size] = 1
-        else:
-            input_planes[self.input_channels-1, 0:board_size, 0:board_size] = 1
+        input_planes[self.input_channels-3, 0:board_size, 0:board_size] = (data.board_size**2)/100
+        # input_planes[self.input_channels-2, 0:board_size, 0:board_size] = 0 # fill zeros
+        input_planes[self.input_channels-1, 0:board_size, 0:board_size] = 1 # fill ones
 
         # probabilities
         buf[:] = data.prob[0:num_intersections]
@@ -130,7 +126,7 @@ class TrainingPipe():
         if self.use_gpu:
             self.device = torch.device('cuda:0')
 
-        self.net = NNProcess(self.cfg)
+        self.net = Network(self.cfg)
         self.net.trainable(True)
         self.data_set = None
 
@@ -153,8 +149,6 @@ class TrainingPipe():
 
         # Be sure the network is on the right device.
         self.setup()
-        if self.cfg.misc_verbose:
-            self.net.dump_info()
 
         print("start training...")
 

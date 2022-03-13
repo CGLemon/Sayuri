@@ -67,7 +67,7 @@ void Engine::SetNormalGame(int g) {
     auto variant = GetOption<float>("komi_variant");
     auto dis = std::normal_distribution<float>(mean, variant);
 
-    auto bonus = dis(Random<RandomType::kXoroShiro128Plus>::Get());
+    auto bonus = dis(Random<kXoroShiro128Plus>::Get());
 
     game_pool_[g].SetKomi(AdjustKomi<float>(komi + bonus));
 }
@@ -75,7 +75,7 @@ void Engine::SetNormalGame(int g) {
 void Engine::SetHandicapGame(int g) {
     auto &state = game_pool_[g];
 
-    int handicap = Random<RandomType::kXoroShiro128Plus>::Get().RandFix<4>() + 1;
+    int handicap = Random<kXoroShiro128Plus>::Get().RandFix<4>() + 1;
     state.SetFixdHandicap(handicap);
 
     SetFairKomi(g);
