@@ -365,7 +365,7 @@ class Network(nn.Module):
         torch.save(self.state_dict(), filename)
 
     def load_pt(self, filename):
-        self.load_state_dict(torch.load(filename))
+        self.load_state_dict(torch.load(filename, map_location=torch.device('cpu')))
 
     def dump_info(self):
         print("NN Type: {type}".format(type=self.nntype))

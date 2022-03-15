@@ -18,20 +18,13 @@ Supervised &Supervised::Get() {
 }
 
 void Supervised::FromSgf(std::string sgf_name,
-                             std::string out_name,
+                             std::string out_name_prefix,
                              float cutoff_games_prob,
                              float cutoff_moves_rate) const {
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
     auto file = std::ofstream{};
-
-    file.open(out_name, std::ios_base::app);
-
-    if (!file.is_open()) {
-        ERROR << "Fail to create the file: " << out_name << '!' << std::endl; 
-        return;
-    }
-    // TODO: Multi-thread to product training data.
-
+    auto fcnt = 0;
+    auto closed = true;
 
     const auto Clamp = [](float val) {
         val = std::max(val, 0.f);
@@ -45,7 +38,23 @@ void Supervised::FromSgf(std::string sgf_name,
     int games = 0;
     for (auto &sgf : sgfs) {
         if (games % 200 == 0) {
+            if (!closed) {
+                file.close();
+                closed = true;
+            }
             LOGGING << Format("Process games: %d.", games) << std::endl;
+        }
+
+        if (closed) {
+            auto out_name = Format("%s_%d.txt", out_name_prefix.c_str(), fcnt++);
+            file.open(out_name, std::ios_base::app);
+
+            if (!file.is_open()) {
+                ERROR << "Fail to create the file: " << out_name << '!' << std::endl; 
+                return;
+            }
+            closed = false;
+            // TODO: Multi-thread to product training data.
         }
 
         bool cutoff = Random<kXoroShiro128Plus>::Get().Roulette<10000>(1.0f - cutoff_games_prob);
@@ -53,6 +62,9 @@ void Supervised::FromSgf(std::string sgf_name,
         if (SgfProcess(sgf, file, cutoff, cutoff_moves_rate)) {
             games += 1;
         }
+    }
+    if (!closed) {
+        file.close();
     }
 }
 

@@ -9,7 +9,7 @@ public:
     static Supervised &Get();
 
     void FromSgf(std::string sgf_name,
-                     std::string out_name,
+                     std::string out_name_prefix,
                      float cutoff_games_prob,
                      float cutoff_moves_rate) const;
 

@@ -1,5 +1,5 @@
 import numpy as np
-import glob, os, random
+import glob, os, random, time, io
 
 FIXED_DATA_VERSION = 1
 
@@ -152,84 +152,63 @@ class Data():
             return 45
         return -1
 
-    def pack_planes(self):
-        # TODO: Pack ownership.
-        c, s = self.planes.shape
-        self.pack_channels = c
-        self.planes = np.packbits(np.reshape(self.planes, (c*s)))
-
-    def unpack_planes(self):
-        s = self.board_size ** 2
-        c = self.pack_channels
-        size = c*s
-        buf = np.zeros((size), dtype=np.int8)
-        buf[:] = np.unpackbits(self.planes)[:size]
-        self.planes = np.reshape(buf, (c, s))
-
     def __str__(self):
         out = str()
-        out += "Board size: {}".format(self.board_size)
-        out += "Side to move: {}".format(self.to_move)
-        out += "Komi: {}".format(self.komi)
-        out += "Result: {}".format(self.result)
-        out += "Q value: {}".format(self.q_value)
-        out += "Final score: {}".format(self.final_score)
+        out += "Board size: {}\n".format(self.board_size)
+        out += "Side to move: {}\n".format(self.to_move)
+        out += "Komi: {}\n".format(self.komi)
+        out += "Result: {}\n".format(self.result)
+        out += "Q value: {}\n".format(self.q_value)
+        out += "Final score: {}\n".format(self.final_score)
 
-        self.unpack_planes()
         for p in range(len(self.planes)):
             out += "Plane: {}".format(p+1)
             out += str(self.planes[p])
-        self.pack_planes()
+            out += "\n"
 
         out += "Probabilities: "
         out += str(self.prob)
+        out += "\n"
 
         out += "Auxiliary probabilities: "
         out += str(self.aux_prob)
+        out += "\n"
 
         out += "Ownership: "
         out += str(self.ownership)
+        out += "\n"
 
         return out
 
 class Loader:
     def __init__(self, dirname):
         self.dirname = dirname
-        self.buffer = []
-        self.run()
 
-    def linesparser(self, datalines, filestream):
+        self.stream_end = True
+        self.stream = None
+        self.chunks = []
+        self.done = glob.glob(os.path.join(self.dirname, "*"))
+
+    def next(self):
+        if self.stream_end:
+            if len(self.chunks) == 0:
+                self.chunks, self.done = self.done, self.chunks
+                random.shuffle(self.chunks)
+
+            filename = self.chunks.pop()
+            self.done.append(filename)
+
+            with open(filename, 'r') as f:
+                self.stream = io.StringIO(f.read())
+                self.stream_end = False
+
+        datalines = Data.get_datalines(FIXED_DATA_VERSION);
         data = Data()
 
         for cnt in range(datalines):
-            readline = filestream.readline()
-            if len(readline) == 0:
-                assert cnt == 0, "The data is incomplete."
-                return False
-            data.fill_v1(cnt, readline)
-        data.pack_planes()
-        self.buffer.append(data)
-
-        return True
-
-    def run(self):
-        datalines = Data.get_datalines(FIXED_DATA_VERSION);
-        for name in glob.glob(os.path.join(self.dirname, "*")):
-            with open(name, 'r') as f:
-                while True:
-                    if self.linesparser(datalines, f) == False:
-                        break
-
-    def __getitem__(self, idx):
-        return self.buffer[idx]
-
-    def __len__(self):
-        return len(self.buffer)
-
-    def __str__(self):
-        out = str()
-        for b, s in self.buffer:
-            out += str(data)
-            out += '\n'
-        out += "----------------------------------------------------------"
-        return out
+            line = self.stream.readline()
+            if len(line) == 0:
+                self.stream_end = True
+                return self.next()
+            data.fill_v1(cnt, line)
+        return data

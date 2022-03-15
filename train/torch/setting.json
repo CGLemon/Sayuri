@@ -1,7 +1,7 @@
 {
     "NeuralNetwork" : {
         "NNType": "Residual",
-        "DefaultBoardSize": 9,
+        "MaxBoardSize": 9,
         "InputChannels": 38,
         "ResidualChannels": 192,
         "PolicyExtract": 64,
@@ -20,12 +20,12 @@
 
     "Train" : {
         "GPUs": null,
-        "StepPerEpoch" : 2000,
-        "MaxStep": 100000,
+        "StepsPerEpoch" : 2000,
+        "MaxSteps": 100000,
         "Workers": 4,
         "BatchSize": 512,
         "LearningRate": 1e-4,
-        "WeightDecay": 0.001,
+        "WeightDecay": 1e-4,
         "TrainDirectory": "train-dir"
-    } 
+    }
 }

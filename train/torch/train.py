@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
-import random
+import random, time
 
 from symmetry import get_symmetry_plane
 from network import Network
@@ -18,14 +18,27 @@ class DataSet():
     # The simple DataSet wrapper.
 
     def __init__(self, cfg, dirname):
-        self.data_loader = Loader(dirname)
         self.nn_board_size = cfg.boardsize
         self.nn_num_intersections = self.nn_board_size * self.nn_board_size
         self.input_channels = cfg.input_channels
 
+        self.dummy_size = 0
+
+        self.data_loaders = []
+        num_workers = max(cfg.num_workers, 1)
+        for _ in range(num_workers):
+            self.data_loaders.append(Loader(dirname))
+
+
     def __getitem__(self, idx):
-        data = self.data_loader[idx]
-        data.unpack_planes()
+        worker_info = torch.utils.data.get_worker_info()
+        worker_id = None
+        if worker_info == None:
+            worker_id = 0
+        else:
+            worker_id = worker_info.id
+
+        data = self.data_loaders[worker_id].next()
 
         symm = int(np.random.choice(8, 1)[0])
 
@@ -90,8 +103,6 @@ class DataSet():
         stm[0] = data.q_value
         final_score[0] = data.final_score
 
-        data.pack_planes()
-
         return (
             data.board_size,
             torch.tensor(input_planes).float(),
@@ -104,7 +115,7 @@ class DataSet():
         )
 
     def __len__(self):
-        return len(self.data_loader)
+        return self.dummy_size
 
 class TrainingPipe():
     # TODO: Support for multi-gpu training.
@@ -115,8 +126,8 @@ class TrainingPipe():
         self.num_workers = cfg.num_workers
         self.train_dir = cfg.train_dir
 
-        self.step_per_epoch =  cfg.step_per_epoch
-        self.max_step =  cfg.max_step
+        self.steps_per_epoch =  cfg.steps_per_epoch
+        self.max_steps =  cfg.max_steps
 
         self.learn_rate = cfg.learn_rate
         self.weight_decay = cfg.weight_decay
@@ -126,9 +137,8 @@ class TrainingPipe():
         if self.use_gpu:
             self.device = torch.device('cuda:0')
 
-        self.net = Network(self.cfg)
+        self.net = Network(cfg)
         self.net.trainable(True)
-        self.data_set = None
 
     def setup(self):
         if self.use_gpu:
@@ -140,12 +150,7 @@ class TrainingPipe():
             weight_decay=self.weight_decay,
         )
 
-    def prepare_data(self):
-        self.data_set = DataSet(self.cfg, self.train_dir)
-
-    def fit(self):
-        if self.data_set == None:
-            return
+    def fit_and_store(self, filename_prefix):
 
         # Be sure the network is on the right device.
         self.setup()
@@ -156,22 +161,24 @@ class TrainingPipe():
 
         keep_running = True
         running_loss = 0
-        num_step = 0
-        verbose_step = 500
+        num_steps = 0
+        verbose_steps = 1000
+        clock_time = time.time()
 
-        print("data size {}".format(len(self.data_set)))
-        indics_list = range(len(self.data_set))
+        self.data_set = DataSet(self.cfg, self.train_dir)
 
         while keep_running:
-            selections = min(self.step_per_epoch * self.batchsize, len(self.data_set))
+            self.data_set.dummy_size = self.steps_per_epoch * self.batchsize
 
-            subset = Subset(self.data_set, random.sample(indics_list, selections))
             train_data = DataLoader(
-                subset,
+                self.data_set,
                 num_workers=self.num_workers,
-                shuffle=True,
                 batch_size=self.batchsize
             )
+
+            if num_steps != 0:
+                self.save_pt("{}-s{}.{}".format(filename_prefix, num_steps, "pt"))
+
 
             for _, batch in enumerate(train_data):
                 board_size_list, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
@@ -189,17 +196,22 @@ class TrainingPipe():
                 # update network
                 running_loss += self.step(board_size_list, planes, target, self.adam_opt)
 
-                num_step += 1
+                num_steps += 1
 
-                if num_step % verbose_step == 0:
-                    print("step: {} -> loss {:.4f}".format(
-                                                        num_step,
-                                                        running_loss/verbose_step
+                elapsed = time.time() - clock_time
+                clock_time = time.time()
+
+                if num_steps % verbose_steps == 0:
+                    print("steps: {} -> loss {:.4f}, speed: {:.2f}".format(
+                                                        num_steps,
+                                                        running_loss/verbose_steps,
+                                                        verbose_steps/elapsed
                                                     ))
-                    tb_writer.add_scalar('loss', running_loss/verbose_step, num_step)
+                    tb_writer.add_scalar('loss', running_loss/verbose_steps, num_steps)
                     running_loss = 0
 
-                if num_step >= self.max_step:
+                # should stop?
+                if num_steps >= self.max_steps:
                     keep_running = False
                     break
 
@@ -237,12 +249,6 @@ class TrainingPipe():
         loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + fina_score_loss
 
         return loss
-
-    def to_cpu(self):
-        self.net = self.net.to(torch.device('cpu'))
-
-    def to_device(self):
-        self.net = self.net.to(self.device)
 
     def save_pt(self, filename):
         self.net.save_pt(filename)
