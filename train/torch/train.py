@@ -195,13 +195,12 @@ class TrainingPipe():
 
                 # update network
                 running_loss += self.step(board_size_list, planes, target, self.adam_opt)
-
                 num_steps += 1
 
-                elapsed = time.time() - clock_time
-                clock_time = time.time()
-
                 if num_steps % verbose_steps == 0:
+                    elapsed = time.time() - clock_time
+                    clock_time = time.time()
+
                     print("steps: {} -> loss {:.4f}, speed: {:.2f}".format(
                                                         num_steps,
                                                         running_loss/verbose_steps,
