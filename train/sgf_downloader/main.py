@@ -17,7 +17,10 @@ if __name__ == "__main__":
                         help='Number of downloading games.', type=int)
     parser.add_argument('-d', '--directory', metavar='<string>',
                         help='The saving directory.', type=str)
+    parser.add_argument('-u', '--url', metavar='<string>',
+                        help='Try to download the sgfs file from this url.', type=str)
+
     args = parser.parse_args()
 
     if check(args):
-        rp = RequestProcess(args.directory, args.games)
+        rp = RequestProcess(args.directory, args.games, args.url)

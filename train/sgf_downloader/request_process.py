@@ -42,16 +42,16 @@ class GameState:
 
 
 class RequestProcess:
-    def __init__(self, root_dir, num_games):
+    def __init__(self, root_dir, num_games, target_url):
         self.root_url = 'https://katagotraining.org/games/'
         self.root_dir = root_dir
         self.num_games = num_games
         self.discarded_game_states = list()
         self.saved_game_states = list()
 
-        self._run()
+        self._run(target_url)
 
-    def _run(self):
+    def _run(self, target_url):
         raw_network_games_urls = self._gather_network_games_urls()
         raw_network_games_urls.pop(0) # discard the last one
 
@@ -59,9 +59,13 @@ class RequestProcess:
             os.mkdir(self.root_dir)
 
         network_games_urls = list()
-        for url in raw_network_games_urls:
-            if url.find('kata1-b60c320') >= 0:
-                network_games_urls.append(url)
+
+        if target_url == None:
+            for url in raw_network_games_urls:
+                if url.find('kata1-b60c320') >= 0:
+                    network_games_urls.append(url)
+        else:
+            network_games_urls.append(target_url)
 
         saved_games = 0
         discarded_games = 0
