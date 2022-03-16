@@ -37,14 +37,6 @@ void Supervised::FromSgf(std::string sgf_name,
 
     int games = 0;
     for (auto &sgf : sgfs) {
-        if (games % 200 == 0) {
-            if (!closed) {
-                file.close();
-                closed = true;
-            }
-            LOGGING << Format("Process games: %d.", games) << std::endl;
-        }
-
         if (closed) {
             auto out_name = Format("%s_%d.txt", out_name_prefix.c_str(), fcnt++);
             file.open(out_name, std::ios_base::app);
@@ -61,6 +53,13 @@ void Supervised::FromSgf(std::string sgf_name,
 
         if (SgfProcess(sgf, file, cutoff, cutoff_moves_rate)) {
             games += 1;
+            if (games % 100 == 0) {
+                if (!closed) {
+                    file.close();
+                    closed = true;
+                }
+                LOGGING << Format("Parsed %d games.", games) << std::endl;
+            }
         }
     }
     if (!closed) {
