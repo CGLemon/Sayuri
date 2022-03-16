@@ -1,5 +1,4 @@
 cmake_minimum_required(VERSION 3.15)
-project(Sayuri LANGUAGES CXX CUDA)
 
 # Set up the root.
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -123,6 +122,12 @@ elseif(BLAS_BACKEND STREQUAL "CUDNN")
 else()
     ResetAll()
     set(_USE_BUILD_IN True)
+endif()
+
+if (_USE_CUDA)
+    project(Sayuri LANGUAGES CXX CUDA)
+else()
+    project(Sayuri)
 endif()
 
 # Define the neural network default backend.
