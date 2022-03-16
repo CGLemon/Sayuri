@@ -21,4 +21,3 @@ if __name__ == "__main__":
 
     if check(args):
         rp = RequestProcess(args.directory, args.games)
-        rp.run()

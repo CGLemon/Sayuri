@@ -46,18 +46,27 @@ class RequestProcess:
         self.root_url = 'https://katagotraining.org/games/'
         self.root_dir = root_dir
         self.num_games = num_games
+        self.discarded_game_states = list()
         self.saved_game_states = list()
 
-    def run(self):
-        network_games_urls = self._gather_network_games_urls()
+        self._run()
 
-        network_games_urls.pop(0) # discard the last one
+    def _run(self):
+        raw_network_games_urls = self._gather_network_games_urls()
+        raw_network_games_urls.pop(0) # discard the last one
 
         if not os.path.isdir(self.root_dir):
             os.mkdir(self.root_dir)
 
+        network_games_urls = list()
+        for url in raw_network_games_urls:
+            if url.find('kata1-b60c320') >= 0:
+                network_games_urls.append(url)
+
         saved_games = 0
         discarded_games = 0
+        sgfs_buf = list()
+        cnt = 0
 
         for nn_url in network_games_urls:
             pages_urls = self._gather_training_pages_urls(nn_url)
@@ -65,11 +74,17 @@ class RequestProcess:
                 sgf_urls = self._gather_sgf_urls(p_url)
 
                 for sgf_url in sgf_urls:
-                    sgf_name = os.path.join(self.root_dir, 'katago_{g}.sgf'.format(g=saved_games+1))
-                    if self._try_save_sgf(sgf_url, sgf_name):
-                        saved_games += 1
-                    else:
+                    sgf_game = self._try_get_sgf(sgf_url)
+                    if sgf_game == None:
                         discarded_games += 1
+                    else:
+                        saved_games += 1
+                        sgfs_buf.append(sgf_game)
+
+                    if len(sgfs_buf) >= 1000:
+                        self._save_buf(sgfs_buf, cnt)
+                        sgfs_buf = list()
+                        cnt += 1
 
                     if (saved_games + discarded_games) % 100 == 0:
                         print('saved {s} games, discarded {d} games.'.format(s=saved_games,d=discarded_games))
@@ -77,6 +92,7 @@ class RequestProcess:
 
                     if saved_games >= self.num_games:
                         self._dump_stats()
+                        self._save_buf(sgfs_buf,cnt)
                         return
 
     def _gather_network_games_urls(self):
@@ -103,19 +119,28 @@ class RequestProcess:
         p.feed(r.text)
         return p.sgf_urls
 
-    def _try_save_sgf(self, url, filename):
+    def _save_buf(self, sgfs_buf, cnt):
+        if len(sgfs_buf) == 0:
+            return
+
+        sgf_name = os.path.join(self.root_dir, 'katago_{g}.sgfs'.format(g=cnt+1))
+        with open(sgf_name, 'w') as f:
+            for s in sgfs_buf:
+                f.write(s)
+                f.write('\n')
+
+    def _try_get_sgf(self, url):
         r = requests.get(url=url)    
         sgf = r.text
 
         state = GameState(sgf)
         if state.board_size.find(':') >= 0:
-            return False
+            self.discarded_game_states.append(state)
+            return None
 
         self.saved_game_states.append(state)
-        with open(filename, 'w') as f:
-            f.write(sgf)
+        return sgf
 
-        return True
 
     def _dump_stats(self):
         max_bsize = 25
@@ -123,7 +148,7 @@ class RequestProcess:
         handicap_list = [0] * 20
         tot_games = len(self.saved_game_states)
 
-        print('Games: {}'.format(tot_games))
+        print('Game number: {}'.format(tot_games))
 
         for game in self.saved_game_states:
             bsize = int(game.board_size)
