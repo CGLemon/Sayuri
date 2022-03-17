@@ -157,7 +157,6 @@ class RequestProcess:
 
     def _dump_stats(self):
         elapsed = time.time() - self.clock_time
-        self.clock_time = time.time()
 
         max_bsize = 25
         bsize_list = [0] * (max_bsize+1)
