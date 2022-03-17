@@ -1,9 +1,11 @@
-import requests, os
+import requests, os, time
 from parser import PageParser, get_games_page_url 
+from utils import is_int, is_float
 
 class GameState:
     def __init__(self, sgf):
         self.board_size = '19'
+        self.komi = '7.5'
         self.ko = 'simple'
         self.score = 'area'
         self.suicide = False
@@ -15,12 +17,15 @@ class GameState:
         begin = sgf.find('SZ[')+3
         self.board_size = sgf[begin : sgf.find(']', begin)]
 
-        begin = sgf.find('RU[')+3
-        rule = sgf[begin : sgf.find(']', begin)]
-        self._parse_rule(rule)
+        begin = sgf.find('KM[')+3
+        self.komi = sgf[begin : sgf.find(']', begin)]
 
         begin = sgf.find('HA[')+3
         self.handicap = sgf[begin : sgf.find(']', begin)]
+
+        begin = sgf.find('RU[')+3
+        rule = sgf[begin : sgf.find(']', begin)]
+        self._parse_rule(rule)
 
     def _parse_rule(self, rule):
         if rule.find('koSIMPLE') >= 0:
@@ -48,6 +53,7 @@ class RequestProcess:
         self.num_games = num_games
         self.discarded_game_states = list()
         self.saved_game_states = list()
+        self.clock_time = None
 
         self._run(target_url)
 
@@ -71,6 +77,7 @@ class RequestProcess:
         discarded_games = 0
         sgfs_buf = list()
         cnt = 0
+        self.clock_time = time.time();
 
         for nn_url in network_games_urls:
             pages_urls = self._gather_training_pages_urls(nn_url)
@@ -138,7 +145,9 @@ class RequestProcess:
         sgf = r.text
 
         state = GameState(sgf)
-        if state.board_size.find(':') >= 0:
+        if not is_int(state.board_size) or \
+               not is_int(state.handicap) or \
+               not is_float(state.komi):
             self.discarded_game_states.append(state)
             return None
 
@@ -147,12 +156,15 @@ class RequestProcess:
 
 
     def _dump_stats(self):
+        elapsed = time.time() - self.clock_time
+        self.clock_time = time.time()
+
         max_bsize = 25
         bsize_list = [0] * (max_bsize+1)
         handicap_list = [0] * 20
         tot_games = len(self.saved_game_states)
 
-        print('Game number: {}'.format(tot_games))
+        print('Game number: {} | Speed: {:.2f} (games/sec)'.format(tot_games, tot_games/elapsed))
 
         for game in self.saved_game_states:
             bsize = int(game.board_size)
