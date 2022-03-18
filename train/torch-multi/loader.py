@@ -198,9 +198,14 @@ class Loader:
             filename = self.chunks.pop()
             self.done.append(filename)
 
-            with open(filename, 'r') as f:
-                self.stream = io.StringIO(f.read())
-                self.stream_end = False
+            if filename.find(".gz") >= 0:
+                with gzip.open(filename, 'rt') as f:
+                    self.stream = io.StringIO(f.read())
+                    self.stream_end = False
+            else:
+                with open(filename, 'r') as f:
+                    self.stream = io.StringIO(f.read())
+                    self.stream_end = False
 
         datalines = Data.get_datalines(FIXED_DATA_VERSION);
         data = Data()
