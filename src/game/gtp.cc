@@ -417,8 +417,6 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
     } else if (const auto res = parser.Find("supervised", 0)) {
         auto sgf_file = std::string{};
         auto data_file = std::string{};
-        auto cutoff_games_prob = 0.f;
-        auto cutoff_moves_rate = 0.f;
 
         if (const auto sgf = parser.GetCommand(1)) {
             sgf_file = sgf->Get<std::string>();
@@ -426,18 +424,9 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         if (const auto data = parser.GetCommand(2)) {
             data_file = data->Get<std::string>();
         }
-        if (const auto prob = parser.GetCommand(3)) {
-            cutoff_games_prob = prob->Get<float>();
-        }
-        if (const auto rate = parser.GetCommand(4)) {
-            cutoff_moves_rate = rate->Get<float>();
-        }
 
         if (!sgf_file.empty() && !data_file.empty()) {
-            Supervised::Get().FromSgf(sgf_file,
-                                          data_file,
-                                          cutoff_games_prob,
-                                          cutoff_moves_rate);
+            Supervised::Get().FromSgfs(sgf_file, data_file);
             out << GTPSuccess("");
         } else {
             out << GTPFail("");

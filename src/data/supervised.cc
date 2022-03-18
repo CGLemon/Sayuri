@@ -7,77 +7,121 @@
 #include "utils/log.h"
 #include "utils/format.h"
 #include "utils/random.h"
+#include "utils/threadpool.h"
+
+#include "config.h"
 
 #include <fstream>
 #include <cassert>
 #include <cmath>
+#include <thread>
 
 Supervised &Supervised::Get() {
     static Supervised supervised;
     return supervised;
 }
 
-void Supervised::FromSgf(std::string sgf_name,
-                             std::string out_name_prefix,
-                             float cutoff_games_prob,
-                             float cutoff_moves_rate) const {
+void Supervised::FromSgfs(std::string sgf_name,
+                              std::string out_name_prefix) {
+
+    file_cnt_.store(0);
+    worker_cnt_.store(0);
+    tot_games_.store(0);
+    running_.store(true);
+
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
     auto file = std::ofstream{};
-    auto fcnt = 0;
-    auto closed = true;
 
-    const auto Clamp = [](float val) {
-        val = std::max(val, 0.f);
-        val = std::min(val, 1.f);
-        return val; 
+
+    auto Worker = [this, out_name_prefix]() -> void {
+        auto file = std::ofstream{};
+        bool closed = true;
+        int games = 0;
+        int worker_cnt = worker_cnt_.fetch_add(1);
+
+        while (true) {
+            if (!running_.load(std::memory_order_relaxed) && tasks_.empty()) {
+                break;
+            }
+
+            auto sgf = std::string{};
+
+            {
+                std::lock_guard<std::mutex> lk(mtx_);
+                if (!tasks_.empty()) {
+                    sgf = tasks_.front();
+                    tasks_.pop();
+                }
+            }
+
+            if (sgf.empty()) {
+                std::this_thread::yield();
+                continue;
+            }
+
+            if (closed) {
+                auto out_name = Format("%s_%d.txt", out_name_prefix.c_str(), file_cnt_.fetch_add(1));
+                file.open(out_name, std::ios_base::app);
+
+                if (!file.is_open()) {
+                    ERROR << "Fail to create the file: " << out_name << '!' << std::endl; 
+                    return;
+                }
+                closed = false;
+            }
+
+            if (SgfProcess(sgf, file)) {
+                games += 1;
+                tot_games_.fetch_add(1, std::memory_order_relaxed);
+                if (games % 100 == 0) {
+                    if (!closed) {
+                        file.close();
+                        closed = true;
+                    }
+                    LOGGING << Format("Thread %d parsed %d games, totally parsed %d games.",
+                                          worker_cnt+1, games, tot_games_.load(std::memory_order_relaxed)) << std::endl;
+                }
+            }
+        }
+
+        if (!closed) {
+            file.close();
+        }
     };
 
-    cutoff_games_prob = Clamp(cutoff_games_prob);
-    cutoff_moves_rate = Clamp(cutoff_moves_rate);
+    auto threads = GetOption<int>("threads");
+    auto group =  ThreadGroup<void>(&ThreadPool::Get(threads));
 
-    int games = 0;
-    for (auto &sgf : sgfs) {
-        if (closed) {
-            auto out_name = Format("%s_%d.txt", out_name_prefix.c_str(), fcnt++);
-            file.open(out_name, std::ios_base::app);
+    for (int t = 0; t < threads; ++t) {
+        group.AddTask(Worker);
+    }
 
-            if (!file.is_open()) {
-                ERROR << "Fail to create the file: " << out_name << '!' << std::endl; 
-                return;
-            }
-            closed = false;
-            // TODO: Multi-thread to product training data.
-        }
-
-        bool cutoff = Random<kXoroShiro128Plus>::Get().Roulette<10000>(1.0f - cutoff_games_prob);
-
-        if (SgfProcess(sgf, file, cutoff, cutoff_moves_rate)) {
-            games += 1;
-            if (games % 100 == 0) {
-                if (!closed) {
-                    file.close();
-                    closed = true;
-                }
-                LOGGING << Format("Parsed %d games.", games) << std::endl;
+    while (!sgfs.empty()) {
+        auto sgf = sgfs.back();
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            if ((int)tasks_.size() <= threads * 4) {
+                tasks_.push(sgf);
+                sgfs.pop_back();
+            } else {
+                std::this_thread::yield();
             }
         }
     }
-    if (!closed) {
-        file.close();
-    }
+
+    running_.store(false, std::memory_order_relaxed);
+    group.WaitToJoin();
 }
 
 bool Supervised::SgfProcess(std::string &sgfstring,
-                                std::ostream &out_file,
-                                bool cut_off,
-                                float cutoff_moves_rate) const {
+                                std::ostream &out_file) const {
     GameState state;
 
     try {
         state = Sgf::Get().FromString(sgfstring, 9999);
     } catch (const char *err) {
         ERROR << "Fail to load the SGF file! Discard it." << std::endl
-                  << Format("    Cause: %s.", err) << std::endl;
+                  << Format("\tCause: %s.", err) << std::endl;
         return false;
     }
 
@@ -146,13 +190,7 @@ bool Supervised::SgfProcess(std::string &sgfstring,
         return state.GetIndex(x, y);
     };
 
-    const int cutoff_moves = (1.f - cutoff_moves_rate) * num_intersections;
-
     for (auto i = size_t{0}; i < movelist.size(); ++i) {
-
-        if (cut_off && (i >= (size_t)cutoff_moves)) break;
-
-
         auto vtx = movelist[i];
         auto aux_vtx = kPass;
 
