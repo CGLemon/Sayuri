@@ -145,10 +145,10 @@ class TrainingPipe():
         if self.use_gpu:
             self.net = self.net.to(self.device)
 
-        self.net = DataParallel(self.net) 
+        self.parallel_net = DataParallel(self.net) 
 
         self.adam_opt = torch.optim.Adam(
-            self.net.parameters(),
+            self.pnet.parameters(),
             lr=self.learn_rate,
             weight_decay=self.weight_decay,
         )
@@ -181,7 +181,6 @@ class TrainingPipe():
 
             if num_steps != 0:
                 self.save_pt("{}-s{}.{}".format(filename_prefix, num_steps, "pt"))
-
 
             for _, batch in enumerate(train_data):
                 board_size_list, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
@@ -218,7 +217,7 @@ class TrainingPipe():
                     break
 
     def step(self, board_size_list, planes, target, opt):
-        _, loss = self.net(planes, board_size_list, target)
+        _, loss = self.parallel_net(planes, board_size_list, target)
         loss = loss.mean()
 
         opt.zero_grad()
