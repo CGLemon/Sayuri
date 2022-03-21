@@ -135,7 +135,7 @@ class TrainingPipe():
         self.use_gpu = cfg.use_gpu
         self.device = torch.device('cpu')
         if self.use_gpu:
-            self.device = torch.device('cuda:0')
+            self.device = torch.device('cuda')
 
         self.net = Network(cfg)
         self.net.trainable(True)

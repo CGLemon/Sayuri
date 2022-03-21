@@ -1,5 +1,5 @@
 import numpy as np
-import glob, os, random, time, io
+import glob, os, random, time, io, gzip
 
 FIXED_DATA_VERSION = 1
 
