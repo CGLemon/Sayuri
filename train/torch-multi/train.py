@@ -148,7 +148,7 @@ class TrainingPipe():
         self.parallel_net = DataParallel(self.net) 
 
         self.adam_opt = torch.optim.Adam(
-            self.pnet.parameters(),
+            self.parallel_net.parameters(),
             lr=self.learn_rate,
             weight_decay=self.weight_decay,
         )
