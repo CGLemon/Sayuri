@@ -227,7 +227,7 @@ class TrainingPipe():
         return loss.item()
 
     def save_pt(self, filename):
-        self.net.save_pt(filename)
+        torch.save(self.parallel_net.module.state_dict(), filename)
 
     def load_pt(self, filename):
         self.net.load_pt(filename)
