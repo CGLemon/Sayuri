@@ -83,6 +83,9 @@ void InitOptionsMap() {
     options_map["random_min_visits"] << Option::setoption(1);
     options_map["random_moves_cnt"] << Option::setoption(0);
 
+    options_map["root_policy_temp"] << Option::setoption(0.8f, 1.f, 0.f);
+    options_map["policy_temp"] << Option::setoption(1.f, 1.f, 0.f);
+
     options_map["dirichlet_noise"] << Option::setoption(false);
     options_map["dirichlet_epsilon"] << Option::setoption(0.25f);
     options_map["dirichlet_init"] << Option::setoption(0.03f);
@@ -358,6 +361,20 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext("--draw-root-factor")) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("draw_root_factor", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--root-policy-temp")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("root_policy_temp", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--policy-temp")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("policy_temp", res->Get<float>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

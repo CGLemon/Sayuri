@@ -42,6 +42,9 @@ public:
         lag_buffer = GetOption<int>("lag_buffer");
         ponder = GetOption<bool>("ponder");
         cache_buffer_factor = GetOption<int>("cache_buffer_factor");
+
+        root_policy_temp = GetOption<float>("root_policy_temp");
+        policy_temp = GetOption<float>("policy_temp");
     }
 
     int threads;
@@ -68,6 +71,9 @@ public:
 
     float forced_policy_factor;
     float score_utility_factor;
+
+    float root_policy_temp;
+    float policy_temp;
 
     int cap_playouts;
     int lag_buffer;

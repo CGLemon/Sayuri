@@ -104,26 +104,6 @@ Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
 
 Network::Result
 Network::GetOutputInternal(const GameState &state, const int symmetry) {
-    const auto Softmax = [](std::vector<float> &input, float temperature) {
-        auto output = std::vector<float>{};
-        output.reserve(input.size());
-
-        const auto alpha = *std::max_element(std::begin(input), std::end(input));
-        auto denom = 0.0f;
-
-        for (const auto in_val : input) {
-            auto val = std::exp((in_val - alpha) / temperature);
-            denom += val;
-            output.emplace_back(val);
-        }
-
-        for (auto &out : output) {
-            out /= denom;
-        }
-
-        return output;
-    };
-
     Network::Result out_result;
     Network::Result result;
 
@@ -139,14 +119,13 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
     const auto boardsize = inputs.board_size;
     const auto num_intersections = boardsize * boardsize;
 
-    auto probabilities_buffer = std::vector<float>(num_intersections+1);
+    auto probabilities_buffer = std::vector<float>(num_intersections);
     auto ownership_buffer = std::vector<float>(num_intersections);
+
     for (int idx = 0; idx < num_intersections; ++idx) {
         probabilities_buffer[idx] = result.probabilities[idx];
         ownership_buffer[idx] = result.ownership[idx];
     }
-    probabilities_buffer[num_intersections] = result.pass_probability;
-    probabilities_buffer = Softmax(probabilities_buffer, 1);
 
     // Probabilities, ownership
     for (int idx = 0; idx < num_intersections; ++idx) {
@@ -154,7 +133,6 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
         out_result.probabilities[symm_index] = probabilities_buffer[idx];
         out_result.ownership[symm_index] = std::tanh(ownership_buffer[idx]);
     }
-    out_result.pass_probability = probabilities_buffer[num_intersections];
 
     // Final score
     out_result.final_score = 20 * result.final_score;
@@ -219,6 +197,7 @@ bool Network::ProbeCache(const GameState &state,
 Network::Result
 Network::GetOutput(const GameState &state,
                    const Ensemble ensemble,
+                   const float temperature,
                    int symmetry,
                    const bool read_cache,
                    const bool write_cache) {
@@ -231,19 +210,25 @@ Network::GetOutput(const GameState &state,
         symmetry = Random<kXoroShiro128Plus>::Get().RandFix<Symmetry::kNumSymmetris>();
     }
 
+    bool probed = false;
+
     // Get result from cache, if it is in the cache memory.
     if (read_cache) {
         if (ProbeCache(state, result)) {
-            return result;
+            probed = true;
         }
     }
 
-    result = GetOutputInternal(state, symmetry);
+    if (!probed) {
+        result = GetOutputInternal(state, symmetry);
 
-    // Write result to cache, if it is not in the cache memory.
-    if (write_cache) {
-        nn_cache_.Insert(state.GetHash(), result);
+        // Write result to cache, if it is not in the cache memory.
+        if (write_cache) {
+            nn_cache_.Insert(state.GetHash(), result);
+        }
     }
+
+    ActivatePolicy(result, temperature);
 
     return result;
 }
@@ -251,7 +236,7 @@ Network::GetOutput(const GameState &state,
 std::string Network::GetOutputString(const GameState &state,
                                      const Ensemble ensemble,
                                      int symmetry) {
-    const auto result = GetOutput(state, ensemble, symmetry, false, false);
+    const auto result = GetOutput(state, ensemble, 1.f, symmetry, false, false);
     const auto bsize = result.board_size;
 
     auto out = std::ostringstream{};
@@ -282,6 +267,44 @@ std::string Network::GetOutputString(const GameState &state,
     out << std::endl;
 
     return out.str();
+}
+
+std::vector<float> Network::Softmax(std::vector<float> &input, const float temperature) const {
+    auto output = std::vector<float>{};
+    output.reserve(input.size());
+
+    const auto alpha = *std::max_element(std::begin(input), std::end(input));
+    auto denom = 0.0f;
+
+    for (const auto in_val : input) {
+        auto val = std::exp((in_val - alpha) / temperature);
+        denom += val;
+        output.emplace_back(val);
+    }
+
+    for (auto &out : output) {
+        out /= denom;
+    }
+
+    return output;
+}
+
+void Network::ActivatePolicy(Result &result, const float temperature) const {
+    const auto boardsize = result.board_size;
+    const auto num_intersections = boardsize * boardsize;
+
+    auto probabilities_buffer = std::vector<float>(num_intersections+1);
+
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        probabilities_buffer[idx] = result.probabilities[idx];
+    }
+    probabilities_buffer[num_intersections] = result.pass_probability;
+    probabilities_buffer = Softmax(probabilities_buffer, temperature);
+
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        result.probabilities[idx] = probabilities_buffer[idx];
+    }
+    result.pass_probability = probabilities_buffer[num_intersections];
 }
 
 void Network::Destroy() {

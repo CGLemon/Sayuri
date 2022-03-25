@@ -25,6 +25,7 @@ public:
 
     Result GetOutput(const GameState &state,
                      const Ensemble ensemble,
+                     const float temperature = 1.f,
                      int symmetry = -1,
                      const bool read_cache = true,
                      const bool write_cache = true);
@@ -39,7 +40,11 @@ public:
     void ClearCache();
 
 private:
+    void ActivatePolicy(Result &result, const float temperature) const;
+
     bool ProbeCache(const GameState &state, Result &result);
+
+    std::vector<float> Softmax(std::vector<float> &input, const float temperature) const;
 
     Result GetOutputInternal(const GameState &state, const int symmetry);
 

@@ -76,7 +76,13 @@ bool Node::ExpandChildren(Network &network,
     }
 
     // Second, get network computation result.
-    const auto raw_netlist = network.GetOutput(state, Network::kRandom);
+    float temp;
+    if (is_root) {
+        temp = GetParameters()->root_policy_temp;
+    } else {
+        temp = GetParameters()->policy_temp;
+    }
+    const auto raw_netlist = network.GetOutput(state, Network::kRandom, temp);
     const auto board_size = state.GetBoardSize();
     const auto num_intersections = state.GetNumIntersections();
 
