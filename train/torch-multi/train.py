@@ -8,7 +8,6 @@ from network import Network
 from loader import Loader
 
 from torch.nn import DataParallel
-from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, Subset
 
 def dump_dependent_version():
@@ -155,14 +154,12 @@ class TrainingPipe():
             weight_decay=self.weight_decay,
         )
 
-    def fit_and_store(self, filename_prefix, init_steps):
+    def fit_and_store(self, filename_prefix, init_steps, log_file):
 
         # Be sure the network is on the right device.
         self.setup()
 
         print("start training...")
-
-        tb_writer = SummaryWriter()
 
         keep_running = True
         running_loss = 0
@@ -202,12 +199,14 @@ class TrainingPipe():
                     elapsed = time.time() - clock_time
                     clock_time = time.time()
 
-                    print("steps: {} -> loss {:.4f}, speed: {:.2f}".format(
-                                                        num_steps,
-                                                        running_loss/verbose_steps,
-                                                        verbose_steps/elapsed
-                                                    ))
-                    tb_writer.add_scalar('loss', running_loss/verbose_steps, num_steps)
+                    log_outs = "steps: {} -> loss {:.4f}, speed: {:.2f}".format(
+                                   num_steps,
+                                   running_loss/verbose_steps,
+                                   verbose_steps/elapsed)
+                    print(log_outs)
+                    with open(log_file, 'a') as f:
+                        f.write(log_outs + '\n')
+
                     running_loss = 0
 
                 # should stop?
