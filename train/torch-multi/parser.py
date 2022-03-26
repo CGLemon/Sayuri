@@ -8,13 +8,10 @@ def main(args, cfg):
     pipe = TrainingPipe(cfg)
 
     if args.input != None:
-        pipe.load_pt(args.input + ".pt")
+        pipe.load_pt("{}-s{}.pt".format(args.input, args.steps))
 
     if args.dummy != True:
-        pipe.fit_and_store(args.output)
-
-    pipe.save_pt(args.output + ".pt")
-
+        pipe.fit_and_store(args.output, args.steps)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -26,6 +23,9 @@ if __name__ == "__main__":
 
     parser.add_argument("-o", "--output", metavar="<string>",
                         help="The ouput weights prefix path/name.", type=str)
+
+    parser.add_argument("-s", "--steps", metavar="<string>", default=0,
+                        help="The initialization steps.", type=int)
 
     parser.add_argument("-i", "--input", metavar="<string>",
                         help="The intput weights prefix path/name.", type=str)

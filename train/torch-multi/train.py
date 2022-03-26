@@ -142,18 +142,20 @@ class TrainingPipe():
         self.net.trainable(True)
 
     def setup(self):
+        self.module  = self.net
+
         if self.use_gpu:
             self.net = self.net.to(self.device)
-
-        self.parallel_net = DataParallel(self.net) 
+            self.net = DataParallel(self.net) 
+            self.module  = self.net.module
 
         self.adam_opt = torch.optim.Adam(
-            self.parallel_net.parameters(),
+            self.net.parameters(),
             lr=self.learn_rate,
             weight_decay=self.weight_decay,
         )
 
-    def fit_and_store(self, filename_prefix):
+    def fit_and_store(self, filename_prefix, init_steps):
 
         # Be sure the network is on the right device.
         self.setup()
@@ -164,7 +166,7 @@ class TrainingPipe():
 
         keep_running = True
         running_loss = 0
-        num_steps = 0
+        num_steps = init_steps
         verbose_steps = 1000
         clock_time = time.time()
 
@@ -178,9 +180,6 @@ class TrainingPipe():
                 num_workers=self.num_workers,
                 batch_size=self.batchsize
             )
-
-            if num_steps != 0:
-                self.save_pt("{}-s{}.{}".format(filename_prefix, num_steps, "pt"))
 
             for _, batch in enumerate(train_data):
                 board_size_list, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
@@ -216,8 +215,11 @@ class TrainingPipe():
                     keep_running = False
                     break
 
+            torch.save(self.module.state_dict(), "{}-s{}.pt".format(filename_prefix, num_steps))
+        print("Training is over.")
+
     def step(self, board_size_list, planes, target, opt):
-        _, loss = self.parallel_net(planes, board_size_list, target)
+        _, loss = self.net(planes, board_size_list, target)
         loss = loss.mean()
 
         opt.zero_grad()
@@ -226,8 +228,5 @@ class TrainingPipe():
 
         return loss.item()
 
-    def save_pt(self, filename):
-        torch.save(self.parallel_net.module.state_dict(), filename)
-
     def load_pt(self, filename):
-        self.net.load_pt(filename)
+        self.net.load_state_dict(torch.load(filename, map_location=torch.device('cpu')))
