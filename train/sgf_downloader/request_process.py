@@ -47,17 +47,26 @@ class GameState:
 
 
 class RequestProcess:
-    def __init__(self, root_dir, num_games, target_url):
+    def __init__(self, args):
         self.root_url = 'https://katagotraining.org/games/'
-        self.root_dir = root_dir
-        self.num_games = num_games
+
+        self.root_dir = args.directory
+        self.num_games = args.games
+
+        self.target_url = args.url
+        self.target_area_only = args.area
+        self.target_size = range(1, 26)
+
+        if args.size != None:
+            self.target_size = [args.size]
+
         self.discarded_game_states = list()
         self.saved_game_states = list()
         self.clock_time = None
 
-        self._run(target_url)
+        self._run()
 
-    def _run(self, target_url):
+    def _run(self):
         raw_network_games_urls = self._gather_network_games_urls()
         raw_network_games_urls.pop(0) # discard the last one
 
@@ -66,12 +75,12 @@ class RequestProcess:
 
         network_games_urls = list()
 
-        if target_url == None:
+        if self.target_url == None:
             for url in raw_network_games_urls:
                 if url.find('kata1-b60c320') >= 0:
                     network_games_urls.append(url)
         else:
-            network_games_urls.append(target_url)
+            network_games_urls.append(self.target_url)
 
         saved_games = 0
         discarded_games = 0
@@ -98,10 +107,13 @@ class RequestProcess:
                         cnt += 1
 
                     if (saved_games + discarded_games) % 100 == 0:
+                        print('================ Stats ================')
                         print('saved {s} games, discarded {d} games.'.format(s=saved_games,d=discarded_games))
                         self._dump_stats()
 
                     if saved_games >= self.num_games:
+                        print('================ Stats ================')
+                        print('saved {s} games, discarded {d} games.'.format(s=saved_games,d=discarded_games))
                         self._dump_stats()
                         self._save_buf(sgfs_buf,cnt)
                         return
@@ -151,6 +163,14 @@ class RequestProcess:
             self.discarded_game_states.append(state)
             return None
 
+        if int(state.board_size) not in self.target_size:
+            self.discarded_game_states.append(state)
+            return None
+
+        if self.target_area_only and state.score.find('territory') >= 0:
+            self.discarded_game_states.append(state)
+            return None
+
         self.saved_game_states.append(state)
         return sgf
 
@@ -162,6 +182,8 @@ class RequestProcess:
         bsize_list = [0] * (max_bsize+1)
         handicap_list = [0] * 20
         tot_games = len(self.saved_game_states)
+        score_rule_cnt = [0] * 3
+        score_rule = ['area', 'territory', 'other']
 
         print('Game number: {} | Speed: {:.2f} (games/sec)'.format(tot_games, tot_games/elapsed))
 
@@ -171,6 +193,13 @@ class RequestProcess:
 
             bsize_list[bsize] += 1
             handicap_list[handicap] += 1
+
+            if game.score.find('area') >= 0:
+                score_rule_cnt[0] += 1
+            elif game.score.find('territory') >= 0:
+                score_rule_cnt[1] += 1
+            else:
+                score_rule_cnt[2] += 1
 
         print('Board Size Stats')
         for bsize in range(max_bsize):
@@ -183,3 +212,9 @@ class RequestProcess:
             val = handicap_list[handicap]
             if val != 0:
                 print ('\tsize {}: {:.2f}%'.format(handicap, 100 * val/tot_games))
+
+        print('Score Rule Stats')
+        for s in range(3):
+            val = score_rule_cnt[s]
+            if val != 0:
+                print ('\t{}: {:.2f}%'.format(score_rule[s], 100 * val/tot_games))
