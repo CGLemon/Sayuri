@@ -7,7 +7,7 @@ from symmetry import get_symmetry_plane
 from network import Network
 from loader import Loader
 
-from torch.utils.tensorboard import SummaryWriter
+from torch.nn import DataParallel
 from torch.utils.data import DataLoader, Subset
 
 def dump_dependent_version():
@@ -118,8 +118,6 @@ class DataSet():
         return self.dummy_size
 
 class TrainingPipe():
-    # TODO: Support for multi-gpu training.
-
     def __init__(self, cfg):
         self.cfg = cfg
         self.batchsize =  cfg.batchsize
@@ -141,8 +139,12 @@ class TrainingPipe():
         self.net.trainable(True)
 
     def setup(self):
+        self.module  = self.net
+
         if self.use_gpu:
             self.net = self.net.to(self.device)
+            self.net = DataParallel(self.net) 
+            self.module  = self.net.module
 
         self.adam_opt = torch.optim.Adam(
             self.net.parameters(),
@@ -150,18 +152,16 @@ class TrainingPipe():
             weight_decay=self.weight_decay,
         )
 
-    def fit_and_store(self, filename_prefix):
+    def fit_and_store(self, filename_prefix, init_steps, log_file):
 
         # Be sure the network is on the right device.
         self.setup()
 
         print("start training...")
 
-        tb_writer = SummaryWriter()
-
         keep_running = True
         running_loss = 0
-        num_steps = 0
+        num_steps = init_steps
         verbose_steps = 1000
         clock_time = time.time()
 
@@ -175,10 +175,6 @@ class TrainingPipe():
                 num_workers=self.num_workers,
                 batch_size=self.batchsize
             )
-
-            if num_steps != 0:
-                self.save_pt("{}-s{}.{}".format(filename_prefix, num_steps, "pt"))
-
 
             for _, batch in enumerate(train_data):
                 board_size_list, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
@@ -201,23 +197,29 @@ class TrainingPipe():
                     elapsed = time.time() - clock_time
                     clock_time = time.time()
 
-                    print("steps: {} -> loss {:.4f}, speed: {:.2f}".format(
-                                                        num_steps,
-                                                        running_loss/verbose_steps,
-                                                        verbose_steps/elapsed
-                                                    ))
-                    tb_writer.add_scalar('loss', running_loss/verbose_steps, num_steps)
+                    log_outs = "steps: {} -> loss: {:.4f}, speed: {:.2f} | learn rate: {}, batch size: {}".format(
+                                   num_steps,
+                                   running_loss/verbose_steps,
+                                   verbose_steps/elapsed,
+                                   self.learn_rate,
+                                   self.batchsize)
+                    print(log_outs)
+                    with open(log_file, 'a') as f:
+                        f.write(log_outs + '\n')
+
                     running_loss = 0
 
                 # should stop?
-                if num_steps >= self.max_steps:
+                if num_steps >= self.max_steps + init_steps:
                     keep_running = False
                     break
 
-    def step(self, board_size_list, planes, target, opt):
-        pred = self.net(planes, board_size_list)
+            torch.save(self.module.state_dict(), "{}-s{}.pt".format(filename_prefix, num_steps))
+        print("Training is over.")
 
-        loss = self.compute_loss(pred, target)
+    def step(self, board_size_list, planes, target, opt):
+        _, loss = self.net(planes, board_size_list, target)
+        loss = loss.mean()
 
         opt.zero_grad()
         loss.backward()
@@ -225,32 +227,5 @@ class TrainingPipe():
 
         return loss.item()
 
-    def compute_loss(self, pred, target):
-        (pred_prob, pred_aux_prob, pred_ownership, pred_wdl, pred_stm, pred_score) = pred
-        (target_prob,target_aux_prob, target_ownership, target_wdl, target_stm, target_final_score) = target
-
-        def cross_entropy(pred, target):
-            return torch.mean(-torch.sum(torch.mul(F.log_softmax(pred, dim=-1), target), dim=1), dim=0)
-
-        def huber_loss(x, y, delta):
-            absdiff = torch.abs(x - y)
-            loss = torch.where(absdiff > delta, (0.5 * delta*delta) + delta * (absdiff - delta), 0.5 * absdiff * absdiff)
-            return torch.mean(torch.sum(loss, dim=1), dim=0)
-
-        prob_loss = cross_entropy(pred_prob, target_prob)
-        aux_prob_loss = 0.15 * cross_entropy(pred_aux_prob, target_aux_prob)
-        ownership_loss = 0.15 * F.mse_loss(pred_ownership, target_ownership)
-        wdl_loss = cross_entropy(pred_wdl, target_wdl)
-        stm_loss = F.mse_loss(pred_stm, target_stm)
-
-        fina_score_loss = 0.0012 * huber_loss(20 * pred_score, target_final_score, 12)
-
-        loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + fina_score_loss
-
-        return loss
-
-    def save_pt(self, filename):
-        self.net.save_pt(filename)
-
     def load_pt(self, filename):
-        self.net.load_pt(filename)
+        self.net.load_state_dict(torch.load(filename, map_location=torch.device('cpu')))

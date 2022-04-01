@@ -19,7 +19,7 @@
     },
 
     "Train" : {
-        "GPUs": null,
+        "UseGPU": null,
         "StepsPerEpoch" : 2000,
         "MaxSteps": 100000,
         "Workers": 4,

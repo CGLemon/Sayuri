@@ -296,7 +296,7 @@ class Network(nn.Module):
             collector=self.tensor_collector
         )
 
-    def forward(self, planes, board_size_list = None):
+    def forward(self, planes, board_size_list = None, target = None):
         # mask buffer
         batch, _, _, _ = planes.size()
         mask = torch.zeros((batch, 1, self.xsize, self.ysize))
@@ -353,7 +353,37 @@ class Network(nn.Module):
         wdl, stm, score = torch.split(val_misc, [3, 1, 1], dim=1)
         stm = torch.tanh(stm)
 
-        return prob, aux_prob, ownership, wdl, stm, score
+        predict = (prob, aux_prob, ownership, wdl, stm, score)
+
+        loss = None
+        if target != None:
+            loss = self.compute_loss(predict, target)
+
+        return predict, loss
+
+    def compute_loss(self, pred, target):
+        (pred_prob, pred_aux_prob, pred_ownership, pred_wdl, pred_stm, pred_score) = pred
+        (target_prob,target_aux_prob, target_ownership, target_wdl, target_stm, target_final_score) = target
+
+        def cross_entropy(pred, target):
+            return torch.mean(-torch.sum(torch.mul(F.log_softmax(pred, dim=-1), target), dim=1), dim=0)
+
+        def huber_loss(x, y, delta):
+            absdiff = torch.abs(x - y)
+            loss = torch.where(absdiff > delta, (0.5 * delta*delta) + delta * (absdiff - delta), 0.5 * absdiff * absdiff)
+            return torch.mean(torch.sum(loss, dim=1), dim=0)
+
+        prob_loss = cross_entropy(pred_prob, target_prob)
+        aux_prob_loss = 0.15 * cross_entropy(pred_aux_prob, target_aux_prob)
+        ownership_loss = 0.15 * F.mse_loss(pred_ownership, target_ownership)
+        wdl_loss = cross_entropy(pred_wdl, target_wdl)
+        stm_loss = F.mse_loss(pred_stm, target_stm)
+
+        fina_score_loss = 0.0012 * huber_loss(20 * pred_score, target_final_score, 12)
+
+        loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + fina_score_loss
+
+        return loss
 
     def trainable(self, t=True):
         if t==True:

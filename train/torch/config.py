@@ -18,7 +18,7 @@ CONFIG_KEYWOED = [
     "ResidualBlock-SE", # resnet block with SE structure
 
     "Train",
-    "GPUs",             # number of gpus(only support one now)
+    "UseGPU",
     "StepsPerEpoch",    # number of training steps per epoch
     "MaxSteps",         # terminate after these steps
     "LearningRate",     # the learning rate
@@ -30,7 +30,6 @@ class Config:
     def __init__(self):
         # Training option
         self.num_workers = None
-        self.gpus = None
         self.use_gpu = None
         self.batchsize = None
         self.learn_rate = None
@@ -57,7 +56,7 @@ def parse_training_config(json_data, config):
     # We assume that every value is valid.
     train = json_data["Train"]
 
-    config.gpus = train["GPUs"]
+    config.use_gpu = train["UseGPU"]
     config.learn_rate = train["LearningRate"]
     config.weight_decay = train["WeightDecay"]
 
@@ -81,11 +80,9 @@ def parse_training_config(json_data, config):
     if config.num_workers == None:
         config.num_workers = os.cpu_count()
 
-    if config.gpus == None:
+    if config.use_gpu == None:
         if torch.cuda.is_available():
-            config.gpus = torch.cuda.device_count()
-
-    config.use_gpu = True if config.gpus is not None else False
+            config.use_gpu = True
 
     return config
 
