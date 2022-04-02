@@ -30,8 +30,6 @@ void Supervised::FromSgfs(std::string sgf_name,
     running_.store(true);
 
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
-    auto file = std::ofstream{};
-
 
     auto Worker = [this, out_name_prefix]() -> void {
         auto file = std::ofstream{};

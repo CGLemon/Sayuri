@@ -749,3 +749,7 @@ std::vector<bool> GameState::GetStrictSafeArea() const {
 std::uint64_t GameState::ComputeSymmetryHash(const int symm) const {
     return board_.ComputeSymmetryHash(board_.GetKoMove(), symm) ^ komi_hash_;
 }
+
+std::uint64_t GameState::ComputeSymmetryKoHash(const int symm) const {
+    return board_.ComputeKoHash(symm);
+}

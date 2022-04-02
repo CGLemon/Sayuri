@@ -368,6 +368,12 @@ std::uint64_t SimpleBoard::ComputeKoHash() const {
     return ComputeKoHash([](const auto vertex) { return vertex; });
 }
 
+std::uint64_t SimpleBoard::ComputeKoHash(int symmetry) const {
+    return ComputeKoHash([this, symmetry](const auto vertex) {
+        return Symmetry::Get().TransformVertex(board_size_, symmetry, vertex);
+    });
+}
+
 std::uint64_t SimpleBoard::ComputeHash(int komove, std::function<int(int)> transform) const {
     auto res = ComputeKoHash(transform);
 

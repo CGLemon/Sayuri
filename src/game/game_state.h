@@ -98,6 +98,7 @@ public:
     std::vector<int> GetStringList(const int vtx) const;
 
     std::uint64_t ComputeSymmetryHash(const int symm) const;
+    std::uint64_t ComputeSymmetryKoHash(const int symm) const;
 
     std::vector<int> GetAppendMoves(int color) const;
     std::shared_ptr<const Board> GetPastBoard(unsigned int p) const;
