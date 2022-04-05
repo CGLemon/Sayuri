@@ -1,3 +1,4 @@
+
 #include <fstream>
 #include <sstream>
 #include <utility>
@@ -138,6 +139,7 @@ int Book::Probe(const GameState &state) const {
     const auto board_size = state.GetBoardSize();
     const auto num_intersections = state.GetNumIntersections();
 
+    auto acc_score = 0;
     auto candidate_moves = std::vector<std::pair<int, int>>{};
 
     for (int idx = 0; idx < num_intersections; ++idx) {
@@ -153,6 +155,7 @@ int Book::Probe(const GameState &state) const {
 
             if (it != std::end(data_)) {
                 candidate_moves.emplace_back(it->second, vtx);
+                acc_score += it->second;
             }
         }
     }
@@ -161,14 +164,17 @@ int Book::Probe(const GameState &state) const {
 
     std::stable_sort(std::rbegin(candidate_moves), std::rend(candidate_moves));
 
-    int max_size = 12;
-    if (state.GetMoveNumber() < 4) {
-        max_size = 36;
+    const auto rand = Random<kXoroShiro128Plus>::Get().Generate() % acc_score;
+    int choice;
+    acc_score = 0;
+
+    for (int i = 0; i < (int)candidate_moves.size(); ++i) {
+        acc_score +=  candidate_moves[i].first;
+        if (rand < acc_score) {
+            choice = i;
+            break;
+        }
     }
 
-    max_size = std::min(max_size, (int)candidate_moves.size());
-    candidate_moves.resize(max_size);
-    const auto rand = Random<kXoroShiro128Plus>::Get().Generate() % max_size;
-
-    return candidate_moves[rand].second;
+    return candidate_moves[choice].second;
 }

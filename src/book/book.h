@@ -22,6 +22,6 @@ private:
     std::unordered_map<std::uint64_t, int> data_;
 
     static constexpr int kBookBoardSize = 19;
-    static constexpr int kMaxBookMoves = 50;
-    static constexpr int kFilterThreshold = 100;
+    static constexpr int kMaxBookMoves = 30;
+    static constexpr int kFilterThreshold = 25;
 };
