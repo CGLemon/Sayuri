@@ -89,6 +89,7 @@ class ConvBlock(nn.Module):
     def __init__(self, in_channels,
                        out_channels,
                        kernel_size,
+                       fixup,
                        relu=True,
                        collector=None):
         super().__init__()
@@ -102,10 +103,16 @@ class ConvBlock(nn.Module):
             padding=1 if kernel_size == 3 else 0,
             bias=False,
         )
+
+        momentum = 0.1
+        if fixup:
+            momentum = 0
+
         self.bn = nn.BatchNorm2d(
             out_channels,
             eps=1e-5,
             affine=False,
+            momentum=momentum
         )
 
         if collector != None:
@@ -124,7 +131,7 @@ class ConvBlock(nn.Module):
         return F.relu(x, inplace=True) if self.relu else x
 
 class ResBlock(nn.Module):
-    def __init__(self, channels, se_size=None, collector=None):
+    def __init__(self, channels, fixup, se_size=None, collector=None):
         super().__init__()
         self.with_se=False
         self.channels=channels
@@ -133,12 +140,14 @@ class ResBlock(nn.Module):
             in_channels=channels,
             out_channels=channels,
             kernel_size=3,
+            fixup=fixup,
             collector=collector
         )
         self.conv2 = ConvBlock(
             in_channels=channels,
             out_channels=channels,
             kernel_size=3,
+            fixup=fixup,
             relu=False,
             collector=collector
         )
@@ -197,6 +206,8 @@ class Network(nn.Module):
         self.cfg = cfg
         self.nntype = cfg.nntype
 
+        self.fixup = cfg.fixup_batch_norm
+
         self.input_channels = cfg.input_channels
         self.residual_channels = cfg.residual_channels
         self.xsize = cfg.boardsize
@@ -218,6 +229,7 @@ class Network(nn.Module):
             in_channels=self.input_channels,
             out_channels=self.residual_channels,
             kernel_size=3,
+            fixup=self.fixup,
             relu=True,
             collector=self.tensor_collector
         )
@@ -227,10 +239,12 @@ class Network(nn.Module):
         for s in self.stack:
             if s == "ResidualBlock":
                 nn_stack.append(ResBlock(self.residual_channels,
+                                         self.fixup,
                                          None,
                                          self.tensor_collector))
             elif s == "ResidualBlock-SE":
                 nn_stack.append(ResBlock(self.residual_channels,
+                                         self.fixup,
                                          self.residual_channels * 4,
                                          self.tensor_collector))
         self.residual_tower = nn.Sequential(*nn_stack)
@@ -240,6 +254,7 @@ class Network(nn.Module):
             in_channels=self.residual_channels,
             out_channels=self.policy_extract,
             kernel_size=1,
+            fixup=self.fixup,
             relu=True,
             collector=self.tensor_collector
         )
@@ -277,6 +292,7 @@ class Network(nn.Module):
             in_channels=self.residual_channels,
             out_channels=self.value_extract,
             kernel_size=1,
+            fixup=self.fixup,
             relu=True,
             collector=self.tensor_collector
         )

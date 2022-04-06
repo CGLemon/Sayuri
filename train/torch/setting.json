@@ -26,6 +26,7 @@
         "BatchSize": 512,
         "LearningRate": 1e-4,
         "WeightDecay": 1e-4,
+        "FixUpBatchNorm": true,
         "TrainDirectory": "train-dir"
     }
 }
