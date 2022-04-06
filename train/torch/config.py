@@ -37,7 +37,7 @@ class Config:
         self.train_dir = None
         self.steps_per_epoch = None
         self.max_steps = None
-        self.fix_batch_norm = None
+        self.fixup_batch_norm = None
 
         # Adjustable values
         self.stack = []
