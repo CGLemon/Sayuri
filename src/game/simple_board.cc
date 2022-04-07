@@ -409,7 +409,7 @@ void SimpleBoard::FindStringSurround(const int vtx,
         }
     };
 
-    assert(GetState(avtx) == color);
+    assert(GetState(vtx) == color);
     int next = vtx;
 
     do {
