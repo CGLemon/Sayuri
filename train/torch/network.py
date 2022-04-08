@@ -124,7 +124,9 @@ class ConvBlock(nn.Module):
     def forward(self, x, mask):
         x = self.conv(x)
         if self.fixup:
-            x = x/(self.eps+1)
+            m = self.bn.running_mean.view(1, self.bn.num_features, 1, 1).expand_as(x)
+            v = self.bn.running_var.view(1, self.bn.num_features, 1, 1).expand_as(x)
+            x = (x-m)/torch.sqrt(self.eps+v)
         else:
             x = self.bn(x)
         x = x * mask
