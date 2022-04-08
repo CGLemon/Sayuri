@@ -104,15 +104,12 @@ class ConvBlock(nn.Module):
             bias=False,
         )
 
-        momentum = 0.1
-        if fixup:
-            momentum = 0
-
+        self.eps = 1e-5
+        self.fixup = fixup
         self.bn = nn.BatchNorm2d(
             out_channels,
-            eps=1e-5,
-            affine=False,
-            momentum=momentum
+            eps=self.eps,
+            affine=False
         )
 
         if collector != None:
@@ -126,7 +123,10 @@ class ConvBlock(nn.Module):
                                 nonlinearity="relu")
     def forward(self, x, mask):
         x = self.conv(x)
-        x = self.bn(x)
+        if self.fixup:
+            x = x/(self.eps+1)
+        else:
+            x = self.bn(x)
         x = x * mask
         return F.relu(x, inplace=True) if self.relu else x
 
