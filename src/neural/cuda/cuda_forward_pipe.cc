@@ -416,7 +416,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
             const auto tower_channels = weights_->residual_channels;
             graph_->tower_bnorm[t_offset+1].Forward(batch_size,
                                                     cuda_conv_op_[2], cuda_conv_op_[0]);
-            CUDA::copy(cuda_conv_op_[0], cuda_conv_op_[2], batch_size * tower_channels * num_intersections, handles_.stream);
+            std::swap(cuda_conv_op_[0], cuda_conv_op_[2]);
         }
     }
 
