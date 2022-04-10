@@ -1428,78 +1428,6 @@ void SimpleBoard::PlayMoveAssumeLegal(const int vtx, const int color) {
     ExchangeToMove();
 }
 
-int SimpleBoard::GetPrisoner(const int color) const {
-    return prisoners_[color];
-}
-
-int SimpleBoard::GetMoveNumber() const {
-    return move_number_;
-}
-
-int SimpleBoard::GetBoardSize() const {
-    return board_size_;
-}
-
-int SimpleBoard::GetLetterBoxSize() const {
-    return letter_box_size_;
-}
-
-int SimpleBoard::GetNumVertices() const {
-    return num_vertices_;
-}
-
-int SimpleBoard::GetNumIntersections() const {
-    return num_intersections_;
-}
-
-int SimpleBoard::GetToMove() const {
-    return to_move_;
-}
-
-int SimpleBoard::GetLastMove() const {
-    return last_move_;
-}
-
-int SimpleBoard::GetKoMove() const {
-    return ko_move_;
-}
-
-int SimpleBoard::GetPasses() const {
-    return passes_;
-}
-
-std::uint64_t SimpleBoard::GetKoHash() const {
-    return ko_hash_;
-}
-
-std::uint64_t SimpleBoard::GetHash() const {
-    return hash_;
-}
-
-int SimpleBoard::GetState(const int vtx) const {
-    return state_[vtx];
-}
-
-int SimpleBoard::GetState(const int x, const int y) const {
-    return GetState(GetVertex(x,y));
-}
-
-int SimpleBoard::GetLiberties(const int vtx) const {
-    return strings_.GetLiberty(strings_.GetParent(vtx));
-}
-
-int SimpleBoard::GetStones(const int vtx) const {
-    return strings_.GetStones(strings_.GetParent(vtx));
-}
-
-int SimpleBoard::GetEmptyCount() const {
-    return empty_cnt_;
-}
-
-int SimpleBoard::GetEmpty(const int idx) const {
-    return empty_[idx];
-}
-
 std::vector<int> SimpleBoard::GetStringList(const int vtx) const {
     auto result = std::vector<int>{};
 
@@ -1514,39 +1442,4 @@ std::vector<int> SimpleBoard::GetStringList(const int vtx) const {
     assert(!result.empty());
 
     return result;
-}
-
-void SimpleBoard::UpdateZobrist(const int vtx,
-                                const int new_color,
-                                const int old_color) {
-    hash_ ^= Zobrist::kState[old_color][vtx];
-    hash_ ^= Zobrist::kState[new_color][vtx];
-    ko_hash_ ^= Zobrist::kState[old_color][vtx];
-    ko_hash_ ^= Zobrist::kState[new_color][vtx];
-}
-
-void SimpleBoard::UpdateZobristPrisoner(const int color,
-                                        const int new_pris,
-                                        const int old_pris) {
-    hash_ ^= Zobrist::kPrisoner[color][old_pris];
-    hash_ ^= Zobrist::kPrisoner[color][new_pris];
-}
-
-void SimpleBoard::UpdateZobristToMove(const int new_color,
-                                      const int old_color) {
-    if (old_color != new_color) {
-        hash_ ^= Zobrist::kBlackToMove;
-    }
-}
-
-void SimpleBoard::UpdateZobristKo(const int new_komove,
-                                  const int old_komove) {
-    hash_ ^= Zobrist::kKoMove[old_komove];
-    hash_ ^= Zobrist::kKoMove[new_komove];
-}
-
-void SimpleBoard::UpdateZobristPass(const int new_pass,
-                                    const int old_pass) {
-    hash_ ^= Zobrist::KPass[old_pass];
-    hash_ ^= Zobrist::KPass[new_pass];
 }

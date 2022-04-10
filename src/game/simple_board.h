@@ -85,6 +85,8 @@ public:
     // The GTP showboard.
     std::string GetBoardString(const int last_move, bool is_sgf) const;
 
+    std::uint32_t GetPattern3x3(const int vtx) const;
+
     // Compute the symmetry Zobrist hashing.
     std::uint64_t ComputeSymmetryHash(int komove, int symmetry) const;
 
@@ -289,4 +291,134 @@ inline int SimpleBoard::GetIndex(const int x, const int y) const {
     assert(x >= 0 || x < board_size_);
     assert(y >= 0 || y < board_size_);
     return y * board_size_ + x;
+}
+
+inline std::uint32_t SimpleBoard::GetPattern3x3(const int vtx) const {
+    const int size = letter_box_size_;
+
+    /*
+     color order
+
+     1 2 3
+     4 . 5     
+     6 7 8
+
+     each color takes 2 bits, totally take 16 bits
+     */
+
+    return (state_[vtx - size - 1]     << 14) |
+               (state_[vtx - size]     << 12) |
+               (state_[vtx - size + 1] << 10) |
+               (state_[vtx - 1]        <<  8) |
+               (state_[vtx + 1]        <<  6) |
+               (state_[vtx + size - 1] <<  4) |
+               (state_[vtx + size]     <<  2) |
+               (state_[vtx + size + 1] <<  0);
+}
+
+inline void SimpleBoard::UpdateZobrist(const int vtx,
+                                           const int new_color,
+                                           const int old_color) {
+    hash_ ^= Zobrist::kState[old_color][vtx];
+    hash_ ^= Zobrist::kState[new_color][vtx];
+    ko_hash_ ^= Zobrist::kState[old_color][vtx];
+    ko_hash_ ^= Zobrist::kState[new_color][vtx];
+}
+
+inline void SimpleBoard::UpdateZobristPrisoner(const int color,
+                                                   const int new_pris,
+                                                   const int old_pris) {
+    hash_ ^= Zobrist::kPrisoner[color][old_pris];
+    hash_ ^= Zobrist::kPrisoner[color][new_pris];
+}
+
+inline void SimpleBoard::UpdateZobristToMove(const int new_color,
+                                                 const int old_color) {
+    if (old_color != new_color) {
+        hash_ ^= Zobrist::kBlackToMove;
+    }
+}
+
+inline void SimpleBoard::UpdateZobristKo(const int new_komove,
+                                             const int old_komove) {
+    hash_ ^= Zobrist::kKoMove[old_komove];
+    hash_ ^= Zobrist::kKoMove[new_komove];
+}
+
+inline void SimpleBoard::UpdateZobristPass(const int new_pass,
+                                               const int old_pass) {
+    hash_ ^= Zobrist::KPass[old_pass];
+    hash_ ^= Zobrist::KPass[new_pass];
+}
+
+inline int SimpleBoard::GetPrisoner(const int color) const {
+    return prisoners_[color];
+}
+
+inline int SimpleBoard::GetMoveNumber() const {
+    return move_number_;
+}
+
+inline int SimpleBoard::GetBoardSize() const {
+    return board_size_;
+}
+
+inline int SimpleBoard::GetLetterBoxSize() const {
+    return letter_box_size_;
+}
+
+inline int SimpleBoard::GetNumVertices() const {
+    return num_vertices_;
+}
+
+inline int SimpleBoard::GetNumIntersections() const {
+    return num_intersections_;
+}
+
+inline int SimpleBoard::GetToMove() const {
+    return to_move_;
+}
+
+inline int SimpleBoard::GetLastMove() const {
+    return last_move_;
+}
+
+inline int SimpleBoard::GetKoMove() const {
+    return ko_move_;
+}
+
+inline int SimpleBoard::GetPasses() const {
+    return passes_;
+}
+
+inline std::uint64_t SimpleBoard::GetKoHash() const {
+    return ko_hash_;
+}
+
+inline std::uint64_t SimpleBoard::GetHash() const {
+    return hash_;
+}
+
+inline int SimpleBoard::GetState(const int vtx) const {
+    return state_[vtx];
+}
+
+inline int SimpleBoard::GetState(const int x, const int y) const {
+    return GetState(GetVertex(x,y));
+}
+
+inline int SimpleBoard::GetLiberties(const int vtx) const {
+    return strings_.GetLiberty(strings_.GetParent(vtx));
+}
+
+inline int SimpleBoard::GetStones(const int vtx) const {
+    return strings_.GetStones(strings_.GetParent(vtx));
+}
+
+inline int SimpleBoard::GetEmptyCount() const {
+    return empty_cnt_;
+}
+
+inline int SimpleBoard::GetEmpty(const int idx) const {
+    return empty_[idx];
 }
