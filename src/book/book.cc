@@ -19,7 +19,6 @@ Book &Book::Get() {
 
 void Book::GenerateBook(std::string sgf_name, std::string filename) const {
 
-
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
     std::unordered_map<std::uint64_t, VertexFrequencyList> book_data;
 
@@ -105,27 +104,29 @@ void Book::BookDataProcess(std::string sgfstring,
     int book_move_num = std::min(kMaxBookMoves, (int)movelist.size());
 
     for (int i = 0; i < book_move_num; ++i) {
-        int vertex = movelist[i];
+        const int vertex = movelist[i];
 
         for (int symm = 0; symm < Symmetry::kNumSymmetris; ++symm) { 
             auto hash = main_state.ComputeSymmetryKoHash(symm);
             auto it = book_data.find(hash);
+
+            const int symm_vtx = Symmetry::Get().TransformVertex(state.GetBoardSize(), symm, vertex);
 
             if (it == std::end(book_data)) {
                 // Insert new hash state in the book, also insert the 
                 // new move.
 
                 VertexFrequencyList vfreq;
-                vfreq.emplace_back(vertex, 1);
+                vfreq.emplace_back(symm_vtx, 1);
 
                 book_data.insert({hash,  vfreq});
             } else {
                 auto &vfreq_list = it->second;
                 auto vfreq_it = std::find_if(std::begin(vfreq_list), std::end(vfreq_list),
-                                                 [vertex](auto &element) { return element.first == vertex; });
+                                                 [symm_vtx](auto &element) { return element.first == symm_vtx; });
                 if (vfreq_it == std::end(vfreq_list)) {
                     // Insert new move in the book.
-                    vfreq_list.emplace_back(vertex, 1);
+                    vfreq_list.emplace_back(symm_vtx, 1);
                 } else {
                     vfreq_it->second++;
                 }
