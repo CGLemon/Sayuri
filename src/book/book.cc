@@ -201,8 +201,6 @@ int Book::Probe(const GameState &state) const {
 
     std::stable_sort(std::rbegin(candidate_moves), std::rend(candidate_moves));
 
-    ERROR << "size: " << candidate_moves.size() << std::endl;
-
     const auto rand = Random<kXoroShiro128Plus>::Get().Generate() % acc_score;
     int choice;
     acc_score = 0;
