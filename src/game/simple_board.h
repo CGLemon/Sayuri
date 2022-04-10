@@ -88,6 +88,8 @@ public:
     // Compute the symmetry Zobrist hashing.
     std::uint64_t ComputeSymmetryHash(int komove, int symmetry) const;
 
+    std::uint64_t ComputeKoHash(int symmetry) const;
+
     int ComputeReachGroup(int start_vertex, int spread_color,
                           std::vector<bool> &buf,
                           std::function<int(int)> Peek) const;

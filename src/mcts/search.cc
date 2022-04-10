@@ -8,6 +8,7 @@
 #include "neural/encoder.h"
 #include "utils/log.h"
 #include "utils/format.h"
+#include "book/book.h"
 
 #ifdef WIN32
 #include <windows.h>
@@ -183,6 +184,14 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
         // Always reture pass move if the passese number is greater than two.
         computation_result.best_move = kPass;
         return computation_result;
+    }
+
+    if (tag & kThinking) {
+        auto book_move = Book::Get().Probe(root_state_);
+        if (book_move != kPass) {
+            computation_result.best_move = book_move;
+            return computation_result;
+        }
     }
 
     // The SMP worker run on every threads except main thread.

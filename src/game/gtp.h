@@ -7,6 +7,7 @@
 #include "mcts/search.h"
 #include "utils/parser.h"
 #include "utils/threadpool.h"
+#include "book/book.h"
 
 #include <memory>
 
@@ -56,6 +57,7 @@ public:
 
         ThreadPool::Get(GetOption<int>("threads")-1); // one thread is main thread.
         FastPolicy::Get().LoadWeights();
+        Book::Get().LoadBook(GetOption<std::string>("book_file"));
 
         Loop();
     }

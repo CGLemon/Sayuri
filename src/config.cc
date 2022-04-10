@@ -62,6 +62,8 @@ void InitOptionsMap() {
     options_map["threads"] << Option::setoption(0);
 
     options_map["weights_file"] << Option::setoption(std::string{});
+    options_map["book_file"] << Option::setoption(std::string{});
+
     options_map["use_gpu"] << Option::setoption(false);
     options_map["gpu"] << Option::setoption(-1);
     options_map["gpu_waittime"] << Option::setoption(2);
@@ -291,6 +293,13 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext({"--weights", "-w"})) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("weights_file", res->Get<std::string>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--book")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("book_file", res->Get<std::string>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

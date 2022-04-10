@@ -447,6 +447,23 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         }
 
         out << GTPSuccess(agent_->GetNetwork().GetOutputString(agent_->GetState(), Network::kDirect, symmetry));
+    } else if (const auto res = parser.Find("genbook", 0)) {
+        auto sgf_file = std::string{};
+        auto data_file = std::string{};
+
+        if (const auto sgf = parser.GetCommand(1)) {
+            sgf_file = sgf->Get<std::string>();
+        }
+        if (const auto data = parser.GetCommand(2)) {
+            data_file = data->Get<std::string>();
+        }
+
+        if (!sgf_file.empty() && !data_file.empty()) {
+            Book::Get().GenerateBook(sgf_file, data_file);
+            out << GTPSuccess("");
+        } else {
+            out << GTPFail("");
+        }
     } else {
         out << GTPFail("unknown command");
     }

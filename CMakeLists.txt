@@ -5,6 +5,7 @@ set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(GAME_SOURCES_DIR ${SOURCE_DIR}/game)
 set(NEURAL_SOURCES_DIR ${SOURCE_DIR}/neural)
 set(DATA_SOURCES_DIR ${SOURCE_DIR}/data)
+set(BOOK_SOURCES_DIR ${SOURCE_DIR}/book)
 set(MCTS_SOURCES_DIR ${SOURCE_DIR}/mcts)
 set(SELFPLAY_SOURCES_DIR ${SOURCE_DIR}/selfplay)
 set(UTILS_SOURCES_DIR ${SOURCE_DIR}/utils)
@@ -45,6 +46,10 @@ set(NEURAL_SOURCES
     ${NEURAL_SOURCES_DIR}/blas/biases.cc
     ${NEURAL_SOURCES_DIR}/blas/se_unit.cc
     ${NEURAL_SOURCES_DIR}/blas/blas_forward_pipe.cc
+    )
+
+set(BOOK_SOURCES
+    ${BOOK_SOURCES_DIR}/book.cc
     )
 
 set(DATA_SOURCES
@@ -217,6 +222,7 @@ endif()
 add_executable(Sayuri
     ${BASIC_SOURCES}
     ${GAME_SOURCES}
+    ${BOOK_SOURCES}
     ${DATA_SOURCES}
     ${MCTS_SOURCES}
     ${NEURAL_SOURCES}
