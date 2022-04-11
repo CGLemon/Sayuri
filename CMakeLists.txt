@@ -6,6 +6,7 @@ set(GAME_SOURCES_DIR ${SOURCE_DIR}/game)
 set(NEURAL_SOURCES_DIR ${SOURCE_DIR}/neural)
 set(DATA_SOURCES_DIR ${SOURCE_DIR}/data)
 set(BOOK_SOURCES_DIR ${SOURCE_DIR}/book)
+set(PATTERN_SOURCES_DIR ${SOURCE_DIR}/pattern)
 set(MCTS_SOURCES_DIR ${SOURCE_DIR}/mcts)
 set(SELFPLAY_SOURCES_DIR ${SOURCE_DIR}/selfplay)
 set(UTILS_SOURCES_DIR ${SOURCE_DIR}/utils)
@@ -50,6 +51,13 @@ set(NEURAL_SOURCES
 
 set(BOOK_SOURCES
     ${BOOK_SOURCES_DIR}/book.cc
+    )
+
+set(PATTERN_SOURCES
+    ${PATTERN_SOURCES_DIR}/pattern.cc
+    ${PATTERN_SOURCES_DIR}/patterns_scan.cc
+    ${PATTERN_SOURCES_DIR}/gammas_dict.cc
+    ${PATTERN_SOURCES_DIR}/mm.cc
     )
 
 set(DATA_SOURCES
@@ -223,6 +231,7 @@ add_executable(Sayuri
     ${BASIC_SOURCES}
     ${GAME_SOURCES}
     ${BOOK_SOURCES}
+    ${PATTERN_SOURCES}
     ${DATA_SOURCES}
     ${MCTS_SOURCES}
     ${NEURAL_SOURCES}

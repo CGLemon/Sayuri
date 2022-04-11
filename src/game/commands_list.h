@@ -83,5 +83,7 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "raw-nn",
 
-    "genbook"
+    "genbook",
+
+    "genpatterns"
 };
