@@ -108,10 +108,8 @@ void PatternsScan::CollectPatterns(std::string sgfstring, GammasDict &dict) cons
     for (int i = 0; i < (int)movelist.size(); ++i) {
         const int vertex = movelist[i];
         const int color = main_state.GetToMove();
-        const auto val = main_state.board_.GetPattern3x3(vertex, color);
 
-        dict.InsertPattern(Pattern::GetSpatial3x3(val));
-
+        dict.InsertPattern(main_state.board_.GetPattern3x3(vertex, color));
         main_state.PlayMove(vertex);
     }
 }
@@ -145,13 +143,11 @@ void PatternsScan::CollectGammas(std::string sgfstring,
 
     CTeamList<> cteam_list;
 
-
     for (int i = 0; i < (int)movelist.size(); ++i) {
         const int vertex = movelist[i];
         const int color = main_state.GetToMove();
 
-        int pattern_index = dict.GetIndex(Pattern::Bind(kSpatial3x3,
-                                              main_state.board_.GetPattern3x3(vertex, color)));
+        int pattern_index = dict.GetIndex(main_state.board_.GetPattern3x3(vertex, color)());
         // set winner
         if (pattern_index >= 0) {
             cteam_list.InsertWinner(pattern_index);
@@ -164,8 +160,7 @@ void PatternsScan::CollectGammas(std::string sgfstring,
 
             if (main_state.IsLegalMove(other_vtx) && other_vtx != vertex) {
 
-                pattern_index = dict.GetIndex(Pattern::Bind(kSpatial3x3,
-                                                  main_state.board_.GetPattern3x3(other_vtx, color)));
+                pattern_index = dict.GetIndex(main_state.board_.GetPattern3x3(other_vtx, color)());
                 if (pattern_index >= 0) {
                     cteam_list.InsertWinner(pattern_index);
                 }

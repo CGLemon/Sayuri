@@ -6,9 +6,6 @@
 #include <iostream>
 #include <vector>
 
-#include "game/game_state.h"
-
-
 enum FeaturnType : std::uint32_t {
     kNoFeature,
     kSpatial3x3
@@ -34,4 +31,3 @@ struct Pattern {
 
     static Pattern GetSpatial3x3(std::uint32_t v);
 };
-

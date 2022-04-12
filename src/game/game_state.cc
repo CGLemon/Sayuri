@@ -504,6 +504,9 @@ void GameState::PlayRandomMove() {
     const int empty_cnt = board_.GetEmptyCount();
     int acc_score = 0;
 
+    auto safe_area = std::vector<bool>(GetNumIntersections(), false);
+    board_.ComputeSafeArea(safe_area, true);
+
     for (int i = 0; i < empty_cnt; ++i) {
         const auto vtx = board_.GetEmpty(i);
         float val;
@@ -512,10 +515,13 @@ void GameState::PlayRandomMove() {
             continue;
         }
 
+        if (safe_area[GetIndex(GetX(vtx), GetY(vtx))]) {
+            continue;
+        }
+
         legal_moves.emplace_back(vtx);
 
-        if (GammasDict::Get().ProbeGammas(Pattern::Bind(kSpatial3x3,
-                                              board_.GetPattern3x3(vtx, color)), val)) {
+        if (GammasDict::Get().ProbeGammas(board_.GetPattern3x3(vtx, color)(), val)) {
             candidate_moves.emplace_back(int(val * 10000), vtx);
             acc_score += int(val * 10000);
         }
@@ -538,7 +544,7 @@ void GameState::PlayRandomMove() {
         }
     }
 
-    PlayMove(select_move, color);
+    PlayMoveFast(select_move, color);
 }
 
 std::vector<int> GameState::GetOwnershipAndRemovedDeadStrings(int playouts) const {

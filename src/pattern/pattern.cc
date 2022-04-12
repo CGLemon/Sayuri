@@ -1,5 +1,3 @@
-#include <set>
-
 #include "pattern/pattern.h"
 
 Pattern Pattern::GetSpatial3x3(std::uint32_t v) {
