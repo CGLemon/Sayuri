@@ -497,7 +497,7 @@ void GameState::FillRandomMove() {
 
 void GameState::PlayRandomMove() {
     auto candidate_moves = std::vector<std::pair<int, int>>{};
-    auto legal_moves = std::vector<int>{};
+    auto legal_moves = std::vector<int>{ kPass };
 
     const int rand = Random<kXoroShiro128Plus>::Get().Generate();
     const int color = GetToMove();
