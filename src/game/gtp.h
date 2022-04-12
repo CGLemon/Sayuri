@@ -8,6 +8,7 @@
 #include "utils/parser.h"
 #include "utils/threadpool.h"
 #include "book/book.h"
+#include "pattern/gammas_dict.h"
 
 #include <memory>
 
@@ -57,7 +58,9 @@ public:
 
         ThreadPool::Get(GetOption<int>("threads")-1); // one thread is main thread.
         FastPolicy::Get().LoadWeights();
+
         Book::Get().LoadBook(GetOption<std::string>("book_file"));
+        GammasDict::Get().LoadPatternsGammas(GetOption<std::string>("patterns_file"));
 
         Loop();
     }

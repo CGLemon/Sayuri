@@ -9,11 +9,14 @@ GammasDict& GammasDict::Get() {
     return dict_;
 }
 
-void GammasDict::InsertPattern(Pattern pattern) {
-    int idx = order_.size();
-
-    index_dict_.insert({pattern(), idx});
-    order_.emplace_back(pattern);
+bool GammasDict::InsertPattern(Pattern pattern) {
+    if (index_dict_.find(pattern()) == std::end(index_dict_)) {
+        int idx = order_.size();
+        index_dict_.insert({pattern(), idx});
+        order_.emplace_back(pattern);
+        return true;
+    }
+    return false;
 }
 
 int GammasDict::Size() const{
@@ -41,9 +44,12 @@ Pattern GammasDict::GetPattern(int idx) const {
     return order_[idx];
 }
 
-void GammasDict::LoadGammas(std::string filename) {
+void GammasDict::LoadPatternsGammas(std::string filename) {
     std::ifstream file;
     file.open(filename);
+
+    if (!file.is_open()) return;
+
 
     index_dict_.clear();
     gammas_dict_.clear();
@@ -60,8 +66,9 @@ void GammasDict::LoadGammas(std::string filename) {
 
         iss >> hash >> gammas;
 
-        InsertPattern(Pattern::FromHash(hash));
-        gammas_dict_.insert({hash, gammas});
+        if (InsertPattern(Pattern::FromHash(hash))) {
+            gammas_dict_.insert({hash, gammas});
+        }
     }
 
     file.close();

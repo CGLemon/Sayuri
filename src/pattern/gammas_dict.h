@@ -10,9 +10,9 @@ class GammasDict {
 public:
     static GammasDict& Get();
 
-    void LoadGammas(std::string filename);
+    void LoadPatternsGammas(std::string filename);
 
-    void InsertPattern(Pattern pattern);
+    bool InsertPattern(Pattern pattern);
 
     int Size() const;
 

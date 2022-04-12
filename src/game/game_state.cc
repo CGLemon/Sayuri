@@ -4,7 +4,8 @@
 #include "utils/log.h"
 #include "utils/random.h"
 #include "utils/komi.h"
-#include "neural/fast_policy.h"
+#include "pattern/gammas_dict.h"
+#include "pattern/pattern.h"
 
 #include <random>
 
@@ -495,68 +496,48 @@ void GameState::FillRandomMove() {
 }
 
 void GameState::PlayRandomMove() {
-    auto policy = std::vector<float>{};
-    const auto board_size = GetBoardSize();
+    auto candidate_moves = std::vector<std::pair<int, int>>{};
+    auto legal_moves = std::vector<int>{};
 
-    policy = FastPolicy::Get().Forward(*this);
+    const int rand = Random<kXoroShiro128Plus>::Get().Generate();
+    const int color = GetToMove();
+    const int empty_cnt = board_.GetEmptyCount();
+    int acc_score = 0;
 
-    const auto random_prob_move = [](std::vector<std::pair<float, int>> &list) {
-        float acc = 0.f;
-
-        for (auto &e : list) {
-            acc += e.first;
-            e.first = acc;
-        }
-
-        auto size = list.size();
-        auto dis = std::uniform_real_distribution<float>(0, acc);
-        auto p = dis(Random<kXoroShiro128Plus>::Get());
-
-        for (size_t i = 1; i < size; ++i) {
-            auto low = list[i-1].first;
-            auto high = list[i].first;
-          
-            if (p >= low && p < high) {
-                return list[i].second;
-            }
-        }
-        return list[0].second;
-    };
-
-    int color = GetToMove();
-    auto movelist = std::vector<std::pair<float, int>>{};
-    auto acc_prob = 0.f;
-
-    for (int idx = 0; idx < GetNumIntersections(); ++idx) {
-        const auto prob = policy[idx];
-        const auto x = idx % board_size;
-        const auto y = idx / board_size;
-        const auto vtx = GetVertex(x, y);
+    for (int i = 0; i < empty_cnt; ++i) {
+        const auto vtx = board_.GetEmpty(i);
+        float val;
 
         if (!IsLegalMove(vtx, color)) {
             continue;
         }
 
-        if (board_.IsRealEye(vtx, color)) {
-            continue;
-        }
+        legal_moves.emplace_back(vtx);
 
-        acc_prob += prob;
-        movelist.emplace_back(prob, vtx);
+        if (GammasDict::Get().ProbeGammas(Pattern::Bind(kSpatial3x3,
+                                              board_.GetPattern3x3(vtx, color)), val)) {
+            candidate_moves.emplace_back(int(val * 10000), vtx);
+            acc_score += int(val * 10000);
+        }
     }
 
-    int select_move = kPass;
-    if (!movelist.empty()) {
-        if (acc_prob == 0.0f) {
-            auto new_prob = 1.f / (float)movelist.size();
-            for (auto &m : movelist) {
-                m.first = new_prob;
+    int select_move;
+
+    if (candidate_moves.empty()) {
+        select_move = legal_moves[rand % legal_moves.size()];
+    } else {
+        auto randx = rand % acc_score;
+        acc_score = 0;
+
+        for (int i = 0; i < (int)candidate_moves.size(); ++i) {
+            acc_score +=  candidate_moves[i].first;
+            if (randx < acc_score) {
+                select_move = candidate_moves[i].second;
+                break;
             }
         }
-
-        auto move = random_prob_move(movelist);
-        select_move = move;
     }
+
     PlayMove(select_move, color);
 }
 

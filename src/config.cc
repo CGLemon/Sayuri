@@ -51,7 +51,7 @@ void InitOptionsMap() {
     options_map["quiet"] << Option::setoption(false);
     options_map["ponder"] << Option::setoption(false);
     options_map["analysis_verbose"] << Option::setoption(false);
-    options_map["mode"] << Option::setoption("gtp");
+    options_map["mode"] << Option::setoption(std::string{"gtp"});
 
     options_map["defualt_boardsize"] << Option::setoption(kDefaultBoardSize);
     options_map["defualt_komi"] << Option::setoption(kDefaultKomi);
@@ -63,6 +63,7 @@ void InitOptionsMap() {
 
     options_map["weights_file"] << Option::setoption(std::string{});
     options_map["book_file"] << Option::setoption(std::string{});
+    options_map["patterns_file"] << Option::setoption(std::string{});
 
     options_map["use_gpu"] << Option::setoption(false);
     options_map["gpu"] << Option::setoption(-1);
@@ -300,6 +301,13 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext("--book")) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("book_file", res->Get<std::string>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--patterns")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("patterns_file", res->Get<std::string>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
