@@ -162,7 +162,7 @@ void PatternsScan::CollectGammas(std::string sgfstring,
 
                 pattern_index = dict.GetIndex(main_state.board_.GetPattern3x3(other_vtx, color)());
                 if (pattern_index >= 0) {
-                    cteam_list.InsertWinner(pattern_index);
+                    cteam_list.Insert(pattern_index);
                 }
             }
         }

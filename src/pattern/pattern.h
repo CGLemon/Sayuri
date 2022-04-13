@@ -8,7 +8,9 @@
 
 enum FeaturnType : std::uint32_t {
     kNoFeature,
-    kSpatial3x3
+    kSpatial3x3,
+    kLiberties,
+    kAtari
 };
 
 struct Pattern {
@@ -30,4 +32,8 @@ struct Pattern {
     static Pattern FromHash(std::uint64_t hash);
 
     static Pattern GetSpatial3x3(std::uint32_t v);
+
+    static Pattern GetLiberties(std::uint32_t v);
+
+    static Pattern GetAtari(std::uint32_t v);
 };

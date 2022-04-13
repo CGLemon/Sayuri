@@ -104,12 +104,13 @@ public:
     std::shared_ptr<const Board> GetPastBoard(unsigned int p) const;
     const std::vector<std::shared_ptr<const Board>>& GetHistory() const;
 
+    void PlayRandomMove();
+
 private:
     using VertexColor = std::pair<int, int>;
 
     void PlayMoveFast(const int vtx, const int color);
     void FillRandomMove();
-    void PlayRandomMove();
 
     std::string GetStateString() const;
 

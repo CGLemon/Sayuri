@@ -51,9 +51,9 @@ double CGameCollection::LogLikelihood() const {
 }
 
 void CGameCollection::ComputeVictories() {
- vVictories.resize(vGamma.size());
- vParticipations.resize(vGamma.size());
- vPresences.resize(vGamma.size());
+    vVictories.resize(vGamma.size());
+    vParticipations.resize(vGamma.size());
+    vPresences.resize(vGamma.size());
 
     for (int i = vVictories.size(); --i >= 0;) {
         vVictories[i] = 0;
@@ -214,6 +214,8 @@ void ReadGameCollection(CGameCollection &gcol, std::istream &in) {
         }
     }
 
+    gcol.MaxGamma = MaxGamma;
+
     //
     // Features
     //
@@ -274,6 +276,7 @@ void MinorizationMaximizationTraining(CGameCollection &gcol, std::istream &data)
      ReadGameCollection(gcol, data);
      gcol.ComputeVictories();
      std::cerr << "Games = " << gcol.vgame.size() << '\n';
+     std::cerr << "Gammas = " << gcol.MaxGamma << '\n';
 
      double LogLikelihood = gcol.LogLikelihood() / gcol.vgame.size();
      const int Features = gcol.vFeatureName.size();

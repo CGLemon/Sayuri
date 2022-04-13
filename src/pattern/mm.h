@@ -33,6 +33,8 @@ public:
     std::vector<int> vParticipations;
     std::vector<int> vPresences;
 
+    int MaxGamma;
+
     double GetTeamGamma(const CTeam &team) const;
     void ComputeVictories();
     void MM(int Feature);

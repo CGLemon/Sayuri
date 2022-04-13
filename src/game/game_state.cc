@@ -522,8 +522,11 @@ void GameState::PlayRandomMove() {
         legal_moves.emplace_back(vtx);
 
         if (GammasDict::Get().ProbeGammas(board_.GetPattern3x3(vtx, color)(), val)) {
-            candidate_moves.emplace_back(int(val * 10000), vtx);
-            acc_score += int(val * 10000);
+            int int_val = int(val * 100);
+            if (int_val != 0) {
+                candidate_moves.emplace_back(int_val, vtx);
+                acc_score += int_val;
+            }
         }
     }
 

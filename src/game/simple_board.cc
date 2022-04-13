@@ -795,10 +795,10 @@ bool SimpleBoard::IsAtariMove(const int vtx, const int color) const {
     for (int k = 0; k < 4; ++k) {
         const auto avtx = vtx + directions_[k];
         if (GetState(avtx) == opp_color) {
-             const auto libs = strings_.GetLiberty(strings_.GetParent(avtx));
-             if (libs == 2) {
-                 return true;
-             }
+            const auto libs = strings_.GetLiberty(strings_.GetParent(avtx));
+            if (libs == 2) {
+                return true;
+            }
         }
     }
 
@@ -810,10 +810,10 @@ bool SimpleBoard::IsCaptureMove(const int vtx, const int color) const {
     for (int k = 0; k < 4; ++k) {
         const auto avtx = vtx + directions_[k];
         if (GetState(avtx) == opp_color) {
-             const auto libs = strings_.GetLiberty(strings_.GetParent(avtx));
-             if (libs == 1) {
-                 return true;
-             }
+            const auto libs = strings_.GetLiberty(strings_.GetParent(avtx));
+            if (libs == 1) {
+                return true;
+            }
         }
     }
     return false;
@@ -830,7 +830,7 @@ bool SimpleBoard::IsEscapeMove(const int vtx, const int color) const {
 bool SimpleBoard::IsNeighbor(const int vtx, const int avtx) const {
     for (int k = 0; k < 4; ++k) {
         if ((vtx + directions_[k]) == avtx) {
-             return true;
+            return true;
         }
     }
     return false;
@@ -1443,75 +1443,4 @@ std::vector<int> SimpleBoard::GetStringList(const int vtx) const {
     assert(!result.empty());
 
     return result;
-}
-
-Pattern SimpleBoard::GetPattern3x3(const int vtx, const int color) const {
-    const int size = letter_box_size_;
-
-    /*
-     color order
-
-     1 2 3
-     4 . 5     
-     6 7 8
-
-     each color takes 2 bits, totally take 16 bits
-     */
-
-    int color_invert[4] = {kWhite, kBlack, kEmpty, kInvalid};
-    int temp0 = state_[vtx - size - 1];
-    int temp1 = state_[vtx - size];
-    int temp2 = state_[vtx - size + 1];
-    int temp3 = state_[vtx - 1];
-    int temp4 = state_[vtx + 1];
-    int temp5 = state_[vtx + size - 1];
-    int temp6 = state_[vtx + size];
-    int temp7 = state_[vtx + size + 1];
-
-    if (color == kWhite) {
-        temp0 = color_invert[temp0];
-        temp1 = color_invert[temp1];
-        temp2 = color_invert[temp2];
-        temp3 = color_invert[temp3];
-        temp4 = color_invert[temp4];
-        temp5 = color_invert[temp5];
-        temp6 = color_invert[temp6];
-        temp7 = color_invert[temp7];
-    }
-
-    std::uint32_t hash_arr[8];
-
-    hash_arr[0] = (temp0 << 14) | (temp1 << 12) | (temp2 << 10) |
-                  (temp3 <<  8) |                 (temp4 <<  6) |
-                  (temp5 <<  4) | (temp6 <<  2) | (temp7 <<  0);
-
-    hash_arr[1] = (temp5 << 14) | (temp3 << 12) | (temp0 << 10) |
-                  (temp6 <<  8) |                 (temp1 <<  6) |
-                  (temp7 <<  4) | (temp4 <<  2) | (temp2 <<  0);
-
-    hash_arr[2] = (temp7 << 14) | (temp6 << 12) | (temp5 << 10) |
-                  (temp4 <<  8) |                 (temp3 <<  6) | 
-                  (temp2 <<  4) | (temp1 <<  2) | (temp0 <<  0);
-
-    hash_arr[3] = (temp2 << 14) | (temp4 << 12) | (temp7 << 10) |
-                  (temp1 <<  8) |                 (temp6 <<  6) |
-                  (temp0 <<  4) | (temp3 <<  2) | (temp5 <<  0);
-
-    hash_arr[4] = (temp0 << 14) | (temp3 << 12) | (temp5 << 10) |
-                  (temp1 <<  8) |                 (temp6 <<  6) |
-                  (temp2 <<  4) | (temp4 <<  2) | (temp7 <<  0);
-
-    hash_arr[5] = (temp2 << 14) | (temp1 << 12) | (temp0 << 10) |
-                  (temp4 <<  8) |                 (temp3 <<  6) |
-                  (temp7 <<  4) | (temp6 <<  2) | (temp5 <<  0);
-
-    hash_arr[6] = (temp7 << 14) | (temp4 << 12) | (temp2 << 10) |
-                  (temp6 <<  8) |                 (temp1 <<  6) | 
-                  (temp5 <<  4) | (temp3 <<  2) | (temp0 <<  0);
-
-    hash_arr[7] = (temp5 << 14) | (temp6 << 12) | (temp7 << 10) |
-                  (temp3 <<  8) |                 (temp4 <<  6) |
-                  (temp0 <<  4) | (temp1 <<  2) | (temp2 <<  0);
-
-    return Pattern::GetSpatial3x3(*std::min_element(hash_arr, hash_arr+8));
 }

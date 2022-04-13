@@ -23,6 +23,7 @@ set(BASIC_SOURCES
 set(GAME_SOURCES
     ${GAME_SOURCES_DIR}/board.cc
     ${GAME_SOURCES_DIR}/simple_board.cc
+    ${GAME_SOURCES_DIR}/pattern_board.cc
     ${GAME_SOURCES_DIR}/game_state.cc
     ${GAME_SOURCES_DIR}/strings.cc
     ${GAME_SOURCES_DIR}/sgf.cc
