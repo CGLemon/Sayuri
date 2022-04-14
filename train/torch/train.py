@@ -146,9 +146,11 @@ class TrainingPipe():
             self.net = DataParallel(self.net) 
             self.module  = self.net.module
 
-        self.adam_opt = torch.optim.Adam(
+        self.sgd_opt = torch.optim.SGD(
             self.net.parameters(),
             lr=self.learn_rate,
+            momentum=0.9,
+            nesterov=True,
             weight_decay=self.weight_decay,
         )
 
@@ -190,7 +192,7 @@ class TrainingPipe():
                 target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score)
 
                 # update network
-                running_loss += self.step(board_size_list, planes, target, self.adam_opt)
+                running_loss += self.step(board_size_list, planes, target, self.sgd_opt)
                 num_steps += 1
 
                 if num_steps % verbose_steps == 0:
