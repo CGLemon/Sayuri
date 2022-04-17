@@ -1,11 +1,13 @@
 #ifdef USE_CUDA
 
-#include "config.h"
+#include <sstream>
 
+#include "config.h"
 #include "neural/cuda/cuda_forward_pipe.h"
 #include "neural/cuda/cuda_common.h"
 #include "neural/cuda/cuda_kernels.h"
 #include "utils/log.h"
+#include "utils/format.h"
 
 void CudaForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
     LOGGING << CUDA::GetBackendInfo();
@@ -53,23 +55,48 @@ void CudaForwardPipe::Reload(int board_size) {
     max_batch_ = GetOption<int>("batch_size");
     const auto d_cnt = CUDA::GetDeviceCount();
 
-    if (GetOption<int>("gpu") >= 0) {
-        nngraphs_.emplace_back(std::make_unique<NNGraph>(io_mutex_));
-        const auto gpu = GetOption<int>("gpu") >= d_cnt ? 0 : GetOption<int>("gpu");
-        nngraphs_[0]->BuildGraph(gpu, max_batch_, board_size, weights_);
+    auto gpus_str = GetOption<std::string>("gpus");
+    auto gpus_list = std::vector<int>{};
+
+    if (gpus_str.empty()) {
+         for (int i = 0; i < d_cnt; ++i) {
+             gpus_list.emplace_back(i);
+         } 
     } else {
-        for (int i = 0; i < d_cnt; ++i) {
-            nngraphs_.emplace_back(std::make_unique<NNGraph>(io_mutex_));
-        }
-        // TODO: Assign different batch size by device computing capability.
+        std::istringstream iss{gpus_str};
+        int gpu_id;
 
-        // Resize the the batch for each netork.
-        max_batch_ = (max_batch_/d_cnt) + bool(max_batch_%d_cnt);
+        while (iss >> gpu_id) {
+            if (gpu_id < d_cnt) {
+                gpus_list.emplace_back(gpu_id);
+            } else {
+                ERROR << Format("Not found GPU device %d\n", gpu_id);
+            }
+        }
+    }
+
+    if (gpus_list.empty()) {
+        ERROR << "Not found any GPU devices, now assign the GPU(s) automatically.\n";
+        for (int i = 0; i < d_cnt; ++i) {
+            gpus_list.emplace_back(i);
+        }
+    }
+
+    for (size_t i = 0; i < gpus_list.size(); ++i) {
+        nngraphs_.emplace_back(std::make_unique<NNGraph>(io_mutex_));
+    }
+
+    // TODO: Assign different batch size by device computing capability.
+
+    if (gpus_list.size() >= 2) {
+        // Assign the the batch for each netork.
+        const int num_gpus = gpus_list.size();
+        max_batch_ = (max_batch_ / num_gpus) + bool(max_batch_ % num_gpus);
         max_batch_ = std::max(max_batch_, 1);
+    }
 
-        for (int i = 0; i < d_cnt; ++i) {
-            nngraphs_[i]->BuildGraph(i, max_batch_, board_size, weights_);
-        }
+    for (auto i = size_t{0}; i < gpus_list.size(); ++i) {
+        nngraphs_[i]->BuildGraph(gpus_list[i], max_batch_, board_size, weights_);
     }
 }
 

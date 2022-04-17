@@ -66,7 +66,7 @@ void InitOptionsMap() {
     options_map["patterns_file"] << Option::setoption(std::string{});
 
     options_map["use_gpu"] << Option::setoption(false);
-    options_map["gpu"] << Option::setoption(-1);
+    options_map["gpus"] << Option::setoption(std::string{});
     options_map["gpu_waittime"] << Option::setoption(2);
 
     options_map["resign_threshold"] << Option::setoption(0.1f, 1.f, 0.f);
@@ -227,9 +227,11 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
-    if (const auto res = parser.FindNext({"--gpu", "-g"})) {
+    while (const auto res = parser.FindNext({"--gpu", "-g"})) {
         if (IsParameter(res->Get<std::string>())) {
-            SetOption("gpu", res->Get<int>());
+            auto gpus = GetOption<std::string>("gpus");
+            gpus += (res->Get<std::string>() + " ");
+            SetOption("gpus", gpus);
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -465,41 +467,44 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 
 void ArgsParser::DumpHelper() const {
     ERROR << "Arguments:" << std::endl
-              << "\t--quiet, -q" << std::endl
-              << "\t\tDisable all diagnostic verbose." << std::endl
+              << "\t--quiet, -q\n"
+              << "\t\tDisable all diagnostic verbose.\n\n" 
 
-              << "\t--analysis-verbose, -a" << std::endl
-              << "\t\tDump the search verbose." << std::endl
+              << "\t--analysis-verbose, -a\n"
+              << "\t\tDump the search verbose.\n\n"
 
-              << "\t--ponder" << std::endl
-              << "\t\tThinking on opponent's time." << std::endl
+              << "\t--ponder\n"
+              << "\t\tThinking on opponent's time.\n\n"
 
-              << "\t--early-symm-cache" << std::endl
-              << "\t\tAccelerate search at the early step." << std::endl
+              << "\t--early-symm-cache\n"
+              << "\t\tAccelerate search on the opening step.\n\n"
 
-              << "\t--resign-threshold, -r <float>" << std::endl
-              << "\t\tResign when winrate is less than x. Defulat is 0.1." << std::endl
+              << "\t--resign-threshold, -r <float>\n"
+              << "\t\tResign when winrate is less than x. Defulat is 0.1.\n\n"
 
-              << "\t--playouts, -p <integer>" << std::endl
-              << "\t\tNumber of playouts. Defulat is 1600" << std::endl
+              << "\t--playouts, -p <integer>\n"
+              << "\t\tNumber of playouts. Defulat is 1600\n\n"
 
-              << "\t--gpu, -g <integer>" << std::endl
-              << "\t\tSelect a specific gpu device. Defaul is all devices." << std::endl
+              << "\t--gpu, -g <integer>\n"
+              << "\t\tSelect a specific GPU device. Defaul is all devices.\n\n"
 
-              << "\t--threads, -t <integer>" << std::endl
-              << "\t\tNumber of threads. Set 0 will select a reasonable number." << std::endl
+              << "\t--threads, -t <integer>\n"
+              << "\t\tNumber of threads. Set 0 will select a reasonable number.\n\n"
 
-              << "\t--batch-size, -b <integer>" << std::endl
-              << "\t\tNumber of batch size. Set 0 will select a reasonable number." << std::endl
+              << "\t--batch-size, -b <integer>\n"
+              << "\t\tNumber of batch size. Set 0 will select a reasonable number.\n\n"
 
-              << "\t--logfile, -l <log file name>" << std::endl
-              << "\t\tFile to log input/output to." << std::endl
+              << "\t--logfile, -l <log file name>\n"
+              << "\t\tFile to log input/output to.\n\n"
 
-              << "\t--lag-buffer <integer>" << std::endl
-              << "\t\tSafety margin for time usage in seconds." << std::endl
+              << "\t--lag-buffer <integer>\n"
+              << "\t\tSafety margin for time usage in seconds.\n\n"
 
-              << "\t--weights, -w <weight file name>" << std::endl
-              << "\t\tFile with network weights." << std::endl
+              << "\t--weights, -w <weight file name>\n"
+              << "\t\tFile with network weights.\n\n"
+
+              << "\t--book <book file name>\n"
+              << "\t\tFile with opening book.\n\n"
         ;
     exit(-1);
 }
