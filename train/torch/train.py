@@ -155,7 +155,7 @@ class TrainingPipe():
                 lr=self.learn_rate,
                 weight_decay=self.weight_decay,
             )
-        else if self.opt_name == "SGD":
+        elif self.opt_name == "SGD":
             self.opt = torch.optim.SGD(
                 self.net.parameters(),
                 lr=self.learn_rate,
