@@ -210,10 +210,11 @@ class TrainingPipe():
                     elapsed = time.time() - clock_time
                     clock_time = time.time()
 
-                    log_outs = "steps: {} -> loss: {:.4f}, speed: {:.2f} | learning rate: {}, batch size: {}".format(
+                    log_outs = "steps: {} -> loss: {:.4f}, speed: {:.2f} | opt: {}, learning rate: {}, batch size: {}".format(
                                    num_steps,
                                    running_loss/verbose_steps,
                                    verbose_steps/elapsed,
+                                   self.opt_name,
                                    self.learn_rate,
                                    self.batchsize)
                     print(log_outs)
