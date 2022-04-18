@@ -19,6 +19,7 @@ CONFIG_KEYWOED = [
 
     "Train",
     "UseGPU",
+    "Optimizer",
     "StepsPerEpoch",    # number of training steps per epoch
     "MaxSteps",         # terminate after these steps
     "LearningRate",     # the learning rate
@@ -44,6 +45,7 @@ class Config:
         self.residual_channels = None
         self.policy_extract = None
         self.value_extract = None
+        self.optimizer = None
 
         # Fixed values but flexible
         self.nntype = None
@@ -57,6 +59,7 @@ def parse_training_config(json_data, config):
     # We assume that every value is valid.
     train = json_data["Train"]
 
+    config.optimizer = train["Optimizer"]
     config.use_gpu = train["UseGPU"]
     config.learn_rate = train["LearningRate"]
     config.weight_decay = train["WeightDecay"]

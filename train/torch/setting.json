@@ -20,6 +20,7 @@
 
     "Train" : {
         "UseGPU": null,
+        "Optimizer": "Adam",
         "StepsPerEpoch" : 2000,
         "MaxSteps": 100000,
         "Workers": 4,

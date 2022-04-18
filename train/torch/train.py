@@ -124,6 +124,7 @@ class TrainingPipe():
         self.num_workers = cfg.num_workers
         self.train_dir = cfg.train_dir
 
+        self.opt_name = cfg.optimizer
         self.steps_per_epoch =  cfg.steps_per_epoch
         self.max_steps =  cfg.max_steps
 
@@ -146,13 +147,23 @@ class TrainingPipe():
             self.net = DataParallel(self.net) 
             self.module  = self.net.module
 
-        self.sgd_opt = torch.optim.SGD(
-            self.net.parameters(),
-            lr=self.learn_rate,
-            momentum=0.9,
-            nesterov=True,
-            weight_decay=self.weight_decay,
-        )
+        self.opt = None
+
+        if self.opt_name == "Adam":
+            self.opt = torch.optim.Adam(
+                self.net.parameters(),
+                lr=self.learn_rate,
+                weight_decay=self.weight_decay,
+            )
+        else if self.opt_name == "SGD":
+            self.opt = torch.optim.SGD(
+                self.net.parameters(),
+                lr=self.learn_rate,
+                momentum=0.9,
+                nesterov=True,
+                weight_decay=self.weight_decay,
+            )
+
 
     def fit_and_store(self, filename_prefix, init_steps, log_file):
 
@@ -192,7 +203,7 @@ class TrainingPipe():
                 target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score)
 
                 # update network
-                running_loss += self.step(board_size_list, planes, target, self.sgd_opt)
+                running_loss += self.step(board_size_list, planes, target, self.opt)
                 num_steps += 1
 
                 if num_steps % verbose_steps == 0:
