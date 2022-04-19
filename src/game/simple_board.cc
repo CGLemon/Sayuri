@@ -55,7 +55,6 @@ void SimpleBoard::ResetBasicData() {
     last_move_ = kNullVertex;
     to_move_ = kBlack;
     passes_ = 0;
-    move_number_ = 0;
 
     const int x_shift = GetLetterBoxSize();
     directions_[0] = (-x_shift);
@@ -229,10 +228,6 @@ bool SimpleBoard::IsLegalMove(const int vtx, const int color,
     }
 
     return true;
-}
-
-void SimpleBoard::SetMoveNumber(int number) {
-    move_number_ = number;
 }
 
 void SimpleBoard::SetBoardSize(int boardsize) {
@@ -1424,7 +1419,6 @@ void SimpleBoard::PlayMoveAssumeLegal(const int vtx, const int color) {
         UpdateZobristKo(ko_move_, old_ko_move);
     }
     last_move_ = vtx;
-    move_number_++;
 
     ExchangeToMove();
 }

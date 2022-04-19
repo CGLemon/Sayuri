@@ -10,21 +10,21 @@ void SgfNode::AddProperty(std::string property, std::string value) {
     properties_.emplace(property, value);
 }
 
-std::shared_ptr<std::string> SgfNode::GetPropertyValue(std::string property) const {
+std::unique_ptr<std::string> SgfNode::GetPropertyValue(std::string property) const {
     auto it = properties_.find(property);
     if (it != end(properties_)) {
-        return std::make_shared<std::string>(it->second);
+        return std::make_unique<std::string>(it->second);
     }
     return nullptr;
 }
 
-std::shared_ptr<SgfNode> SgfNode::AddChild() {
+SgfNode* SgfNode::AddChild() {
     // first allocation is better small
     if (children_.empty()) {
         children_.reserve(1);
     }
-    children_.emplace_back(std::make_shared<SgfNode>());
-    return children_.back();
+    children_.emplace_back(std::make_unique<SgfNode>());
+    return children_.back().get();
 }
 
 GameState& SgfNode::GetState() {
@@ -47,18 +47,18 @@ int SgfNode::GetVertexFromString(const std::string& movestring) {
 
     int bsize = GetState().GetBoardSize();
 
-    if (bsize <= 19) {
-        if (movestring == "tt") {
-            return kPass;
-        }
-    }
-
     if (bsize <= 0) {
         throw "Node has 0 sized board";
     }
 
     if (movestring.size() != 2) {
         throw "Illegal SGF move format";
+    }
+
+    if (bsize <= 19) {
+        if (movestring.find("tt") == 0) {
+            return kPass;
+        }
     }
 
     char c1 = movestring[0];
@@ -174,7 +174,7 @@ void SgfNode::PopulateState(GameState currstate) {
                 }
             }
         }
-        GetState().SetBlackScore(black_final_score);
+        (void) black_final_score;
     }
 
     if (const auto res = GetPropertyValue("PL")) {
@@ -199,18 +199,18 @@ void SgfNode::PopulateState(GameState currstate) {
     }
 }
 
-std::shared_ptr<SgfNode> SgfNode::GetChild(unsigned int index) {
+SgfNode* SgfNode::GetChild(unsigned int index) {
     if (children_.size() <= index) {
         return nullptr;
     }
-    return children_[index];
+    return children_[index].get();
 }
 
 // This follows the entire line, and doesn't really need the intermediate
 // states, just the moves. As a consequence, states that contain more than
 // just moves won't have any effect.
 GameState SgfNode::GetMainLineState(unsigned int movenum) {
-    auto link = std::make_shared<SgfNode>(*this);
+    auto link = this;
 
     // This initializes a starting state from a KoState and
     // sets up the game history.
@@ -296,7 +296,7 @@ std::string SgfParser::ParsePropertyValue(std::istringstream &strm, bool &succes
     return result.str();
 }
 
-void SgfParser::Parse(std::istringstream &strm, std::shared_ptr<SgfNode> node) const {
+void SgfParser::Parse(std::istringstream &strm, SgfNode* node) const {
     auto splitpoint = false;
     auto c = char{};
 
@@ -449,17 +449,16 @@ SgfParser& SgfParser::Get() {
     return parser;
 }
 
-std::shared_ptr<SgfNode> SgfParser::ParseFromFile(std::string filename, size_t index) const {
+std::unique_ptr<SgfNode> SgfParser::ParseFromFile(std::string filename, size_t index) const {
     auto sgfstring = ChopFromFile(filename, index);
     auto node = ParseFromString(sgfstring);
     return node;
 }
 
-std::shared_ptr<SgfNode> SgfParser::ParseFromString(std::string sgfstring) const {
-    auto node = std::make_shared<SgfNode>();
-    auto rootnode = node;
+std::unique_ptr<SgfNode> SgfParser::ParseFromString(std::string sgfstring) const {
+    auto rootnode = std::make_unique<SgfNode>();
     auto gamebuff = std::istringstream{sgfstring};
-    Parse(gamebuff, node);
+    Parse(gamebuff, rootnode.get());
     rootnode->StartPopulateState();
     return rootnode;
 }

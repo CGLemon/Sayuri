@@ -30,8 +30,6 @@ public:
 
     void SetWinner(GameResult result);
 
-    void SetBlackScore(float score);
-
     int TextToVertex(std::string text);
 
     std::string VertexToSgf(const int vtx);
@@ -109,7 +107,11 @@ public:
 private:
     using VertexColor = std::pair<int, int>;
 
+    // Play the move without pushing current board to the history.
     void PlayMoveFast(const int vtx, const int color);
+
+    // FillRandomMove assume that both players think the game is end. Now we
+    // try to remove the dead string.
     void FillRandomMove();
 
     std::string GetStateString() const;
@@ -131,7 +133,7 @@ private:
 
     bool komi_negative_;
 
-    float black_score_;
+    int move_number_;
 
     std::uint64_t komi_hash_;
 

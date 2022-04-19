@@ -30,6 +30,7 @@ void GameState::ClearBoard() {
 void GameState::PlayMoveFast(const int vtx, const int color) {
     if (vtx != kResign) {
         board_.PlayMoveAssumeLegal(vtx, color);
+        move_number_++;
     }
 }
 
@@ -37,7 +38,7 @@ bool GameState::AppendMove(const int vtx, const int color) {
     if (vtx == kResign || vtx == kPass) {
         return false;
     }
-    if (GetMoveNumber() != 0) {
+    if (move_number_ != 0) {
         ClearBoard(); // Besure sure that it is the first move.
     }
 
@@ -45,8 +46,8 @@ bool GameState::AppendMove(const int vtx, const int color) {
         board_.PlayMoveAssumeLegal(vtx, color);
         board_.SetToMove(kBlack);
         board_.SetLastMove(kNullVertex);
-        board_.SetMoveNumber(0);
 
+        move_number_ = 0;
         ko_hash_history_.clear();
         game_history_.clear();
 
@@ -75,10 +76,11 @@ bool GameState::PlayMove(const int vtx, const int color) {
 
     if (IsLegalMove(vtx, color)) {
         board_.PlayMoveAssumeLegal(vtx, color);
+        move_number_++;
 
         // Cut off unused history.
-        ko_hash_history_.resize(GetMoveNumber());
-        game_history_.resize(GetMoveNumber());
+        ko_hash_history_.resize(move_number_);
+        game_history_.resize(move_number_);
 
         ko_hash_history_.emplace_back(GetKoHash());
         game_history_.emplace_back(std::make_shared<Board>(board_));
@@ -89,15 +91,16 @@ bool GameState::PlayMove(const int vtx, const int color) {
 }
 
 bool GameState::UndoMove() {
-    const auto move_number = GetMoveNumber();
-    if (move_number >= 1) {
-        winner_ = kUndecide;
-
+    if (move_number_ >= 1) {
         // Cut off unused history.
-        ko_hash_history_.resize(move_number);
-        game_history_.resize(move_number);
+        ko_hash_history_.resize(move_number_);
+        game_history_.resize(move_number_);
 
-        board_ = *game_history_[move_number-1];
+        board_ = *game_history_[move_number_-1];
+
+        winner_ = kUndecide;
+        move_number_--;
+
         return true;
     }
     return false;
@@ -241,7 +244,7 @@ std::string GameState::GetStateString() const {
         out << "Error";
     }
     out << ", ";
-    out << "Move Number: " << GetMoveNumber() << ", ";
+    out << "Move Number: " << move_number_ << ", ";
     out << "Komi: " << GetKomi() << ", ";
     out << "Board Size: " << GetBoardSize() << ", ";
     out << "Handicap: " << GetHandicap();
@@ -250,7 +253,6 @@ std::string GameState::GetStateString() const {
     return out.str();
 }
 
-
 void GameState::ShowBoard() const {
     ERROR << board_.GetBoardString(board_.GetLastMove(), true);
     ERROR << GetStateString();
@@ -258,10 +260,6 @@ void GameState::ShowBoard() const {
 
 void GameState::SetWinner(GameResult result) {
     winner_ = result;
-}
-
-void GameState::SetBlackScore(float score) {
-    black_score_ = score;
 }
 
 void GameState::SetKomi(float komi) {
@@ -431,8 +429,6 @@ std::vector<int> GameState::GetOwnership() const {
     return res;
 }
 
-// FillRandomMove assume that both players think the game is end. Now we try to remove the
-// dead string.
 void GameState::FillRandomMove() {
     const int color = GetToMove();
     const int empty_cnt = board_.GetEmptyCount();
@@ -662,7 +658,7 @@ int GameState::GetPrisoner(const int color) const {
 }
 
 int GameState::GetMoveNumber() const {
-    return board_.GetMoveNumber();
+    return move_number_;
 }
 
 int GameState::GetBoardSize() const {
@@ -718,8 +714,8 @@ std::vector<int> GameState::GetAppendMoves(int color) const {
 }
 
 std::shared_ptr<const Board> GameState::GetPastBoard(unsigned int p) const {
-    assert(p <= (unsigned)GetMoveNumber());
-    return game_history_[(unsigned)GetMoveNumber() - p];
+    assert(p <= (unsigned)move_number_);
+    return game_history_[(unsigned)move_number_ - p];
 }
 
 const std::vector<std::shared_ptr<const Board>>& GameState::GetHistory() const {

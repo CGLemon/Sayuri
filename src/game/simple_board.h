@@ -21,10 +21,8 @@ public:
 
     void SetBoardSize(int boardsize);
     void SetToMove(int color);
-    void SetMoveNumber(int number);
     void SetLastMove(int vertex);
 
-    int GetMoveNumber() const;
     int GetBoardSize() const;
     int GetLetterBoxSize() const;
     int GetNumVertices() const;
@@ -92,6 +90,7 @@ public:
     // Compute the symmetry Zobrist hashing.
     std::uint64_t ComputeSymmetryHash(int komove, int symmetry) const;
 
+    // Compute the symmetry Zobrist ko hashing.
     std::uint64_t ComputeKoHash(int symmetry) const;
 
     int ComputeReachGroup(int start_vertex, int spread_color,
@@ -332,10 +331,6 @@ inline void SimpleBoard::UpdateZobristPass(const int new_pass,
 
 inline int SimpleBoard::GetPrisoner(const int color) const {
     return prisoners_[color];
-}
-
-inline int SimpleBoard::GetMoveNumber() const {
-    return move_number_;
 }
 
 inline int SimpleBoard::GetBoardSize() const {
