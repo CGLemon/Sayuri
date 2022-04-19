@@ -23,7 +23,6 @@ Supervised &Supervised::Get() {
 
 void Supervised::FromSgfs(std::string sgf_name,
                               std::string out_name_prefix) {
-
     file_cnt_.store(0);
     worker_cnt_.store(0);
     tot_games_.store(0);
@@ -39,6 +38,8 @@ void Supervised::FromSgfs(std::string sgf_name,
 
         while (true) {
             if (!running_.load(std::memory_order_relaxed) && tasks_.empty()) {
+                LOGGING << Format("Thread %d is terminate, totally parsed %d games.",
+                                          worker_cnt+1, tot_games_.load(std::memory_order_relaxed)) << std::endl;
                 break;
             }
 
@@ -68,10 +69,12 @@ void Supervised::FromSgfs(std::string sgf_name,
                 closed = false;
             }
 
+            constexpr int kChopPerGames = 200;
+
             if (SgfProcess(sgf, file)) {
                 games += 1;
                 tot_games_.fetch_add(1, std::memory_order_relaxed);
-                if (games % 100 == 0) {
+                if (games % kChopPerGames == 0) {
                     if (!closed) {
                         file.close();
                         closed = true;
