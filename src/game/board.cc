@@ -92,6 +92,7 @@ std::vector<LadderType> Board::GetLadderMap() const {
             const auto vtx = GetVertex(x, y);
 
             auto first_found = false;
+            auto vital_moves = std::vector<int>{};
             int libs = 0;
             auto parent = strings_.GetParent(vtx);
 
@@ -100,7 +101,7 @@ std::vector<LadderType> Board::GetLadderMap() const {
                 libs = strings_.GetLiberty(parent);
             } else if (!VectorFind(not_ladder, parent)) {
                 // Not be found! Now Search it.
-                if (IsLadder(vtx)) {
+                if (IsLadder(vtx, vital_moves)) {
                     // It is a ladder.
                     ladder.emplace_back(parent);
                     first_found = true; 
@@ -125,14 +126,7 @@ std::vector<LadderType> Board::GetLadderMap() const {
             }
 
             if (first_found) {
-                auto buf = std::vector<int>{};
-                auto move_num = FindStringLiberties(vtx, buf);
-            #ifdef NDEBUG
-                (void)move_num;
-            #else
-                assert(move_num == libs);
-            #endif
-                for (const auto &v : buf) {
+                for (const auto &v : vital_moves) {
                     const auto ax = GetX(v);
                     const auto ay = GetY(v);
                     const auto aidx = GetIndex(ax, ay); 

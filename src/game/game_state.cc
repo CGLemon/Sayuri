@@ -21,6 +21,7 @@ void GameState::Reset(const int boardsize, const float komi) {
 
     winner_ = kUndecide;
     handicap_ = 0;
+    move_number_ = 0;
 }
 
 void GameState::ClearBoard() {

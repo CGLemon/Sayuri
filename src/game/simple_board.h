@@ -68,7 +68,7 @@ public:
     bool IsNeighbor(const int vtx, const int avtx) const;
 
     // Reture true if the string is ladder.
-    bool IsLadder(const int vtx) const;
+    bool IsLadder(const int vtx, std::vector<int> &vital_moves) const;
 
     // Reture true if the point is read eye.
     bool IsRealEye(const int vtx, const int color) const;

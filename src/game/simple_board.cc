@@ -749,7 +749,7 @@ LadderType SimpleBoard::HunterMove(std::shared_ptr<SimpleBoard> board,
     return best;
 }
 
-bool SimpleBoard::IsLadder(const int vtx) const {
+bool SimpleBoard::IsLadder(const int vtx, std::vector<int> &vital_moves) const {
     if (vtx == kPass) {
         return false;
     }
@@ -759,20 +759,37 @@ bool SimpleBoard::IsLadder(const int vtx) const {
         return false;
     }
 
-    const int libs = strings_.GetLiberty(strings_.GetParent(vtx));
+    vital_moves.clear();
+
+    auto buf = std::vector<int>{};
+    const int libs = FindStringLiberties(vtx, buf);
     const int ladder_vtx = vtx;
     size_t searched_nodes = 0;
     auto res = LadderType::kGoodForNeither;
+
     if (libs == 1) {
         auto ladder_board = std::make_shared<SimpleBoard>(*this);
         res = PreyMove(ladder_board,
                        kNullVertex, prey_color,
                        ladder_vtx, searched_nodes, false);
+
+        if (res == LadderType::kGoodForHunter) {
+            vital_moves.emplace_back(buf[0]);
+        }
     } else if (libs == 2) {
-        auto ladder_board = std::make_shared<SimpleBoard>(*this);
-        res = HunterMove(ladder_board,
-                         kNullVertex, prey_color,
-                         ladder_vtx, searched_nodes, false);
+        for (auto vvtx: buf) {
+            auto ladder_board = std::make_shared<SimpleBoard>(*this);
+            if (ladder_board->IsLegalMove(vvtx, !prey_color)) {
+
+                // force the hunter do atari move first
+                res = PreyMove(ladder_board,
+                                 vvtx, prey_color,
+                                 ladder_vtx, searched_nodes, false);
+                if (res == LadderType::kGoodForHunter) {
+                    vital_moves.emplace_back(vvtx);
+                }
+            }
+        }
     } else if (libs >= 3) {
         res = LadderType::kGoodForPrey;
     }
