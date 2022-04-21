@@ -164,9 +164,6 @@ class TrainingPipe():
                 weight_decay=self.weight_decay,
             )
 
-        self.swa_model = torch.optim.swa_utils.AveragedModel(self.module)
-        self.swa_scheduler = torch.optim.swa_utils.SWALR(self.opt, swa_lr=0.05)
-
     def fit_and_store(self, filename_prefix, init_steps, log_file):
 
         # Be sure the network is on the right device.
@@ -230,16 +227,7 @@ class TrainingPipe():
                     keep_running = False
                     break
 
-            # update swa
-            self.swa_model.update_parameters(self.module)
-            self.swa_scheduler.step()
-
             # save the last network
-
-            # TODO: We should update the batch normalization layer, but seem there
-            #       is bug here. Try to fix it.
-            # torch.optim.swa_utils.update_bn(train_data, self.swa_model)
-
             torch.save(self.module.state_dict(), "{}-s{}.pt".format(filename_prefix, num_steps))
         print("Training is over.")
 
