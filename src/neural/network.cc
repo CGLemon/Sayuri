@@ -177,9 +177,11 @@ bool Network::ProbeCache(const GameState &state,
 
                 // copy result to buffer
                 std::copy(std::begin(result.probabilities),
-                              std::end(result.probabilities), std::begin(probabilities_buffer));
+                              std::begin(result.probabilities) + num_intersections,
+                              std::begin(probabilities_buffer));
                 std::copy(std::begin(result.ownership),
-                              std::end(result.ownership), std::begin(ownership_buffer));
+                              std::begin(result.ownership) + num_intersections,
+                              std::begin(ownership_buffer));
 
                 // transfer them
                 for (int idx = 0; idx < num_intersections; ++idx) {
