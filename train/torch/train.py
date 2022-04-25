@@ -120,15 +120,24 @@ class DataSet():
 class TrainingPipe():
     def __init__(self, cfg):
         self.cfg = cfg
+
+        # mini-batch size, update the network per batch size
         self.batchsize =  cfg.batchsize
+
+        # marco batch size and factor, (marco batch size) * factor = batch size
+        self.macrobatchsize = cfg.macrobatchsize
+        self.macrofactor = cfg.macrofactor
+
+        # how many cpu does the 'DataLoader' use?
         self.num_workers = cfg.num_workers
         self.train_dir = cfg.train_dir
-
-        self.opt_name = cfg.optimizer
         self.steps_per_epoch =  cfg.steps_per_epoch
         self.max_steps =  cfg.max_steps
 
-        self.learn_rate = cfg.learn_rate
+        # which optimizer do we use?
+        self.opt_name = cfg.optimizer
+
+        self.learning_rate = cfg.learning_rate
         self.weight_decay = cfg.weight_decay
 
         self.use_gpu = cfg.use_gpu
@@ -152,13 +161,13 @@ class TrainingPipe():
         if self.opt_name == "Adam":
             self.opt = torch.optim.Adam(
                 self.net.parameters(),
-                lr=self.learn_rate,
+                lr=self.learning_rate,
                 weight_decay=self.weight_decay,
             )
         elif self.opt_name == "SGD":
             self.opt = torch.optim.SGD(
                 self.net.parameters(),
-                lr=self.learn_rate,
+                lr=self.learning_rate,
                 momentum=0.9,
                 nesterov=True,
                 weight_decay=self.weight_decay,
@@ -174,6 +183,8 @@ class TrainingPipe():
         keep_running = True
         running_loss = 0
         num_steps = init_steps
+        macro_steps = 0
+
         verbose_steps = 1000
         clock_time = time.time()
 
@@ -185,7 +196,7 @@ class TrainingPipe():
             train_data = DataLoader(
                 self.data_set,
                 num_workers=self.num_workers,
-                batch_size=self.batchsize
+                batch_size=self.macrobatchsize
             )
 
             for _, batch in enumerate(train_data):
@@ -199,28 +210,42 @@ class TrainingPipe():
                     target_stm = target_stm.to(self.device)
                     target_score = target_score.to(self.device)
 
+                # gather batch data
                 target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score)
 
-                # update network
-                running_loss += self.step(board_size_list, planes, target, self.opt)
-                num_steps += 1
 
-                if num_steps % verbose_steps == 0:
-                    elapsed = time.time() - clock_time
-                    clock_time = time.time()
+                # forward and backforwad
+                _, loss = self.net(planes, board_size_list, target)
+                loss = loss.mean() / self.macrofactor
+                loss.backward()
+                macro_steps += 1
 
-                    log_outs = "steps: {} -> loss: {:.4f}, speed: {:.2f} | opt: {}, learning rate: {}, batch size: {}".format(
-                                   num_steps,
-                                   running_loss/verbose_steps,
-                                   verbose_steps/elapsed,
-                                   self.opt_name,
-                                   self.learn_rate,
-                                   self.batchsize)
-                    print(log_outs)
-                    with open(log_file, 'a') as f:
-                        f.write(log_outs + '\n')
+                # accumulate loss
+                running_loss += loss.item()
 
-                    running_loss = 0
+                if macro_steps % self.macrofactor == 0:
+                    # update network
+                    self.opt.step()
+                    self.opt.zero_grad()
+                    num_steps += 1
+
+                    # dump the verbose
+                    if num_steps % verbose_steps == 0:
+                        elapsed = time.time() - clock_time
+                        clock_time = time.time()
+
+                        log_outs = "steps: {} -> loss: {:.4f}, speed: {:.2f} | opt: {}, learning rate: {}, batch size: {}".format(
+                                       num_steps,
+                                       running_loss/verbose_steps,
+                                       verbose_steps/elapsed,
+                                       self.opt_name,
+                                       self.learning_rate,
+                                       self.batchsize)
+                        print(log_outs)
+                        with open(log_file, 'a') as f:
+                            f.write(log_outs + '\n')
+
+                        running_loss = 0
 
                 # should stop?
                 if num_steps >= self.max_steps + init_steps:
@@ -230,16 +255,6 @@ class TrainingPipe():
             # save the last network
             torch.save(self.module.state_dict(), "{}-s{}.pt".format(filename_prefix, num_steps))
         print("Training is over.")
-
-    def step(self, board_size_list, planes, target, opt):
-        _, loss = self.net(planes, board_size_list, target)
-        loss = loss.mean()
-
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
-
-        return loss.item()
 
     def load_pt(self, filename):
         self.net.load_state_dict(torch.load(filename, map_location=torch.device('cpu')))

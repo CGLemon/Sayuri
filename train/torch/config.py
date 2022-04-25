@@ -2,38 +2,15 @@ import json
 import os
 import torch
 
-CONFIG_KEYWOED = [
-    "NeuralNetwork",
-    "NNType",           # the type of net
-    "Version",          # net version(implies the net structure)
-    "MaxBoardSize",     # max board size in training data
-    "InputChannels",    # Input planes channels
-    "PolicyExtract",    # policy shared head channels
-    "ValueExtract",     # value shared head channels
-    "ValueMisc",        # output value layer size
-
-    "Stack",            # the net structure(also implies the block number)
-    "ResidualChannels", # each resnet block channels
-    "ResidualBlock",    # resnet block without variant
-    "ResidualBlock-SE", # resnet block with SE structure
-
-    "Train",
-    "UseGPU",
-    "Optimizer",
-    "StepsPerEpoch",    # number of training steps per epoch
-    "MaxSteps",         # terminate after these steps
-    "LearningRate",     # the learning rate
-    "WeightDecay",      # the net weight decay
-    "TrainDirectory"    # The training data directory
-]
-
 class Config:
     def __init__(self):
-        # Training option
+        # Training options
         self.num_workers = None
         self.use_gpu = None
         self.batchsize = None
-        self.learn_rate = None
+        self.macrobatchsize = None
+        self.macrofactor = None
+        self.learning_rate = None
         self.weight_decay = None
         self.train_dir = None
         self.steps_per_epoch = None
@@ -61,11 +38,14 @@ def parse_training_config(json_data, config):
 
     config.optimizer = train["Optimizer"]
     config.use_gpu = train["UseGPU"]
-    config.learn_rate = train["LearningRate"]
+    config.learning_rate = train["LearningRate"]
     config.weight_decay = train["WeightDecay"]
 
     config.train_dir = train["TrainDirectory"]
     config.batchsize = train["BatchSize"]
+    config.macrofactor = train["MacroFactor"]
+    config.macrobatchsize = config.batchsize // config.macrofactor
+
     config.num_workers = train["Workers"]
     config.steps_per_epoch = train["StepsPerEpoch"]
     config.max_steps = train["MaxSteps"]
@@ -75,9 +55,6 @@ def parse_training_config(json_data, config):
 
     if config.steps_per_epoch == None:
         config.steps_per_epoch = 500
-
-    if config.learn_rate == None:
-        config.learn_rate = 1e-4
 
     if config.weight_decay == None:
         config.weight_decay = 1e-4

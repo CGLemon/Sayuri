@@ -25,6 +25,7 @@
         "MaxSteps": 100000,
         "Workers": 4,
         "BatchSize": 512,
+        "MacroFactor": 1,
         "LearningRate": 1e-4,
         "WeightDecay": 1e-4,
         "FixUpBatchNorm": true,
