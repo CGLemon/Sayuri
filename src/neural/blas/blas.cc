@@ -1,6 +1,21 @@
 #include "neural/blas/blas.h"
 
+#ifdef USE_EIGEN
+template <typename T>
+using EigenVectorMap = Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>>;
 
+template <typename T>
+using ConstEigenVectorMap =
+    Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>>;
+
+template <typename T>
+using EigenMatrixMap =
+    Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>>;
+
+template <typename T>
+using ConstEigenMatrixMap =
+    Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>>;
+#endif
 
 void Blas::ConvolutionSgemm(const int M, const int N, const int K,
                             const float alpha, 
