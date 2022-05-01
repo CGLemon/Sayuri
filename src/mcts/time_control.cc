@@ -5,6 +5,7 @@
 #include <cassert>
 #include <algorithm>
 #include <sstream>
+#include <iostream>
 
 static_assert(sizeof(int) == 4, "");
 
@@ -19,7 +20,7 @@ void TimeControl::TimeSettings(const int main_time,
                                    const int byo_yomi_periods) {
     // We store the time as centisecond. If the input seconds is greater
     // than 248 days, we set infinite time.
-    int max_value = 248 * 86400;
+    int max_value = 248 * 24 * 60 * 60;
     if (main_time > max_value ||
             byo_yomi_time > max_value) {
         TimeSettings(0, 0, 0, 0);
@@ -36,10 +37,10 @@ void TimeControl::TimeSettings(const int main_time,
         main_time_ = 0;
     }
 
-    if (byo_stones_ <= 0 ||
-            (byo_yomi_stones > 0 && byo_periods_ > 0)) {
-        // The byo_yomi_stones and byo_periods should not greater than zero at
-        // the same time.
+    if ((byo_stones_ <= 0 && byo_periods_ <= 0) ||
+            (byo_stones_ > 0 && byo_periods_ > 0)) {
+        // The byo_yomi_stones and byo_periods should not be greater or
+        // smaller than zero at the same time.
         byo_time_ = byo_periods_ = 0;
     }
 
@@ -103,15 +104,16 @@ void TimeControl::TookTime(int color) {
         byotime_left_[color] -= remaining_took_time;
 
         if (byo_periods_) {
-            // Canadian type
-            if (byotime_left_[color]) {
+            // Byo-Yomi type
+            if (byotime_left_[color] < 0) {
                 periods_left_[color]--;
-                if (periods_left_[color] > 0) {
-                    byotime_left_[color] = byo_time_;
-                }
+            }
+
+            if (periods_left_[color] > 0) {
+                byotime_left_[color] = byo_time_;
             }
         } else if (byo_stones_) {
-            // Byo-Yomi type
+            // Canadian type
             stones_left_[color]--;
             if (stones_left_[color] == 0) {
                 if (byotime_left_[color] > 0) {
@@ -124,8 +126,8 @@ void TimeControl::TookTime(int color) {
 }
 
 void TimeControl::SetLagBuffer(int lag_buffer) {
-    constexpr int kMinLag = 50; // 0.5 second is big enough for CPU
-                                // forward pipe.
+    constexpr int kMinLag = 25; // 0.25 second is big enough for CPU
+                                // forward pipe hiccupping.
 
     lag_buffer *= 100;
     lag_buffer_ = lag_buffer < kMinLag ? kMinLag : lag_buffer;
@@ -180,8 +182,6 @@ void TimeControl::TimeStream(std::ostream &out, int color) const {
        out << std::setw(2) << std::setfill('0') << seconds;
     } else {
        const int remaining = byotime_left_[color]/100; // centisecond to second
-       const int stones_left = stones_left_[color];
-       const int periods_left = periods_left_[color];
        const int hours = remaining / 3600;
        const int minutes = (remaining % 3600) / 60;
        const int seconds = remaining % 60;
@@ -191,11 +191,11 @@ void TimeControl::TimeStream(std::ostream &out, int color) const {
        out << std::setw(2) << std::setfill('0') << seconds << ", ";
 
         if (byo_periods_) {
-            // Canadian type
-            out << "Periods left: " << periods_left;
-        } else if (byo_stones_) {
             // Byo-Yomi type
-            out << "Stones left: " << stones_left;
+            out << "Periods left: " << periods_left_[color];
+        } else if (byo_stones_) {
+            // Canadian type
+            out << "Stones left: " << stones_left_[color];
         }
     }
     out << std::setfill(' ');
@@ -218,8 +218,6 @@ float TimeControl::GetThinkingTime(int color, int boardsize, int move_num) const
     int extra_time_per_move = 0;
 
     if (in_byo_[color]) {
-        // TODO: accumulate think time in byo yomi stage
-
         if (byo_periods_) {
             // just use the byo time
             extra_time_per_move = byo_time_;
@@ -248,7 +246,7 @@ float TimeControl::GetThinkingTime(int color, int boardsize, int move_num) const
     // Output value may loss littel precision. It is OK that most case
     // the losing of precision is smaller than one second. If the losing
     // value greater than one second, output value is very large. We don't 
-    // the losing in that case.
+    // care the losing in that case.
     return (float)(base_time + inc_time) / 100.f; // centisecond to second
 }
 

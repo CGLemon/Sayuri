@@ -77,6 +77,8 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "kgs-game_over",
 
+    "kgs-time_settings",
+
     "supervised",
 
     "planes",

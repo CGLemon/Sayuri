@@ -269,6 +269,35 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         } else {
             out << GTPFail("");
         }
+    } else if (const auto res = parser.Find("kgs-time_settings", 0)) {
+        // none, absolute, byoyomi, or canadian
+        int main_time = 0, byo_yomi_time = 0, byo_yomi_stones = 0, byo_yomi_periods = 0;
+        bool success = true;
+
+        if (const auto res = parser.Find("none", 1)) {
+            // infinite time
+            main_time = byo_yomi_time = byo_yomi_stones = byo_yomi_periods;
+        } else if (const auto res = parser.Find("absolute", 1)) {
+            main_time = parser.GetCommand(2)->Get<int>();
+        } else if (const auto res = parser.Find("canadian", 1)) {
+            main_time = parser.GetCommand(2)->Get<int>();
+            byo_yomi_time = parser.GetCommand(3)->Get<int>();
+            byo_yomi_stones = parser.GetCommand(4)->Get<int>();
+        } else if (const auto res = parser.Find("byoyomi", 1)) {
+            main_time = parser.GetCommand(2)->Get<int>();
+            byo_yomi_time = parser.GetCommand(3)->Get<int>();
+            byo_yomi_periods = parser.GetCommand(4)->Get<int>();
+        } else {
+            success = false;
+        }
+        if (success) {
+            agent_->GetSearch().TimeSettings(main_time, byo_yomi_time,
+                                                 byo_yomi_stones, byo_yomi_periods);
+            out << GTPSuccess("");
+        } else {
+            out << GTPFail("");
+        }
+
     } else if (const auto res = parser.Find("time_settings", 0)) {
         int main_time = -1, byo_yomi_time = -1, byo_yomi_stones = -1;
 
