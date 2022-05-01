@@ -3,11 +3,11 @@
 
 #include "include.h"
 
-static void StartGtpLoop() {
+void StartGtpLoop() {
     auto gtp_loop = std::make_unique<GtpLoop>();
 }
 
-static void StartSelfplayLoop() {
+void StartSelfplayLoop() {
     auto selfplay_loop = std::make_unique<SelfPlayPipe>();
 }
 

@@ -39,7 +39,6 @@ int Timer::GetDurationMicroseconds() const {
     return microseconds;
 }
 
-
 float Timer::GetDuration() const {
     const auto seconds = GetDurationSeconds();
     const auto milliseconds = GetDurationMilliseconds();

@@ -11,8 +11,9 @@ public:
     TimeControl();
 
     void TimeSettings(const int main_time,
-                      const int byo_yomi_time,
-                      const int byo_yomi_stones);
+                          const int byo_yomi_time,
+                          const int byo_yomi_stones,
+                          const int byo_yomi_periods);
 
     void TimeLeft(const int color, const int time, const int stones);
 
@@ -38,13 +39,14 @@ private:
     int byo_stones_;
     int byo_periods_;
 
-    std::array<float, 2> maintime_left_;
-    std::array<float, 2> byotime_left_;
-    std::array<int,   2> stones_left_;
-    std::array<int,   2> periods_left_;
+    std::array<int, 2> maintime_left_; // centiseconds
+    std::array<int, 2> byotime_left_;  // centiseconds
+    std::array<int, 2> stones_left_;
+    std::array<int, 2> periods_left_;
+
     std::array<bool,  2> in_byo_;
 
-    float lag_buffer_{0};
+    int lag_buffer_; // centiseconds
 
     Timer timer_;
 

@@ -285,7 +285,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         if (main_time == -1 || byo_yomi_time == -1 || byo_yomi_stones == -1) {
             out << GTPFail("");
         } else {
-            agent_->GetSearch().TimeSettings(main_time, byo_yomi_time, byo_yomi_stones);
+            agent_->GetSearch().TimeSettings(main_time, byo_yomi_time, byo_yomi_stones, 0);
             out << GTPSuccess("");
         }
     } else if (const auto res = parser.Find("time_left", 0)) {

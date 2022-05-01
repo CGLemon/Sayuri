@@ -125,8 +125,10 @@ void Search::ClearNodes() {
 
 void Search::TimeSettings(const int main_time,
                           const int byo_yomi_time,
-                          const int byo_yomi_stones) {
-    time_control_.TimeSettings(main_time, byo_yomi_time, byo_yomi_stones);
+                          const int byo_yomi_stones,
+                          const int byo_yomi_periods) {
+    time_control_.TimeSettings(main_time, byo_yomi_time,
+                                   byo_yomi_stones, byo_yomi_periods);
 }
 
 void Search::TimeLeft(const int color, const int time, const int stones) {
