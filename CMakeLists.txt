@@ -147,17 +147,18 @@ endif()
 # Define the neural network default backend.
 if(_USE_CUDA)
     if(_USE_CUDNN)
-        message(STATUS "Using cuDNN backend.")
+        message(STATUS "Backend is cuDNN.")
     else()
-        message(STATUS "Using CUDA backend.")
+        message(STATUS "Backend is CUDA-only.")
         message(" The cuDNN backend is faster than CUDA backend in multi-batch condition.")
-        message(" If you want to use cuDNN to speed up, adding flag -DBLAS_BACKEND=CUDNN.")
+        message(" If you want to speed up with cuDNN, adding flag -DBLAS_BACKEND=CUDNN.")
         message(" The cuDNN library and Nvida GPU are both required.\n")
     endif()
 
     add_definitions(-DUSE_CUDA)
     enable_language(CUDA)
     aux_source_directory(${NEURAL_SOURCES_DIR}/cuda CUDA_SOURCES)
+
     set(CMAKE_CUDA_FLAGS "" CACHE STRING "")
     if(CMAKE_CUDA_FLAGS)
         list(REMOVE_ITEM CMAKE_CUDA_FLAGS "-cudart static")
@@ -165,26 +166,95 @@ if(_USE_CUDA)
     string(APPEND CMAKE_CUDA_FLAGS "-cudart shared")
 
     set(CUDA_STANDARD 14)
-    set(CMAKE_CUDA_FLAGS
-        "-gencode arch=compute_30,code=sm_30 -gencode arch=compute_30,code=compute_30 -gencode arch=compute_37,code=sm_37 -gencode arch=compute_53,code=sm_53 -gencode arch=compute_53,code=compute_53 -gencode arch=compute_70,code=sm_70 -gencode arch=compute_70,code=compute_70 -gencode  arch=compute_75,code=compute_75"
-    )
+    set(CMAKE_CUDA_RUNTIME_LIBRARY SHARED)
+
+    if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 11.0)
+        set(CMAKE_CUDA_FLAGS
+            " \
+            -gencode arch=compute_35,code=sm_35       \
+            -gencode arch=compute_35,code=compute_35  \
+            -gencode arch=compute_37,code=sm_37       \
+            -gencode arch=compute_37,code=compute_37  \
+            -gencode arch=compute_50,code=sm_50       \
+            -gencode arch=compute_50,code=compute_50  \
+            -gencode arch=compute_53,code=sm_53       \
+            -gencode arch=compute_53,code=compute_53  \
+            -gencode arch=compute_60,code=sm_60       \
+            -gencode arch=compute_60,code=compute_60  \
+            -gencode arch=compute_61,code=sm_61       \
+            -gencode arch=compute_61,code=compute_61  \
+            -gencode arch=compute_62,code=sm_62       \
+            -gencode arch=compute_62,code=compute_62  \
+            -gencode arch=compute_70,code=sm_70       \
+            -gencode arch=compute_70,code=compute_70  \
+            -gencode arch=compute_72,code=sm_72       \
+            -gencode arch=compute_72,code=compute_72  \
+            -gencode arch=compute_75,code=sm_75       \
+            -gencode arch=compute_75,code=compute_75  \
+            -gencode arch=compute_80,code=sm_80       \
+            -gencode arch=compute_80,code=compute_80  \
+            -Wno-deprecated-gpu-targets \
+            "
+            )
+    elseif (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 10.2)
+        set(CMAKE_CUDA_FLAGS
+            " \
+            -gencode arch=compute_30,code=sm_30       \
+            -gencode arch=compute_30,code=compute_30  \
+            -gencode arch=compute_35,code=sm_35       \
+            -gencode arch=compute_35,code=compute_35  \
+            -gencode arch=compute_37,code=sm_37       \
+            -gencode arch=compute_37,code=compute_37  \
+            -gencode arch=compute_50,code=sm_50       \
+            -gencode arch=compute_50,code=compute_50  \
+            -gencode arch=compute_53,code=sm_53       \
+            -gencode arch=compute_53,code=compute_53  \
+            -gencode arch=compute_60,code=sm_60       \
+            -gencode arch=compute_60,code=compute_60  \
+            -gencode arch=compute_61,code=sm_61       \
+            -gencode arch=compute_61,code=compute_61  \
+            -gencode arch=compute_62,code=sm_62       \
+            -gencode arch=compute_62,code=compute_62  \
+            -gencode arch=compute_70,code=sm_70       \
+            -gencode arch=compute_70,code=compute_70  \
+            -gencode arch=compute_72,code=sm_72       \
+            -gencode arch=compute_72,code=compute_72  \
+            -gencode arch=compute_75,code=sm_75       \
+            -gencode arch=compute_75,code=compute_75  \
+            -Wno-deprecated-gpu-targets \
+            "
+            )
+    else()
+        message(WARNING "CUDA 10.2 or greater is recommended, but attempting to build anyways")
+        set(CMAKE_CUDA_FLAGS
+            " \
+            -gencode arch=compute_30,code=sm_30 \
+            -gencode arch=compute_30,code=compute_30 \
+            -gencode arch=compute_37,code=sm_37 \
+            -gencode arch=compute_53,code=sm_53 \
+            -gencode arch=compute_53,code=compute_53 \
+            -gencode arch=compute_70,code=sm_70 \
+            -gencode arch=compute_70,code=compute_70 \
+            "
+            )
+    endif()
     set(CMAKE_CUDA_FLAGS "-Xptxas -O3 -Xcompiler -fPIC ${CMAKE_CUDA_FLAGS}")
 else()
     if(_USE_EIGEN)
-        message(STATUS "Use Eigen backend")
+        message(STATUS "Backend is Eigen")
     elseif(_USE_BLAS)
-        message(STATUS "Use OpenBlas backend")
+        message(STATUS "Backend is OpenBlas")
     elseif(_USE_BUILD_IN)
         message(STATUS "Using built-in matrix backend.")
-        message(" Built-in matrix is much slow. Open Blas and Eigen are the better choice.")
+        message(" Built-in matrix is very slow. Open Blas and Eigen are the better choice.")
         message(" If you want to use Eigen, adding flag -DBLAS_BACKEND=EIGEN. And you need")
         message(" to put the Eigen library to third_party directory. If you want to use OpenBlas,")
         message(" adding flag -DBLAS_BACKEND=OPENBLAS. OpenBlas library is required.\n")
     endif()
 
-    message(" The GPU backend is much faster than CPU backend.")
-    message(" If you want to use GPU to speed up, adding flag -DBLAS_BACKEND=CUDA or -DBLAS_BACKEND=CUDNN.")
-    message(" CUDA library and Nvida GPU both are required.\n")
+        message(" The GPU backend is much faster than CPU backend. If you want to speed with")
+        message(" GPUs, adding flag -DBLAS_BACKEND=CUDA or -DBLAS_BACKEND=CUDNN. CUDA library")
+        message(" and Nvida GPU are both required.\n")
 endif()
 
 # Find all required packages.
@@ -262,4 +332,3 @@ if(_USE_CUDA)
     include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})
     target_link_libraries(Sayuri ${CUDNN_LIBRARY} ${CUDA_CUBLAS_LIBRARIES} ${CUDA_LIBRARIES})
 endif()
-
