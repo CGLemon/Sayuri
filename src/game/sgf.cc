@@ -406,7 +406,7 @@ std::vector<std::string> SgfParser::ChopStream(std::istream& ins, size_t stopat)
             intag = true;
         } else if (c == ']') {
             if (intag == false) {
-                ERROR << "Tag error on line" << ' ' << line << std::endl;
+                LOGGING << "Tag error on line" << ' ' << line << std::endl;
             }
             intag = false;
         }

@@ -255,8 +255,8 @@ std::string GameState::GetStateString() const {
 }
 
 void GameState::ShowBoard() const {
-    ERROR << board_.GetBoardString(board_.GetLastMove(), true);
-    ERROR << GetStateString();
+    LOGGING << board_.GetBoardString(board_.GetLastMove(), true);
+    LOGGING << GetStateString();
 }
 
 void GameState::SetWinner(GameResult result) {
@@ -277,7 +277,7 @@ void GameState::SetKomi(float komi) {
     } else if (IsSameKomi(float_part, 0.5f)) {
         komi_half_ = true;
     } else {
-        ERROR << "Only accept for integer komi or half komi." << std::endl;
+        LOGGING << "Only accept for integer komi or half komi." << std::endl;
         return;
     }
 

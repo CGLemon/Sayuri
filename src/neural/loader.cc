@@ -30,7 +30,7 @@ void DNNLoder::FromFile(std::shared_ptr<DNNWeights> weights, std::string filenam
     file.open(filename.c_str());
 
     if (!file.is_open()) {
-        ERROR << "Couldn't open file:" << ' ' << filename << '!' << std::endl;
+        LOGGING << "Couldn't open file:" << ' ' << filename << '!' << std::endl;
         return;
     }
 
@@ -48,8 +48,8 @@ void DNNLoder::FromFile(std::shared_ptr<DNNWeights> weights, std::string filenam
     } catch (const char *err) {
         // Should be not happned.
 
-        ERROR << "Fail to load the network file!" << std::endl
-                  << Format("    Cause: %s.", err) << std::endl;
+        LOGGING << "Fail to load the network file!" << std::endl
+                    << Format("    Cause: %s.", err) << std::endl;
     }
 }
 

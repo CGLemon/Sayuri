@@ -70,13 +70,13 @@ void CudaForwardPipe::Reload(int board_size) {
             if (gpu_id < d_cnt) {
                 gpus_list.emplace_back(gpu_id);
             } else {
-                ERROR << Format("Not found GPU device %d\n", gpu_id);
+                LOGGING << Format("Not found GPU device %d\n", gpu_id);
             }
         }
     }
 
     if (gpus_list.empty()) {
-        ERROR << "Not found any GPU devices, now assign the GPU(s) automatically.\n";
+        LOGGING << "Not found any GPU devices, now assign the GPU(s) automatically.\n";
         for (int i = 0; i < d_cnt; ++i) {
             gpus_list.emplace_back(i);
         }

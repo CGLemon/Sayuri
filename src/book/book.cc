@@ -34,7 +34,7 @@ void Book::GenerateBook(std::string sgf_name, std::string filename) const {
 
     file.open(filename, std::ios_base::app);
     if (!file.is_open()) {
-        ERROR << "Fail to create the file: " << filename << '!' << std::endl; 
+        LOGGING << "Fail to create the file: " << filename << '!' << std::endl; 
         return;
     }
 
@@ -79,8 +79,8 @@ void Book::BookDataProcess(std::string sgfstring,
     try {
         state = Sgf::Get().FromString(sgfstring, kMaxBookMoves);
     } catch (const char *err) {
-        ERROR << "Fail to load the SGF file! Discard it." << std::endl
-                  << Format("\tCause: %s.", err) << std::endl;
+        LOGGING << "Fail to load the SGF file! Discard it." << std::endl
+                    << Format("\tCause: %s.", err) << std::endl;
         return;
     }
 
@@ -143,7 +143,7 @@ void Book::LoadBook(std::string book_name) {
     std::ifstream file;
     file.open(book_name);
     if (!file.is_open()) {
-        ERROR << "Fail to load the file: " << book_name << '!' << std::endl; 
+        LOGGING << "Fail to load the file: " << book_name << '!' << std::endl; 
         return;
     }
 

@@ -36,11 +36,11 @@ void SelfPlayPipe::Initialize() {
 void SelfPlayPipe::Loop() {
     // Check all data are ready.
     if (target_directory_.size() == 0) {
-        ERROR << "Please give the target directory name." << std::endl;
+        LOGGING << "Please give the target directory name." << std::endl;
         return;
     }
     if (max_games_ == 0) {
-        ERROR << "The number of self-play games must be greater than one." << std::endl;
+        LOGGING << "The number of self-play games must be greater than one." << std::endl;
         return;
     }
 

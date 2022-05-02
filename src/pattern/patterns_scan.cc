@@ -87,8 +87,8 @@ void PatternsScan::CollectPatterns(std::string sgfstring, GammasDict &dict) cons
     try {
         state = Sgf::Get().FromString(sgfstring, 9999);
     } catch (const char *err) {
-        ERROR << "Fail to load the SGF file! Discard it." << std::endl
-                  << Format("\tCause: %s.", err) << std::endl;
+        LOGGING << "Fail to load the SGF file! Discard it." << std::endl
+                    << Format("\tCause: %s.", err) << std::endl;
         return;
     }
 
@@ -121,8 +121,8 @@ void PatternsScan::CollectGammas(std::string sgfstring,
     try {
         state = Sgf::Get().FromString(sgfstring, 9999);
     } catch (const char *err) {
-        ERROR << "Fail to load the SGF file! Discard it." << std::endl
-                  << Format("\tCause: %s.", err) << std::endl;
+        LOGGING << "Fail to load the SGF file! Discard it." << std::endl
+                    << Format("\tCause: %s.", err) << std::endl;
         return;
     }
 

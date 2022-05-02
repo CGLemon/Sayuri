@@ -63,7 +63,7 @@ void Supervised::FromSgfs(std::string sgf_name,
                 file.open(out_name, std::ios_base::app);
 
                 if (!file.is_open()) {
-                    ERROR << "Fail to create the file: " << out_name << '!' << std::endl; 
+                    LOGGING << "Fail to create the file: " << out_name << '!' << std::endl; 
                     return;
                 }
                 closed = false;
@@ -121,8 +121,8 @@ bool Supervised::SgfProcess(std::string &sgfstring,
     try {
         state = Sgf::Get().FromString(sgfstring, 9999);
     } catch (const char *err) {
-        ERROR << "Fail to load the SGF file! Discard it." << std::endl
-                  << Format("\tCause: %s.", err) << std::endl;
+        LOGGING << "Fail to load the SGF file! Discard it." << std::endl
+                    << Format("\tCause: %s.", err) << std::endl;
         return false;
     }
 

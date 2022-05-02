@@ -21,7 +21,6 @@ private:
     std::ofstream file_;
 
     friend class Logging;
-    friend class StandError;
 };
 
 class LogOptions {
@@ -34,32 +33,21 @@ private:
     bool quiet_;
 
     friend class Logging;
-    friend class StandError;
 };
 
 class Logging : public std::ostringstream {
 public:
-    Logging(const char* file, int line, bool write_only, bool use_options);
+    Logging(const char* file, int line, bool err, bool write_only, bool use_options);
     ~Logging();
 
 private:
     bool write_only_;
     bool use_options_;
+    bool err_;
     std::string file_;
     int line_;
 };
 
-class StandError : public std::ostringstream {
-public:
-    StandError(const char* file, int line);
-    ~StandError();
-
-private:
-    std::string file_;
-    int line_;
-};
-
-#define LOGGING (::Logging(__FILE__, __LINE__, false, true))
-#define WRITING (::Logging(__FILE__, __LINE__, true, true))
-#define DUMPING (::Logging(__FILE__, __LINE__, false, false))
-#define ERROR (::StandError(__FILE__, __LINE__))
+#define LOGGING (::Logging(__FILE__, __LINE__, true,  false, true))
+#define WRITING (::Logging(__FILE__, __LINE__, false, true,  true))
+#define DUMPING (::Logging(__FILE__, __LINE__, false, false, false))

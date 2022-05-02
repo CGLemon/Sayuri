@@ -460,7 +460,7 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
     file.open(filename, std::ios_base::app);
 
     if (!file.is_open()) {
-        ERROR << "Fail to create the file: " << filename << '!' << std::endl; 
+        LOGGING << "Fail to create the file: " << filename << '!' << std::endl; 
         return;
     }
 

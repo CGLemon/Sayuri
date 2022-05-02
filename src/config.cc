@@ -153,14 +153,14 @@ ArgsParser::ArgsParser(int argc, char** argv) {
             return false;
         }
         int t = 1;
-        ERROR << "Command(s) Error:" << std::endl;
+        LOGGING << "Command(s) Error:" << std::endl;
         for (auto i = size_t{0}; i < cnt; ++i) {
             const auto command = parser.GetCommand(i)->Get<std::string>();
             if (!IsParameter(command)) {
-                ERROR << " " << t << ". " << command << std::endl;
+                LOGGING << " " << t << ". " << command << std::endl;
             }
         }
-        ERROR << " are not understood." << std::endl;
+        LOGGING << " are not understood." << std::endl;
         return true;
     };
 
@@ -466,45 +466,45 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 }
 
 void ArgsParser::DumpHelper() const {
-    ERROR << "Arguments:" << std::endl
-              << "\t--quiet, -q\n"
-              << "\t\tDisable all diagnostic verbose.\n\n" 
+    LOGGING << "Arguments:" << std::endl
+                << "\t--quiet, -q\n"
+                << "\t\tDisable all diagnostic verbose.\n\n" 
 
-              << "\t--analysis-verbose, -a\n"
-              << "\t\tDump the search verbose.\n\n"
+                << "\t--analysis-verbose, -a\n"
+                << "\t\tDump the search verbose.\n\n"
 
-              << "\t--ponder\n"
-              << "\t\tThinking on opponent's time.\n\n"
+                << "\t--ponder\n"
+                << "\t\tThinking on opponent's time.\n\n"
 
-              << "\t--early-symm-cache\n"
-              << "\t\tAccelerate search on the opening step.\n\n"
+                << "\t--early-symm-cache\n"
+                << "\t\tAccelerate search on the opening step.\n\n"
 
-              << "\t--resign-threshold, -r <float>\n"
-              << "\t\tResign when winrate is less than x. Defulat is 0.1.\n\n"
+                << "\t--resign-threshold, -r <float>\n"
+                << "\t\tResign when winrate is less than x. Defulat is 0.1.\n\n"
 
-              << "\t--playouts, -p <integer>\n"
-              << "\t\tNumber of playouts. Defulat is 1600\n\n"
+                << "\t--playouts, -p <integer>\n"
+                << "\t\tNumber of playouts. Defulat is 1600\n\n"
 
-              << "\t--gpu, -g <integer>\n"
-              << "\t\tSelect a specific GPU device. Defaul is all devices.\n\n"
+                << "\t--gpu, -g <integer>\n"
+                << "\t\tSelect a specific GPU device. Defaul is all devices.\n\n"
 
-              << "\t--threads, -t <integer>\n"
-              << "\t\tNumber of threads. Set 0 will select a reasonable number.\n\n"
+                << "\t--threads, -t <integer>\n"
+                << "\t\tNumber of threads. Set 0 will select a reasonable number.\n\n"
 
-              << "\t--batch-size, -b <integer>\n"
-              << "\t\tNumber of batch size. Set 0 will select a reasonable number.\n\n"
+                << "\t--batch-size, -b <integer>\n"
+                << "\t\tNumber of batch size. Set 0 will select a reasonable number.\n\n"
 
-              << "\t--logfile, -l <log file name>\n"
-              << "\t\tFile to log input/output to.\n\n"
+                << "\t--logfile, -l <log file name>\n"
+                << "\t\tFile to log input/output to.\n\n"
 
-              << "\t--lag-buffer <integer>\n"
-              << "\t\tSafety margin for time usage in seconds.\n\n"
+                << "\t--lag-buffer <integer>\n"
+                << "\t\tSafety margin for time usage in seconds.\n\n"
 
-              << "\t--weights, -w <weight file name>\n"
-              << "\t\tFile with network weights.\n\n"
+                << "\t--weights, -w <weight file name>\n"
+                << "\t\tFile with network weights.\n\n"
 
-              << "\t--book <book file name>\n"
-              << "\t\tFile with opening book.\n\n"
-        ;
+                << "\t--book <book file name>\n"
+                << "\t\tFile with opening book.\n\n"
+          ;
     exit(-1);
 }
