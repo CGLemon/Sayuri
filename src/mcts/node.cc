@@ -617,7 +617,7 @@ std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
     assert(HaveChildren());
 
     auto lcb_reduction = GetParameters()->lcb_reduction;
-    auto max_playouts = (float) GetParameters()->playouts;
+    auto parents_visits = (float)GetVisits();
     auto list = std::vector<std::pair<float, int>>{};
 
     for (const auto & child : children_) {
@@ -629,7 +629,7 @@ std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
         const auto visits = node->GetVisits();
         if (visits > 0) {
             const auto lcb = node->GetLcb(color) * (1.f - lcb_reduction) + 
-                                 lcb_reduction * ((float)visits/max_playouts);
+                                 lcb_reduction * ((float)visits/parents_visits);
             list.emplace_back(lcb, node->GetVertex());
         }
     }
