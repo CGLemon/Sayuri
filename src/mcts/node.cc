@@ -124,6 +124,7 @@ bool Node::ExpandChildren(Network &network,
 
     if (allow_pass) {
         nodelist.emplace_back(raw_netlist.pass_probability, kPass);
+        legal_accumulate += raw_netlist.pass_probability;
     }
 
     if (legal_accumulate <= 0.0f) {
