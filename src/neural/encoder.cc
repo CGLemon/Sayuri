@@ -113,12 +113,8 @@ void Encoder::FillMove(const Board* board,
     auto num_intersections = board->GetNumIntersections();
 
     auto last_move = board->GetLastMove();
-    if (last_move == kNullVertex) {
+    if (last_move == kNullVertex || last_move == kPass || last_move == kResign) {
         return;
-    } else if (last_move == kPass || last_move == kResign) {
-        for (int index = 0; index < num_intersections; ++index) {
-            move_it[index] = static_cast<float>(true);
-        }
     } else {
         for (int index = 0; index < num_intersections; ++index) {
             auto x = index % boardsize;
