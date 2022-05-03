@@ -50,6 +50,7 @@ void InitOptionsMap() {
     options_map["help"] << Option::setoption(false);
     options_map["quiet"] << Option::setoption(false);
     options_map["ponder"] << Option::setoption(false);
+    options_map["friendly_pass"] << Option::setoption(false);
     options_map["analysis_verbose"] << Option::setoption(false);
     options_map["mode"] << Option::setoption(std::string{"gtp"});
 
@@ -188,6 +189,11 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 
     if (const auto res = parser.Find("--ponder")) {
         SetOption("ponder", true);
+        parser.RemoveCommand(res->Index());
+    }
+
+    if (const auto res = parser.Find("--friendly-pass")) {
+        SetOption("friendly_pass", true);
         parser.RemoveCommand(res->Index());
     }
 

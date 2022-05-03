@@ -349,55 +349,14 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             pass_cnt += 2;
         }
 
-        constexpr float kOwnshipThreshold = 0.75f;
         auto result = agent_->GetSearch().Computation(400, 0, Search::kNullTag);
-        auto bsize = agent_->GetState().GetBoardSize();
-        auto color = agent_->GetState().GetToMove();
-        auto safe_ownership = agent_->GetState().GetOwnership();
-        auto safe_area = agent_->GetState().GetStrictSafeArea();
-
-        auto alive = std::vector<std::vector<int>>{};
-        auto dead = std::vector<std::vector<int>>{};
-
-        for (int idx = 0; idx < agent_->GetState().GetNumIntersections(); ++idx) {
-            auto x = idx % bsize;
-            auto y = idx / bsize;
-            auto vtx = agent_->GetState().GetVertex(x,y);
-            auto owner = safe_area[idx] == true ?
-                             2 * (float)(safe_ownership[idx] == color) - 1 : result.root_ownership[idx];
-            auto state = agent_->GetState().GetState(vtx);
-
-            if (owner > kOwnshipThreshold) {
-                if (color == state) {
-                    alive.emplace_back(agent_->GetState().GetStringList(vtx));
-                } else if ((!color) == state) {
-                    dead.emplace_back(agent_->GetState().GetStringList(vtx));
-                }
-            } else if (owner < -kOwnshipThreshold) {
-                if ((!color) == state) {
-                    alive.emplace_back(agent_->GetState().GetStringList(vtx));
-                } else if (color == state) {
-                    dead.emplace_back(agent_->GetState().GetStringList(vtx));
-                }
-            }
-        }
-
-        // remove multiple mentions of the same string
-        // unique reorders and returns new iterator, erase actually deletes
-        std::sort(begin(alive), end(alive));
-        alive.erase(std::unique(std::begin(alive), std::end(alive)),
-                    std::end(alive));
-
-        std::sort(std::begin(dead), std::end(dead));
-        dead.erase(std::unique(std::begin(dead), std::end(dead)),
-                   std::end(dead));
 
         auto vtx_list = std::ostringstream{};
 
         if (const auto input = parser.Find("alive", 1)) {
-            for (size_t i = 0; i < alive.size(); i++) {
+            for (size_t i = 0; i < result.alive_strings.size(); i++) {
                 vtx_list << (i == 0 ? "" : "\n");
-                auto &string = alive[i];
+                auto &string = result.alive_strings[i];
                 for (size_t j = 0; j < string.size(); j++) {
                     auto vtx = string[j];
                     vtx_list << agent_->GetState().VertexToText(vtx);
@@ -406,9 +365,9 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             }
             out << GTPSuccess(vtx_list.str());
         } else if (const auto input = parser.Find("dead", 1)) {
-             for (size_t i = 0; i < dead.size(); i++) {
+             for (size_t i = 0; i < result.dead_strings.size(); i++) {
                 vtx_list << (i == 0 ? "" : "\n");
-                auto &string = dead[i];
+                auto &string = result.dead_strings[i];
                 for (size_t j = 0; j < string.size(); j++) {
                     auto vtx = string[j];
                     vtx_list << agent_->GetState().VertexToText(vtx);

@@ -69,20 +69,20 @@ struct ComputationResult {
     int board_size;
     int best_move{kNullVertex};
     int random_move{kNullVertex};
-    int ponder_move{kNullVertex};
 
     VertexType to_move;
-
     float komi;
     float root_eval;
     float root_final_score;
 
     std::vector<float> root_ownership;
     std::vector<float> root_probabilities;
-    std::vector<float> root_target_probabilities;
-    std::vector<float> root_policy;
-    std::vector<float> root_noise;
     std::vector<int> root_visits;
+
+    std::vector<float> target_probabilities;
+
+    std::vector<std::vector<int>> alive_strings;
+    std::vector<std::vector<int>> dead_strings;
 
     int movenum;
 };
@@ -131,6 +131,8 @@ public:
 
 private:
     bool InputPending(Search::OptionTag tag) const;
+
+    void GatherComputationResult(ComputationResult &result) const;
 
     void GatherData(const GameState &state, ComputationResult &result);
 

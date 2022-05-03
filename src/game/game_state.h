@@ -53,7 +53,7 @@ public:
 
     void SetHandicap(int handicap);
 
-    // Compute final score with Tromp Taylor rule.
+    // Compute black final score with Tromp Taylor rule.
     float GetFinalScore(float bonus = 0) const;
 
     std::vector<bool> GetStrictSafeArea() const;
@@ -71,6 +71,7 @@ public:
     std::vector<int> GetOwnershipAndRemovedDeadStrings(int playouts) const;
     std::vector<int> MarKDeadStrings(int playouts) const;
     void RemoveDeadStrings(int playouts);
+    void RemoveDeadStrings(std::vector<int> &dead_list);
 
     int GetVertex(const int x, const int y) const;
     int GetIndex(const int x, const int y) const;

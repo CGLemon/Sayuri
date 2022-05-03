@@ -617,6 +617,10 @@ void GameState::RemoveDeadStrings(int playouts) {
     board_.RemoveMarkedStrings(dead);
 }
 
+void GameState::RemoveDeadStrings(std::vector<int> &dead_list) {
+    board_.RemoveMarkedStrings(dead_list);
+}
+
 float GameState::GetFinalScore(float bonus) const {
     return board_.ComputeFinalScore(GetKomi() - bonus);
 }

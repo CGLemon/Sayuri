@@ -77,6 +77,8 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
     node->DecrementThreads();
 }
 
+
+// Allocate some data, reset the counters, and expand the root node before MCTS.
 std::vector<float> Search::PrepareRootNode() {
     node_data_ = std::make_unique<NodeData>();
     node_stats_ = std::make_unique<NodeStats>();
@@ -182,6 +184,16 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
     auto computation_result = ComputationResult{};
     playours = std::min(playours, kMaxPlayouts);
 
+    // Prepare some basic information.
+    const auto color = root_state_.GetToMove();
+    const auto board_size = root_state_.GetBoardSize();
+    const auto move_num = root_state_.GetMoveNumber();
+
+    computation_result.to_move = static_cast<VertexType>(color);
+    computation_result.board_size = board_size;
+    computation_result.komi = root_state_.GetKomi();
+    computation_result.movenum = root_state_.GetMoveNumber();
+
     if (root_state_.IsGameOver()) {
         // Always reture pass move if the passese number is greater than two.
         computation_result.best_move = kPass;
@@ -208,15 +220,6 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
         };
     };
 
-    // Prepare some basic information.
-    const auto color = root_state_.GetToMove();
-    const auto board_size = root_state_.GetBoardSize();
-    const auto move_num = root_state_.GetMoveNumber();
-
-    computation_result.board_size = board_size;
-    computation_result.komi = root_state_.GetKomi();
-    computation_result.movenum = root_state_.GetMoveNumber();
-
     Timer timer;
     Timer analyze_timer;
 
@@ -227,7 +230,7 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
     analyze_timer.Clock();
 
     const auto thinking_time = time_control_.GetThinkingTime(color, board_size, move_num);
-    const auto root_noise = PrepareRootNode();
+    PrepareRootNode();
 
     if (thinking_time < timer.GetDuration()) {
         running_.store(false, std::memory_order_relaxed);
@@ -253,6 +256,7 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
         }
 
         if ((tag & kAnalyze) && analyze_timer.GetDurationMilliseconds() > interval * 10) {
+            // Output analyze verbose for GTP interface, like sabaki...
             analyze_timer.Clock();
             DUMPING << root_node_->ToAnalyzeString(root_state_, color);
         }
@@ -285,46 +289,49 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
                                       timer.GetDuration() << "(p/sec)\n";
     }
 
-    // Fill side to move, moves, root eval and score.
-    computation_result.to_move = static_cast<VertexType>(color);
-    computation_result.best_move = root_node_->GetBestMove();
-    computation_result.random_move = root_node_->RandomizeFirstProportionally(1);
-    computation_result.root_eval = root_node_->GetEval(color, false);
-    computation_result.root_final_score = root_node_->GetFinalScore(color);
+    GatherComputationResult(computation_result);
 
-    auto num_intersections = root_state_.GetNumIntersections();
+    // Release the tree nodes.
+    ClearNodes();
+
+    return computation_result;
+}
+
+void Search::GatherComputationResult(ComputationResult &result) const {
+    const auto color = root_state_.GetToMove();
+    const auto num_intersections = root_state_.GetNumIntersections();
+    const auto board_size = root_state_.GetBoardSize(); 
+
+    // Fill best moves, root eval and score.
+    result.best_move = root_node_->GetBestMove();
+    result.random_move = root_node_->RandomizeFirstProportionally(1);
+    result.root_eval = root_node_->GetEval(color, false);
+    result.root_final_score = root_node_->GetFinalScore(color);
+
 
     // Resize the childern status buffer.
-    computation_result.root_ownership.resize(num_intersections);
-    computation_result.root_probabilities.resize(num_intersections+1);
-    computation_result.root_target_probabilities.resize(num_intersections+1);
-    computation_result.root_policy.resize(num_intersections+1);
-    computation_result.root_noise.resize(num_intersections+1);
-    computation_result.root_visits.resize(num_intersections+1);
-
-    // Fill noise.
-    std::copy(std::begin(root_noise), 
-                  std::end(root_noise),
-                  std::begin(computation_result.root_noise));
+    result.root_ownership.resize(num_intersections);
+    result.root_probabilities.resize(num_intersections+1);
+    result.root_visits.resize(num_intersections+1);
+    result.target_probabilities.resize(num_intersections+1);
 
     // Fill ownership.
     auto ownership = root_node_->GetOwnership(color);
     std::copy(std::begin(ownership), 
                   std::begin(ownership) + num_intersections,
-                  std::begin(computation_result.root_ownership));
+                  std::begin(result.root_ownership));
 
-    // Fill visits.
+    // Fill root visits.
     auto parentvisits = 0;
     const auto &children = root_node_->GetChildren();
     for (const auto &child : children) {
         const auto node = child.Get();
         const auto visits = node->GetVisits();
         const auto vertex = node->GetVertex();
-        const auto policy = node->GetPolicy();
+
         parentvisits += visits;
         if (vertex == kPass) {
-            computation_result.root_visits[num_intersections] = visits;
-            computation_result.root_policy[num_intersections] = policy;
+            result.root_visits[num_intersections] = visits;
             continue;
         }
 
@@ -332,18 +339,19 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
         const auto y = root_state_.GetY(vertex);
         const auto index = root_state_.GetIndex(x, y);
 
-        computation_result.root_visits[index] = visits;
-        computation_result.root_policy[index] = policy;
+        result.root_visits[index] = visits;
     }
 
-    // Fill probabilities.
+    // Fill raw probabilities.
     for (int idx = 0; idx < num_intersections+1; ++idx) {
-        float prob = (float) computation_result.root_visits[idx]/ (float) parentvisits;
-        computation_result.root_probabilities[idx] = prob;
+        float prob = (float) result.root_visits[idx]/ (float) parentvisits;
+        result.root_probabilities[idx] = prob;
     }
 
     // Fill target probabilities.
-    // root_node_->PolicyTargetPruning();
+
+    // TODO: Prune some bad children in order get better
+    //       target probabilities.
     float tot_target_policy = 0.0f;
     for (int idx = 0; idx < num_intersections+1; ++idx) {
         const auto x = idx % board_size;
@@ -358,22 +366,66 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
 
         auto node = root_node_->GetChild(vertex);
         if (node && node->IsActive()) {
-            const auto prob = computation_result.root_probabilities[idx];
-            computation_result.root_target_probabilities[idx] = prob;
+            const auto prob = result.root_probabilities[idx];
+            result.target_probabilities[idx] = prob;
             tot_target_policy += prob;
         } else {
-            computation_result.root_target_probabilities[idx] = 0.0f;
+            result.target_probabilities[idx] = 0.0f;
         }
     }
 
-    for (auto &prob : computation_result.root_target_probabilities) {
+    for (auto &prob : result.target_probabilities) {
         prob /= tot_target_policy;
     }
 
-    // Release the tree nodes.
-    ClearNodes();
+    // Fill the dead strings and live strings.
+    constexpr float kOwnshipThreshold = 0.75f;
 
-    return computation_result;
+    auto safe_ownership = root_state_.GetOwnership();
+    auto safe_area = root_state_.GetStrictSafeArea();
+
+    auto alive = std::vector<std::vector<int>>{};
+    auto dead = std::vector<std::vector<int>>{};
+
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        const auto x = idx % board_size;
+        const auto y = idx / board_size;
+
+        const auto vtx = root_state_.GetVertex(x,y);
+
+        // owner value, 1 is my value, -1 is opp's.
+        const auto owner = safe_area[idx] == true ?
+                               2 * (float)(safe_ownership[idx] == color) - 1 : result.root_ownership[idx];
+        const auto state = root_state_.GetState(vtx);
+
+
+        if (owner > kOwnshipThreshold) {
+            if (color == state) {
+                alive.emplace_back(root_state_.GetStringList(vtx));
+            } else if ((!color) == state) {
+                dead.emplace_back(root_state_.GetStringList(vtx));
+            }
+        } else if (owner < -kOwnshipThreshold) {
+            if ((!color) == state) {
+                alive.emplace_back(root_state_.GetStringList(vtx));
+            } else if (color == state) {
+                dead.emplace_back(root_state_.GetStringList(vtx));
+            }
+        }
+    }
+
+    // remove multiple mentions of the same string
+    // unique reorders and returns new iterator, erase actually deletes
+    std::sort(begin(alive), end(alive));
+    alive.erase(std::unique(std::begin(alive), std::end(alive)),
+                std::end(alive));
+
+    std::sort(std::begin(dead), std::end(dead));
+    dead.erase(std::unique(std::begin(dead), std::end(dead)),
+               std::end(dead));
+
+    result.alive_strings = alive;
+    result.dead_strings = dead;
 }
 
 bool ShouldResign(GameState &state, ComputationResult &result, float resign_threshold) {
@@ -412,10 +464,48 @@ bool ShouldResign(GameState &state, ComputationResult &result, float resign_thre
     return true;
 }
 
+bool ShouldPass(GameState &state, ComputationResult &result, bool friendly_pass) {
+    if (!friendly_pass || state.GetLastMove() != kPass) {
+        return false;
+    }
+
+    auto dead_list = std::vector<int>{};
+    auto fork_state = state;
+
+    for (const auto &string : result.dead_strings) {
+        for (const auto vtx: string) {
+            dead_list.emplace_back(vtx);
+        }
+    }
+
+    // Remove the dead strings predicted by NN.
+    fork_state.RemoveDeadStrings(dead_list);
+
+    // Compute black final score.
+    float score = fork_state.GetFinalScore();
+
+
+    if (state.GetToMove() == kWhite) {
+        score = 0 - score;
+    }
+
+    if (score > 0.1f) {
+        // We already win the game. I will play the pass move.
+        return true;
+    }
+
+    // The game result is unknown. I will keep playing.
+    return false;
+}
+
 int Search::ThinkBestMove() {
     auto result = Computation(max_playouts_, 0, kThinking);
     if (ShouldResign(root_state_, result, param_->resign_threshold)) {
         return kResign;
+    }
+
+    if (ShouldPass(root_state_, result, param_->friendly_pass)) {
+        return kPass;
     }
 
     return result.best_move;
@@ -450,6 +540,10 @@ int Search::Analyze(int interval, bool ponder) {
     auto result = Computation(playouts, interval, (OptionTag)tag);
     if (ShouldResign(root_state_, result, param_->resign_threshold)) {
         return kResign;
+    }
+
+    if (ShouldPass(root_state_, result, param_->friendly_pass)) {
+        return kPass;
     }
 
     return result.best_move;
@@ -540,7 +634,7 @@ void Search::GatherData(const GameState &state, ComputationResult &result) {
 
     data.q_value = result.root_eval;
     data.planes = Encoder::Get().GetPlanes(state);
-    data.probabilities = result.root_target_probabilities;
+    data.probabilities = result.target_probabilities;
 
     training_buffer_.emplace_back(data);
 }

@@ -19,6 +19,8 @@ public:
     // Get ladder type map.
     // LadderType::kLadderDeath means that the ladder string is already death.
     // LadderType::kLadderEscapable means that the ladder string has a chance to escape.
+    // LadderType::kLadderTake means that someone can take the opponent's ladder strings.
+    // LadderType::kLadderAtari means that someone can atari opponent's ladder string.
     std::vector<LadderType> GetLadderMap() const;
 
     // Compute all safe area which both players don't need to play move in.

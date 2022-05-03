@@ -41,6 +41,7 @@ public:
 
         lag_buffer = GetOption<int>("lag_buffer");
         ponder = GetOption<bool>("ponder");
+        friendly_pass = GetOption<bool>("friendly_pass");
         cache_buffer_factor = GetOption<int>("cache_buffer_factor");
 
         root_policy_temp = GetOption<float>("root_policy_temp");
@@ -80,6 +81,7 @@ public:
     int cache_buffer_factor;
 
     bool ponder;
+    bool friendly_pass;
 
     std::array<float, kNumVertices + 10> dirichlet_buffer;
 };
