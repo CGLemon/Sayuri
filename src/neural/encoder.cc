@@ -66,7 +66,6 @@ std::string Encoder::GetPlanesString(const GameState &state, int symmetry) const
             }
             out << std::endl;
         }
-        out << std::endl;
     }
     return out.str();
 }
