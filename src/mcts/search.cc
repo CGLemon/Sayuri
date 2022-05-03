@@ -469,6 +469,12 @@ bool ShouldPass(GameState &state, ComputationResult &result, bool friendly_pass)
         return false;
     }
 
+    const auto move_threshold = state.GetNumIntersections() / 3;
+    if (state.GetMoveNumber() <= move_threshold) {
+        // Too early to pass.
+        return false;
+    }
+
     auto dead_list = std::vector<int>{};
     auto fork_state = state;
 
