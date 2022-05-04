@@ -200,7 +200,7 @@ class TrainingPipe():
             )
 
             for _, batch in enumerate(train_data):
-                board_size_list, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
+                _, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
                 if self.use_gpu:
                     planes = planes.to(self.device)
                     target_prob = target_prob.to(self.device)
@@ -215,7 +215,7 @@ class TrainingPipe():
 
 
                 # forward and backforwad
-                _, loss = self.net(planes, board_size_list, target)
+                _, loss = self.net(planes, target)
                 loss = loss.mean() / self.macrofactor
                 loss.backward()
                 macro_steps += 1

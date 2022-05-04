@@ -239,7 +239,7 @@ void Encoder::FillMisc(const Board* board,
     if (to_move == kWhite) {
         komi = 0.0f - komi;
     }
-
+/*
     // komi
     std::fill(misc_it+ 0 * num_intersections,
                   misc_it+ 1 * num_intersections, komi/10.f);
@@ -250,6 +250,7 @@ void Encoder::FillMisc(const Board* board,
 
     std::fill(misc_it+ 2 * num_intersections,
                   misc_it+ 3 * num_intersections, static_cast<float>(false));
+ */
     std::fill(misc_it+ 3 * num_intersections,
                   misc_it+ 4 * num_intersections, static_cast<float>(true));
 }
@@ -265,9 +266,9 @@ void Encoder::EncoderFeatures(const GameState &state,
     auto ladder_it = it + 6 * num_intersections;
     auto misc_it = it + 10 * num_intersections;
 
-    FillKoMove(board.get(), ko_it);
-    FillSafeArea(board.get(), safearea_it);
-    FillLiberties(board.get(), liberties_it);
-    FillLadder(board.get(), ladder_it);
+    // FillKoMove(board.get(), ko_it);
+    // FillSafeArea(board.get(), safearea_it);
+    // FillLiberties(board.get(), liberties_it);
+    // FillLadder(board.get(), ladder_it);
     FillMisc(board.get(), state.GetToMove(), state.GetKomi(), misc_it);
 }

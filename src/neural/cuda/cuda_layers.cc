@@ -358,22 +358,20 @@ GlobalPool::GlobalPool(CudaHandles *handles,
 }
 
 void GlobalPool::Forward(const int batch, float *input, float *output) {
-    float b_coeff = 0;
     const int board_size = (width_ + height_) / 2;
+    const float b_diff = (float)board_size - kAvgBSize;
 
     if (is_value_head_) {
-        float bsize_varaint = 0;
-        for (auto b = kMinBSize; b <= kMaxBSize; ++b) {
-            bsize_varaint += ((b - kAvgBSize) * (b - kAvgBSize));
-        }
-        bsize_varaint /= (kMaxBSize - kMinBSize + 1);
-        b_coeff = (std::pow((float)board_size - kAvgBSize, 2) - bsize_varaint) * kFactorPow;
+        const float b_coeff0 = b_diff / 10.f;
+        const float b_coeff1 = b_diff * b_diff / 100.f - kBSizeVaraint;
 
+        head_global_pool(input, output, b_coeff0, b_coeff1, batch,
+                         channels_, spatial_size_, handles_->stream);
     } else {
-        b_coeff = ((float)board_size - kAvgBSize) * kFactor;
+        const float b_coeff = b_diff / 10.f;
+        global_pool(input, output, b_coeff, batch,
+                    channels_, spatial_size_, handles_->stream);
     }
-    global_pool(input, output, b_coeff, batch,
-                channels_, spatial_size_, handles_->stream);
 }
 
 
@@ -435,7 +433,7 @@ void SEUnit::LoadingWeight(const std::vector<float> &weights_w1,
 
 void SEUnit::Forward(const int batch, float *input, float *ouput) {
     const int board_size = (width_ + height_) / 2;
-    const float b_coeff = ((float)board_size - kAvgBSize) * kFactor;
+    const float b_coeff = ((float)board_size - kAvgBSize) / 10.f;
     global_pool(input, cuda_op_[0], b_coeff, batch, channels_, spatial_size_, handles_->stream);
 
     const size_t fc1_input_size = 3 * channels_;

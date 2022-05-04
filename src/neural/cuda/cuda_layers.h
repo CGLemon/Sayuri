@@ -112,12 +112,11 @@ public:
     void Forward(const int batch, float *input, float *output);
 
 private:
-    bool is_value_head_; 
+    bool is_value_head_;
     static constexpr size_t kMaxBSize = 19;
-    static constexpr size_t kMinBSize = 7;
+    static constexpr size_t kMinBSize = 9;
     static constexpr float kAvgBSize = (kMaxBSize + kMinBSize) / 2.f;
-    static constexpr float kFactor = 0.1f;
-    static constexpr float kFactorPow = kFactor * kFactor;
+    static constexpr float kBSizeVaraint = 0.1;
 };
 
 
@@ -146,9 +145,9 @@ private:
     float *cuda_weights_b2_;
 
     static constexpr size_t kMaxBSize = 19;
-    static constexpr size_t kMinBSize = 7;
+    static constexpr size_t kMinBSize = 9;
     static constexpr float kAvgBSize = (kMaxBSize + kMinBSize) / 2.f;
-    static constexpr float kFactor = 0.1f;
+    static constexpr float kBSizeVaraint = 0.1;
 };
 } // namespace CUDA
 

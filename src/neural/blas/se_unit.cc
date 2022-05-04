@@ -12,7 +12,7 @@ void GlobalPool<false>::Forward(const size_t board_size,
     const auto width = board_size;
     const auto height = board_size;
     const auto spatial_size = width * height;
-    const float b_coeff = ((float)board_size - kAvgBSize) * kFactor;
+    const float b_coeff = ((float)board_size - kAvgBSize) / 10.f;
     const float *input_ptr = input.data();
 
     for (auto c = size_t{0}; c < channels; ++c) {
@@ -29,8 +29,8 @@ void GlobalPool<false>::Forward(const size_t board_size,
 
         const float mean = sum / (float)spatial_size;
         output[c + 0 * channels] = mean;
-        output[c + 1 * channels] = max;
-        output[c + 2 * channels] = b_coeff;
+        output[c + 1 * channels] = mean * b_coeff;
+        output[c + 2 * channels] = max;
     }
 }
 
@@ -44,30 +44,24 @@ void GlobalPool<true>::Forward(const size_t board_size,
     const auto spatial_size = width * height;
     const float *input_ptr = input.data();
 
-    float bsize_varaint = 0;
-    for (auto b = kMinBSize; b <= kMaxBSize; ++b) {
-        bsize_varaint += ((b - kAvgBSize) * (b - kAvgBSize));
-    }
-    bsize_varaint /= (kMaxBSize-kMinBSize+1);
-    const float b_coeff = (std::pow((float)board_size - kAvgBSize, 2) - 
-                               bsize_varaint) * kFactorPow;
+    const float b_diff = (float)board_size - kAvgBSize;
+    const float b_coeff0 = b_diff / 10.f;
+    const float b_coeff1 = b_diff * b_diff / 100.f - kBSizeVaraint;
 
     for (auto c = size_t{0}; c < channels; ++c) {
         float sum = 0.0f;
-        float max = 0.0f;
         for (auto b = size_t{0}; b < spatial_size; ++b) {
             float val = *input_ptr;
 
             sum += val;
-            max = std::max(val, max);
 
             input_ptr++;
         }
 
         const float mean = sum / (float)spatial_size;
         output[c + 0 * channels] = mean;
-        output[c + 1 * channels] = max;
-        output[c + 2 * channels] = b_coeff;
+        output[c + 1 * channels] = mean * b_coeff0;
+        output[c + 2 * channels] = mean * b_coeff1;
     }
 }
 

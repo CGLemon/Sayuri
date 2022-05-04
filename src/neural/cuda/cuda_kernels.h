@@ -29,6 +29,11 @@ void global_pool(T *input, T *output, T b_coeff, int batch,
                  int channels, int spatial_size, cudaStream_t stream);
 
 template<typename T>
+void head_global_pool(T *input, T *output, T b_coeff0, T b_coeff1, int batch,
+                      int channels, int spatial_size, cudaStream_t stream);
+
+
+template<typename T>
 void se_scale(const T *input, const T* se_bias, T* data,
               int batch, int channels, int spatial_size, cudaStream_t stream);
 

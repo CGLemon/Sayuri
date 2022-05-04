@@ -4,41 +4,39 @@ import torch.nn.functional as F
 import numpy as np
 
 class GlobalPool(nn.Module):
-    def __init__(self, b_max=19,
-                       b_min=7,
-                       is_value_head=False):
+    def __init__(self, is_value_head=False):
         super().__init__()
-        self.b_avg = (b_max + b_min) / 2
-        self.b_factor = 0.1
-        self.b_factor_pow = self.b_factor * self.b_factor
-        self.b_varinat = np.mean(np.power(np.arange(b_min, b_max+1, 1) - self.b_avg, 2))
+        self.b_avg = (19 + 9) / 2
+        self.b_varinat = 0.1
 
         self.is_value_head = is_value_head
 
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.max_pool = nn.AdaptiveMaxPool2d(1)
 
-    def forward(self, x, mask, mask_factor):
-        avg_part = self.avg_pool(x * mask_factor)
-        avg_part = torch.flatten(avg_part, start_dim=1, end_dim=3)
+    def forward(self, x, mask_buffers):
+        mask, mask_sum_hw, mask_sum_hw_sqrt = mask_buffers
+        b, c, h, w = x.size()
 
-        max_part = self.max_pool(x)
-        max_part = F.relu(torch.flatten(max_part, start_dim=1, end_dim=3), inplace=True)
+        div = torch.reshape(mask_sum_hw, (-1,1))
+        div_sqrt = torch.reshape(mask_sum_hw_sqrt, (-1,1))
 
-        _, _, h, w = mask_factor.size()
-        spatial = h * w
-        b_coeff = torch.sqrt(spatial / self.max_pool(mask_factor))
-        b_coeff = torch.flatten(b_coeff, start_dim=1, end_dim=3)
-        b_coeff = b_coeff - self.b_avg
+        layer_raw_mean = torch.sum(x, dim=(2,3), keepdims=False) / div
+        b_diff = div_sqrt - self.b_avg
+
+        layer0 = None
+        layer1 = None
+        layer2 = None
 
         if self.is_value_head:
-            b_coeff = (torch.pow(b_coeff, 2) - self.b_varinat) * self.b_factor_pow
+            layer0 = layer_raw_mean
+            layer1 = layer_raw_mean * (b_diff / 10.0)
+            layer2 = layer_raw_mean * (torch.square(b_diff) / 100.0 - self.b_varinat)
         else:
-            b_coeff = b_coeff * self.b_factor
+            layer_raw_max = torch.max(torch.reshape(x, (b,c,h*w)), dim=2, keepdims=False)[0]
+            layer0 = layer_raw_mean
+            layer1 = layer_raw_mean * (b_diff / 10.0)
+            layer2 = layer_raw_max
 
-        b_coeff = b_coeff.expand((avg_part.size()))
-
-        return torch.cat((avg_part, max_part, b_coeff), 1)
+        return torch.cat((layer0, layer1, layer2), 1)
 
 class FullyConnect(nn.Module):
     def __init__(self, in_size,
@@ -80,8 +78,8 @@ class Convolve(nn.Module):
         nn.init.kaiming_normal_(self.conv.weight,
                                 mode="fan_out",
                                 nonlinearity="relu")
-    def forward(self, x):
-        x = self.conv(x)
+    def forward(self, x, mask):
+        x = self.conv(x) * mask
         return F.relu(x, inplace=True) if self.relu else x
 
 
@@ -172,7 +170,10 @@ class ResBlock(nn.Module):
             )
 
     def forward(self, inputs):
-        x, mask, mask_factor = inputs
+        x, mask_buffers = inputs
+
+        mask, _, _ = mask_buffers
+
         identity = x
 
         out = self.conv1(x, mask)
@@ -180,7 +181,7 @@ class ResBlock(nn.Module):
         
         if self.with_se:
             b, c, _, _ = out.size()
-            seprocess = self.global_pool(out, mask, mask_factor)
+            seprocess = self.global_pool(out, mask_buffers)
             seprocess = self.extend(seprocess)
             seprocess = self.squeeze(seprocess)
 
@@ -192,7 +193,7 @@ class ResBlock(nn.Module):
 
         out += identity
 
-        return F.relu(out, inplace=True), mask, mask_factor
+        return F.relu(out, inplace=True), mask_buffers
 
 
 class Network(nn.Module):
@@ -223,7 +224,6 @@ class Network(nn.Module):
         self.set_layers()
 
     def set_layers(self):
-        # self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.global_pool = GlobalPool(is_value_head=False)
         self.global_pool_val = GlobalPool(is_value_head=True)
 
@@ -314,45 +314,32 @@ class Network(nn.Module):
             collector=self.tensor_collector
         )
 
-    def forward(self, planes, board_size_list = None, target = None):
-        # mask buffer
-        batch, _, _, _ = planes.size()
-        mask = torch.zeros((batch, 1, self.xsize, self.ysize))
-        mask_factor = torch.zeros((batch, 1, self.xsize, self.ysize))
-
-        if board_size_list == None:
-            mask[:, :, 0:self.xsize, 0:self.ysize] = 1
-            mask_factor[:, :, 0:self.xsize, 0:self.ysize] = 1
-        else:
-            for i in range(batch):
-                bsize = board_size_list[i]
-                mask[i, :, 0:bsize, 0:bsize] = 1
-                mask_factor[i, :, 0:bsize, 0:bsize] = (self.xsize * self.ysize) / (bsize * bsize)
-
-        device = planes.get_device()
-        if device >= 0:
-            mask = mask.to(device)
-            mask_factor = mask_factor.to(device)
+    def forward(self, planes, target = None):
+        # mask buffers
+        mask = planes[:, (self.input_channels-1):self.input_channels , :, :]
+        mask_sum_hw = torch.sum(mask, dim=(1,2,3))
+        mask_sum_hw_sqrt = torch.sqrt(mask_sum_hw)
+        mask_buffers = (mask, mask_sum_hw, mask_sum_hw_sqrt)
 
         # input layer
         x = self.input_conv(planes, mask)
 
         # residual tower
-        x, _, _ = self.residual_tower((x, mask, mask_factor))
+        x, _ = self.residual_tower((x, mask_buffers))
 
         # policy head
         pol = self.policy_conv(x, mask)
 
-        prob_without_pass = self.prob(pol) * mask
+        prob_without_pass = self.prob(pol, mask)
         prob_without_pass = torch.flatten(prob_without_pass, start_dim=1, end_dim=3)
 
-        pol_gpool = self.global_pool(pol, mask, mask_factor)
+        pol_gpool = self.global_pool(pol, mask_buffers)
 
         prob_pass = self.prob_pass_fc(pol_gpool)
         prob = torch.cat((prob_without_pass, prob_pass), 1)
 
         # auxiliary policy
-        aux_prob_without_pass = self.aux_prob(pol) * mask
+        aux_prob_without_pass = self.aux_prob(pol, mask)
         aux_prob_without_pass = torch.flatten(aux_prob_without_pass, start_dim=1, end_dim=3)
         aux_prob_pass = self.aux_prob_pass_fc(pol_gpool)
         aux_prob = torch.cat((aux_prob_without_pass, aux_prob_pass), 1)
@@ -360,11 +347,11 @@ class Network(nn.Module):
         # value head
         val = self.value_conv(x, mask)
 
-        ownership = self.ownership_conv(val) * mask
+        ownership = self.ownership_conv(val, mask)
         ownership = torch.flatten(ownership, start_dim=1, end_dim=3)
         ownership = torch.tanh(ownership)
 
-        val_gpool = self.global_pool_val(val, mask, mask_factor)
+        val_gpool = self.global_pool_val(val, mask_buffers)
 
         val_misc = self.value_misc_fc(val_gpool)
 

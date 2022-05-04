@@ -201,8 +201,8 @@ __global__ void global_pool_kernel(T *input, T *output, T b_coeff, int N, int C,
         int offset = c + n * 3 * C;
 
         output[offset + 0 * C] = (T)mean;
-        output[offset + 1 * C] = (T)max;
-        output[offset + 2 * C] = b_coeff;
+        output[offset + 1 * C] = (T)mean * b_coeff;
+        output[offset + 2 * C] = (T)max;
     }
 }
 
@@ -213,6 +213,42 @@ void global_pool(T *input, T *output, T b_coeff, int batch, int channels, int sp
     const int blocks = DivUp(size, gpool_kBlockSize);
     global_pool_kernel<<<blocks, gpool_kBlockSize, 0, stream>>>(input, output, b_coeff,
                                                                 batch, channels, spatial_size);
+    ReportCUDAErrors(cudaGetLastError());
+}
+
+template <typename T>
+__global__ void head_global_pool_kernel(T *input, T *output, T b_coeff0, T b_coeff1, int N, int C, int spatial) {
+    int total_elements = N * C;
+    int index = threadIdx.x + blockDim.x * blockIdx.x; // index = 0 ~ batch * channels
+    if (index < total_elements) {
+        float *input_ptr = input + index * spatial;
+        float sum = 0;
+
+        for (int i = 0; i < spatial; ++i) {
+            float val = input_ptr[i];
+            sum += val;
+        }
+
+        float mean = sum / spatial;
+
+        int n = index / C;
+        int c = index % C;
+        int offset = c + n * 3 * C;
+
+        output[offset + 0 * C] = (T)mean;
+        output[offset + 1 * C] = (T)mean * b_coeff0;
+        output[offset + 2 * C] = (T)mean * b_coeff1;
+    }
+}
+
+template <typename T>
+void head_global_pool(T *input, T *output, T b_coeff0, T b_coeff1,
+                      int batch, int channels, int spatial_size, cudaStream_t stream) {
+    const int size = batch * channels;
+    const int gpool_kBlockSize = 64;
+    const int blocks = DivUp(size, gpool_kBlockSize);
+    head_global_pool_kernel<<<blocks, gpool_kBlockSize, 0, stream>>>(input, output, b_coeff0, b_coeff1,
+                                                                     batch, channels, spatial_size);
     ReportCUDAErrors(cudaGetLastError());
 }
 
@@ -311,6 +347,9 @@ template void im2col<float>(int filter_size, int C, int H, int W,
 
 template void global_pool<float>(float *input, float *output, float b_coeff,
                                  int batch, int channels, int spatial_size, cudaStream_t stream);
+
+template void head_global_pool<float>(float *input, float *output, float b_coeff0, float b_coeff1,
+                                      int batch, int channels, int spatial_size, cudaStream_t stream);
 
 template void se_scale<float>(const float *input, const float *se_bias, float *data,
                               int batch, int channels, int spatial_size, cudaStream_t stream);
