@@ -11,7 +11,6 @@ class GlobalPool(nn.Module):
 
         self.is_value_head = is_value_head
 
-
     def forward(self, x, mask_buffers):
         mask, mask_sum_hw, mask_sum_hw_sqrt = mask_buffers
         b, c, h, w = x.size()

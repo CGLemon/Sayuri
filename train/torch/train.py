@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
-import random, time
+import random, time, math
 
 from symmetry import get_symmetry_plane
 from network import Network
@@ -222,6 +222,11 @@ class TrainingPipe():
 
                 # accumulate loss
                 running_loss += loss.item()
+
+                if math.isnan(running_loss):
+                    print("The gradient is explosion. Stop training...")
+                    keep_running = False
+                    break
 
                 if macro_steps % self.macrofactor == 0:
                     # update network
