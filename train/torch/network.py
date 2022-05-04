@@ -33,7 +33,7 @@ class GlobalPool(nn.Module):
             layer_raw_max = torch.max(torch.reshape(x, (b,c,h*w)), dim=2, keepdims=False)[0]
             layer0 = layer_raw_mean
             layer1 = layer_raw_mean * (b_diff / 10.0)
-            layer2 = layer_raw_max
+            layer2 =  F.relu(layer_raw_max, inplace=True)
 
         return torch.cat((layer0, layer1, layer2), 1)
 
