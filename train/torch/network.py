@@ -329,7 +329,7 @@ class Network(nn.Module):
         # policy head
         pol = self.policy_conv(x, mask)
 
-        prob_without_pass = self.prob(pol, mask)
+        prob_without_pass = self.prob(pol, mask) - (1.0-mask) * 5000.0
         prob_without_pass = torch.flatten(prob_without_pass, start_dim=1, end_dim=3)
 
         pol_gpool = self.global_pool(pol, mask_buffers)
@@ -338,7 +338,7 @@ class Network(nn.Module):
         prob = torch.cat((prob_without_pass, prob_pass), 1)
 
         # auxiliary policy
-        aux_prob_without_pass = self.aux_prob(pol, mask)
+        aux_prob_without_pass = self.aux_prob(pol, mask) - (1.0-mask) * 5000.0
         aux_prob_without_pass = torch.flatten(aux_prob_without_pass, start_dim=1, end_dim=3)
         aux_prob_pass = self.aux_prob_pass_fc(pol_gpool)
         aux_prob = torch.cat((aux_prob_without_pass, aux_prob_pass), 1)
