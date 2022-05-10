@@ -155,13 +155,13 @@ class ResBlock(nn.Module):
             self.with_se = True
             self.global_pool = GlobalPool(is_value_head=False)
 
-            self.extend = FullyConnect(
+            self.squeeze = FullyConnect(
                 in_size=3*channels,
                 out_size=se_size,
                 relu=True,
                 collector=collector
             )
-            self.squeeze = FullyConnect(
+            self.excite = FullyConnect(
                 in_size=se_size,
                 out_size=2*channels,
                 relu=False,
@@ -181,8 +181,8 @@ class ResBlock(nn.Module):
         if self.with_se:
             b, c, _, _ = out.size()
             seprocess = self.global_pool(out, mask_buffers)
-            seprocess = self.extend(seprocess)
             seprocess = self.squeeze(seprocess)
+            seprocess = self.excite(seprocess)
 
             gammas, betas = torch.split(seprocess, self.channels, dim=1)
             gammas = torch.reshape(gammas, (b, c, 1, 1))
@@ -246,7 +246,7 @@ class Network(nn.Module):
             elif s == "ResidualBlock-SE":
                 nn_stack.append(ResBlock(self.residual_channels,
                                          self.fixup,
-                                         self.residual_channels * 4,
+                                         self.residual_channels,
                                          self.tensor_collector))
         self.residual_tower = nn.Sequential(*nn_stack)
 
@@ -438,8 +438,8 @@ class Network(nn.Module):
                     f.write(Network.conv2text(self.residual_channels, self.residual_channels, 3))
                     f.write(Network.bn2text(self.residual_channels))
                     if s == "ResidualBlock-SE":
-                        f.write(Network.fullyconnect2text(self.residual_channels * 3, self.residual_channels * 4))
-                        f.write(Network.fullyconnect2text(self.residual_channels * 4, self.residual_channels * 2))
+                        f.write(Network.fullyconnect2text(self.residual_channels * 3, self.residual_channels))
+                        f.write(Network.fullyconnect2text(self.residual_channels, self.residual_channels * 2))
 
             # policy head
             f.write(Network.conv2text(self.residual_channels, self.policy_extract, 1))
