@@ -14,7 +14,7 @@ void LinearLayer::LoadWeights(std::vector<float> &load_weights) {
 
 void LinearLayer::LoadBiases(std::vector<float> &load_weights) {
     if ((int)load_weights.size() != GetOutputs()) {
-        throw "The biases size of linear layer are is acceptable";
+        throw "The biases size of linear layer is not acceptable";
     }
     biases_ = std::move(load_weights);
 }
@@ -41,14 +41,14 @@ void BatchNormLayer::Set(int channels) {
 
 void BatchNormLayer::LoadMeans(std::vector<float> &load_weights){
     if ((int)load_weights.size() != GetChannels()) {
-        throw "The means size of batch normallayer are not acceptable";
+        throw "The means size of batch normalization layer is not acceptable";
     }
     means_ = std::move(load_weights);
 }
 
 void BatchNormLayer::LoadStddevs(std::vector<float> &load_weights){
     if ((int)load_weights.size() != GetChannels()) {
-        throw "The StdDevs size of batch normallayer are not acceptable";
+        throw "The StdDevs size of batch normalization layer is not acceptable";
     }
     ProcessVariant(load_weights);
     stddevs_ = std::move(load_weights);

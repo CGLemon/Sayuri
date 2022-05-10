@@ -316,10 +316,10 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
 
         if (tower_ptr->apply_se) {
             graph_->tower_se[i].LoadingWeight(
-                tower_ptr->extend.GetWeights(),
-                tower_ptr->extend.GetBiases(),
                 tower_ptr->squeeze.GetWeights(),
-                tower_ptr->squeeze.GetBiases());
+                tower_ptr->squeeze.GetBiases(),
+                tower_ptr->excite.GetWeights(),
+                tower_ptr->excite.GetBiases());
         }
     }
 

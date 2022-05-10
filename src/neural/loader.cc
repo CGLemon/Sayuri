@@ -57,11 +57,11 @@ void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) 
    /**
     * get main
     * get info
-    *   (Aboaut the network information.)
+    *   (About the network information.)
     * end
     *
     * get struct
-    *   (Aboaut the network struct.)
+    *   (About the network struct.)
     * end
     *
     * get parameters
@@ -298,25 +298,28 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
         if (res_next_shape.size() == 2 /* fullyconnect layer */) {
             tower_ptr->apply_se = true;
             se_cnt++;
-            const auto se_extend_shape = netstruct[t_offset+4];
-            const auto se_squeeze_shape = netstruct[t_offset+5];
-            FillFullyconnectLayer(tower_ptr->extend,
-                                  buffer,
-                                  se_extend_shape[0],
-                                  se_extend_shape[1]);
+            const auto se_squeeze_shape = netstruct[t_offset+4];
+            const auto se_excite_shape = netstruct[t_offset+5];
             FillFullyconnectLayer(tower_ptr->squeeze,
                                   buffer,
                                   se_squeeze_shape[0],
                                   se_squeeze_shape[1]);
+            FillFullyconnectLayer(tower_ptr->excite,
+                                  buffer,
+                                  se_excite_shape[0],
+                                  se_excite_shape[1]);
 
-            if (se_extend_shape[1] != se_squeeze_shape[0]) {
+            if (se_squeeze_shape[1] != se_excite_shape[0]) {
                 throw "The SE Unit size is wrong 1.";
             }
-            if (se_extend_shape[0] != 3 * weights->residual_channels) {
+            if (se_squeeze_shape[0] != 3 * weights->residual_channels) {
                 throw "The SE Unit size is wrong 2.";
             }
+            if (se_excite_shape[1] != 2 * weights->residual_channels) {
+                throw "The SE Unit size is wrong 3.";
+            }
                 
-            tower_ptr->se_size = se_extend_shape[1];
+            tower_ptr->se_size = se_squeeze_shape[1];
         } else {
             tower_ptr->apply_se = false;
         }

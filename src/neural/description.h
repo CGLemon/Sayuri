@@ -83,8 +83,8 @@ public:
     ConvLayer conv2;
     BatchNormLayer bn2;
 
-    LinearLayer extend;
     LinearLayer squeeze;
+    LinearLayer excite;
 
     int se_size{0};
     int apply_se{false};

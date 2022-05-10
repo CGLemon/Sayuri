@@ -96,10 +96,10 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
             const size_t se_size = tower_ptr->se_size;
             SEUnit::Forward(board_size, tower_channels, se_size,
                             conv_out, res,
-                            tower_ptr->extend.GetWeights(),
-                            tower_ptr->extend.GetBiases(),
                             tower_ptr->squeeze.GetWeights(),
-                            tower_ptr->squeeze.GetBiases());
+                            tower_ptr->squeeze.GetBiases(),
+                            tower_ptr->excite.GetWeights(),
+                            tower_ptr->excite.GetBiases());
         
         } else {
              Batchnorm::Forward(board_size, tower_channels,
