@@ -9,7 +9,7 @@ GammasDict& GammasDict::Get() {
     return dict_;
 }
 
-bool GammasDict::InsertPattern(Pattern pattern) {
+bool GammasDict::InsertPattern(LocPattern pattern) {
     if (index_dict_.find(pattern()) == std::end(index_dict_)) {
         int idx = order_.size();
         index_dict_.insert({pattern(), idx});
@@ -40,7 +40,7 @@ int GammasDict::GetIndex(std::uint64_t hash) const {
     return it->second;
 }
 
-Pattern GammasDict::GetPattern(int idx) const {
+LocPattern GammasDict::GetPattern(int idx) const {
     return order_[idx];
 }
 
@@ -66,7 +66,7 @@ void GammasDict::LoadPatternsGammas(std::string filename) {
 
         iss >> hash >> gammas;
 
-        if (InsertPattern(Pattern::FromHash(hash))) {
+        if (InsertPattern(LocPattern::FromHash(hash))) {
             gammas_dict_.insert({hash, gammas});
         }
     }

@@ -85,7 +85,7 @@ public:
     // The GTP showboard.
     std::string GetBoardString(const int last_move, bool is_sgf) const;
 
-    Pattern GetPattern3x3(const int vtx, const int color) const;
+    LocPattern GetPattern3x3(const int vtx, const int color) const;
 
     // Compute the symmetry Zobrist hashing.
     std::uint64_t ComputeSymmetryHash(int komove, int symmetry) const;

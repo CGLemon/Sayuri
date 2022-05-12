@@ -12,9 +12,9 @@ enum FeaturnType : std::uint32_t {
     kAtari
 };
 
-struct Pattern {
-    Pattern() = default;
-    Pattern(std::uint32_t f, std::uint32_t v) : featurn(f), value(v) {}
+struct LocPattern {
+    LocPattern() = default;
+    LocPattern(std::uint32_t f, std::uint32_t v) : featurn(f), value(v) {}
 
     std::uint32_t featurn{kNoFeature};
 
@@ -28,11 +28,7 @@ struct Pattern {
         return Bind(featurn, value);
     }
 
-    static Pattern FromHash(std::uint64_t hash);
+    static LocPattern FromHash(std::uint64_t hash);
 
-    static Pattern GetSpatial3x3(std::uint32_t v);
-
-    static Pattern GetLiberties(std::uint32_t v);
-
-    static Pattern GetAtari(std::uint32_t v);
+    static LocPattern GetSpatial3x3(std::uint32_t v);
 };

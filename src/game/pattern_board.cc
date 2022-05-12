@@ -1,6 +1,6 @@
 #include "game/simple_board.h"
 
-Pattern SimpleBoard::GetPattern3x3(const int vtx, const int color) const {
+LocPattern SimpleBoard::GetPattern3x3(const int vtx, const int color) const {
     const int size = letter_box_size_;
 
     /*
@@ -121,5 +121,5 @@ Pattern SimpleBoard::GetPattern3x3(const int vtx, const int color) const {
                   (temp9 << 20) |                 (temp10<< 18) |
                                   (temp8 << 16);
 
-    return Pattern::GetSpatial3x3(*std::min_element(hash_arr, hash_arr+8));
+    return LocPattern::GetSpatial3x3(*std::min_element(hash_arr, hash_arr+8));
 }
