@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-CRAZY_NEGATIVE_VALUE = 5000.0
+CRAZY_NEGATIVE_VALUE = -5000.0
 
 class GlobalPool(nn.Module):
     def __init__(self, is_value_head=False):
@@ -32,7 +32,7 @@ class GlobalPool(nn.Module):
             layer1 = layer_raw_mean * (b_diff / 10.0)
             layer2 = layer_raw_mean * (torch.square(b_diff) / 100.0 - self.b_varinat)
         else:
-            raw_x = x - (1.0-mask) * CRAZY_NEGATIVE_VALUE
+            raw_x = x + (1.0-mask) * CRAZY_NEGATIVE_VALUE
             layer_raw_max = torch.max(torch.reshape(raw_x, (b,c,h*w)), dim=2, keepdims=False)[0]
             layer0 = layer_raw_mean
             layer1 = layer_raw_mean * (b_diff / 10.0)
@@ -333,7 +333,7 @@ class Network(nn.Module):
         # policy head
         pol = self.policy_conv(x, mask)
 
-        prob_without_pass = self.prob(pol, mask) - (1.0-mask) * CRAZY_NEGATIVE_VALUE
+        prob_without_pass = self.prob(pol, mask) + (1.0-mask) * CRAZY_NEGATIVE_VALUE
         prob_without_pass = torch.flatten(prob_without_pass, start_dim=1, end_dim=3)
 
         pol_gpool = self.global_pool(pol, mask_buffers)
@@ -342,7 +342,7 @@ class Network(nn.Module):
         prob = torch.cat((prob_without_pass, prob_pass), 1)
 
         # auxiliary policy
-        aux_prob_without_pass = self.aux_prob(pol, mask) - (1.0-mask) * CRAZY_NEGATIVE_VALUE
+        aux_prob_without_pass = self.aux_prob(pol, mask) + (1.0-mask) * CRAZY_NEGATIVE_VALUE
         aux_prob_without_pass = torch.flatten(aux_prob_without_pass, start_dim=1, end_dim=3)
         aux_prob_pass = self.aux_prob_pass_fc(pol_gpool)
         aux_prob = torch.cat((aux_prob_without_pass, aux_prob_pass), 1)
