@@ -17,7 +17,7 @@ void GlobalPool<false>::Forward(const size_t board_size,
 
     for (auto c = size_t{0}; c < channels; ++c) {
         float sum = 0.0f;
-        float max = 0.0f;
+        float max = -5000.0f; // crazy negative value
         for (auto b = size_t{0}; b < spatial_size; ++b) {
             float val = *input_ptr;
 

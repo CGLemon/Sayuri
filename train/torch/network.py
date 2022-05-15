@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+CRAZY_NEGATIVE_VALUE = 5000.0
+
 class GlobalPool(nn.Module):
     def __init__(self, is_value_head=False):
         super().__init__()
@@ -30,10 +32,11 @@ class GlobalPool(nn.Module):
             layer1 = layer_raw_mean * (b_diff / 10.0)
             layer2 = layer_raw_mean * (torch.square(b_diff) / 100.0 - self.b_varinat)
         else:
-            layer_raw_max = torch.max(torch.reshape(x, (b,c,h*w)), dim=2, keepdims=False)[0]
+            raw_x = x - (1.0-mask) * CRAZY_NEGATIVE_VALUE
+            layer_raw_max = torch.max(torch.reshape(raw_x, (b,c,h*w)), dim=2, keepdims=False)[0]
             layer0 = layer_raw_mean
             layer1 = layer_raw_mean * (b_diff / 10.0)
-            layer2 =  F.relu(layer_raw_max, inplace=True)
+            layer2 = layer_raw_max
 
         return torch.cat((layer0, layer1, layer2), 1)
 
@@ -132,7 +135,7 @@ class ConvBlock(nn.Module):
 class ResBlock(nn.Module):
     def __init__(self, channels, fixup, se_size=None, collector=None):
         super().__init__()
-        self.with_se=False
+        self.use_se=False
         self.channels=channels
 
         self.conv1 = ConvBlock(
@@ -140,6 +143,7 @@ class ResBlock(nn.Module):
             out_channels=channels,
             kernel_size=3,
             fixup=fixup,
+            relu=True,
             collector=collector
         )
         self.conv2 = ConvBlock(
@@ -152,7 +156,7 @@ class ResBlock(nn.Module):
         )
 
         if se_size != None:
-            self.with_se = True
+            self.use_se = True
             self.global_pool = GlobalPool(is_value_head=False)
 
             self.squeeze = FullyConnect(
@@ -178,7 +182,7 @@ class ResBlock(nn.Module):
         out = self.conv1(x, mask)
         out = self.conv2(out, mask)
         
-        if self.with_se:
+        if self.use_se:
             b, c, _, _ = out.size()
             seprocess = self.global_pool(out, mask_buffers)
             seprocess = self.squeeze(seprocess)
@@ -187,10 +191,10 @@ class ResBlock(nn.Module):
             gammas, betas = torch.split(seprocess, self.channels, dim=1)
             gammas = torch.reshape(gammas, (b, c, 1, 1))
             betas = torch.reshape(betas, (b, c, 1, 1))
-            out = torch.sigmoid(gammas) * out + betas
+            out = torch.sigmoid(gammas) * out + betas + identity
             out = out * mask
-
-        out += identity
+        else:
+            out += identity
 
         return F.relu(out, inplace=True), mask_buffers
 
@@ -329,7 +333,7 @@ class Network(nn.Module):
         # policy head
         pol = self.policy_conv(x, mask)
 
-        prob_without_pass = self.prob(pol, mask) - (1.0-mask) * 5000.0
+        prob_without_pass = self.prob(pol, mask) - (1.0-mask) * CRAZY_NEGATIVE_VALUE
         prob_without_pass = torch.flatten(prob_without_pass, start_dim=1, end_dim=3)
 
         pol_gpool = self.global_pool(pol, mask_buffers)
@@ -338,7 +342,7 @@ class Network(nn.Module):
         prob = torch.cat((prob_without_pass, prob_pass), 1)
 
         # auxiliary policy
-        aux_prob_without_pass = self.aux_prob(pol, mask) - (1.0-mask) * 5000.0
+        aux_prob_without_pass = self.aux_prob(pol, mask) - (1.0-mask) * CRAZY_NEGATIVE_VALUE
         aux_prob_without_pass = torch.flatten(aux_prob_without_pass, start_dim=1, end_dim=3)
         aux_prob_pass = self.aux_prob_pass_fc(pol_gpool)
         aux_prob = torch.cat((aux_prob_without_pass, aux_prob_pass), 1)

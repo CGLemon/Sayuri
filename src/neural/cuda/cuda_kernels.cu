@@ -184,7 +184,7 @@ __global__ void global_pool_kernel(T *input, T *output, T b_coeff, int N, int C,
     if (index < total_elements) {
         float *input_ptr = input + index * spatial;
         float sum = 0;
-        float max = 0;
+        float max = -5000.0f; // crazy negative value
 
         for (int i = 0; i < spatial; ++i) {
             float val = input_ptr[i];
