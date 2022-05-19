@@ -67,11 +67,11 @@ class DataSet():
             input_planes[p, 0:board_size, 0:board_size] = np.reshape(buf, (board_size, board_size))[:, :]
 
         if data.to_move == 1:
-            input_planes[self.input_channels-4, 0:board_size, 0:board_size] = data.komi/10
+            input_planes[self.input_channels-4, 0:board_size, 0:board_size] = data.komi/20
         else:
-            input_planes[self.input_channels-4, 0:board_size, 0:board_size] = -data.komi/10
+            input_planes[self.input_channels-4, 0:board_size, 0:board_size] = -data.komi/20
 
-        input_planes[self.input_channels-3, 0:board_size, 0:board_size] = (data.board_size**2)/100
+        input_planes[self.input_channels-3, 0:board_size, 0:board_size] = (data.board_size**2)/361
         # input_planes[self.input_channels-2, 0:board_size, 0:board_size] = 0 # fill zeros
         input_planes[self.input_channels-1, 0:board_size, 0:board_size] = 1 # fill ones
 

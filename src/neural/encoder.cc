@@ -238,11 +238,11 @@ void Encoder::FillMisc(const Board* board,
 
     // komi
     std::fill(misc_it+ 0 * num_intersections,
-                  misc_it+ 1 * num_intersections, komi/10.f);
+                  misc_it+ 1 * num_intersections, komi/20.f);
 
     // intersections
     std::fill(misc_it+ 1 * num_intersections,
-                  misc_it+ 2 * num_intersections, static_cast<float>(num_intersections)/100.f);
+                  misc_it+ 2 * num_intersections, static_cast<float>(num_intersections)/361.f);
 
     std::fill(misc_it+ 2 * num_intersections,
                   misc_it+ 3 * num_intersections, static_cast<float>(false));
