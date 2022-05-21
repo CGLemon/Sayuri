@@ -9,22 +9,18 @@
 #include <cmath>
 #include <sstream>
 #include <iomanip>
+#include <stack>
 
 #define VIRTUAL_LOSS_COUNT (3)
 
 Node::Node(NodeData* data) {
     assert(data->parameters != nullptr);
     data_ = data;
-    IncrementNodes();
 }
 
 Node::~Node() {
     assert(GetThreads() == 0);
-    DecrementNodes();
     ReleaseAllChildren();
-    for (auto i = size_t{0}; i < children_.size(); ++i) {
-        DecrementEdges();
-    }
 }
 
 NodeEvals Node::PrepareRootNode(Network &network,
@@ -156,12 +152,10 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
         data.vertex = node.second;
         data.policy = node.first;
         data.parameters = GetParameters();
-        data.node_stats = GetStats();
 
         data.parent = Get();
 
         children_.emplace_back(data);
-        IncrementEdges();
     }
     assert(!children_.empty());
 }
@@ -481,14 +475,6 @@ float Node::GetLcb(const int color) const {
     return mean - z * stddev;
 }
 
-size_t Node::GetMemoryUsed() {
-    const auto nodes = GetStats()->nodes.load(std::memory_order_relaxed);
-    const auto edges = GetStats()->edges.load(std::memory_order_relaxed);
-    const auto node_mem = sizeof(Node) + sizeof(Edge);
-    const auto edge_mem = sizeof(Edge);
-    return nodes * node_mem + edges * edge_mem;
-}
-
 std::string Node::ToVerboseString(GameState &state, const int color) {
     auto out = std::ostringstream{};
     const auto lcblist = GetLcbList(color);
@@ -535,9 +521,14 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
                 << std::endl;
     }
 
-    const auto mem_used = static_cast<double>(GetMemoryUsed()) / (1024.f * 1024.f);
-    const auto nodes = GetStats()->nodes.load(std::memory_order_relaxed);
-    const auto edges = GetStats()->edges.load(std::memory_order_relaxed);
+    auto nodes = size_t{0};
+    auto edges = size_t{0};
+    ComputeStats(nodes, edges);
+
+    const auto node_mem = sizeof(Node) + sizeof(Edge);
+    const auto edge_mem = sizeof(Edge);
+    const auto mem_used = static_cast<double>(nodes * node_mem + edges * edge_mem) / (1024.f * 1024.f);
+
     out << "Tree Status:" << std::endl
             << std::setw(9) << "nodes:" << ' ' << nodes  << std::endl
             << std::setw(9) << "edges:" << ' ' << edges  << std::endl
@@ -683,10 +674,6 @@ const std::vector<Node::Edge> &Node::GetChildren() const {
     return children_;
 }
 
-NodeStats *Node::GetStats() {
-    return data_->node_stats;
-}
-
 Parameters *Node::GetParameters() {
     return data_->parameters;
 }
@@ -779,15 +766,13 @@ void Node::ReleaseAllChildren() {
 
 void Node::Inflate(Edge& child) {
     if (child.Inflate()) {
-        DecrementEdges();
-        IncrementNodes();
+        // do nothing...
     }
 }
 
 void Node::Release(Edge& child) {
     if (child.Release()) {
-        DecrementNodes();
-        IncrementEdges();
+        // do nothing...
     }
 }
 
@@ -801,22 +786,6 @@ void Node::IncrementThreads() {
 
 void Node::DecrementThreads() {
     running_threads_.fetch_sub(1, std::memory_order_relaxed);
-}
-
-void Node::IncrementNodes() {
-    GetStats()->nodes.fetch_add(1, std::memory_order_relaxed);
-}
-
-void Node::DecrementNodes() {
-    GetStats()->nodes.fetch_sub(1, std::memory_order_relaxed); 
-}
-
-void Node::IncrementEdges() {
-    GetStats()->edges.fetch_add(1, std::memory_order_relaxed); 
-}
-
-void Node::DecrementEdges() {
-    GetStats()->edges.fetch_sub(1, std::memory_order_relaxed); 
 }
 
 void Node::SetActive(const bool active) {
@@ -936,4 +905,38 @@ void Node::SetVisits(int v) {
 
 void Node::SetPolicy(float p) {
     data_->policy = p;
+}
+
+void Node::ComputeStats(size_t &nodes, size_t &edges) {
+    // Use DFS to search all nodes.
+    auto stk = std::stack<Node *>{};
+
+    // Start search from this node.
+    stk.emplace(Get());
+    nodes++;
+
+    while (!stk.empty()) {
+        Node * node = stk.top();
+        stk.pop();
+
+        const auto &children = node->GetChildren();
+
+        // Because we want compute the memory used, collect
+        // all types of node. Including pruned and invalid node.
+        for (const auto &child : children) {
+            node = child.Get();
+            const bool is_pointer = node == nullptr ? false : true;
+
+            if (is_pointer) {
+                // If the node is expending, skip the
+                // the node.
+                if (!(node->IsExpending())) {
+                    nodes++;
+                    stk.emplace(node);
+                }
+            } else {
+                edges++;
+            }
+        }
+    }
 }

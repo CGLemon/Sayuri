@@ -157,7 +157,6 @@ private:
     Network &network_;
 
     std::unique_ptr<NodeData> node_data_;
-    std::unique_ptr<NodeStats> node_stats_;
     std::unique_ptr<Node> root_node_; 
 
     std::unique_ptr<Parameters> param_;

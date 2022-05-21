@@ -81,10 +81,8 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
 // Allocate some data, reset the counters, and expand the root node before MCTS.
 std::vector<float> Search::PrepareRootNode() {
     node_data_ = std::make_unique<NodeData>();
-    node_stats_ = std::make_unique<NodeStats>();
 
     node_data_->parameters = param_.get();
-    node_data_->node_stats = node_stats_.get();
     root_node_ = std::make_unique<Node>(node_data_.get());
 
     playouts_.store(0, std::memory_order_relaxed);
@@ -115,13 +113,6 @@ void Search::ClearNodes() {
     if (root_node_) {
         root_node_.reset();
         root_node_ = nullptr;
-    }
-    if (node_stats_) {
-        assert(node_stats_->nodes.load(std::memory_order_relaxed) == 0);
-        assert(node_stats_->edges.load(std::memory_order_relaxed) == 0);
-
-        node_stats_.reset();
-        node_stats_ = nullptr;
     }
 }
 

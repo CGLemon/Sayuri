@@ -15,18 +15,11 @@
 
 class Node;
 
-struct NodeStats {
-    std::atomic<int> nodes{0};
-    std::atomic<int> edges{0};
-};
-
 struct NodeData {
     float policy{0.0f};
     int vertex{kNullVertex};
 
     Parameters *parameters{nullptr};
-    NodeStats *node_stats{nullptr};
-
     Node *parent{nullptr};
 };
 
@@ -116,8 +109,6 @@ public:
     std::string GetPvString(GameState &state);
 
 private:
-    size_t GetMemoryUsed();
-
     void ApplyDirichletNoise(const float alpha);
     void SetPolicy(float p);
     void SetVisits(int v);
@@ -136,16 +127,11 @@ private:
     void InflateAllChildren();
     void ReleaseAllChildren();
 
-    void IncrementNodes();
-    void DecrementNodes();
-
-    void IncrementEdges();
-    void DecrementEdges();
-
     int GetThreads() const;
     int GetVirtualLoss() const;
 
-    NodeStats *GetStats();
+    void ComputeStats(size_t &nodes, size_t &edges);
+
     Parameters *GetParameters();
 
     enum class StatusType : std::uint8_t {
