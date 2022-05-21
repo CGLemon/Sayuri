@@ -18,9 +18,9 @@ public:
     NodePointer(DataType data);
     NodePointer(NodePointer &&n);
     NodePointer(const NodePointer &) = delete;
-    NodePointer& operator=(const NodePointer&);
+    NodePointer& operator=(NodePointer&&);
 
-    ~NodePointer();
+    ~NodePointer() = default;
 
     bool IsPointer() const;
     bool IsInflating() const;
@@ -54,10 +54,11 @@ inline NodePointer<NodeType, DataType>::NodePointer(NodePointer &&n) {
     pointer_.store(n.pointer_.load(std::memory_order_relaxed), std::memory_order_relaxed);
 }
 
-
 template<typename NodeType, typename DataType>
-inline NodePointer<NodeType, DataType>::~NodePointer() {
-    Release();
+inline NodePointer<NodeType, DataType>& NodePointer<NodeType, DataType>::operator=(NodePointer&& n) {
+    data_ = n.data_;
+    pointer_.store(n.pointer_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    return *this;
 }
 
 template<typename NodeType, typename DataType>
@@ -120,7 +121,7 @@ inflate_loop: // Try to allocate new memory for this node.
         goto inflate_loop;
     }
     auto new_pointer =
-             reinterpret_cast<std::uint64_t>(new NodeType(&data_)) | kPointer;
+             reinterpret_cast<std::uint64_t>(new NodeType(data_)) | kPointer;
     auto old_pointer = pointer_.exchange(new_pointer);
 #ifdef NDEBUG
     (void) old_pointer;

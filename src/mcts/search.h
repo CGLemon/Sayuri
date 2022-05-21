@@ -130,6 +130,8 @@ public:
     void SaveTrainingBuffer(std::string filename, GameState &state);
 
 private:
+    bool AdvanceToNewRootState();
+
     bool InputPending(Search::OptionTag tag) const;
 
     void GatherComputationResult(ComputationResult &result) const;
@@ -139,7 +141,7 @@ private:
     void PlaySimulation(GameState &currstate, Node *const node,
                         Node *const root_node, SearchResult &search_result);
 
-    std::vector<float> PrepareRootNode();
+    void PrepareRootNode();
     void ClearNodes();
 
     int threads_;
@@ -153,10 +155,10 @@ private:
     TimeControl time_control_;
 
     GameState &root_state_;
+    GameState last_state_;
 
     Network &network_;
 
-    std::unique_ptr<NodeData> node_data_;
     std::unique_ptr<Node> root_node_; 
 
     std::unique_ptr<Parameters> param_;

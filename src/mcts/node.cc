@@ -13,7 +13,7 @@
 
 #define VIRTUAL_LOSS_COUNT (3)
 
-Node::Node(NodeData* data) {
+Node::Node(NodeData data) {
     assert(data->parameters != nullptr);
     data_ = data;
 }
@@ -27,34 +27,30 @@ NodeEvals Node::PrepareRootNode(Network &network,
                                 GameState &state,
                                 std::vector<float> &dirichlet) {
     const auto is_root = true;
-    const auto success = ExpandChildren(network, state, is_root);
-    assert(success);
+    ExpandChildren(network, state, is_root);
     assert(HaveChildren());
 
-    if (success) {
-        InflateAllChildren();
+    InflateAllChildren();
+    if (GetParameters()->dirichlet_noise) {
+        // Generate dirichlet noise and gather it.
+        const auto legal_move = children_.size();
+        const auto factor = GetParameters()->dirichlet_factor;
+        const auto init = GetParameters()->dirichlet_init;
+        const auto alpha = init * factor / static_cast<float>(legal_move);
 
-        if (GetParameters()->dirichlet_noise) {
-            // Generate dirichlet noise and gather it.
-            const auto legal_move = children_.size();
-            const auto factor = GetParameters()->dirichlet_factor;
-            const auto init = GetParameters()->dirichlet_init;
-            const auto alpha = init * factor / static_cast<float>(legal_move);
+        ApplyDirichletNoise(alpha);
 
-            ApplyDirichletNoise(alpha);
+        const auto num_intersections = state.GetNumIntersections();
+        const auto board_size = state.GetBoardSize();
+        dirichlet.resize(num_intersections+1);
 
-            const auto num_intersections = state.GetNumIntersections();
-            const auto board_size = state.GetBoardSize();
-            dirichlet.resize(num_intersections+1);
-
-            for (auto idx = 0; idx < num_intersections; ++idx) {
-                const auto x = idx % board_size;
-                const auto y = idx / board_size;
-                const auto vtx = state.GetVertex(x, y);
-                dirichlet[idx] = GetParameters()->dirichlet_buffer[vtx];
-            }
-            dirichlet[num_intersections] = GetParameters()->dirichlet_buffer[kPass];
+        for (auto idx = 0; idx < num_intersections; ++idx) {
+            const auto x = idx % board_size;
+            const auto y = idx / board_size;
+            const auto vtx = state.GetVertex(x, y);
+            dirichlet[idx] = GetParameters()->dirichlet_buffer[vtx];
         }
+        dirichlet[num_intersections] = GetParameters()->dirichlet_buffer[kPass];
     }
     return GetNodeEvals();
 }
@@ -64,7 +60,9 @@ bool Node::ExpandChildren(Network &network,
                           const bool is_root) {
     // The node must be the first time to expand and is not the terminate node.
     assert(state.GetPasses() < 2);
-    assert(!HaveChildren());
+    if (HaveChildren()) {
+        return false;
+    }
 
     // First, try to acquire the owner.
     if (!AcquireExpanding()) {
@@ -594,7 +592,7 @@ Node *Node::Get() {
     return this;
 }
 
-Node *Node::GetChild(int vertex) {
+Node *Node::GetChild(const int vertex) {
     for (auto & child : children_) {
         if (vertex == child.Data()->vertex) {
             Inflate(child);
@@ -602,6 +600,18 @@ Node *Node::GetChild(int vertex) {
         }
     }
     return nullptr;
+}
+
+Node *Node::PopChild(const int vertex) {
+    auto node = GetChild(vertex);
+    if (node) {
+        auto ite = std::remove_if(std::begin(children_), std::end(children_),
+                                  [node](Edge &ele) {
+                                     return ele.Get() == node;
+                                  });
+        children_.erase(ite, std::end(children_));
+    }
+    return node;
 }
 
 std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
@@ -675,7 +685,7 @@ const std::vector<Node::Edge> &Node::GetChildren() const {
 }
 
 Parameters *Node::GetParameters() {
-    return data_->parameters;
+    return data_.parameters;
 }
 
 int Node::GetThreads() const {
@@ -687,11 +697,11 @@ int Node::GetVirtualLoss() const {
 }
 
 int Node::GetVertex() const {
-    return data_->vertex;
+    return data_.vertex;
 }
 
 float Node::GetPolicy() const {
-    return data_->policy;
+    return data_.policy;
 }
 
 int Node::GetVisits() const {
@@ -904,7 +914,7 @@ void Node::SetVisits(int v) {
 }
 
 void Node::SetPolicy(float p) {
-    data_->policy = p;
+    data_.policy = p;
 }
 
 void Node::ComputeStats(size_t &nodes, size_t &edges) {
@@ -931,9 +941,9 @@ void Node::ComputeStats(size_t &nodes, size_t &edges) {
                 // If the node is expending, skip the
                 // the node.
                 if (!(node->IsExpending())) {
-                    nodes++;
                     stk.emplace(node);
                 }
+                nodes++;
             } else {
                 edges++;
             }

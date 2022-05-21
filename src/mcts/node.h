@@ -35,7 +35,7 @@ class Node {
 public:
     using Edge = NodePointer<Node, NodeData>;
 
-    Node(NodeData* data);
+    Node(NodeData data);
     ~Node();
 
     // Expand this node.
@@ -72,7 +72,8 @@ public:
     bool HaveChildren() const;
 
     Node *Get();
-    Node *GetChild(int vertex);
+    Node *GetChild(const int vertex);
+    Node *PopChild(const int vertex);
 
     int GetVisits() const;
     int GetVertex() const;
@@ -178,5 +179,5 @@ private:
     std::atomic<int> running_threads_{0};
 
     std::vector<Edge> children_;
-    NodeData* data_;
+    NodeData data_;
 };

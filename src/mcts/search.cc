@@ -77,42 +77,47 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
     node->DecrementThreads();
 }
 
-
 // Allocate some data, reset the counters, and expand the root node before MCTS.
-std::vector<float> Search::PrepareRootNode() {
-    node_data_ = std::make_unique<NodeData>();
+void Search::PrepareRootNode() {
+    bool adv_next = AdvanceToNewRootState();
+    if (!adv_next) {
+        NodeData node_data;
 
-    node_data_->parameters = param_.get();
-    root_node_ = std::make_unique<Node>(node_data_.get());
+        node_data.parameters = param_.get();
+        node_data.vertex = kPass; // not used
+        node_data.policy = 1.0f; // not used
+        node_data.parent = nullptr; // not used
+
+        root_node_ = std::make_unique<Node>(node_data);
+    }
 
     playouts_.store(0, std::memory_order_relaxed);
     running_.store(true, std::memory_order_relaxed);
 
     auto root_noise = std::vector<float>{};
-
     root_node_->PrepareRootNode(network_, root_state_, root_noise);
+
     const auto evals = root_node_->GetNodeEvals();
-    root_node_->Update(&evals);
+    if (adv_next) {
+        root_node_->Update(&evals);
+    }
 
     const auto color = root_state_.GetToMove();
     const auto winloss = color == kBlack ? evals.black_wl : 1 - evals.black_wl;
     const auto final_score = color == kBlack ? evals.black_final_score :
                                                    -evals.black_final_score;
-
     if (GetOption<bool>("analysis_verbose")) {
         LOGGING << "Raw NN output:" << std::endl
                     << Format("       eval: %.2f%\n", winloss * 100.f)
                     << Format("       draw: %.2f%\n", evals.draw * 100.f)
                     << Format("final score: %.2f\n", final_score);
     }
-
-    return root_noise;
 }
 
 void Search::ClearNodes() {
     if (root_node_) {
-        root_node_.reset();
-        root_node_ = nullptr;
+        auto p = root_node_.release();
+        delete p;
     }
 }
 
@@ -282,8 +287,8 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
 
     GatherComputationResult(computation_result);
 
-    // Release the tree nodes.
-    ClearNodes();
+    // Save the last game state.
+    last_state_ = root_state_;
 
     return computation_result;
 }
@@ -634,4 +639,50 @@ void Search::GatherData(const GameState &state, ComputationResult &result) {
     data.probabilities = result.target_probabilities;
 
     training_buffer_.emplace_back(data);
+}
+
+bool Search::AdvanceToNewRootState() {
+    auto depth =
+        int(root_state_.GetMoveNumber() - last_state_.GetMoveNumber());
+
+    if (depth < 0) {
+        return false;
+    }
+
+    auto move_list = std::queue<int>{};
+    auto test = root_state_;
+    for (auto i = 0; i < depth; i++) {
+        move_list.emplace(test.GetLastMove());
+        test.UndoMove();
+    }
+
+    if (test.GetHash() != last_state_.GetHash() ||
+           test.GetBoardSize() != last_state_.GetBoardSize()) {
+        return false;
+    }
+
+    while (!move_list.empty()) {
+        int vtx = move_list.front();
+
+        auto next_node = root_node_->PopChild(vtx);
+        auto p = root_node_.release();
+
+        // TODD: Implement lazy tree destruction.
+        delete p;
+
+        if (next_node) {
+            root_node_.reset(next_node);
+        } else {
+            return false;
+        }
+
+        last_state_.PlayMove(vtx);
+        move_list.pop();
+    }
+
+    if (root_state_.GetHash() != last_state_.GetHash()) {
+        return false;
+    }
+
+    return true;
 }
