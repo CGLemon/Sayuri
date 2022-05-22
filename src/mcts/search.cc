@@ -25,6 +25,8 @@ void Search::Initialize() {
     param_->Reset();
 
     threads_ = param_->threads;
+    last_state_ = root_state_;
+    root_node_.reset(nullptr);
 
     group_ = std::make_unique<ThreadGroup<void>>(&ThreadPool::Get());
 
@@ -648,6 +650,10 @@ void Search::GatherData(const GameState &state, ComputationResult &result) {
 }
 
 bool Search::AdvanceToNewRootState() {
+    if (!root_node_) {
+        return false;
+    }
+
     auto depth =
         int(root_state_.GetMoveNumber() - last_state_.GetMoveNumber());
 
@@ -655,9 +661,9 @@ bool Search::AdvanceToNewRootState() {
         return false;
     }
 
-    auto move_list = std::queue<int>{};
+    auto move_list = std::stack<int>{};
     auto test = root_state_;
-    for (auto i = 0; i < depth; i++) {
+    for (auto i = 0; i < depth; ++i) {
         move_list.emplace(test.GetLastMove());
         test.UndoMove();
     }
@@ -668,7 +674,7 @@ bool Search::AdvanceToNewRootState() {
     }
 
     while (!move_list.empty()) {
-        int vtx = move_list.front();
+        int vtx = move_list.top();
 
         auto next_node = root_node_->PopChild(vtx);
         auto p = root_node_.release();
