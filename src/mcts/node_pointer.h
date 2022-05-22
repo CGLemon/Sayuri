@@ -17,8 +17,11 @@ public:
     NodePointer() = default;
     NodePointer(DataType data);
     NodePointer(NodePointer &&n);
-    NodePointer(const NodePointer &) = delete;
     NodePointer& operator=(NodePointer&&);
+    
+    // Construct with left value. Forbid it because
+    // we may release same memory again.
+    NodePointer(const NodePointer &) = delete;
 
     ~NodePointer() = default;
 
@@ -50,12 +53,18 @@ inline NodePointer<NodeType, DataType>::NodePointer(DataType data) {
 
 template<typename NodeType, typename DataType>
 inline NodePointer<NodeType, DataType>::NodePointer(NodePointer &&n) {
+    // Construct with right value. It's pointer is
+    // uninflated.
     data_ = n.data_;
     pointer_.store(n.pointer_.load(std::memory_order_relaxed), std::memory_order_relaxed);
 }
 
 template<typename NodeType, typename DataType>
 inline NodePointer<NodeType, DataType>& NodePointer<NodeType, DataType>::operator=(NodePointer&& n) {
+    // Should we release the original pointer? I guess
+    // it is not necessary. The 'std::remove_if' will use
+    // the 'operator='. All pointers Should not be released
+    // in this process.
     data_ = n.data_;
     pointer_.store(n.pointer_.load(std::memory_order_relaxed), std::memory_order_relaxed);
     return *this;
@@ -108,18 +117,20 @@ inline NodeType *NodePointer<NodeType, DataType>::Get() const {
 template<typename NodeType, typename DataType>
 inline bool NodePointer<NodeType, DataType>::Inflate() {
 
-inflate_loop: // Try to allocate new memory for this node.
+inflate_loop: // Try to allocate new memory for the pointer.
 
     if (IsPointer(pointer_.load())) {
-        // Another thread already inflated the pointer.
+        // Another thread already inflated the pointer yet.
         return false;
     }
 
     auto uninflated = kUninflated;
     if (!pointer_.compare_exchange_strong(uninflated, kInflating)) {
-        // Fail to get the owner. Try it next time.
+        // Fail to get the owner. Try to do it next time.
         goto inflate_loop;
     }
+
+    // Success to get the owner. Now allocate new memory.
     auto new_pointer =
              reinterpret_cast<std::uint64_t>(new NodeType(data_)) | kPointer;
     auto old_pointer = pointer_.exchange(new_pointer);
@@ -133,7 +144,8 @@ inflate_loop: // Try to allocate new memory for this node.
 
 template<typename NodeType, typename DataType>
 inline bool NodePointer<NodeType, DataType>::Release() {
-    // Only support for one thread to release the node. 
+    // Becare that only one thread can release the memory. Two
+    // or above may release same memory many times.
     auto v = pointer_.load();
     if (IsPointer(v)) {
         delete ReadPointer(v);

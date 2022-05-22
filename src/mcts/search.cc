@@ -45,7 +45,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
         } else {
             const bool have_children = node->HaveChildren();
 
-            // If we fail to expand the node, that means another thread
+            // If we can not expand the node, that means another thread
             // is expanding node. Skip this simulation.
             const bool success = node->ExpandChildren(network_, currstate, false);
             if (!have_children && success) {
@@ -54,6 +54,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
         }
     }
 
+    // Not terminate node, search the next node.
     if (node->HaveChildren() && !search_result.IsValid()) {
         auto color = currstate.GetToMove();
         Node *next = nullptr;
@@ -84,8 +85,8 @@ void Search::PrepareRootNode() {
         NodeData node_data;
 
         node_data.parameters = param_.get();
-        node_data.vertex = kPass; // not used
-        node_data.policy = 1.0f; // not used
+        node_data.vertex = kPass;   // not used
+        node_data.policy = 1.0f;    // not used
         node_data.parent = nullptr; // not used
 
         root_node_ = std::make_unique<Node>(node_data);
@@ -199,6 +200,7 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
     if (tag & kThinking) {
         auto book_move = Book::Get().Probe(root_state_);
         if (book_move != kPass) {
+            // Current game state is found in book.
             computation_result.best_move = book_move;
             return computation_result;
         }
@@ -217,7 +219,7 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
     };
 
     Timer timer;
-    Timer analyze_timer;
+    Timer analyze_timer; // for analyzing
 
     // clock time.
     time_control_.SetLagBuffer(param_->lag_buffer);
@@ -228,21 +230,24 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
     const auto thinking_time = time_control_.GetThinkingTime(color, board_size, move_num);
     PrepareRootNode();
 
-    if (thinking_time < timer.GetDuration()) {
-        running_.store(false, std::memory_order_relaxed);
-    }
-
     if (GetOption<bool>("analysis_verbose")) {
         LOGGING << "Max thinking time: " << thinking_time << "(sec)" << std::endl;
     }
 
+    if (thinking_time < timer.GetDuration()) {
+        // Prepare root node will spent little time. So disable
+        // tree search if the time is up.
+        running_.store(false, std::memory_order_relaxed);
+    }
+
     for (int t = 1; t < param_->threads; ++t) {
+        // SMP thread is running.
         group_->AddTask(Worker);
     }
 
     // Main thread is running.
     auto keep_running = true;
-    do {
+    while (!InputPending(tag) && keep_running) {
         auto currstate = std::make_unique<GameState>(root_state_);
         auto result = SearchResult{};
 
@@ -260,10 +265,11 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
         const auto elapsed = (tag & kThinking) ?
                                  timer.GetDuration() : std::numeric_limits<float>::lowest();
 
+        // TODO: Stop running when there are no alternate move.
         keep_running &= (elapsed < thinking_time);
         keep_running &= (playouts_.load(std::memory_order_relaxed) < playours);
         keep_running &= running_.load(std::memory_order_relaxed);
-    } while (!InputPending(tag) && keep_running);
+    };
 
     running_.store(false, std::memory_order_release);
 

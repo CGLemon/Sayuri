@@ -23,9 +23,9 @@ Node::~Node() {
     ReleaseAllChildren();
 }
 
-NodeEvals Node::PrepareRootNode(Network &network,
-                                GameState &state,
-                                std::vector<float> &dirichlet) {
+void Node::PrepareRootNode(Network &network,
+                           GameState &state,
+                           std::vector<float> &dirichlet) {
     const auto is_root = true;
     ExpandChildren(network, state, is_root);
     assert(HaveChildren());
@@ -52,7 +52,6 @@ NodeEvals Node::PrepareRootNode(Network &network,
         }
         dirichlet[num_intersections] = GetParameters()->dirichlet_buffer[kPass];
     }
-    return GetNodeEvals();
 }
 
 bool Node::ExpandChildren(Network &network,
@@ -84,6 +83,9 @@ bool Node::ExpandChildren(Network &network,
     LinkNetOutput(raw_netlist, color_);
 
     auto nodelist = std::vector<Network::PolicyVertexPair>{};
+
+    // TODO: Some conditions may forbid the pass. Like, the move
+    //       number is too low.
     auto allow_pass = true;
     auto legal_accumulate = 0.0f;
 
@@ -157,7 +159,6 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
     }
     assert(!children_.empty());
 }
-
 
 void Node::LinkNetOutput(const Network::Result &raw_netlist, const int color){
     auto wl = raw_netlist.wdl[0] - raw_netlist.wdl[2];
@@ -288,7 +289,7 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
     for (const auto &child : children_) {
         const auto node = child.Get();
         if (!node) {
-            // The (uninflated) node is no visit.
+            // There is no visits in uninflated node.
             continue;
         }    
         if (node->IsValid()) {
@@ -326,11 +327,18 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
             continue;
         }
 
+        // Apply First Play Urgency(FPU). We tend to search the expended
+        // node in the PUCT algorithm. So give the unexpended node a little
+        // bad value.
         float q_value = fpu_value;
+
         if (is_pointer) {
             if (node->IsExpending()) {
+                // Like virtual loss, give it a bad value because there is another
+                // thread in this node.
                 q_value = -1.0f - fpu_reduction;
             } else if (node->GetVisits() > 0) {
+                // Transfer Win-Draw-Loss to side-to-move value (Q value).
                 const float eval = node->GetEval(color);
                 const float draw_value = node->GetDraw() * draw_factor;
                 q_value = eval + draw_value;
@@ -338,14 +346,20 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
         }
 
         float denom = 1.0f;
-        float utility = 0.0f;
-        float bonus = 0.0f;
+        float utility = 0.0f; // score utility value
+        float bonus = 0.0f; // force playouts bonus
         if (is_pointer) {
             const auto visits = node->GetVisits();
             denom += visits;
+
             if (visits > 0) {
+                // Heuristic value for score lead.
                 utility += node->GetScoreUtility(color, score_utility_factor, score);
             }
+
+            // According to Kata Go, we want to improve exploration in
+            // the self-play. Give it a large bonus if the visits is not
+            // enough.
             int forced_playouts = std::sqrt(forced_policy_factor *
                                                 node->GetPolicy() *
                                                 float(parentvisits));
@@ -355,6 +369,7 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
             bonus = std::max(bonus, 0.0f);
         }
 
+        // PUCT algorithm
         const float psa = GetUctPolicy(child, noise);
         const float puct = cpuct * psa * (numerator / denom);
         const float value = q_value + puct + utility + bonus;
@@ -407,6 +422,9 @@ void Node::Update(const NodeEvals *evals) {
     const float old_delta = old_visits > 0 ? eval - old_eval / old_visits : 0.0f;
     const float new_delta = eval - (old_eval + eval) / (old_visits + 1);
 
+    // TODO: According to Kata Go, It is not necessary to use
+    //       Welford's online algorithm. The accuracy of simplify
+    //       algorithm is enough.
     // Welford's online algorithm for calculating variance.
     const float delta = old_delta * new_delta;
 
@@ -507,15 +525,15 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
 
         const auto visit_ratio = static_cast<float>(visits) / (parentvisits - 1); // One is root visit.
         out << std::fixed << std::setprecision(2)
-                << std::setw(6) << state.VertexToText(vertex)
-                << std::setw(10) << visits
-                << std::setw(space) << eval * 100.f        // win loss eval
-                << std::setw(space) << lcb_value * 100.f   // LCB eval
-                << std::setw(space) << draw * 100.f        // draw probability
-                << std::setw(space) << pobability * 100.f  // move probability
-                << std::setw(space) << visit_ratio * 100.f
-                << std::setw(space) << final_score
-                << std::setw(6) << "| PV:" << ' ' << pv_string
+                << std::setw(6) << state.VertexToText(vertex)  // move
+                << std::setw(10) << visits                     // visits
+                << std::setw(space) << eval * 100.f            // win loss eval
+                << std::setw(space) << lcb_value * 100.f       // LCB eval
+                << std::setw(space) << draw * 100.f            // draw probability
+                << std::setw(space) << pobability * 100.f      // move probability
+                << std::setw(space) << visit_ratio * 100.f     // visits ratio
+                << std::setw(space) << final_score             // score leading
+                << std::setw(6) << "| PV:" << ' ' << pv_string // principal variation
                 << std::endl;
     }
 
@@ -525,6 +543,10 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
 
     const auto node_mem = sizeof(Node) + sizeof(Edge);
     const auto edge_mem = sizeof(Edge);
+
+    // There is some error to computing memory used. It is because
+    // that there is no edge link to node and we may not collect all
+    // nodes.
     const auto mem_used = static_cast<double>(nodes * node_mem + edges * edge_mem) / (1024.f * 1024.f);
 
     out << "Tree Status:" << std::endl
@@ -536,6 +558,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
 }
 
 std::string Node::ToAnalyzeString(GameState &state, const int color) {
+    // Gather analyzing string, you can see the detail here
     // https://github.com/SabakiHQ/Sabaki/blob/master/docs/guides/engine-analysis-integration.md
 
     auto out = std::ostringstream{};
@@ -624,7 +647,9 @@ std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
 
     for (const auto & child : children_) {
         const auto node = child.Get();
-        if (node == nullptr || !node->IsActive()) {
+        const bool is_pointer = node == nullptr ? false : true;
+
+        if (!is_pointer || !node->IsActive()) {
             continue;
         }
 
@@ -847,6 +872,9 @@ void Node::ExpandCancel() {
 
 void Node::WaitExpanded() const {
     while (true) {
+        //TODO: Sleep some time because it is not busy lock. Implement
+        //      it and test the performance.
+
         auto v = expand_state_.load(std::memory_order_acquire);
         if (v == ExpandState::kExpanded) {
             break;

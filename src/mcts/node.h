@@ -43,10 +43,10 @@ public:
                         GameState &state,
                         const bool is_root);
 
-    // Expand root node children before starting Tree search.
-    NodeEvals PrepareRootNode(Network &network,
-                              GameState &state,
-                              std::vector<float> &dirichlet);
+    // Expand root node children before starting tree search.
+    void PrepareRootNode(Network &network,
+                         GameState &state,
+                         std::vector<float> &dirichlet);
 
     // Select the best policy node.
     Node *ProbSelectChild();
