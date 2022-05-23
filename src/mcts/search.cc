@@ -680,8 +680,10 @@ bool Search::AdvanceToNewRootState() {
         auto next_node = root_node_->PopChild(vtx);
         auto p = root_node_.release();
 
-        // TODD: Implement lazy tree destruction.
-        delete p;
+        // Lazy tree destruction. May save a little of time when
+        // dealing with large trees. We will collect these future
+        // resuls after the search finished.
+        group_->AddTask([p](){ delete p; });
 
         if (next_node) {
             root_node_.reset(next_node);

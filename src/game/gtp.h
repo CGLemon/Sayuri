@@ -55,8 +55,7 @@ public:
         agent_->GetNetwork().Initialize(GetOption<std::string>("weights_file"));
         agent_->ApplySearch();
 
-
-        ThreadPool::Get(GetOption<int>("threads")-1); // one thread is main thread.
+        ThreadPool::Get(GetOption<int>("threads"));
         FastPolicy::Get().LoadWeights();
 
         Book::Get().LoadBook(GetOption<std::string>("book_file"));
