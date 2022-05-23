@@ -142,7 +142,7 @@ private:
                         Node *const root_node, SearchResult &search_result);
 
     void PrepareRootNode();
-    void ClearNodes();
+    void ClearAllNodes();
 
     int threads_;
     int max_playouts_; 

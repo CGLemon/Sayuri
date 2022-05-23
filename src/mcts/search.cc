@@ -80,16 +80,17 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
     node->DecrementThreads();
 }
 
-// Allocate some data, reset the counters, and expand the root node before MCTS.
 void Search::PrepareRootNode() {
-    bool adv_next = AdvanceToNewRootState();
-    if (!adv_next) {
+    bool reused = AdvanceToNewRootState();
+
+    if (!reused) {
+        // Do not reuse the tree, allocate new root node.
         NodeData node_data;
 
         node_data.parameters = param_.get();
-        node_data.vertex = kPass;   // not used
-        node_data.policy = 1.0f;    // not used
-        node_data.parent = nullptr; // not used
+        node_data.vertex = kPass;   // unused
+        node_data.policy = 1.0f;    // unused
+        node_data.parent = nullptr; // unused
 
         root_node_ = std::make_unique<Node>(node_data);
     }
@@ -101,7 +102,7 @@ void Search::PrepareRootNode() {
     root_node_->PrepareRootNode(network_, root_state_, root_noise);
 
     const auto evals = root_node_->GetNodeEvals();
-    if (adv_next) {
+    if (!reused) {
         root_node_->Update(&evals);
     }
 
@@ -117,7 +118,7 @@ void Search::PrepareRootNode() {
     }
 }
 
-void Search::ClearNodes() {
+void Search::ClearAllNodes() {
     if (root_node_) {
         auto p = root_node_.release();
         delete p;
@@ -179,9 +180,9 @@ bool Search::InputPending(Search::OptionTag tag) const {
 #endif
 }
 
-ComputationResult Search::Computation(int playours, int interval, Search::OptionTag tag) {
+ComputationResult Search::Computation(int playouts, int interval, Search::OptionTag tag) {
     auto computation_result = ComputationResult{};
-    playours = std::min(playours, kMaxPlayouts);
+    playouts = std::min(playouts, kMaxPlayouts);
 
     // Prepare some basic information.
     const auto color = root_state_.GetToMove();
@@ -269,7 +270,7 @@ ComputationResult Search::Computation(int playours, int interval, Search::Option
 
         // TODO: Stop running when there are no alternate move.
         keep_running &= (elapsed < thinking_time);
-        keep_running &= (playouts_.load(std::memory_order_relaxed) < playours);
+        keep_running &= (playouts_.load(std::memory_order_relaxed) < playouts);
         keep_running &= running_.load(std::memory_order_relaxed);
     };
 
@@ -696,5 +697,11 @@ bool Search::AdvanceToNewRootState() {
         return false;
     }
 
+    if (!root_node_->HaveChildren()) {
+        // If the root node does not have children, that means
+        // it is equal to edge. We discard it.
+        ClearAllNodes();
+        return false;
+    }
     return true;
 }
