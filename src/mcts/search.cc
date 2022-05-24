@@ -17,6 +17,7 @@
 #endif
 
 Search::~Search() {
+    ClearAllNodes();
     group_->WaitToJoin();
 }
 
@@ -84,6 +85,9 @@ void Search::PrepareRootNode() {
     bool reused = AdvanceToNewRootState();
 
     if (!reused) {
+        // Try release whole trees.
+        ClearAllNodes();
+
         // Do not reuse the tree, allocate new root node.
         NodeData node_data;
 
@@ -121,7 +125,7 @@ void Search::PrepareRootNode() {
 void Search::ClearAllNodes() {
     if (root_node_) {
         auto p = root_node_.release();
-        delete p;
+        group_->AddTask([p](){ delete p; });
     }
 }
 
@@ -702,7 +706,6 @@ bool Search::AdvanceToNewRootState() {
     if (!root_node_->HaveChildren()) {
         // If the root node does not have children, that means
         // it is equal to edge. We discard it.
-        ClearAllNodes();
         return false;
     }
     return true;
