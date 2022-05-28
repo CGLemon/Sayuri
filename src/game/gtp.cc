@@ -174,7 +174,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             Sgf::Get().ToFile(filename, agent_->GetState());
         }
     } else if (const auto res = parser.Find("final_score", 0)) {
-        auto result = agent_->GetSearch().Computation(400, 0, Search::kNullTag);
+        auto result = agent_->GetSearch().Computation(400, 0, Search::kForced);
         auto color = agent_->GetState().GetToMove();
         auto final_score = result.root_final_score;
 
@@ -342,15 +342,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             out << GTPSuccess("");
         }
     } else if (const auto res = parser.Find("final_status_list", 0)) {
-        int pass_cnt = 0;
-        while (agent_->GetState().GetPasses() >= 2) {
-            agent_->GetState().UndoMove();
-            agent_->GetState().UndoMove();
-            pass_cnt += 2;
-        }
-
-        auto result = agent_->GetSearch().Computation(400, 0, Search::kNullTag);
-
+        auto result = agent_->GetSearch().Computation(400, 0, Search::kForced);
         auto vtx_list = std::ostringstream{};
 
         if (const auto input = parser.Find("alive", 1)) {
@@ -377,9 +369,6 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             out << GTPSuccess(vtx_list.str());
         } else {
             out << GTPFail("");
-        }
-        for (int i = 0; i < pass_cnt; ++i) {
-            agent_->GetState().PlayMove(kPass);
         }
     } else if (const auto res = parser.Find({"help", "list_commands"}, 0)) {
         auto list_commands = std::ostringstream{};

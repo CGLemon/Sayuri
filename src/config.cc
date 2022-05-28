@@ -8,6 +8,8 @@
 #include "mcts/lcb.h"
 #include "config.h"
 
+#include <limits>
+
 std::unordered_map<std::string, Option> options_map;
 
 #define OPTIONS_EXPASSION(T)                        \
@@ -50,6 +52,7 @@ void InitOptionsMap() {
     options_map["help"] << Option::setoption(false);
     options_map["quiet"] << Option::setoption(false);
     options_map["ponder"] << Option::setoption(false);
+    options_map["reuse_tree"] << Option::setoption(false);
     options_map["friendly_pass"] << Option::setoption(false);
     options_map["analysis_verbose"] << Option::setoption(false);
     options_map["mode"] << Option::setoption(std::string{"gtp"});
@@ -117,7 +120,7 @@ void InitBasicParameters() {
     bool already_set_batchsize = GetOption<int>("batch_size") > 0;
     bool use_gpu = GetOption<bool>("use_gpu");
 
-    int cores = std::max((int)std::thread::hardware_concurrency(), 1);
+    const int cores = std::max((int)std::thread::hardware_concurrency(), 1);
     int select_threads = GetOption<int>("threads");
     int select_batchsize = GetOption<int>("batch_size");
 
@@ -189,6 +192,11 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 
     if (const auto res = parser.Find("--ponder")) {
         SetOption("ponder", true);
+        parser.RemoveCommand(res->Index());
+    }
+
+    if (const auto res = parser.Find("--reuse-tree")) {
+        SetOption("reuse_tree", true);
         parser.RemoveCommand(res->Index());
     }
 
@@ -481,6 +489,9 @@ void ArgsParser::DumpHelper() const {
 
                 << "\t--ponder\n"
                 << "\t\tThinking on opponent's time.\n\n"
+
+                << "\t--reuse-tree\n"
+                << "\t\tWill reuse the sub-tree.\n\n"
 
                 << "\t--early-symm-cache\n"
                 << "\t\tAccelerate search on the opening step.\n\n"

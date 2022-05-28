@@ -12,6 +12,7 @@
 #include <thread>
 #include <memory>
 #include <atomic>
+#include <limits>
 
 struct SearchResult {
 public:
@@ -89,13 +90,15 @@ struct ComputationResult {
 
 class Search {
 public:
-    static constexpr int kMaxPlayouts = 15000000;
+    static constexpr int kMaxPlayouts = std::numeric_limits<int>::max() / 2;
 
     enum OptionTag : int {
         kNullTag  = 0,
-        kThinking = 1 << 1,
-        kPonder   = 1 << 2,
-        kAnalyze  = 1 << 3
+        kThinking = 1 << 1, // use time control
+        kPonder   = 1 << 2, // thinking on opponent's time
+        kAnalyze  = 1 << 3, // open analyzing mode
+        kForced   = 1 << 4, // remove all pass move before search
+        kUnreused = 1 << 5  // don't reuse the tree
     };
 
     Search(GameState &state, Network &network) : root_state_(state), network_(network) {

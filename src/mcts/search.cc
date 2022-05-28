@@ -16,6 +16,8 @@
 #include <sys/select.h>
 #endif
 
+constexpr int Search::kMaxPlayouts;
+
 Search::~Search() {
     ClearAllNodes();
     group_->WaitToJoin();
@@ -188,6 +190,16 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
     auto computation_result = ComputationResult{};
     playouts = std::min(playouts, kMaxPlayouts);
 
+    // Remove all pass moves if we don't want to stop
+    // the search.
+    int num_passes = 0;
+    if (tag & kForced) {
+        while (root_state_.GetLastMove() == kPass) {
+            root_state_.UndoMove();
+            num_passes++;
+        }
+    }
+
     // Prepare some basic information.
     const auto color = root_state_.GetToMove();
     const auto board_size = root_state_.GetBoardSize();
@@ -228,7 +240,7 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
     Timer timer;
     Timer analyze_timer; // for analyzing
 
-    // clock time.
+    // Set the time control.
     time_control_.SetLagBuffer(param_->lag_buffer);
     time_control_.Clock();
     timer.Clock();
@@ -253,7 +265,8 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
     }
 
     // Main thread is running.
-    auto keep_running = true;
+    auto keep_running = running_.load(std::memory_order_relaxed);
+
     while (!InputPending(tag) && keep_running) {
         auto currstate = std::make_unique<GameState>(root_state_);
         auto result = SearchResult{};
@@ -273,6 +286,13 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
                                  timer.GetDuration() : std::numeric_limits<float>::lowest();
 
         // TODO: Stop running when there are no alternate move.
+        if (tag & kUnreused) {
+            // We simply limit the root visits instead of unreuse the tree. It
+            // because that limiting the root node visits is equal to unreuse tree.
+            // Notice that the visits of root node start from one. We need to
+            // reduce it.
+            keep_running &= (root_node_->GetVisits() - 1 < playouts);
+        }
         keep_running &= (elapsed < thinking_time);
         keep_running &= (playouts_.load(std::memory_order_relaxed) < playouts);
         keep_running &= running_.load(std::memory_order_relaxed);
@@ -302,6 +322,12 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
 
     // Save the last game state.
     last_state_ = root_state_;
+    
+    if (tag & kForced) {
+        for (int i = 0; i < num_passes; ++i) {
+            root_state_.PlayMove(kPass);
+        }
+    }
 
     return computation_result;
 }
@@ -514,7 +540,9 @@ bool ShouldPass(GameState &state, ComputationResult &result, bool friendly_pass)
 }
 
 int Search::ThinkBestMove() {
-    auto result = Computation(max_playouts_, 0, kThinking);
+    auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
+    auto result = Computation(max_playouts_, 0, (OptionTag)tag);
+
     if (ShouldResign(root_state_, result, param_->resign_threshold)) {
         return kResign;
     }
@@ -527,7 +555,9 @@ int Search::ThinkBestMove() {
 }
 
 int Search::GetSelfPlayMove() {
-    auto result = Computation(max_playouts_, 0, kThinking);
+    auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
+    auto result = Computation(max_playouts_, 0, (OptionTag)tag);
+
     int move = result.best_move;
     if (param_->random_moves_cnt > result.movenum) {
         move = result.random_move;
@@ -540,6 +570,7 @@ int Search::GetSelfPlayMove() {
 }
 
 void Search::TryPonder() {
+    // TODO: Select a reasonable number for ponder playouts.
     if (param_->ponder) {
         int ponder_playouts = std::max(max_playouts_,
                                            max_playouts_ * (param_->cache_buffer_factor/2));
@@ -548,7 +579,12 @@ void Search::TryPonder() {
 }
 
 int Search::Analyze(int interval, bool ponder) {
-    auto tag = ponder ? (kAnalyze | kPonder) : (kAnalyze | kThinking);
+    // Ponder mode always reuse the tree.
+    auto reuse_tag = (param_->reuse_tree || ponder) ? kNullTag : kUnreused;
+
+    auto ponder_tag = ponder ? (kAnalyze | kPonder) : (kAnalyze | kThinking);
+    auto tag = reuse_tag | ponder_tag;
+
     int playouts = ponder == true ? std::max(max_playouts_,
                                                  max_playouts_ * (param_->cache_buffer_factor/2))
                                       : max_playouts_;
