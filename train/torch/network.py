@@ -40,6 +40,68 @@ class GlobalPool(nn.Module):
 
         return torch.cat((layer0, layer1, layer2), 1)
 
+class BatchNorm2d(nn.Module):
+    def __init__(self, num_features,
+                       eps = 1e-5,
+                       momentum = 0.02,
+                       affine = True,
+                       fixup = False):
+        # TODO: According to the paper "Batch Renormalization: Towards Reducing Minibatch Dependence
+        #       in Batch-Normalized Models", Batch-Renormalization is much faster and steady than 
+        #       train traditional Batch-Normalized.
+
+        super().__init__()
+        self.register_buffer(
+            "running_mean", torch.zeros(num_features, dtype=torch.float)
+        )
+        self.register_buffer(
+            "running_var", torch.ones(num_features, dtype=torch.float)
+        )
+
+        if affine:
+            self.weight = torch.nn.Parameter(
+                torch.ones(num_features, dtype=torch.float)
+            )
+            self.bias = torch.nn.Parameter(
+                torch.zeros(num_features, dtype=torch.float)
+            )
+        self.affine = affine
+        self.num_features = num_features
+        self.eps = eps
+        self.momentum = self._clamp(momentum)
+        self.fixup = fixup
+
+    def _clamp(self, x):
+        x = max(0, x)
+        x = min(1, x)
+        return x
+
+    def forward(self, x, mask):
+        if self.training and not self.fixup:
+            x *= mask
+            mask_sum = torch.sum(mask) # global sum
+
+            batch_mean = torch.sum(x, dim=(0,2,3)) / mask_sum
+            zmtensor = x - batch_mean.view(1, self.num_features, 1, 1)
+            batch_var = torch.sum(torch.square(zmtensor * mask), dim=(0,2,3)) / mask_sum
+
+            m = batch_mean.view(1, self.num_features, 1, 1)
+            v = batch_var.view(1, self.num_features, 1, 1)
+            x = (x-m)/torch.sqrt(self.eps+v)
+
+            # update 
+            self.running_mean += self.momentum * (batch_mean.detach() - self.running_mean)
+            self.running_var += self.momentum * (batch_var.detach() - self.running_var)
+        else:
+            m = self.running_mean.view(1, self.num_features, 1, 1)
+            v = self.running_var.view(1, self.num_features, 1, 1)
+            x = (x-m)/torch.sqrt(self.eps+v)
+
+        if self.affine:
+            x = self.weight * x + self.bias
+
+        return x * mask
+
 class FullyConnect(nn.Module):
     def __init__(self, in_size,
                        out_size,
@@ -104,12 +166,11 @@ class ConvBlock(nn.Module):
             bias=False,
         )
 
-        self.eps = 1e-5
-        self.fixup = fixup
-        self.bn = nn.BatchNorm2d(
-            out_channels,
-            eps=self.eps,
-            affine=False
+        self.bn = BatchNorm2d(
+            num_features=out_channels,
+            eps=1e-5,
+            affine=False,
+            fixup=fixup
         )
 
         if collector != None:
@@ -122,14 +183,8 @@ class ConvBlock(nn.Module):
                                 mode="fan_out",
                                 nonlinearity="relu")
     def forward(self, x, mask):
-        x = self.conv(x)
-        if self.fixup:
-            m = self.bn.running_mean.view(1, self.bn.num_features, 1, 1).expand_as(x)
-            v = self.bn.running_var.view(1, self.bn.num_features, 1, 1).expand_as(x)
-            x = (x-m)/torch.sqrt(self.eps+v)
-        else:
-            x = self.bn(x)
-        x = x * mask
+        x = self.conv(x) * mask
+        x = self.bn(x, mask)
         return F.relu(x, inplace=True) if self.relu else x
 
 class ResBlock(nn.Module):
