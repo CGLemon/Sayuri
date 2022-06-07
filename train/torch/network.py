@@ -48,7 +48,7 @@ class BatchNorm2d(nn.Module):
                        fixup = False):
         # TODO: According to the paper "Batch Renormalization: Towards Reducing Minibatch Dependence
         #       in Batch-Normalized Models", Batch-Renormalization is much faster and steady than 
-        #       train traditional Batch-Normalized.
+        #       traditional Batch-Normalized.
 
         super().__init__()
         self.register_buffer(
@@ -78,7 +78,6 @@ class BatchNorm2d(nn.Module):
 
     def forward(self, x, mask):
         if self.training and not self.fixup:
-            x *= mask
             mask_sum = torch.sum(mask) # global sum
 
             batch_mean = torch.sum(x, dim=(0,2,3)) / mask_sum
@@ -89,9 +88,9 @@ class BatchNorm2d(nn.Module):
             v = batch_var.view(1, self.num_features, 1, 1)
             x = (x-m)/torch.sqrt(self.eps+v)
 
-            # update 
-            self.running_mean += self.momentum * (batch_mean.detach() - self.running_mean)
-            self.running_var += self.momentum * (batch_var.detach() - self.running_var)
+            # Update running mean and variant.
+            self.running_mean += self.momentum * (batch_mean - self.running_mean)
+            self.running_var += self.momentum * (batch_var - self.running_var)
         else:
             m = self.running_mean.view(1, self.num_features, 1, 1)
             v = self.running_var.view(1, self.num_features, 1, 1)
