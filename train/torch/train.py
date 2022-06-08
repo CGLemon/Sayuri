@@ -180,8 +180,19 @@ class TrainingPipe():
 
         print("start training...")
 
+        def get_running_loss_dict():
+            running_loss_dict = dict()
+            running_loss_dict['loss'] = 0
+            running_loss_dict['prob_loss'] = 0
+            running_loss_dict['aux_prob_loss'] = 0
+            running_loss_dict['ownership_loss'] = 0
+            running_loss_dict['wdl_loss'] = 0
+            running_loss_dict['stm_loss'] = 0
+            running_loss_dict['fina_score_loss'] = 0
+            return running_loss_dict
+
         keep_running = True
-        running_loss = 0
+        running_loss_dict = get_running_loss_dict()
         num_steps = init_steps
         macro_steps = 0
 
@@ -215,15 +226,32 @@ class TrainingPipe():
 
 
                 # forward and backforwad
-                _, loss = self.net(planes, target)
-                loss = loss.mean() / self.macrofactor
+                _, all_loss = self.net(planes, target)
+
+                prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, fina_score_loss = all_loss
+
+                # compute loss
+                prob_loss = prob_loss.mean() / self.macrofactor
+                aux_prob_loss = aux_prob_loss.mean() / self.macrofactor
+                ownership_loss = ownership_loss.mean() / self.macrofactor
+                wdl_loss = wdl_loss.mean() / self.macrofactor
+                stm_loss = stm_loss.mean() / self.macrofactor
+                fina_score_loss = fina_score_loss.mean() / self.macrofactor
+
+                loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + fina_score_loss
                 loss.backward()
                 macro_steps += 1
 
                 # accumulate loss
-                running_loss += loss.item()
+                running_loss_dict['loss'] += loss.item()
+                running_loss_dict['prob_loss'] += prob_loss.item()
+                running_loss_dict['aux_prob_loss'] += aux_prob_loss.item()
+                running_loss_dict['ownership_loss'] += ownership_loss.item()
+                running_loss_dict['wdl_loss'] += wdl_loss.item()
+                running_loss_dict['stm_loss'] += stm_loss.item()
+                running_loss_dict['fina_score_loss'] += fina_score_loss.item()
 
-                if math.isnan(running_loss):
+                if math.isnan(running_loss_dict['loss']):
                     print("The gradient is explosion. Stop training...")
                     keep_running = False
                     break
@@ -245,18 +273,33 @@ class TrainingPipe():
                         elapsed = time.time() - clock_time
                         clock_time = time.time()
 
+
+                        dump_outs = "steps: {} -> ".format(num_steps)
+                        dump_outs += "speed: {:.2f}, opt: {}, learning rate: {}, batch size: {}\n".format(
+                                         verbose_steps/elapsed,
+                                         self.opt_name,
+                                         self.learning_rate,
+                                         self.batchsize)
+                        dump_outs += "\tloss: {:.4f}\n".format(running_loss_dict['loss']/verbose_steps)
+                        dump_outs += "\tprob loss: {:.4f}\n".format(running_loss_dict['prob_loss']/verbose_steps)
+                        dump_outs += "\taux prob loss: {:.4f}\n".format(running_loss_dict['aux_prob_loss']/verbose_steps)
+                        dump_outs += "\townership loss: {:.4f}\n".format(running_loss_dict['ownership_loss']/verbose_steps)
+                        dump_outs += "\twdl loss: {:.4f}\n".format(running_loss_dict['wdl_loss']/verbose_steps)
+                        dump_outs += "\tstm loss: {:.4f}\n".format(running_loss_dict['stm_loss']/verbose_steps)
+                        dump_outs += "\tfina score loss: {:.4f}".format(running_loss_dict['fina_score_loss']/verbose_steps)
+
+                        print(dump_outs)
                         log_outs = "steps: {} -> loss: {:.4f}, speed: {:.2f} | opt: {}, learning rate: {}, batch size: {}".format(
                                        num_steps,
-                                       running_loss/verbose_steps,
+                                       running_loss_dict['loss']/verbose_steps,
                                        verbose_steps/elapsed,
                                        self.opt_name,
                                        self.learning_rate,
                                        self.batchsize)
-                        print(log_outs)
                         with open(log_file, 'a') as f:
                             f.write(log_outs + '\n')
 
-                        running_loss = 0
+                        running_loss_dict = get_running_loss_dict()
 
                 # should stop?
                 if num_steps >= self.max_steps + init_steps:

@@ -417,11 +417,11 @@ class Network(nn.Module):
 
         predict = (prob, aux_prob, ownership, wdl, stm, score)
 
-        loss = None
+        all_loss = None
         if target != None:
-            loss = self.compute_loss(predict, target)
+            all_loss = self.compute_loss(predict, target)
 
-        return predict, loss
+        return predict, all_loss
 
     def compute_loss(self, pred, target):
         (pred_prob, pred_aux_prob, pred_ownership, pred_wdl, pred_stm, pred_score) = pred
@@ -443,9 +443,8 @@ class Network(nn.Module):
 
         fina_score_loss = 0.0012 * huber_loss(20 * pred_score, target_final_score, 12)
 
-        loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + fina_score_loss
 
-        return loss
+        return (prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, fina_score_loss)
 
     def trainable(self, t=True):
         if t==True:
