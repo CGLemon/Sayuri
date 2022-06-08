@@ -187,7 +187,11 @@ class ConvBlock(nn.Module):
         return F.relu(x, inplace=True) if self.relu else x
 
 class ResBlock(nn.Module):
-    def __init__(self, channels, fixup, se_size=None, collector=None):
+    def __init__(self, blocks,
+                       channels,
+                       fixup,
+                       se_size=None,
+                       collector=None):
         super().__init__()
         self.use_se=False
         self.channels=channels
@@ -225,6 +229,16 @@ class ResBlock(nn.Module):
                 relu=False,
                 collector=collector
             )
+
+        if fixup:
+            # re-scale the weights
+            fixup_scale2 = 1.0 / math.sqrt(blocks)
+            self.conv1.weight *= fixup_scale2
+            self.conv2.weight *= 0
+            if se_size != None:
+                fixup_scale4 = 1.0 / (blocks ** (1.0 / 4.0)) 
+                self.squeeze.weight *= fixup_scale4
+                self.excite.weight *= fixup_scale4
 
     def forward(self, inputs):
         x, mask_buffers = inputs
@@ -297,15 +311,18 @@ class Network(nn.Module):
         nn_stack = []
         for s in self.stack:
             if s == "ResidualBlock":
-                nn_stack.append(ResBlock(self.residual_channels,
-                                         self.fixup,
-                                         None,
-                                         self.tensor_collector))
+                nn_stack.append(ResBlock(blocks=len(self.stack),
+                                         channels=self.residual_channels,
+                                         fixup=self.fixup,
+                                         se_size=None,
+                                         collector=self.tensor_collector))
             elif s == "ResidualBlock-SE":
-                nn_stack.append(ResBlock(self.residual_channels,
-                                         self.fixup,
-                                         self.residual_channels,
-                                         self.tensor_collector))
+                nn_stack.append(ResBlock(blocks=len(self.stack),
+                                         channels=self.residual_channels,
+                                         fixup=self.fixup,
+                                         se_size=self.residual_channels,
+                                         collector=self.tensor_collector))
+
         self.residual_tower = nn.Sequential(*nn_stack)
 
         # policy head
