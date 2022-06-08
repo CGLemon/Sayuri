@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import math
 
 CRAZY_NEGATIVE_VALUE = -5000.0
 
@@ -233,12 +234,12 @@ class ResBlock(nn.Module):
         if fixup:
             # re-scale the weights
             fixup_scale2 = 1.0 / math.sqrt(blocks)
-            self.conv1.weight *= fixup_scale2
-            self.conv2.weight *= 0
+            self.conv1.conv.weight.data *= fixup_scale2
+            self.conv2.conv.weight.data *= 0
             if se_size != None:
                 fixup_scale4 = 1.0 / (blocks ** (1.0 / 4.0)) 
-                self.squeeze.weight *= fixup_scale4
-                self.excite.weight *= fixup_scale4
+                self.squeeze.linear.weight.data *= fixup_scale4
+                self.excite.linear.weight.data *= fixup_scale4
 
     def forward(self, inputs):
         x, mask_buffers = inputs
