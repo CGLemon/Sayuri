@@ -89,8 +89,8 @@ class BatchNorm2d(nn.Module):
             x = (x-m)/torch.sqrt(self.eps+v)
 
             # Update running mean and variant.
-            self.running_mean += self.momentum * (batch_mean - self.running_mean)
-            self.running_var += self.momentum * (batch_var - self.running_var)
+            self.running_mean += self.momentum * (batch_mean.detach() - self.running_mean)
+            self.running_var += self.momentum * (batch_var.detach() - self.running_var)
         else:
             m = self.running_mean.view(1, self.num_features, 1, 1)
             v = self.running_var.view(1, self.num_features, 1, 1)
