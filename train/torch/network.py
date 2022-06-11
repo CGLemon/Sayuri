@@ -6,6 +6,21 @@ import math
 
 CRAZY_NEGATIVE_VALUE = -5000.0
 
+def conv_to_text(in_channels, out_channels, kernel_size):
+    return "Convolution {iC} {oC} {KS}\n".format(
+               iC=in_channels,
+               oC=out_channels,
+               KS=kernel_size)
+
+def fullyconnect_to_text(in_size, out_size):
+    return "FullyConnect {iS} {oS}\n".format(iS=in_size, oS=out_size)
+
+def bn_to_text(channels):
+    return "BatchNorm {C}\n".format(C=channels)
+
+def tensor_to_text(t: torch.Tensor):
+    return " ".join([str(w) for w in t.detach().numpy().ravel()]) + "\n"
+
 class GlobalPool(nn.Module):
     def __init__(self, is_value_head=False):
         super().__init__()
@@ -31,9 +46,16 @@ class GlobalPool(nn.Module):
         if self.is_value_head:
             layer0 = layer_raw_mean
             layer1 = layer_raw_mean * (b_diff / 10.0)
+
+            # Accordiog to KataGo, computing the board size variance can 
+            # improve the value head performance. That because the winrate
+            # and score lead heads consist of komi and intersections.
             layer2 = layer_raw_mean * (torch.square(b_diff) / 100.0 - self.b_varinat)
         else:
+            # Apply CRAZY_NEGATIVE_VALUE to out of board area. We guess that 
+            # -5000 is large enough.
             raw_x = x + (1.0-mask) * CRAZY_NEGATIVE_VALUE
+
             layer_raw_max = torch.max(torch.reshape(raw_x, (b,c,h*w)), dim=2, keepdims=False)[0]
             layer0 = layer_raw_mean
             layer1 = layer_raw_mean * (b_diff / 10.0)
@@ -45,7 +67,7 @@ class BatchNorm2d(nn.Module):
     def __init__(self, num_features,
                        eps = 1e-5,
                        momentum = 0.02,
-                       affine = True,
+                       use_gamma = False,
                        fixup = False):
         # TODO: According to the paper "Batch Renormalization: Towards Reducing Minibatch Dependence
         #       in Batch-Normalized Models", Batch-Renormalization is much faster and steady than 
@@ -59,14 +81,22 @@ class BatchNorm2d(nn.Module):
             "running_var", torch.ones(num_features, dtype=torch.float)
         )
 
-        if affine:
-            self.weight = torch.nn.Parameter(
+        # for batch renorm, unused
+        self.register_buffer(
+            "num_batches_tracked", torch.tensor(0, dtype=torch.long)
+        )
+
+        self.gamma = None
+        if use_gamma:
+            self.gamma = torch.nn.Parameter(
                 torch.ones(num_features, dtype=torch.float)
             )
-            self.bias = torch.nn.Parameter(
-                torch.zeros(num_features, dtype=torch.float)
-            )
-        self.affine = affine
+
+        self.beta = torch.nn.Parameter(
+            torch.zeros(num_features, dtype=torch.float)
+        )
+
+        self.use_gamma = use_gamma
         self.num_features = num_features
         self.eps = eps
         self.momentum = self._clamp(momentum)
@@ -78,6 +108,8 @@ class BatchNorm2d(nn.Module):
         return x
 
     def forward(self, x, mask):
+        #TODO: Improve the performance.
+
         if self.training and not self.fixup:
             mask_sum = torch.sum(mask) # global sum
 
@@ -97,8 +129,11 @@ class BatchNorm2d(nn.Module):
             v = self.running_var.view(1, self.num_features, 1, 1)
             x = (x-m)/torch.sqrt(self.eps+v)
 
-        if self.affine:
-            x = self.weight * x + self.bias
+        if self.gamma is not None:
+            x = x * self.gamma.view(1, self.num_features, 1, 1)
+
+        if self.beta is not None:
+            x = x + self.beta.view(1, self.num_features, 1, 1)
 
         return x * mask
 
@@ -109,11 +144,27 @@ class FullyConnect(nn.Module):
                        collector=None):
         super().__init__()
         self.relu = relu
-        self.linear = nn.Linear(in_size, out_size)
+        self.in_size = in_size
+        self.out_size = out_size
+        self.linear = nn.Linear(
+            in_size,
+            out_size,
+            bias=True
+        )
+        self.__try_collect(collector)
 
-        if collector != None:
-            collector.append(self.linear.weight)
-            collector.append(self.linear.bias)
+    def __try_collect(self, collector):
+        if collector is not None:
+            collector.append(self)
+
+    def shape_to_text(self):
+        return fullyconnect_to_text(self.in_size, self.out_size)
+
+    def tensors_to_text(self):
+        out = str()
+        out += tensor_to_text(self.linear.weight)
+        out += tensor_to_text(self.linear.bias)
+        return out
 
     def forward(self, x):
         x = self.linear(x)
@@ -127,6 +178,11 @@ class Convolve(nn.Module):
                        relu=True,
                        collector=None):
         super().__init__()
+
+        assert kernel_size in (1, 3)
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
         self.relu = relu
         self.conv = nn.Conv2d(
             in_channels,
@@ -135,13 +191,25 @@ class Convolve(nn.Module):
             padding=1 if kernel_size == 3 else 0,
             bias=True,
         )
-        if collector != None:
-            collector.append(self.conv.weight)
-            collector.append(self.conv.bias)
+        self.__try_collect(collector)
 
         nn.init.kaiming_normal_(self.conv.weight,
                                 mode="fan_out",
                                 nonlinearity="relu")
+
+    def __try_collect(self, collector):
+        if collector is not None:
+            collector.append(self)
+
+    def shape_to_text(self):
+        return conv_to_text(self.in_channels, self.out_channels, self.kernel_size)
+
+    def tensors_to_text(self):
+        out = str()
+        out += tensor_to_text(self.conv.weight)
+        out += tensor_to_text(self.conv.bias)
+        return out
+
     def forward(self, x, mask):
         x = self.conv(x) * mask
         return F.relu(x, inplace=True) if self.relu else x
@@ -151,12 +219,16 @@ class ConvBlock(nn.Module):
     def __init__(self, in_channels,
                        out_channels,
                        kernel_size,
+                       use_gamma,
                        fixup,
                        relu=True,
                        collector=None):
         super().__init__()
  
         assert kernel_size in (1, 3)
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
         self.relu = relu
         self.conv = nn.Conv2d(
             in_channels,
@@ -169,19 +241,46 @@ class ConvBlock(nn.Module):
         self.bn = BatchNorm2d(
             num_features=out_channels,
             eps=1e-5,
-            affine=False,
+            use_gamma=use_gamma,
             fixup=fixup
         )
-
-        if collector != None:
-            collector.append(self.conv.weight)
-            collector.append(torch.zeros(out_channels))
-            collector.append(self.bn.running_mean)
-            collector.append(self.bn.running_var)
+        self.__try_collect(collector)
 
         nn.init.kaiming_normal_(self.conv.weight,
                                 mode="fan_out",
                                 nonlinearity="relu")
+
+    def __try_collect(self, collector):
+        if collector is not None:
+            collector.append(self)
+
+    def shape_to_text(self):
+        out = str()
+        out += conv_to_text(self.in_channels, self.out_channels, self.kernel_size)
+        out += bn_to_text(self.out_channels)
+        return out
+
+    def tensors_to_text(self):
+        bn_mean = torch.zeros(self.out_channels)
+        bn_std = torch.zeros(self.out_channels)
+
+        out = str()
+        out += tensor_to_text(self.conv.weight)
+        out += tensor_to_text(torch.zeros(self.out_channels)) # fill zero
+
+        bn_mean[:] = self.bn.running_mean[:]
+        bn_std[:] = torch.sqrt(self.bn.eps + self.bn.running_var)[:]
+
+        if self.bn.gamma is not None:
+            bn_std = bn_std / self.bn.gamma
+        if self.bn.beta is not None:
+            bn_mean = bn_mean - self.bn.beta * bn_std
+        bn_var = torch.square(bn_std) - self.bn.eps
+
+        out += tensor_to_text(bn_mean)
+        out += tensor_to_text(bn_var)
+        return out
+
     def forward(self, x, mask):
         x = self.conv(x) * mask
         x = self.bn(x, mask)
@@ -201,6 +300,7 @@ class ResBlock(nn.Module):
             in_channels=channels,
             out_channels=channels,
             kernel_size=3,
+            use_gamma=False,
             fixup=fixup,
             relu=True,
             collector=collector
@@ -209,12 +309,13 @@ class ResBlock(nn.Module):
             in_channels=channels,
             out_channels=channels,
             kernel_size=3,
+            use_gamma=True,
             fixup=fixup,
             relu=False,
             collector=collector
         )
 
-        if se_size != None:
+        if se_size is not None:
             self.use_se = True
             self.global_pool = GlobalPool(is_value_head=False)
 
@@ -236,7 +337,7 @@ class ResBlock(nn.Module):
             fixup_scale2 = 1.0 / math.sqrt(blocks)
             self.conv1.conv.weight.data *= fixup_scale2
             self.conv2.conv.weight.data *= 0
-            if se_size != None:
+            if se_size is not None:
                 fixup_scale4 = 1.0 / (blocks ** (1.0 / 4.0)) 
                 self.squeeze.linear.weight.data *= fixup_scale4
                 self.excite.linear.weight.data *= fixup_scale4
@@ -272,11 +373,11 @@ class Network(nn.Module):
     def __init__(self, cfg):
         super().__init__()
 
-        # Tensor Collector will collect all weights which we want automatically.
-        # According to multi-task learning, some heads are only auxiliary. These
-        # heads may be not useful in inference process. So they will not be 
-        # collected by Tensor Collector.
-        self.tensor_collector = []
+        # Layer Collector will collect all weights except for ingnore
+        # heads. According to multi-task learning, some heads are just
+        # auxiliary. These heads may improve the performance but are useless
+        # in the inference time. We do not collect them. 
+        self.layer_collector = []
 
         self.cfg = cfg
         self.nntype = cfg.nntype
@@ -287,15 +388,14 @@ class Network(nn.Module):
         self.residual_channels = cfg.residual_channels
         self.xsize = cfg.boardsize
         self.ysize = cfg.boardsize
-        self.plane_size = self.xsize * self.ysize
         self.policy_extract = cfg.policy_extract
         self.value_extract = cfg.value_extract
         self.value_misc = cfg.value_misc
         self.stack = cfg.stack
 
-        self.set_layers()
+        self.construct_layers()
 
-    def set_layers(self):
+    def construct_layers(self):
         self.global_pool = GlobalPool(is_value_head=False)
         self.global_pool_val = GlobalPool(is_value_head=True)
 
@@ -303,9 +403,10 @@ class Network(nn.Module):
             in_channels=self.input_channels,
             out_channels=self.residual_channels,
             kernel_size=3,
+            use_gamma=True,
             fixup=self.fixup,
             relu=True,
-            collector=self.tensor_collector
+            collector=self.layer_collector
         )
 
         # residual tower
@@ -316,13 +417,13 @@ class Network(nn.Module):
                                          channels=self.residual_channels,
                                          fixup=self.fixup,
                                          se_size=None,
-                                         collector=self.tensor_collector))
+                                         collector=self.layer_collector))
             elif s == "ResidualBlock-SE":
                 nn_stack.append(ResBlock(blocks=len(self.stack),
                                          channels=self.residual_channels,
                                          fixup=self.fixup,
                                          se_size=self.residual_channels,
-                                         collector=self.tensor_collector))
+                                         collector=self.layer_collector))
 
         self.residual_tower = nn.Sequential(*nn_stack)
 
@@ -331,22 +432,23 @@ class Network(nn.Module):
             in_channels=self.residual_channels,
             out_channels=self.policy_extract,
             kernel_size=1,
+            use_gamma=False,
             fixup=self.fixup,
             relu=True,
-            collector=self.tensor_collector
+            collector=self.layer_collector
         )
         self.prob = Convolve(
             in_channels=self.policy_extract,
             out_channels=1,
             kernel_size=1,
             relu=False,
-            collector=self.tensor_collector
+            collector=self.layer_collector
         )
         self.prob_pass_fc = FullyConnect(
             in_size=self.policy_extract * 3,
             out_size=1,
             relu=False,
-            collector=self.tensor_collector
+            collector=self.layer_collector
         )
 
         # Ingnore auxiliary policy.
@@ -369,9 +471,10 @@ class Network(nn.Module):
             in_channels=self.residual_channels,
             out_channels=self.value_extract,
             kernel_size=1,
+            use_gamma=False,
             fixup=self.fixup,
             relu=True,
-            collector=self.tensor_collector
+            collector=self.layer_collector
         )
 
         self.ownership_conv = Convolve(
@@ -379,14 +482,14 @@ class Network(nn.Module):
             out_channels=1,
             kernel_size=1,
             relu=False,
-            collector=self.tensor_collector
+            collector=self.layer_collector
         )
 
         self.value_misc_fc = FullyConnect(
             in_size=self.value_extract * 3,
             out_size=self.value_misc,
             relu=False,
-            collector=self.tensor_collector
+            collector=self.layer_collector
         )
 
     def forward(self, planes, target = None):
@@ -405,6 +508,8 @@ class Network(nn.Module):
         # policy head
         pol = self.policy_conv(x, mask)
 
+        # Apply CRAZY_NEGATIVE_VALUE on out of board area. This point
+        # policy will be zero after softmax 
         prob_without_pass = self.prob(pol, mask) + (1.0-mask) * CRAZY_NEGATIVE_VALUE
         prob_without_pass = torch.flatten(prob_without_pass, start_dim=1, end_dim=3)
 
@@ -436,7 +541,7 @@ class Network(nn.Module):
         predict = (prob, aux_prob, ownership, wdl, stm, score)
 
         all_loss = None
-        if target != None:
+        if target is not None:
             all_loss = self.compute_loss(predict, target, mask_sum_hw)
 
         return predict, all_loss
@@ -494,8 +599,21 @@ class Network(nn.Module):
         print("Value misc size: {valuemisc}".format(valuemisc=self.value_misc))
 
     def transfer2text(self, filename):
+        def write_struct(f, layer_collector):
+            f.write("get struct\n")
+            for layer in layer_collector:
+                f.write(layer.shape_to_text())
+            f.write("end struct\n")
+
+        def write_params(f, layer_collector):
+            f.write("get parameters\n")
+            for layer in layer_collector:
+                f.write(layer.tensors_to_text())
+            f.write("end parameters\n")
+
         with open(filename, 'w') as f:
             f.write("get main\n")
+
             f.write("get info\n")
             f.write("NNType {}\n".format(self.nntype))
             f.write("InputChannels {}\n".format(self.input_channels))
@@ -506,54 +624,7 @@ class Network(nn.Module):
             f.write("ValueMisc {}\n".format(self.value_misc))
             f.write("end info\n")
 
-            f.write("get struct\n")
-            f.write(Network.conv2text(self.input_channels, self.residual_channels, 3))
-            f.write(Network.bn2text(self.residual_channels))
+            write_struct(f, self.layer_collector)
+            write_params(f, self.layer_collector)
 
-            for s in self.stack:
-                if s == "ResidualBlock" or s == "ResidualBlock-SE":
-                    f.write(Network.conv2text(self.residual_channels, self.residual_channels, 3))
-                    f.write(Network.bn2text(self.residual_channels))
-                    f.write(Network.conv2text(self.residual_channels, self.residual_channels, 3))
-                    f.write(Network.bn2text(self.residual_channels))
-                    if s == "ResidualBlock-SE":
-                        f.write(Network.fullyconnect2text(self.residual_channels * 3, self.residual_channels))
-                        f.write(Network.fullyconnect2text(self.residual_channels, self.residual_channels * 2))
-
-            # policy head
-            f.write(Network.conv2text(self.residual_channels, self.policy_extract, 1))
-            f.write(Network.bn2text(self.policy_extract))
-            f.write(Network.conv2text(self.policy_extract, 1, 1))
-            f.write(Network.fullyconnect2text(self.policy_extract * 3, 1))
-
-            # value head
-            f.write(Network.conv2text(self.residual_channels, self.value_extract, 1))
-            f.write(Network.bn2text(self.value_extract))
-            f.write(Network.conv2text(self.value_extract, 1, 1))
-
-            f.write(Network.fullyconnect2text(self.value_extract * 3, self.value_misc))
-            f.write("end struct\n")
-            f.write("get parameters\n")
-            for tensor in self.tensor_collector:
-                f.write(Network.tensor2text(tensor))
-            f.write("end parameters\n")
             f.write("end main")
-
-    @staticmethod
-    def fullyconnect2text(in_size, out_size):
-        return "FullyConnect {iS} {oS}\n".format(iS=in_size, oS=out_size)
-
-    @staticmethod
-    def conv2text(in_channels, out_channels, kernel_size):
-        return "Convolution {iC} {oC} {KS}\n".format(
-                   iC=in_channels,
-                   oC=out_channels,
-                   KS=kernel_size)
-
-    @staticmethod
-    def bn2text(channels):
-        return "BatchNorm {C}\n".format(C=channels)
-    
-    @staticmethod
-    def tensor2text(t: torch.Tensor):
-        return " ".join([str(w) for w in t.detach().numpy().ravel()]) + "\n"
