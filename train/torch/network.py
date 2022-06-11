@@ -437,11 +437,11 @@ class Network(nn.Module):
 
         all_loss = None
         if target != None:
-            all_loss = self.compute_loss(predict, target)
+            all_loss = self.compute_loss(predict, target, mask_sum_hw)
 
         return predict, all_loss
 
-    def compute_loss(self, pred, target):
+    def compute_loss(self, pred, target, mask_sum_hw):
         (pred_prob, pred_aux_prob, pred_ownership, pred_wdl, pred_stm, pred_score) = pred
         (target_prob,target_aux_prob, target_ownership, target_wdl, target_stm, target_final_score) = target
 
@@ -453,9 +453,13 @@ class Network(nn.Module):
             loss = torch.where(absdiff > delta, (0.5 * delta*delta) + delta * (absdiff - delta), 0.5 * absdiff * absdiff)
             return torch.mean(torch.sum(loss, dim=1), dim=0)
 
+        def mse_loss_spat(pred, target, mask_sum_hw):
+            spat_sum = torch.sum(torch.square(pred - target), dim=1) / mask_sum_hw
+            return torch.mean(spat_sum, dim=0)
+
         prob_loss = cross_entropy(pred_prob, target_prob)
         aux_prob_loss = 0.15 * cross_entropy(pred_aux_prob, target_aux_prob)
-        ownership_loss = 0.15 * F.mse_loss(pred_ownership, target_ownership)
+        ownership_loss = 1.5 * mse_loss_spat(pred_ownership, target_ownership, mask_sum_hw)
         wdl_loss = cross_entropy(pred_wdl, target_wdl)
         stm_loss = F.mse_loss(pred_stm, target_stm)
 
