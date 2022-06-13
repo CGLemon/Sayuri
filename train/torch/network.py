@@ -151,7 +151,11 @@ class FullyConnect(nn.Module):
             out_size,
             bias=True
         )
+        self.__init_weights()
         self.__try_collect(collector)
+
+    def __init_weights(self):
+        nn.init.xavier_normal_(self.linear.weight, gain=1.0)
 
     def __try_collect(self, collector):
         if collector is not None:
@@ -191,11 +195,15 @@ class Convolve(nn.Module):
             padding=1 if kernel_size == 3 else 0,
             bias=True,
         )
+        self.__init_weights()
         self.__try_collect(collector)
 
-        nn.init.kaiming_normal_(self.conv.weight,
-                                mode="fan_out",
-                                nonlinearity="relu")
+    def __init_weights(self):
+        nn.init.xavier_normal_(self.conv.weight, gain=1.0)
+
+        # nn.init.kaiming_normal_(self.conv.weight,
+        #                         mode="fan_out",
+        #                         nonlinearity="relu")
 
     def __try_collect(self, collector):
         if collector is not None:
@@ -244,11 +252,15 @@ class ConvBlock(nn.Module):
             use_gamma=use_gamma,
             fixup=fixup
         )
+        self.__init_weights()
         self.__try_collect(collector)
 
-        nn.init.kaiming_normal_(self.conv.weight,
-                                mode="fan_out",
-                                nonlinearity="relu")
+    def __init_weights(self):
+        nn.init.xavier_normal_(self.conv.weight, gain=1.0)
+
+        # nn.init.kaiming_normal_(self.conv.weight,
+        #                         mode="fan_out",
+        #                         nonlinearity="relu")
 
     def __try_collect(self, collector):
         if collector is not None:
