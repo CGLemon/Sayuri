@@ -25,7 +25,7 @@ class GlobalPool(nn.Module):
     def __init__(self, is_value_head=False):
         super().__init__()
         self.b_avg = (19 + 9) / 2
-        self.b_varinat = 0.1
+        self.b_variance = 0.1
 
         self.is_value_head = is_value_head
 
@@ -39,10 +39,6 @@ class GlobalPool(nn.Module):
         layer_raw_mean = torch.sum(x, dim=(2,3), keepdims=False) / div
         b_diff = div_sqrt - self.b_avg
 
-        layer0 = None
-        layer1 = None
-        layer2 = None
-
         if self.is_value_head:
             layer0 = layer_raw_mean
             layer1 = layer_raw_mean * (b_diff / 10.0)
@@ -50,7 +46,9 @@ class GlobalPool(nn.Module):
             # Accordiog to KataGo, computing the board size variance can 
             # improve the value head performance. That because the winrate
             # and score lead heads consist of komi and intersections.
-            layer2 = layer_raw_mean * (torch.square(b_diff) / 100.0 - self.b_varinat)
+            layer2 = layer_raw_mean * (torch.square(b_diff) / 100.0 - self.b_variance)
+
+            layer_pooled = torch.cat((layer0, layer1, layer2), 1)
         else:
             # Apply CRAZY_NEGATIVE_VALUE to out of board area. We guess that 
             # -5000 is large enough.
@@ -61,7 +59,9 @@ class GlobalPool(nn.Module):
             layer1 = layer_raw_mean * (b_diff / 10.0)
             layer2 = layer_raw_max
 
-        return torch.cat((layer0, layer1, layer2), 1)
+            layer_pooled = torch.cat((layer0, layer1, layer2), 1)
+
+        return layer_pooled
 
 class BatchNorm2d(nn.Module):
     def __init__(self, num_features,
@@ -69,9 +69,9 @@ class BatchNorm2d(nn.Module):
                        momentum = 0.02,
                        use_gamma = False,
                        fixup = False):
-        # TODO: According to the paper "Batch Renormalization: Towards Reducing Minibatch Dependence
-        #       in Batch-Normalized Models", Batch-Renormalization is much faster and steady than 
-        #       traditional Batch-Normalized.
+        # According to the paper "Batch Renormalization: Towards Reducing Minibatch Dependence
+        # in Batch-Normalized Models", Batch-Renormalization is much faster and steady than 
+        # traditional Batch-Normalized.
 
         super().__init__()
         self.register_buffer(
@@ -80,8 +80,6 @@ class BatchNorm2d(nn.Module):
         self.register_buffer(
             "running_var", torch.ones(num_features, dtype=torch.float)
         )
-
-        # for batch renorm, unused
         self.register_buffer(
             "num_batches_tracked", torch.tensor(0, dtype=torch.long)
         )
@@ -96,15 +94,57 @@ class BatchNorm2d(nn.Module):
             torch.zeros(num_features, dtype=torch.float)
         )
 
+        self.use_renorm = False
+
         self.use_gamma = use_gamma
         self.num_features = num_features
         self.eps = eps
-        self.momentum = self._clamp(momentum)
+        self.momentum = self.__clamp(momentum)
         self.fixup = fixup
 
-    def _clamp(self, x):
+    def __clamp(self, x):
         x = max(0, x)
         x = min(1, x)
+        return x
+
+    @property
+    def rmax(self):
+        # first 5k training step, rmax = 1
+        # after 25k training step, rmax = 3
+        return (2 / 35000 * self.num_batches_tracked + 25 / 35).clamp_(
+            1.0, 3.0
+        )
+
+    @property
+    def dmax(self):
+        # first 5k training step, dmax = 0
+        # after 25k training step, dmax = 5
+        return (5 / 20000 * self.num_batches_tracked - 25 / 20).clamp_(
+            0.0, 5.0
+        )
+
+    def __apply_renorm(self, x, mean, var):
+        mean = mean.view(1, self.num_features, 1, 1)
+        std = torch.sqrt(var+self.eps).view(1, self.num_features, 1, 1)
+        running_std = torch.sqrt(self.running_var+self.eps).view(1, self.num_features, 1, 1)
+        running_mean = self.running_mean.view(1, self.num_features, 1, 1)
+
+        r = (
+            std.detach() / running_std
+        ).clamp_(1 / self.rmax, self.rmax)
+
+
+        d = (
+            (mean.detach() - running_mean) / running_std
+        ).clamp_(-self.dmax, self.dmax)
+
+        x = (x-mean)/std * r + d
+        return x
+
+    def __apply_norm(self, x, mean, var):
+        mean = mean.view(1, self.num_features, 1, 1)
+        std = torch.sqrt(var+self.eps).view(1, self.num_features, 1, 1)
+        x = (x-mean)/std
         return x
 
     def forward(self, x, mask):
@@ -117,17 +157,19 @@ class BatchNorm2d(nn.Module):
             zmtensor = x - batch_mean.view(1, self.num_features, 1, 1)
             batch_var = torch.sum(torch.square(zmtensor * mask), dim=(0,2,3)) / mask_sum
 
-            m = batch_mean.view(1, self.num_features, 1, 1)
-            v = batch_var.view(1, self.num_features, 1, 1)
-            x = (x-m)/torch.sqrt(self.eps+v)
+            if self.use_renorm:
+                # In the first 5k training steps, the batch renorm is equal
+                # to the batch norm.
+                x = self.__apply_renorm(x , batch_mean, batch_var)
+            else:
+                x = self.__apply_norm(x , batch_mean, batch_var)
 
-            # Update running mean and variant.
+            # Update moving averages.
             self.running_mean += self.momentum * (batch_mean.detach() - self.running_mean)
             self.running_var += self.momentum * (batch_var.detach() - self.running_var)
+            self.num_batches_tracked += 1
         else:
-            m = self.running_mean.view(1, self.num_features, 1, 1)
-            v = self.running_var.view(1, self.num_features, 1, 1)
-            x = (x-m)/torch.sqrt(self.eps+v)
+            x = self.__apply_norm(x, self.running_mean, self.running_var)
 
         if self.gamma is not None:
             x = x * self.gamma.view(1, self.num_features, 1, 1)
