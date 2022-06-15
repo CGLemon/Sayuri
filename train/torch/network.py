@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 import math
 
+from symmetry import torch_symmetry
 CRAZY_NEGATIVE_VALUE = -5000.0
 
 def conv_to_text(in_channels, out_channels, kernel_size):
@@ -65,10 +66,10 @@ class GlobalPool(nn.Module):
 
 class BatchNorm2d(nn.Module):
     def __init__(self, num_features,
-                       eps = 1e-5,
-                       momentum = 0.02,
-                       use_gamma = False,
-                       fixup = False):
+                       eps=1e-5,
+                       momentum=0.01,
+                       use_gamma=False,
+                       fixup=False):
         # According to the paper "Batch Renormalization: Towards Reducing Minibatch Dependence
         # in Batch-Normalized Models", Batch-Renormalization is much faster and steady than 
         # traditional Batch-Normalized.
@@ -546,7 +547,11 @@ class Network(nn.Module):
             collector=self.layer_collector
         )
 
-    def forward(self, planes, target = None):
+    def forward(self, planes, target=None, use_symm=False):
+        symm = int(np.random.choice(8, 1)[0])
+        if use_symm:
+            planes = torch_symmetry(symm, planes, inves=False)
+
         # mask buffers
         mask = planes[:, (self.input_channels-1):self.input_channels , :, :]
         mask_sum_hw = torch.sum(mask, dim=(1,2,3))
@@ -565,6 +570,8 @@ class Network(nn.Module):
         # Apply CRAZY_NEGATIVE_VALUE on out of board area. This point
         # policy will be zero after softmax 
         prob_without_pass = self.prob(pol, mask) + (1.0-mask) * CRAZY_NEGATIVE_VALUE
+        if use_symm:
+            prob_without_pass = torch_symmetry(symm, prob_without_pass, inves=True)
         prob_without_pass = torch.flatten(prob_without_pass, start_dim=1, end_dim=3)
 
         pol_gpool = self.global_pool(pol, mask_buffers)
@@ -574,6 +581,8 @@ class Network(nn.Module):
 
         # auxiliary policy
         aux_prob_without_pass = self.aux_prob(pol, mask) + (1.0-mask) * CRAZY_NEGATIVE_VALUE
+        if use_symm:
+            aux_prob_without_pass = torch_symmetry(symm, aux_prob_without_pass, inves=True)
         aux_prob_without_pass = torch.flatten(aux_prob_without_pass, start_dim=1, end_dim=3)
         aux_prob_pass = self.aux_prob_pass_fc(pol_gpool)
         aux_prob = torch.cat((aux_prob_without_pass, aux_prob_pass), 1)
@@ -582,6 +591,8 @@ class Network(nn.Module):
         val = self.value_conv(x, mask)
 
         ownership = self.ownership_conv(val, mask)
+        if use_symm:
+            ownership = torch_symmetry(symm, ownership, inves=True)
         ownership = torch.flatten(ownership, start_dim=1, end_dim=3)
         ownership = torch.tanh(ownership)
 
