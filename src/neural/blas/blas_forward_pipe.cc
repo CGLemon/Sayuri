@@ -151,7 +151,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                           conv_out,
                           weights_->v_ex_conv.GetWeights(),
                           workspace, value_conv);
-    
+
     Batchnorm::Forward(board_size, value_extract_channels,
                        value_conv,
                        weights_->v_ex_bn.GetMeans(),
@@ -165,7 +165,6 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     AddSpatialBiases::Forward(board_size, 1,
                               output_ownership,
                               weights_->v_ownership.GetBiases(), false);
-
 
     GlobalPool<true>::Forward(board_size, value_extract_channels, value_conv, value_layer);
 

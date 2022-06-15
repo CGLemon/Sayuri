@@ -115,8 +115,8 @@ private:
     bool is_value_head_;
     static constexpr size_t kMaxBSize = 19;
     static constexpr size_t kMinBSize = 9;
-    static constexpr float kAvgBSize = (kMaxBSize + kMinBSize) / 2.f;
-    static constexpr float kBSizeVaraint = 0.1;
+    static constexpr float kAvgBSize = (float)(kMaxBSize + kMinBSize) / 2.f;
+    static constexpr float kBSizeVaraince = 0.1;
 };
 
 
@@ -146,8 +146,8 @@ private:
 
     static constexpr size_t kMaxBSize = 19;
     static constexpr size_t kMinBSize = 9;
-    static constexpr float kAvgBSize = (kMaxBSize + kMinBSize) / 2.f;
-    static constexpr float kBSizeVaraint = 0.1;
+    static constexpr float kAvgBSize = (float)(kMaxBSize + kMinBSize) / 2.f;
+    static constexpr float kBSizeVaraince = 0.1;
 };
 } // namespace CUDA
 

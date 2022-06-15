@@ -26,8 +26,8 @@ public:
      * plane     26 : pass-alive and pass-dead area
      * planes 27-30 : strings with 1, 2, 3 and others liberties 
      * planes 31-34 : ladder features
-     * plane     35 : komi/10
-     * plane     36 : intersections/100
+     * plane     35 : komi/20
+     * plane     36 : intersections/361
      * planes 37-38 : fill zeros, ones
      *
      */
