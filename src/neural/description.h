@@ -113,6 +113,7 @@ public:
     // policy head
     ConvLayer p_ex_conv;
     BatchNormLayer p_ex_bn;
+    LinearLayer p_inter_fc;
 
     ConvLayer prob_conv;
     LinearLayer pass_fc;
@@ -120,6 +121,7 @@ public:
     // value head
     ConvLayer v_ex_conv;
     BatchNormLayer v_ex_bn;
+    LinearLayer v_inter_fc;
 
     ConvLayer v_ownership;
     LinearLayer v_misc;

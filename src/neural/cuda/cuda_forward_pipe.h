@@ -46,17 +46,19 @@ private:
             // policy head 
             CUDA::Convolution p_ex_conv;
             CUDA::Batchnorm p_ex_bnorm;
+            CUDA::GlobalPool p_pool;
+            CUDA::FullyConnect p_inter;
 
             CUDA::Convolution p_prob;
-            CUDA::GlobalPool p_pool;
             CUDA::FullyConnect p_prob_pass;
 
             // value head
             CUDA::Convolution v_ex_conv;
             CUDA::Batchnorm v_ex_bnorm;
+            CUDA::GlobalPool v_pool;
+            CUDA::FullyConnect v_inter;
 
             CUDA::Convolution v_ownership;
-            CUDA::GlobalPool v_pool;
             CUDA::FullyConnect v_misc;
         };
 
@@ -88,8 +90,8 @@ private:
         float *cuda_output_ownership_;
 
         std::array<float*, 3> cuda_conv_op_;
-        std::array<float*, 2> cuda_pol_op_;
-        std::array<float*, 2> cuda_val_op_;
+        std::array<float*, 3> cuda_pol_op_;
+        std::array<float*, 3> cuda_val_op_;
 
         std::mutex &io_mutex_;
 

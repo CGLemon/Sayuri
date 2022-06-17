@@ -72,7 +72,8 @@ class BatchNorm2d(nn.Module):
                        fixup=False):
         # According to the paper "Batch Renormalization: Towards Reducing Minibatch Dependence
         # in Batch-Normalized Models", Batch-Renormalization is much faster and steady than 
-        # traditional Batch-Normalized.
+        # traditional Batch-Normalized. Will improve the performance in the small batch size
+        # case.
 
         super().__init__()
         self.register_buffer(
@@ -95,12 +96,18 @@ class BatchNorm2d(nn.Module):
             torch.zeros(num_features, dtype=torch.float)
         )
 
+        # TODO: Test Batch Renormalization.
         self.use_renorm = False
 
         self.use_gamma = use_gamma
         self.num_features = num_features
         self.eps = eps
         self.momentum = self.__clamp(momentum)
+
+        # Fix up Batch Normalization layer. According to kata Go, Batch Normalization may cause
+        # some wierd reuslts that becuse the inference and training computation results are different.
+        # Fix up also speeds up the performance. May improve around x1.6 ~ x1.8 thae becuse we use
+        # customized Batch Normalization layer. The performance of customized layer is very slow.
         self.fixup = fixup
 
     def __clamp(self, x):
@@ -170,6 +177,7 @@ class BatchNorm2d(nn.Module):
             self.running_var += self.momentum * (batch_var.detach() - self.running_var)
             self.num_batches_tracked += 1
         else:
+            # Inference step or fixup, they are same.
             x = self.__apply_norm(x, self.running_mean, self.running_var)
 
         if self.gamma is not None:
@@ -199,6 +207,7 @@ class FullyConnect(nn.Module):
 
     def __init_weights(self):
         nn.init.xavier_normal_(self.linear.weight, gain=1.0)
+        nn.init.zeros_(self.linear.bias)
 
     def __try_collect(self, collector):
         if collector is not None:
@@ -243,6 +252,7 @@ class Convolve(nn.Module):
 
     def __init_weights(self):
         nn.init.xavier_normal_(self.conv.weight, gain=1.0)
+        nn.init.zeros_(self.conv.bias)
 
         # nn.init.kaiming_normal_(self.conv.weight,
         #                         mode="fan_out",
@@ -323,8 +333,20 @@ class ConvBlock(nn.Module):
         out += tensor_to_text(self.conv.weight)
         out += tensor_to_text(torch.zeros(self.out_channels)) # fill zero
 
+        # Merge four tensors(mean, variance, gamma, beta) into two tensors (
+        # mean, variance).
         bn_mean[:] = self.bn.running_mean[:]
         bn_std[:] = torch.sqrt(self.bn.eps + self.bn.running_var)[:]
+
+        # Original format: gamma * ((x-mean) / std) + beta
+        # Target format: (x-mean) / std
+        #
+        # Solve the following equation:
+        #     gamma * ((x-mean) / std) + beta = (x-tgt_mean) / tgt_std
+        #
+        # We get:
+        #     tgt_std = std / gamma
+        #     tgt_mean = (mean - beta) * (std / gamma)
 
         if self.bn.gamma is not None:
             bn_std = bn_std / self.bn.gamma
@@ -492,6 +514,12 @@ class Network(nn.Module):
             relu=True,
             collector=self.layer_collector
         )
+        self.policy_intermediate_fc = FullyConnect(
+            in_size=self.policy_extract * 3,
+            out_size=self.policy_extract,
+            relu=True,
+            collector=self.layer_collector
+        )
         self.prob = Convolve(
             in_channels=self.policy_extract,
             out_channels=1,
@@ -500,7 +528,7 @@ class Network(nn.Module):
             collector=self.layer_collector
         )
         self.prob_pass_fc = FullyConnect(
-            in_size=self.policy_extract * 3,
+            in_size=self.policy_extract,
             out_size=1,
             relu=False,
             collector=self.layer_collector
@@ -516,7 +544,7 @@ class Network(nn.Module):
 
         # Ingnore auxiliary pass policy.
         self.aux_prob_pass_fc = FullyConnect(
-            in_size=self.policy_extract * 3,
+            in_size=self.policy_extract,
             out_size=1,
             relu=False,
         )
@@ -531,7 +559,12 @@ class Network(nn.Module):
             relu=True,
             collector=self.layer_collector
         )
-
+        self.value_intermediate_fc = FullyConnect(
+            in_size=self.policy_extract * 3,
+            out_size=self.policy_extract,
+            relu=True,
+            collector=self.layer_collector
+        )
         self.ownership_conv = Convolve(
             in_channels=self.value_extract,
             out_channels=1,
@@ -539,9 +572,8 @@ class Network(nn.Module):
             relu=False,
             collector=self.layer_collector
         )
-
         self.value_misc_fc = FullyConnect(
-            in_size=self.value_extract * 3,
+            in_size=self.value_extract,
             out_size=self.value_misc,
             relu=False,
             collector=self.layer_collector
@@ -566,29 +598,38 @@ class Network(nn.Module):
 
         # policy head
         pol = self.policy_conv(x, mask)
+        pol_gpool = self.global_pool(pol, mask_buffers)
+        pol_inter = self.policy_intermediate_fc(pol_gpool)
 
-        # Apply CRAZY_NEGATIVE_VALUE on out of board area. This point
+        b, c = pol_inter.size()
+        pol = (pol + pol_inter.view(b, c, 1, 1)) * mask
+
+        # Apply CRAZY_NEGATIVE_VALUE on out of board area. This position
         # policy will be zero after softmax 
         prob_without_pass = self.prob(pol, mask) + (1.0-mask) * CRAZY_NEGATIVE_VALUE
+
         if use_symm:
             prob_without_pass = torch_symmetry(symm, prob_without_pass, inves=True)
         prob_without_pass = torch.flatten(prob_without_pass, start_dim=1, end_dim=3)
-
-        pol_gpool = self.global_pool(pol, mask_buffers)
-
-        prob_pass = self.prob_pass_fc(pol_gpool)
+        prob_pass = self.prob_pass_fc(pol_inter)
         prob = torch.cat((prob_without_pass, prob_pass), 1)
 
-        # auxiliary policy
+        # Apply CRAZY_NEGATIVE_VALUE on out of board area. This position
+        # policy will be zero after softmax 
         aux_prob_without_pass = self.aux_prob(pol, mask) + (1.0-mask) * CRAZY_NEGATIVE_VALUE
         if use_symm:
             aux_prob_without_pass = torch_symmetry(symm, aux_prob_without_pass, inves=True)
         aux_prob_without_pass = torch.flatten(aux_prob_without_pass, start_dim=1, end_dim=3)
-        aux_prob_pass = self.aux_prob_pass_fc(pol_gpool)
+        aux_prob_pass = self.aux_prob_pass_fc(pol_inter)
         aux_prob = torch.cat((aux_prob_without_pass, aux_prob_pass), 1)
 
         # value head
         val = self.value_conv(x, mask)
+        val_gpool = self.global_pool_val(val, mask_buffers)
+        val_inter = self.value_intermediate_fc(val_gpool)
+
+        b, c = val_inter.size()
+        val = (val + val_inter.view(b, c, 1, 1)) * mask
 
         ownership = self.ownership_conv(val, mask)
         if use_symm:
@@ -596,10 +637,7 @@ class Network(nn.Module):
         ownership = torch.flatten(ownership, start_dim=1, end_dim=3)
         ownership = torch.tanh(ownership)
 
-        val_gpool = self.global_pool_val(val, mask_buffers)
-
-        val_misc = self.value_misc_fc(val_gpool)
-
+        val_misc = self.value_misc_fc(val_inter)
         wdl, stm, score = torch.split(val_misc, [3, 1, 1], dim=1)
         stm = torch.tanh(stm)
 
