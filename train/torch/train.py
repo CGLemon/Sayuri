@@ -3,7 +3,6 @@ import torch.nn.functional as F
 import numpy as np
 import random, time, math
 
-from symmetry import get_symmetry_plane
 from network import Network
 from loader import Loader
 
@@ -15,8 +14,6 @@ def dump_dependent_version():
     print("Name: {name} ->  Version: {ver}".format(name =  "Torch", ver = torch.__version__))
 
 class DataSet():
-    # The simple DataSet wrapper.
-
     def __init__(self, cfg, dirname):
         self.nn_board_size = cfg.boardsize
         self.nn_num_intersections = self.nn_board_size * self.nn_board_size
@@ -61,7 +58,7 @@ class DataSet():
             input_planes[self.input_channels-4, 0:board_size, 0:board_size] = -data.komi/20
 
         input_planes[self.input_channels-3, 0:board_size, 0:board_size] = (data.board_size**2)/361
-        # input_planes[self.input_channels-2, 0:board_size, 0:board_size] = 0 # fill zeros
+        input_planes[self.input_channels-2, 0:board_size, 0:board_size] = 0 # fill zeros
         input_planes[self.input_channels-1, 0:board_size, 0:board_size] = 1 # fill ones
 
         # probabilities

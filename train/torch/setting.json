@@ -1,34 +1,38 @@
 {
     "NeuralNetwork" : {
         "NNType": "Residual",
-        "MaxBoardSize": 9,
+        "MaxBoardSize": 19,
         "InputChannels": 38,
-        "ResidualChannels": 192,
-        "PolicyExtract": 64,
-        "ValueExtract": 96,
+        "ResidualChannels": 128,
+        "PolicyExtract": 32,
+        "ValueExtract": 32,
         "ValueMisc": 5,
 
         "Stack" : [
+            "ResidualBlock",
+            "ResidualBlock",
             "ResidualBlock-SE",
-            "ResidualBlock-SE",
-            "ResidualBlock-SE",
-            "ResidualBlock-SE",
-            "ResidualBlock-SE",
+
+            "ResidualBlock",
+            "ResidualBlock",
             "ResidualBlock-SE"
         ]
     },
 
     "Train" : {
         "UseGPU": null,
-        "Optimizer": "Adam",
-        "StepsPerEpoch" : 2000,
-        "MaxSteps": 100000,
+        "Optimizer": "SGD",
+        "StepsPerEpoch" : 1000,
+        "MaxSteps": 128000,
         "Workers": 4,
-        "BatchSize": 512,
+        "BatchSize": 256,
         "MacroFactor": 1,
-        "LearningRate": 1e-4,
+        "LearningRate": 5e-3,
         "WeightDecay": 1e-4,
-        "FixUpBatchNorm": true,
+        "FixUpBatchNorm": false,
         "TrainDirectory": "train-dir"
     }
 }
+
+
+

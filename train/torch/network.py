@@ -601,6 +601,7 @@ class Network(nn.Module):
         pol_gpool = self.global_pool(pol, mask_buffers)
         pol_inter = self.policy_intermediate_fc(pol_gpool)
 
+        # Add intermediate as biases. It may improve the performance.
         b, c = pol_inter.size()
         pol = (pol + pol_inter.view(b, c, 1, 1)) * mask
 
