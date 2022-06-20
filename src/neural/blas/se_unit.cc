@@ -17,7 +17,7 @@ void GlobalPool<false>::Forward(const size_t board_size,
 
     for (auto c = size_t{0}; c < channels; ++c) {
         float sum = 0.0f;
-        float max = 0.0f;
+        float max = -5000.0f; // crazy negative value
         for (auto b = size_t{0}; b < spatial_size; ++b) {
             float val = *input_ptr;
 
@@ -46,7 +46,7 @@ void GlobalPool<true>::Forward(const size_t board_size,
 
     const float b_diff = (float)board_size - kAvgBSize;
     const float b_coeff0 = b_diff / 10.f;
-    const float b_coeff1 = b_diff * b_diff / 100.f - kBSizeVaraint;
+    const float b_coeff1 = b_diff * b_diff / 100.f - kBSizeVaraince;
 
     for (auto c = size_t{0}; c < channels; ++c) {
         float sum = 0.0f;

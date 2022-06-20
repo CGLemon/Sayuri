@@ -10,6 +10,8 @@ static constexpr int kInputChannels = 38; // 8 past moves * 3
                                           // 2 misc features
 static constexpr int kOuputValueMisc = 5;
 static constexpr int kOuputPassProbability = 1;
+static constexpr int kOuputProbabilitiesChannels = 1;
+static constexpr int kOuputOwnershipChannels = 1;
 
 struct InputData {
     InputData() : komi(0.f), board_size(-1), side_to_move(kInvalid) {

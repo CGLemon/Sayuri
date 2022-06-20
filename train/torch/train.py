@@ -3,7 +3,6 @@ import torch.nn.functional as F
 import numpy as np
 import random, time, math
 
-from symmetry import get_symmetry_plane
 from network import Network
 from loader import Loader
 
@@ -15,8 +14,6 @@ def dump_dependent_version():
     print("Name: {name} ->  Version: {ver}".format(name =  "Torch", ver = torch.__version__))
 
 class DataSet():
-    # The simple DataSet wrapper.
-
     def __init__(self, cfg, dirname):
         self.nn_board_size = cfg.boardsize
         self.nn_num_intersections = self.nn_board_size * self.nn_board_size
@@ -29,18 +26,8 @@ class DataSet():
         for _ in range(num_workers):
             self.data_loaders.append(Loader(dirname))
 
-
-    def __getitem__(self, idx):
-        worker_info = torch.utils.data.get_worker_info()
-        worker_id = None
-        if worker_info == None:
-            worker_id = 0
-        else:
-            worker_id = worker_info.id
-
+    def __wrap_data(self, worker_id):
         data = self.data_loaders[worker_id].next()
-
-        symm = int(np.random.choice(8, 1)[0])
 
         nn_board_size = self.nn_board_size
         nn_num_intersections = self.nn_num_intersections
@@ -62,40 +49,32 @@ class DataSet():
 
         # input planes
         for p in range(self.input_channels-4):
-            buf[:] = data.planes[p][:]
-            buf = get_symmetry_plane(symm, buf, data.board_size)
-            input_planes[p, 0:board_size, 0:board_size] = np.reshape(buf, (board_size, board_size))[:, :]
+            plane = data.planes[p]
+            input_planes[p, 0:board_size, 0:board_size] = np.reshape(plane, (board_size, board_size))[:, :]
 
         if data.to_move == 1:
-            input_planes[self.input_channels-4, 0:board_size, 0:board_size] = data.komi/10
+            input_planes[self.input_channels-4, 0:board_size, 0:board_size] = data.komi/20
         else:
-            input_planes[self.input_channels-4, 0:board_size, 0:board_size] = -data.komi/10
+            input_planes[self.input_channels-4, 0:board_size, 0:board_size] = -data.komi/20
 
-        input_planes[self.input_channels-3, 0:board_size, 0:board_size] = (data.board_size**2)/100
-        # input_planes[self.input_channels-2, 0:board_size, 0:board_size] = 0 # fill zeros
+        input_planes[self.input_channels-3, 0:board_size, 0:board_size] = (data.board_size**2)/361
+        input_planes[self.input_channels-2, 0:board_size, 0:board_size] = 0 # fill zeros
         input_planes[self.input_channels-1, 0:board_size, 0:board_size] = 1 # fill ones
 
         # probabilities
         buf[:] = data.prob[0:num_intersections]
-        buf = get_symmetry_plane(symm, buf, data.board_size)
         sqr_buf[0:board_size, 0:board_size] = np.reshape(buf, (board_size, board_size))[:, :]
-
         prob[0:nn_num_intersections] = np.reshape(sqr_buf, (nn_num_intersections))[:]
         prob[nn_num_intersections] = data.prob[num_intersections]
 
         # auxiliary probabilities
         buf[:] = data.aux_prob[0:num_intersections]
-        buf = get_symmetry_plane(symm, buf, data.board_size)
         sqr_buf[0:board_size, 0:board_size] = np.reshape(buf, (board_size, board_size))[:, :]
-
         aux_prob[0:nn_num_intersections] = np.reshape(sqr_buf, (nn_num_intersections))[:]
         aux_prob[nn_num_intersections] = data.aux_prob[num_intersections]
 
         # ownership
-        buf[:] = data.ownership[:]
-        buf = get_symmetry_plane(symm, buf, data.board_size)
-
-        ownership[0:board_size, 0:board_size] = np.reshape(buf, (board_size, board_size))[:, :]
+        ownership[0:board_size, 0:board_size] = np.reshape(data.ownership, (board_size, board_size))[:, :]
         ownership = np.reshape(ownership, (nn_num_intersections))
 
         # winrate
@@ -113,6 +92,17 @@ class DataSet():
             torch.tensor(stm).float(),
             torch.tensor(final_score).float()
         )
+
+    def __getitem__(self, idx):
+        worker_info = torch.utils.data.get_worker_info()
+        worker_id = None
+        if worker_info == None:
+            worker_id = 0
+        else:
+            worker_id = worker_info.id
+
+        return self.__wrap_data(worker_id)
+
 
     def __len__(self):
         return self.dummy_size
@@ -180,8 +170,19 @@ class TrainingPipe():
 
         print("start training...")
 
+        def get_running_loss_dict():
+            running_loss_dict = dict()
+            running_loss_dict['loss'] = 0
+            running_loss_dict['prob_loss'] = 0
+            running_loss_dict['aux_prob_loss'] = 0
+            running_loss_dict['ownership_loss'] = 0
+            running_loss_dict['wdl_loss'] = 0
+            running_loss_dict['stm_loss'] = 0
+            running_loss_dict['fina_score_loss'] = 0
+            return running_loss_dict
+
         keep_running = True
-        running_loss = 0
+        running_loss_dict = get_running_loss_dict()
         num_steps = init_steps
         macro_steps = 0
 
@@ -210,25 +211,45 @@ class TrainingPipe():
                     target_stm = target_stm.to(self.device)
                     target_score = target_score.to(self.device)
 
-                # gather batch data
+                # gather batch datag
                 target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score)
 
-
                 # forward and backforwad
-                _, loss = self.net(planes, target)
-                loss = loss.mean() / self.macrofactor
+                _, all_loss = self.net(planes, target, use_symm=True)
+
+                prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, fina_score_loss = all_loss
+
+                # compute loss
+                prob_loss = prob_loss.mean() / self.macrofactor
+                aux_prob_loss = aux_prob_loss.mean() / self.macrofactor
+                ownership_loss = ownership_loss.mean() / self.macrofactor
+                wdl_loss = wdl_loss.mean() / self.macrofactor
+                stm_loss = stm_loss.mean() / self.macrofactor
+                fina_score_loss = fina_score_loss.mean() / self.macrofactor
+
+                loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + fina_score_loss
                 loss.backward()
                 macro_steps += 1
 
                 # accumulate loss
-                running_loss += loss.item()
+                running_loss_dict['loss'] += loss.item()
+                running_loss_dict['prob_loss'] += prob_loss.item()
+                running_loss_dict['aux_prob_loss'] += aux_prob_loss.item()
+                running_loss_dict['ownership_loss'] += ownership_loss.item()
+                running_loss_dict['wdl_loss'] += wdl_loss.item()
+                running_loss_dict['stm_loss'] += stm_loss.item()
+                running_loss_dict['fina_score_loss'] += fina_score_loss.item()
 
-                if math.isnan(running_loss):
+                if math.isnan(running_loss_dict['loss']):
                     print("The gradient is explosion. Stop training...")
                     keep_running = False
                     break
 
                 if macro_steps % self.macrofactor == 0:
+                    # clip grad
+                    if self.cfg.fixup_batch_norm:
+                        gnorm = torch.nn.utils.clip_grad_norm_(self.net.parameters(), 1.0)
+
                     # update network
                     self.opt.step()
                     self.opt.zero_grad()
@@ -239,18 +260,33 @@ class TrainingPipe():
                         elapsed = time.time() - clock_time
                         clock_time = time.time()
 
+
+                        dump_outs = "steps: {} -> ".format(num_steps)
+                        dump_outs += "speed: {:.2f}, opt: {}, learning rate: {}, batch size: {}\n".format(
+                                         verbose_steps/elapsed,
+                                         self.opt_name,
+                                         self.learning_rate,
+                                         self.batchsize)
+                        dump_outs += "\tloss: {:.4f}\n".format(running_loss_dict['loss']/verbose_steps)
+                        dump_outs += "\tprob loss: {:.4f}\n".format(running_loss_dict['prob_loss']/verbose_steps)
+                        dump_outs += "\taux prob loss: {:.4f}\n".format(running_loss_dict['aux_prob_loss']/verbose_steps)
+                        dump_outs += "\townership loss: {:.4f}\n".format(running_loss_dict['ownership_loss']/verbose_steps)
+                        dump_outs += "\twdl loss: {:.4f}\n".format(running_loss_dict['wdl_loss']/verbose_steps)
+                        dump_outs += "\tstm loss: {:.4f}\n".format(running_loss_dict['stm_loss']/verbose_steps)
+                        dump_outs += "\tfina score loss: {:.4f}".format(running_loss_dict['fina_score_loss']/verbose_steps)
+
+                        print(dump_outs)
                         log_outs = "steps: {} -> loss: {:.4f}, speed: {:.2f} | opt: {}, learning rate: {}, batch size: {}".format(
                                        num_steps,
-                                       running_loss/verbose_steps,
+                                       running_loss_dict['loss']/verbose_steps,
                                        verbose_steps/elapsed,
                                        self.opt_name,
                                        self.learning_rate,
                                        self.batchsize)
-                        print(log_outs)
                         with open(log_file, 'a') as f:
                             f.write(log_outs + '\n')
 
-                        running_loss = 0
+                        running_loss_dict = get_running_loss_dict()
 
                 # should stop?
                 if num_steps >= self.max_steps + init_steps:

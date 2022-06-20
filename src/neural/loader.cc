@@ -310,13 +310,13 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
                                   se_excite_shape[1]);
 
             if (se_squeeze_shape[1] != se_excite_shape[0]) {
-                throw "The SE Unit size is wrong 1.";
+                throw "The SE Unit size is wrong (1).";
             }
             if (se_squeeze_shape[0] != 3 * weights->residual_channels) {
-                throw "The SE Unit size is wrong 2.";
+                throw "The SE Unit size is wrong (2).";
             }
             if (se_excite_shape[1] != 2 * weights->residual_channels) {
-                throw "The SE Unit size is wrong 3.";
+                throw "The SE Unit size is wrong (3).";
             }
                 
             tower_ptr->se_size = se_squeeze_shape[1];
@@ -327,8 +327,8 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
 
     const auto h_offset = 4 * residuals + 2 * se_cnt + inputs_cnt;
 
-    // policy head 4
-    const auto p_ex_conv_shape = netstruct[h_offset];
+    // policy head
+    const auto p_ex_conv_shape = netstruct[h_offset + 0];
     FillConvolutionLayer(weights->p_ex_conv,
                          buffer,
                          p_ex_conv_shape[0],
@@ -341,14 +341,20 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
                        p_ex_bn_shape[0]);
 
 
-    const auto prob_conv_shape = netstruct[h_offset + 2];
+    const auto p_inter_fc_shape = netstruct[h_offset + 2];
+    FillFullyconnectLayer(weights->p_inter_fc,
+                          buffer,
+                          p_inter_fc_shape[0],
+                          p_inter_fc_shape[1]);
+
+    const auto prob_conv_shape = netstruct[h_offset + 3];
     FillConvolutionLayer(weights->prob_conv,
                          buffer,
                          prob_conv_shape[0],
                          prob_conv_shape[1],
                          prob_conv_shape[2]);
 
-    const auto pass_fc_shape = netstruct[h_offset + 3];
+    const auto pass_fc_shape = netstruct[h_offset + 4];
     FillFullyconnectLayer(weights->pass_fc,
                           buffer,
                           pass_fc_shape[0],
@@ -357,7 +363,7 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
     if (p_ex_conv_shape[2] != 1 || prob_conv_shape[2] != 1) {
         throw "The policy convolution kernel size is wrong";
     }
-    if (prob_conv_shape[1] != 1) {
+    if (prob_conv_shape[1] != kOuputProbabilitiesChannels) {
         throw "The number of policy ouput size is wrong";
     }
     if (pass_fc_shape[1] != kOuputPassProbability) {
@@ -365,33 +371,41 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
     }
 
     // value head
-    const auto v_ex_conv_shape = netstruct[h_offset + 4];
+    const auto v_ex_conv_shape = netstruct[h_offset + 5];
     FillConvolutionLayer(weights->v_ex_conv,
                          buffer,
                          v_ex_conv_shape[0],
                          v_ex_conv_shape[1],
                          v_ex_conv_shape[2]);
 
-    const auto v_ex_bn_shape = netstruct[h_offset  + 5];
+    const auto v_ex_bn_shape = netstruct[h_offset  + 6];
     FillBatchnormLayer(weights->v_ex_bn,
                        buffer,
                        v_ex_bn_shape[0]);
 
-    const auto v_os_conv_shape = netstruct[h_offset + 6];
+    const auto v_inter_fc_shape = netstruct[h_offset + 7];
+    FillFullyconnectLayer(weights->v_inter_fc,
+                          buffer,
+                          v_inter_fc_shape[0],
+                          v_inter_fc_shape[1]);
+
+    const auto v_os_conv_shape = netstruct[h_offset + 8];
     FillConvolutionLayer(weights->v_ownership,
                          buffer,
                          v_os_conv_shape[0],
                          v_os_conv_shape[1],
                          v_os_conv_shape[2]);
 
-
-    const auto misc_fc_shape = netstruct[h_offset + 7];
+    const auto misc_fc_shape = netstruct[h_offset + 9];
     FillFullyconnectLayer(weights->v_misc,
                           buffer,
                           misc_fc_shape[0],
                           misc_fc_shape[1]);
-    if (v_ex_conv_shape[2] != 1) {
+    if (v_ex_conv_shape[2] != 1 || v_os_conv_shape[2] != 1) {
         throw "The value convolution kernel size is wrong";
+    }
+    if (v_os_conv_shape[1] != kOuputOwnershipChannels) {
+        throw "The number of ownership ouput size is wrong";
     }
     if (misc_fc_shape[1] != kOuputValueMisc) {
         throw "The misc value layer size is wrong";

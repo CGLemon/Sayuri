@@ -363,7 +363,7 @@ void GlobalPool::Forward(const int batch, float *input, float *output) {
 
     if (is_value_head_) {
         const float b_coeff0 = b_diff / 10.f;
-        const float b_coeff1 = b_diff * b_diff / 100.f - kBSizeVaraint;
+        const float b_coeff1 = b_diff * b_diff / 100.f - kBSizeVaraince;
 
         head_global_pool(input, output, b_coeff0, b_coeff1, batch,
                          channels_, spatial_size_, handles_->stream);

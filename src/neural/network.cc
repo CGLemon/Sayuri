@@ -257,7 +257,7 @@ std::string Network::GetOutputString(const GameState &state,
         }
         out << std::endl;
     }
-    out << Format("pass probabilities: %.6f\n", result.pass_probability) << std::endl;
+    out << Format("pass probabilities: %.6f\n", result.pass_probability);
 
     out << "ownership: " << std::endl;
     for (int y = 0; y < bsize; ++y) {
