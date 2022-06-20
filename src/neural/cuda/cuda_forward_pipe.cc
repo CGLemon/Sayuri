@@ -284,7 +284,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
         &handles_,
         max_batch_,               // max batch size
         3*value_extract_channels, // input sizes
-        value_extract_channels,   // outpur size
+        2*value_extract_channels, // outpur size
         true
     );
     graph_->v_ownership = CUDA::Convolution(
@@ -298,7 +298,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
     graph_->v_misc = CUDA::FullyConnect(
         &handles_,
         max_batch_,               // max batch size
-        value_extract_channels,   // input size
+        2*value_extract_channels, // input size
         kOuputValueMisc,          // output size
         false                     // relu
     );
@@ -389,7 +389,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
 
     const size_t val_op1_size = factor * value_extract_channels * num_intersections;
     const size_t val_op2_size = factor * value_extract_channels * 3;
-    const size_t val_op3_size = factor * value_extract_channels;
+    const size_t val_op3_size = factor * value_extract_channels * 2;
 
     CUDA::ReportCUDAErrors(cudaMalloc(&cuda_scratch_, scratch_size_));
     CUDA::ReportCUDAErrors(cudaMalloc(&cuda_input_planes_, planes_size));
@@ -510,9 +510,9 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     graph_->v_inter.Forward(batch_size,
                             cuda_val_op_[1], cuda_val_op_[2]);
 
-    CUDA::add_spatial(cuda_val_op_[0], cuda_val_op_[2], cuda_val_op_[0],
-                      v_op_size1, v_op_size2, v_op_size1,
-                      num_intersections, false, handles_.stream);
+    // CUDA::add_spatial(cuda_val_op_[0], cuda_val_op_[2], cuda_val_op_[0],
+    //                   v_op_size1, v_op_size2, v_op_size1,
+    //                   num_intersections, false, handles_.stream);
 
     graph_->v_ownership.Forward(batch_size,
                                 cuda_val_op_[0], cuda_output_ownership_,

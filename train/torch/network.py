@@ -560,8 +560,8 @@ class Network(nn.Module):
             collector=self.layer_collector
         )
         self.value_intermediate_fc = FullyConnect(
-            in_size=self.policy_extract * 3,
-            out_size=self.policy_extract,
+            in_size=self.value_extract * 3,
+            out_size=self.value_extract * 2,
             relu=True,
             collector=self.layer_collector
         )
@@ -573,7 +573,7 @@ class Network(nn.Module):
             collector=self.layer_collector
         )
         self.value_misc_fc = FullyConnect(
-            in_size=self.value_extract,
+            in_size=self.value_extract * 2,
             out_size=self.value_misc,
             relu=False,
             collector=self.layer_collector
@@ -629,8 +629,8 @@ class Network(nn.Module):
         val_gpool = self.global_pool_val(val, mask_buffers)
         val_inter = self.value_intermediate_fc(val_gpool)
 
-        b, c = val_inter.size()
-        val = (val + val_inter.view(b, c, 1, 1)) * mask
+        # b, c = val_inter.size()
+        # val = (val + val_inter.view(b, c, 1, 1)) * mask
 
         ownership = self.ownership_conv(val, mask)
         if use_symm:
