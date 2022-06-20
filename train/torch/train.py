@@ -26,8 +26,20 @@ class DataSet():
         for _ in range(num_workers):
             self.data_loaders.append(Loader(dirname))
 
+    def __skip(self, data):
+        # Reture true if we want to skip current data. For example,
+        # we only want 19 board data, we can use following code...
+        #
+        # if data.board_size != 19:
+        #    return True
+
+        return False
+
     def __wrap_data(self, worker_id):
         data = self.data_loaders[worker_id].next()
+
+        while self.__skip(data):
+            data = self.data_loaders[worker_id].next()
 
         nn_board_size = self.nn_board_size
         nn_num_intersections = self.nn_num_intersections
