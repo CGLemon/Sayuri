@@ -3,6 +3,7 @@
 #include "game/game_state.h"
 #include "game/sgf.h"
 #include "game/types.h"
+#include "game/iterator.h"
 #include "neural/encoder.h"
 #include "utils/log.h"
 #include "utils/format.h"
@@ -35,6 +36,8 @@ void Supervised::FromSgfs(std::string sgf_name,
         bool closed = true;
         int games = 0;
         int worker_cnt = worker_cnt_.fetch_add(1);
+
+        LOGGING << Format("Thread %d is ready", worker_cnt+1) << std::endl;
 
         while (true) {
             if (!running_.load(std::memory_order_relaxed) && tasks_.empty()) {
@@ -150,7 +153,7 @@ bool Supervised::SgfProcess(std::string &sgfstring,
     const auto black_final_score = (float)black_score_on_board - state.GetKomi();
     auto game_winner = kUndecide;
 
-    if (std::abs(black_final_score) < 1e-4) {
+    if (std::abs(black_final_score) < 1e-4f) {
         game_winner = kDraw;
     } else if (black_final_score > 0) {
         game_winner = kBlackWon;
@@ -160,25 +163,12 @@ bool Supervised::SgfProcess(std::string &sgfstring,
 
     (void) success;
 
-    auto history = state.GetHistory();
-    auto movelist = std::vector<int>{};
-
-    for (const auto &board : history) {
-        auto vtx = board->GetLastMove();
-        if (vtx != kNullVertex) {
-            movelist.emplace_back(vtx);
-        }
-    }
-
-    assert(movelist.size() == history.size()-1);
-
-    GameState main_state;
-    main_state.Reset(state.GetBoardSize(), state.GetKomi());
 
     const auto num_intersections = state.GetNumIntersections();
     const auto komi = state.GetKomi();
     const auto winner = game_winner;
 
+    auto game_ite = GameStateIterator(state);
     auto train_datas = std::vector<Training>{};
 
     const auto VertexToIndex = [](GameState &state, int vertex) -> int {
@@ -191,13 +181,10 @@ bool Supervised::SgfProcess(std::string &sgfstring,
         return state.GetIndex(x, y);
     };
 
-    for (auto i = size_t{0}; i < movelist.size(); ++i) {
-        auto vtx = movelist[i];
-        auto aux_vtx = kPass;
-
-        if (i != movelist.size()-1) {
-            aux_vtx = movelist[i+1];
-        }
+    do {
+        auto vtx = game_ite.GetVertex();
+        auto aux_vtx = game_ite.GetNextVertex();
+        GameState& main_state = game_ite.GetState();
 
         auto buf = Training{};
 
@@ -238,9 +225,8 @@ bool Supervised::SgfProcess(std::string &sgfstring,
             buf.final_score = buf.side_to_move == kBlack ? black_final_score : -black_final_score;
         }
 
-        main_state.PlayMove(vtx);
         train_datas.emplace_back(buf);
-    }
+    } while (game_ite.Next());
 
     for (const auto &buf : train_datas) {
         buf.StreamOut(out_file);

@@ -30,6 +30,7 @@ set(GAME_SOURCES
     ${GAME_SOURCES_DIR}/zobrist.cc
     ${GAME_SOURCES_DIR}/symmetry.cc
     ${GAME_SOURCES_DIR}/gtp.cc
+    ${GAME_SOURCES_DIR}/iterator.cc
     )
 
 set(NEURAL_SOURCES
