@@ -15,9 +15,10 @@ public:
     bool Next();
 
     GameState &GetState();
-    int GetToMove();
-    int GetVertex();
-    int GetNextVertex();
+    int GetToMove() const;
+    int GetVertex() const;
+    int GetNextVertex() const;
+    int MaxMoveNumber() const;
 
 private:
     struct ColorVertex {

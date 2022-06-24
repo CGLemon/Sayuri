@@ -6,6 +6,7 @@
 #include "utils/format.h"
 #include "utils/log.h"
 #include "game/sgf.h"
+#include "game/iterator.h"
 
 template<typename T=int>
 class CTeamList {
@@ -92,26 +93,18 @@ void PatternsScan::CollectPatterns(std::string sgfstring, GammasDict &dict) cons
         return;
     }
 
-    auto history = state.GetHistory();
-    auto movelist = std::vector<int>{};
+    auto game_ite = GameStateIterator(state);
 
-    for (const auto &board : history) {
-        auto vtx = board->GetLastMove();
-        if (vtx != kNullVertex) {
-            movelist.emplace_back(vtx);
-        }
+    if (game_ite.MaxMoveNumber() == 0) {
+        return;
     }
-
-    GameState main_state;
-    main_state.Reset(state.GetBoardSize(), state.GetKomi());
-
-    for (int i = 0; i < (int)movelist.size(); ++i) {
-        const int vertex = movelist[i];
-        const int color = main_state.GetToMove();
+    do {
+        const auto vertex = game_ite.GetVertex();
+        const auto color = game_ite.GetToMove();
+        GameState& main_state = game_ite.GetState();
 
         dict.InsertPattern(main_state.board_.GetPattern3x3(vertex, color));
-        main_state.PlayMove(vertex);
-    }
+    } while (game_ite.Next());
 }
 
 void PatternsScan::CollectGammas(std::string sgfstring,
@@ -126,28 +119,23 @@ void PatternsScan::CollectGammas(std::string sgfstring,
         return;
     }
 
-    auto history = state.GetHistory();
-    auto movelist = std::vector<int>{};
+    auto game_ite = GameStateIterator(state);
 
-    for (const auto &board : history) {
-        auto vtx = board->GetLastMove();
-        if (vtx != kNullVertex) {
-            movelist.emplace_back(vtx);
-        }
+    if (game_ite.MaxMoveNumber() == 0) {
+        return;
     }
 
-    GameState main_state;
-    main_state.Reset(state.GetBoardSize(), state.GetKomi());
-    int board_size = state.GetBoardSize();
-    int num_intersections = state.GetNumIntersections();
-
+    const auto board_size = state.GetBoardSize();
+    const auto num_intersections = state.GetNumIntersections();
     CTeamList<> cteam_list;
 
-    for (int i = 0; i < (int)movelist.size(); ++i) {
-        const int vertex = movelist[i];
-        const int color = main_state.GetToMove();
+    do {
+        const auto vertex = game_ite.GetVertex();
+        const auto color = game_ite.GetToMove();
+        GameState& main_state = game_ite.GetState();
 
         int pattern_index = dict.GetIndex(main_state.board_.GetPattern3x3(vertex, color)());
+
         // set winner
         if (pattern_index >= 0) {
             cteam_list.InsertWinner(pattern_index);
@@ -168,7 +156,5 @@ void PatternsScan::CollectGammas(std::string sgfstring,
         }
 
         WritePatterns(out, cteam_list);
-
-        main_state.PlayMove(vertex);
-    }
+    } while (game_ite.Next());
 }

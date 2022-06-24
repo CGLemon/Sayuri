@@ -181,6 +181,10 @@ bool Supervised::SgfProcess(std::string &sgfstring,
         return state.GetIndex(x, y);
     };
 
+    if (game_ite.MaxMoveNumber() == 0) {
+        return false;
+    }
+
     do {
         auto vtx = game_ite.GetVertex();
         auto aux_vtx = game_ite.GetNextVertex();

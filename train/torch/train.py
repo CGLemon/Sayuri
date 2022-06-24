@@ -300,7 +300,7 @@ class TrainingPipe():
 
                         running_loss_dict = get_running_loss_dict()
 
-                # should stop?
+                # should we stop?
                 if num_steps >= self.max_steps + init_steps:
                     keep_running = False
                     break

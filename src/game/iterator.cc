@@ -49,17 +49,21 @@ GameState &GameStateIterator::GetState() {
     return curr_state_;
 }
 
-int GameStateIterator::GetToMove() {
+int GameStateIterator::GetToMove() const {
     return move_history_[curr_idx_].to_move;
 }
 
-int GameStateIterator::GetVertex() {
+int GameStateIterator::GetVertex() const {
     return move_history_[curr_idx_].vertex;
 }
 
-int GameStateIterator::GetNextVertex() {
+int GameStateIterator::GetNextVertex() const {
     if (curr_idx_+1 < (int)move_history_.size()) {
         return move_history_[curr_idx_+1].vertex;
     }
     return kPass;
+}
+
+int GameStateIterator::MaxMoveNumber() const {
+    return move_history_.size();
 }

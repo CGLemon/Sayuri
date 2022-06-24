@@ -41,12 +41,13 @@ class GlobalPool(nn.Module):
         b_diff = div_sqrt - self.b_avg
 
         if self.is_value_head:
+            # Accordiog to KataGo, we compute three orthogonal values. There
+            # are 1, (x-14)/10, and (x-14)^2/100 - 0.1. They may the value head
+            # performance. That because the winrate and score lead heads consist
+            # of komi and intersections.
+
             layer0 = layer_raw_mean
             layer1 = layer_raw_mean * (b_diff / 10.0)
-
-            # Accordiog to KataGo, computing the board size variance can 
-            # improve the value head performance. That because the winrate
-            # and score lead heads consist of komi and intersections.
             layer2 = layer_raw_mean * (torch.square(b_diff) / 100.0 - self.b_variance)
 
             layer_pooled = torch.cat((layer0, layer1, layer2), 1)
@@ -601,7 +602,7 @@ class Network(nn.Module):
         pol_gpool = self.global_pool(pol, mask_buffers)
         pol_inter = self.policy_intermediate_fc(pol_gpool)
 
-        # Add intermediate as biases. It may improve the performance.
+        # Add intermediate as biases. It may improve the policy performance.
         b, c = pol_inter.size()
         pol = (pol + pol_inter.view(b, c, 1, 1)) * mask
 
