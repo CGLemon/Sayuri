@@ -4,8 +4,8 @@
 
 #define MAX_BOARD_SIZE (19)
 
-static constexpr int kDefaultBoardSize = 9;
-static constexpr float kDefaultKomi = 7.f;
+static constexpr int kDefaultBoardSize = 19;
+static constexpr float kDefaultKomi = 7.5f;
 
 static constexpr int kBoardSize = MAX_BOARD_SIZE;
 static constexpr int kLetterBoxSize = kBoardSize+2;

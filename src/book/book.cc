@@ -1,4 +1,3 @@
-
 #include <fstream>
 #include <sstream>
 #include <utility>
@@ -11,6 +10,7 @@
 #include "game/sgf.h"
 #include "game/types.h"
 #include "game/symmetry.h"
+#include "game/iterator.h"
 
 Book &Book::Get() {
     static Book book;
@@ -88,23 +88,17 @@ void Book::BookDataProcess(std::string sgfstring,
         return;
     }
 
-    auto history = state.GetHistory();
-    auto movelist = std::vector<int>{};
+    auto game_ite = GameStateIterator(state);
+    int book_move_num = std::min(kMaxBookMoves, (int)game_ite.MaxMoveNumber());
 
-    for (const auto &board : history) {
-        auto vtx = board->GetLastMove();
-        if (vtx != kNullVertex) {
-            movelist.emplace_back(vtx);
+    int i = 0;
+    do {
+        if (i++ >= book_move_num) {
+            break;
         }
-    }
 
-    GameState main_state;
-    main_state.Reset(state.GetBoardSize(), state.GetKomi());
-
-    int book_move_num = std::min(kMaxBookMoves, (int)movelist.size());
-
-    for (int i = 0; i < book_move_num; ++i) {
-        const int vertex = movelist[i];
+        const auto vertex = game_ite.GetVertex();
+        GameState& main_state = game_ite.GetState();
 
         for (int symm = 0; symm < Symmetry::kNumSymmetris; ++symm) { 
             auto hash = main_state.ComputeSymmetryKoHash(symm);
@@ -132,9 +126,7 @@ void Book::BookDataProcess(std::string sgfstring,
                 }
             }
         }
-
-        main_state.PlayMove(vertex);
-    }
+    } while (game_ite.Next());
 }
 
 void Book::LoadBook(std::string book_name) {

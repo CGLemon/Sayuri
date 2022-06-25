@@ -29,7 +29,7 @@ void OwnershipStreamOut(std::ostream &out, const std::vector<int> &arr) {
 void PlanesStreamOut(std::ostream &out, const std::vector<float> &arr, size_t planes) {
     const auto size = arr.size();
     const auto spatial = size / planes;
-    const bool remining = (spatial % 4 != 0);
+    const bool remaining = (spatial % 4 != 0);
 
     for (size_t p = 0; p < planes-4; ++p) { // Last four channels are not binary features.
         for (size_t idx = 0; idx+4 <= spatial; idx+=4) {
@@ -47,7 +47,7 @@ void PlanesStreamOut(std::ostream &out, const std::vector<float> &arr, size_t pl
 
             out << std::hex << hex;
         }
-        if (remining) {
+        if (remaining) {
             out << (bool)arr[spatial * (p+1) - 1];
         }
 

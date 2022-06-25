@@ -4,7 +4,7 @@
 
 ## Let's ROCK!
 
-Sayuri is a GTP-compliant go engine which supports variable komi and board size. Strongly inspired by Leela Zero and Kata Go. Based on Deep Convolutional Neural Network, Monte Carlo Tree Search and other powerful technics.
+Sayuri is a GTP-compliant go engine which supports variable komi and board size. Strongly inspired by Leela Zero and Kata Go. Based on Deep Convolutional Neural Network, Monte Carlo Tree Search and other powerful techniques.
 
 ## Requirements
 
@@ -24,8 +24,8 @@ Following library are optional.
 The program is only available on Ubuntu/MacOS.
 
     $ git clone https://github.com/CGLemon/Sayuri
-    $ git submodule update --init --recursive
     $ cd Sayuri
+    $ git submodule update --init --recursive
     $ mkdir build && cd build
     $ cmake ..
     $ make -j
