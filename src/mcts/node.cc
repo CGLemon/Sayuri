@@ -960,15 +960,15 @@ void Node::ComputeStats(size_t &nodes, size_t &edges) {
         const auto &children = node->GetChildren();
 
         // Because we want compute the memory used, collect
-        // all types of node. Including pruned and invalid node.
+        // all types of nodes. Including pruned and invalid node.
         for (const auto &child : children) {
             node = child.Get();
             const bool is_pointer = node == nullptr ? false : true;
 
             if (is_pointer) {
-                // If the node is expending, skip the
-                // the node.
                 if (!(node->IsExpending())) {
+                    // If the node is expending, skip the
+                    // the node.
                     stk.emplace(node);
                 }
                 nodes++;

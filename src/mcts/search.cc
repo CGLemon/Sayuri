@@ -3,6 +3,7 @@
 #include <sstream>
 #include <iomanip>
 #include <fstream>
+#include <stack>
 
 #include "mcts/search.h"
 #include "neural/encoder.h"
@@ -41,7 +42,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
                             Node *const root_node, SearchResult &search_result) {
     node->IncrementThreads();
 
-    // Terminate node, try to expand it. 
+    // Terminated node, try to expand it. 
     if (node->Expandable()) {
         if (currstate.GetPasses() >= 2) {
             // The game is over, gather the game result value.
@@ -104,7 +105,7 @@ void Search::PrepareRootNode() {
     playouts_.store(0, std::memory_order_relaxed);
     running_.store(true, std::memory_order_relaxed);
 
-    auto root_noise = std::vector<float>{};
+    auto root_noise = std::vector<float>{}; // unused
     root_node_->PrepareRootNode(network_, root_state_, root_noise);
 
     const auto evals = root_node_->GetNodeEvals();
@@ -695,7 +696,13 @@ bool Search::AdvanceToNewRootState() {
         return false;
     }
 
-    auto depth =
+    if (param_->dirichlet_noise) {
+        // Need re-build the trees if we apply noise. Reuse the
+        // tree will ignore the noise. 
+        return false;
+    }
+
+    const auto depth =
         int(root_state_.GetMoveNumber() - last_state_.GetMoveNumber());
 
     if (depth < 0) {
