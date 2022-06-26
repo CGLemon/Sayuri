@@ -86,6 +86,7 @@ set(UTILS_SOURCES
     ${UTILS_SOURCES_DIR}/filesystem.cc
     ${UTILS_SOURCES_DIR}/option.cc
     ${UTILS_SOURCES_DIR}/komi.cc
+    ${UTILS_SOURCES_DIR}/gogui_helper.cc
     )
 
 # Prepare basic data.

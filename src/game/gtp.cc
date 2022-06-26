@@ -4,6 +4,7 @@
 #include "utils/log.h"
 #include "utils/komi.h"
 #include "utils/format.h"
+#include "utils/gogui_helper.h"
 
 #include "data/supervised.h"
 #include "neural/encoder.h"
@@ -473,6 +474,108 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         }
         test_state.ShowBoard();
         out << GTPSuccess("");
+    } else if (const auto res = parser.Find("gogui-analyze_commands", 0)) {
+        auto gogui_cmds = std::ostringstream{};
+
+        gogui_cmds << "gfx/Policy Heatmap/gogui-policy_heatmap";
+        gogui_cmds << "\ngfx/Ownership Heatmap/gogui-ownership_heatmap";
+        gogui_cmds << "\ngfx/Ownership Influence/gogui-ownership_influence";
+        gogui_cmds << "\ngfx/Gammas Heatmap/gogui-gammas_heatmap";
+
+        out << GTPSuccess(gogui_cmds.str());
+    } else if (const auto res = parser.Find("gogui-policy_heatmap", 0)) {
+        const auto result = agent_->GetNetwork().GetOutput(agent_->GetState(), Network::kNone);
+        const auto board_size = result.board_size;
+        const auto num_intersections = board_size * board_size;
+
+        auto policy_map = std::ostringstream{};
+
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            if (idx != 0) {
+                policy_map << '\n';
+            }
+
+            const auto x = idx % board_size;
+            const auto y = idx / board_size;
+            const auto vtx = agent_->GetState().GetVertex(x,y);
+
+            policy_map << GoguiColor(result.probabilities[idx],
+                                         agent_->GetState().VertexToText(vtx));
+        }
+
+        out << GTPSuccess(policy_map.str());
+    } else if (const auto res = parser.Find("gogui-ownership_heatmap", 0)) {
+        auto result = agent_->GetSearch().Computation(400, 0, Search::kForced);
+
+        const auto board_size = agent_->GetState().GetBoardSize();
+        const auto num_intersections = board_size * board_size;
+        const auto color = agent_->GetState().GetToMove();
+
+        auto owner_map = std::ostringstream{};
+
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            if (idx != 0) {
+                owner_map << '\n';
+            }
+
+            const auto x = idx % board_size;
+            const auto y = idx / board_size;
+            const auto vtx = agent_->GetState().GetVertex(x,y);
+
+            const auto owner_val = (result.root_ownership[idx] + 1.f) / 2.f;
+
+            owner_map << GoguiGray(owner_val,
+                                       agent_->GetState().VertexToText(vtx),
+                                       color == kWhite);
+        }
+
+        out << GTPSuccess(owner_map.str());
+    } else if (const auto res = parser.Find("gogui-ownership_influence", 0)) {
+        auto result = agent_->GetSearch().Computation(400, 0, Search::kForced);
+
+        const auto board_size = agent_->GetState().GetBoardSize();
+        const auto num_intersections = board_size * board_size;
+        const auto color = agent_->GetState().GetToMove();
+
+        auto owner_map = std::ostringstream{};
+        owner_map << "INFLUENCE";
+
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            const auto x = idx % board_size;
+            const auto y = idx / board_size;
+            const auto vtx = agent_->GetState().GetVertex(x,y);
+
+            auto owner_val = result.root_ownership[idx];
+            if (color == kWhite) {
+                owner_val = -owner_val;
+            }
+
+            owner_map << Format(" %s %.1f",
+                                    agent_->GetState().VertexToText(vtx).c_str(),
+                                    owner_val);
+        }
+
+        out << GTPSuccess(owner_map.str());
+    } else if (const auto res = parser.Find("gogui-gammas_heatmap", 0)) {
+        const auto board_size = agent_->GetState().GetBoardSize();
+        const auto num_intersections = board_size * board_size;
+
+        auto gammas_map = std::ostringstream{};
+
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            if (idx != 0) {
+                gammas_map << '\n';
+            }
+
+            const auto x = idx % board_size;
+            const auto y = idx / board_size;
+            const auto vtx = agent_->GetState().GetVertex(x,y);
+
+            gammas_map << GoguiColor(agent_->GetState().GetGammaValue(vtx),
+                                         agent_->GetState().VertexToText(vtx));
+        }
+
+        out << GTPSuccess(gammas_map.str());
     } else {
         out << GTPFail("unknown command");
     }

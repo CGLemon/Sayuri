@@ -547,6 +547,16 @@ void GameState::PlayRandomMove() {
     PlayMoveFast(select_move, color);
 }
 
+float GameState::GetGammaValue(const int vtx) const {
+    const int color = GetToMove();
+    float val;
+
+    if (GammasDict::Get().ProbeGammas(board_.GetPattern3x3(vtx, color)(), val)) {
+        return val;
+    }
+    return 0.f;
+}
+
 std::vector<int> GameState::GetOwnershipAndRemovedDeadStrings(int playouts) const {
     auto fork_state = *this;
     fork_state.RemoveDeadStrings(playouts);

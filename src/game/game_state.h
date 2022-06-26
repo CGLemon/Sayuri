@@ -104,6 +104,7 @@ public:
     const std::vector<std::shared_ptr<const Board>>& GetHistory() const;
 
     void PlayRandomMove();
+    float GetGammaValue(const int vtx) const;
 
 private:
     using VertexColor = std::pair<int, int>;

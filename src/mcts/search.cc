@@ -196,6 +196,7 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
     int num_passes = 0;
     if (tag & kForced) {
         while (root_state_.GetLastMove() == kPass) {
+            LOGGING << "Do Pass";
             root_state_.UndoMove();
             num_passes++;
         }

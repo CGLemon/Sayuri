@@ -87,5 +87,15 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "genbook",
 
-    "genpatterns"
+    "genpatterns",
+
+    "gogui-analyze_commands",
+
+    "gogui-policy_heatmap",
+
+    "gogui-ownership_heatmap",
+
+    "gogui-ownership_influence",
+
+    "gogui-gammas_heatmap"
 };
