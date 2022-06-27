@@ -56,7 +56,7 @@ Accelerate loading network files. Fast Float library is required.
 
 ## Weights and Book
 
-You may download the weights file and opening book from my [google drive](https://drive.google.com/drive/folders/1SgPL3Eyhllr6BCDyi_7D8LnOUYxPAAxQ?usp=sharing).The weights size is 15 blocks and 192 filters(around 170MB).The opening book is human-like book, trained on profession games. Force the Sayuri to play variable opening moves. It is just fun for playing.
+You may download the weights file and opening book from my [google drive](https://drive.google.com/drive/folders/1SgPL3Eyhllr6BCDyi_7D8LnOUYxPAAxQ?usp=sharing).The weights size is 15 blocks and 192 filters. The opening book is human-like book, trained on profession games. Force the Sayuri to play variable opening moves. It is just fun for playing.
 
 ## Engine Arguments
 
@@ -67,7 +67,7 @@ Here are some useful arguments which you may need.
     $ ./Sayuri -w <weights file>
     
     
-    --book, -w: File with opening book.
+    --book: File with opening book.
     
     $ ./Sayuri --book <book file>
     
@@ -107,7 +107,7 @@ Here are some useful arguments which you may need.
     $ ./Sayuri --ponder
     
     
-    --help, -h: Display the more options.
+    --help, -h: Display the more arguments.
     
     $ ./Sayuri --help
     
@@ -126,29 +126,30 @@ You need to collect enough SGF games (at least over 10000 games). Then, go to th
 
 ## User Interface
 
-Sayuri supports any GTP interface application. [Sabaki](https://sabaki.yichuanshen.de/) is recommended.
+Sayuri supports any GTP interface application. [Sabaki](https://sabaki.yichuanshen.de/) and [GoGui](https://github.com/Remi-Coulom/gogui) are recommended.
 
 ## Features
 
-* Provide the profession level strength depending on hardware.
 * Support sabaki analyzing mode.
+* Support some GoGui analyzing commands.
 * Support handicap game.
 * Support variable komi.
 * Support variable board size(from 7x7 to 19x19).
 * Lock-free SMP MCTS.
 * Acceleration by multi-core processor and multi-Nvidia GPU.
-* Predict current side winrate.
-* Predict current side score lead.
+* Predict the current side winrate and draw-rate.
+* Predict the current side score lead.
 * Predict the death strings.
+* Reuse the sub-tree.
 
 ## Todo
 
-* Reuse the tree.
 * Support half-float.
 * Support NHWC format.
 * Support distributed computation.
 * Including pattern system.
 * Store the networks as binary file.
+* Use the fixed cache memory.
 
 ## LICENSE
 
