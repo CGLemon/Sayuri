@@ -93,6 +93,8 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "gogui-policy_heatmap",
 
+    "gogui-policy_rating",
+
     "gogui-ownership_heatmap",
 
     "gogui-ownership_influence",

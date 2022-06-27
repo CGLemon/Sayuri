@@ -113,5 +113,5 @@ std::string GoguiGray(float val, std::string vtx, bool inves) {
 std::string GoguiLable(float val, std::string vtx) {
     val = FancyClamp(val);
 
-    return Format("LABEL %d %s", int(val * 100.f), vtx.c_str());
+    return Format("LABEL %s %d", vtx.c_str(), int(val * 100.f));
 }

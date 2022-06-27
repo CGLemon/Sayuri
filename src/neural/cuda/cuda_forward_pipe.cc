@@ -496,9 +496,9 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
                                 cuda_pol_op_[2], cuda_output_prob_pass_);
 
     // value head
-    const auto value_extract_channels = weights_->value_extract_channels;
-    const auto v_op_size1 = value_extract_channels * num_intersections * batch_size;
-    const auto v_op_size2 = value_extract_channels * batch_size;
+    // const auto value_extract_channels = weights_->value_extract_channels;
+    // const auto v_op_size1 = value_extract_channels * num_intersections * batch_size;
+    // const auto v_op_size2 = value_extract_channels * batch_size;
 
     graph_->v_ex_conv.Forward(batch_size,
                               cuda_conv_op_[0], cuda_val_op_[0],

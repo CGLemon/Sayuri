@@ -478,8 +478,11 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         auto gogui_cmds = std::ostringstream{};
 
         gogui_cmds << "gfx/Policy Heatmap/gogui-policy_heatmap";
-        gogui_cmds << "\ngfx/Ownership Heatmap/gogui-ownership_heatmap";
-        gogui_cmds << "\ngfx/Ownership Influence/gogui-ownership_influence";
+        gogui_cmds << "\ngfx/Policy Rating/gogui-policy_rating";
+        gogui_cmds << "\ngfx/Ownership Heatmap/gogui-ownership_heatmap 0";
+        gogui_cmds << "\ngfx/Ownership Influence/gogui-ownership_influence 0";
+        gogui_cmds << "\ngfx/MCTS Ownership Heatmap/gogui-ownership_heatmap 400";
+        gogui_cmds << "\ngfx/MCTS Ownership Influence/gogui-ownership_influence 400";
         gogui_cmds << "\ngfx/Gammas Heatmap/gogui-gammas_heatmap";
 
         out << GTPSuccess(gogui_cmds.str());
@@ -499,13 +502,64 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             const auto y = idx / board_size;
             const auto vtx = agent_->GetState().GetVertex(x,y);
 
-            policy_map << GoguiColor(result.probabilities[idx],
-                                         agent_->GetState().VertexToText(vtx));
+            auto prob = result.probabilities[idx];
+            if (prob > 0.0001f) {
+                // highlight the probability
+                prob = std::sqrt(prob);
+            }
+
+            policy_map << GoguiColor(prob, agent_->GetState().VertexToText(vtx));
         }
 
         out << GTPSuccess(policy_map.str());
+    } else if (const auto res = parser.Find("gogui-policy_rating", 0)) {
+        const auto result = agent_->GetNetwork().GetOutput(agent_->GetState(), Network::kNone);
+        const auto board_size = result.board_size;
+        const auto num_intersections = board_size * board_size;
+        const auto ave_pol = 1.f / (float)num_intersections;
+
+        auto policy_rating = std::ostringstream{};
+        int max_idx = -1;
+
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            const auto x = idx % board_size;
+            const auto y = idx / board_size;
+            const auto vtx = agent_->GetState().GetVertex(x,y);
+
+            auto prob = result.probabilities[idx];
+            if (prob > ave_pol) {
+                if (max_idx < 0 ||
+                        result.probabilities[max_idx] < prob) {
+                    max_idx = idx;
+                }
+
+                policy_rating << '\n';
+                policy_rating << GoguiLable(prob, agent_->GetState().VertexToText(vtx));
+            }
+        }
+
+        auto policy_rating_val = std::ostringstream{};
+
+        const auto x = max_idx % board_size;
+        const auto y = max_idx / board_size;
+        const auto max_vtx = agent_->GetState().GetVertex(x,y);
+
+        if (agent_->GetState().GetToMove() == kBlack) {
+            policy_rating_val << Format("VAR b %s", agent_->GetState().VertexToText(max_vtx).c_str());
+        } else {
+            policy_rating_val << Format("VAR w %s", agent_->GetState().VertexToText(max_vtx).c_str());
+        }
+        policy_rating_val << policy_rating.str();
+
+        out << GTPSuccess(policy_rating_val.str());
     } else if (const auto res = parser.Find("gogui-ownership_heatmap", 0)) {
-        auto result = agent_->GetSearch().Computation(400, 0, Search::kForced);
+        int playouts = 0;
+        if (const auto p = parser.GetCommand(1)) {
+            playouts = p->Get<int>();
+        }
+
+        agent_->GetSearch().ReleaseTree();
+        auto result = agent_->GetSearch().Computation(playouts, 0, Search::kForced);
 
         const auto board_size = agent_->GetState().GetBoardSize();
         const auto num_intersections = board_size * board_size;
@@ -522,6 +576,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             const auto y = idx / board_size;
             const auto vtx = agent_->GetState().GetVertex(x,y);
 
+            // map -1 ~ 1 to 0 ~ 1
             const auto owner_val = (result.root_ownership[idx] + 1.f) / 2.f;
 
             owner_map << GoguiGray(owner_val,
@@ -531,7 +586,13 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
 
         out << GTPSuccess(owner_map.str());
     } else if (const auto res = parser.Find("gogui-ownership_influence", 0)) {
-        auto result = agent_->GetSearch().Computation(400, 0, Search::kForced);
+        int playouts = 0;
+        if (const auto p = parser.GetCommand(1)) {
+            playouts = p->Get<int>();
+        }
+
+        agent_->GetSearch().ReleaseTree();
+        auto result = agent_->GetSearch().Computation(playouts, 0, Search::kForced);
 
         const auto board_size = agent_->GetState().GetBoardSize();
         const auto num_intersections = board_size * board_size;

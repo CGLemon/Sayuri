@@ -132,6 +132,8 @@ public:
 
     void SaveTrainingBuffer(std::string filename, GameState &state);
 
+    void ReleaseTree();
+
 private:
     bool AdvanceToNewRootState();
 
@@ -145,7 +147,6 @@ private:
                         Node *const root_node, SearchResult &search_result);
 
     void PrepareRootNode();
-    void ClearAllNodes();
 
     int threads_;
     int max_playouts_; 

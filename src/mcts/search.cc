@@ -20,7 +20,7 @@
 constexpr int Search::kMaxPlayouts;
 
 Search::~Search() {
-    ClearAllNodes();
+    ReleaseTree();
     group_->WaitToJoin();
 }
 
@@ -89,7 +89,7 @@ void Search::PrepareRootNode() {
 
     if (!reused) {
         // Try release whole trees.
-        ClearAllNodes();
+        ReleaseTree();
 
         // Do not reuse the tree, allocate new root node.
         NodeData node_data;
@@ -125,7 +125,7 @@ void Search::PrepareRootNode() {
     }
 }
 
-void Search::ClearAllNodes() {
+void Search::ReleaseTree() {
     if (root_node_) {
         auto p = root_node_.release();
         group_->AddTask([p](){ delete p; });
@@ -196,7 +196,6 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
     int num_passes = 0;
     if (tag & kForced) {
         while (root_state_.GetLastMove() == kPass) {
-            LOGGING << "Do Pass";
             root_state_.UndoMove();
             num_passes++;
         }
@@ -255,9 +254,9 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
         LOGGING << "Max thinking time: " << thinking_time << "(sec)" << std::endl;
     }
 
-    if (thinking_time < timer.GetDuration()) {
-        // Prepare root node will spent little time. So disable
-        // tree search if the time is up.
+    if (thinking_time < timer.GetDuration() || playouts == 0) {
+        // Prepare the root node will spent little time. So disable
+        // tree search if the time is up
         running_.store(false, std::memory_order_relaxed);
     }
 
