@@ -23,6 +23,9 @@ public:
     void Initialize(const std::string &weights);
     void Destroy();
 
+    int GetBestPolicyVertex(const GameState &state, 
+                            const bool allow_pass);
+
     Result GetOutput(const GameState &state,
                      const Ensemble ensemble,
                      const float temperature = 1.f,

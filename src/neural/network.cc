@@ -310,6 +310,37 @@ void Network::ActivatePolicy(Result &result, const float temperature) const {
     result.pass_probability = probabilities_buffer[num_intersections];
 }
 
+int Network::GetBestPolicyVertex(const GameState &state,
+                                 const bool allow_pass) {
+    const auto result = GetOutput(state, kRandom);
+    const auto boardsize = result.board_size;
+    const auto num_intersections = boardsize * boardsize;
+
+    int max_idx = -1;
+    int max_vtx = kPass;
+
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        if (max_idx == -1 ||
+                result.probabilities[max_idx] < result.probabilities[idx]) {
+            const auto x = idx % boardsize;
+            const auto y = idx / boardsize;
+            const auto vtx = state.GetVertex(x,y);
+
+            if (state.IsLegalMove(vtx)) {
+                max_idx = idx;
+                max_vtx = vtx;
+            }
+        }
+    }
+
+    if (allow_pass &&
+            result.probabilities[max_idx] < result.pass_probability) {
+        return kPass;
+    }
+
+    return max_vtx;
+}
+
 void Network::Destroy() {
     if (pipe_) {
         pipe_->Destroy();

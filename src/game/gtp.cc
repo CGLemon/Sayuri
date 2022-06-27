@@ -119,12 +119,26 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             out << GTPFail("");
         }
     } else if (const auto res = parser.Find("place_free_handicap", 0)) {
-         auto handicap = -1;
+        auto handicaps = -1;
         if (const auto input = parser.GetCommand(1)) {
-            agent_->GetState().ClearBoard();
-            handicap = input->Get<int>();
+            handicaps = input->Get<int>();
         }
-        auto stone_list = agent_->GetState().PlaceFreeHandicap(handicap);
+
+        int max_handicaps = agent_->GetState().GetNumIntersections() / 4;
+        if (handicaps >= 1 && handicaps <= max_handicaps) {
+            agent_->GetState().ClearBoard();
+            agent_->GetState().SetHandicap(handicaps);
+        } else {
+            handicaps = -1; // disable handicap
+        }
+
+        auto stone_list = std::vector<int>{};
+        for (int i = 0; i < handicaps; ++i) {
+            int vtx = agent_->GetNetwork().GetBestPolicyVertex(agent_->GetState(), false);
+            agent_->GetState().AppendMove(vtx, kBlack);
+            stone_list.emplace_back(vtx);
+        }
+
         if (!stone_list.empty()) {
             auto vtx_list = std::ostringstream{};
             for (size_t i = 0; i < stone_list.size(); i++) {
