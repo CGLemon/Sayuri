@@ -1,4 +1,4 @@
-#include <set>
+#include <vector>
 
 #include "pattern/patterns_scan.h"
 #include "pattern/pattern.h"
@@ -8,32 +8,53 @@
 #include "game/sgf.h"
 #include "game/iterator.h"
 
-template<typename T=int>
-class CTeamList {
+
+class TeamList {
 public:
-    void InsertWinner(T val) {
-        winner_ = val;
-        set_.insert(val);
-    }
-    void Insert(T val) {
-        set_.insert(val);
+    void InsertWinners(std::vector<int> vals) {
+        std::sort(std::begin(vals), std::end(vals));
+        vals.erase(std::unique(std::begin(vals),
+                                   std::end(vals)),
+                   std::end(vals));
+
+        winners_ = vals;
+        InsertParticipants(vals);
     }
 
-    std::set<T> set_;
-    T winner_;
+    void InsertParticipants(std::vector<int> vals) {
+        std::sort(std::begin(vals), std::end(vals));
+        vals.erase(std::unique(std::begin(vals),
+                                   std::end(vals)),
+                   std::end(vals));
+
+        participants_.emplace_back(vals);
+    }
+
+    std::vector<int> winners_;
+
+    std::vector<std::vector<int>> participants_;
 };
 
-void WritePatterns(std::ostream &out, CTeamList<>& list) {
-    if (list.set_.size() <= 1) {
+void WritePatterns(std::ostream &out, TeamList list) {
+    if (list.participants_.empty()) {
         return;
     }
 
-    int winner = list.winner_;
+    std::sort(std::begin(list.participants_),
+                  std::end(list.participants_));
+    list.participants_.erase(std::unique(std::begin(list.participants_),
+                                             std::end(list.participants_)),
+                             std::end(list.participants_));
 
-    out << "\n#\n" << winner;
-
-    for (int p: list.set_) {
-        out << '\n' << p;
+    out << "\n#\n"; 
+    for (int idx: list.winners_) {
+        out << idx << ' ';
+    }
+    for (auto &participant: list.participants_) {
+        out << '\n';
+        for (int idx: participant) {
+            out << idx << ' ';
+        }
     }
 }
 
@@ -71,12 +92,18 @@ void PatternsScan::MMTraining(std::string sgf_name, std::string filename) const 
         CollectPatterns(sgf, dict);
     }
 
+    LOGGING << "Total " << dict.Size() << " features.\n";
+
     CGameCollection gcol;
     std::stringstream ss;
     WriteHeader(ss, dict.Size());
 
+    int i = 0;
     for (const auto &sgf: sgfs) {
         CollectGammas(sgf, dict, ss);
+        if (++i % 50 == 0) {
+            LOGGING << "Parsed " << i << " games\n";
+        }
     }
 
     MinorizationMaximizationTraining(gcol, ss);
@@ -103,7 +130,10 @@ void PatternsScan::CollectPatterns(std::string sgfstring, GammasDict &dict) cons
         const auto color = game_ite.GetToMove();
         GameState& main_state = game_ite.GetState();
 
-        dict.InsertPattern(main_state.board_.GetPattern3x3(vertex, color));
+        auto plist = main_state.board_.GetAllPatterns(vertex, color);
+        for (auto p : plist) {
+            dict.InsertPattern(p);
+        }
     } while (game_ite.Next());
 }
 
@@ -127,34 +157,48 @@ void PatternsScan::CollectGammas(std::string sgfstring,
 
     const auto board_size = state.GetBoardSize();
     const auto num_intersections = state.GetNumIntersections();
-    CTeamList<> cteam_list;
+    TeamList team_list;
 
     do {
         const auto vertex = game_ite.GetVertex();
         const auto color = game_ite.GetToMove();
         GameState& main_state = game_ite.GetState();
 
-        int pattern_index = dict.GetIndex(main_state.board_.GetPattern3x3(vertex, color)());
-
-        // set winner
-        if (pattern_index >= 0) {
-            cteam_list.InsertWinner(pattern_index);
-        }
-
-        for (auto idx = 0; idx < num_intersections; ++idx) {
-            const auto x = idx % board_size;
-            const auto y = idx / board_size;
-            const auto other_vtx = main_state.GetVertex(x, y);
-
-            if (main_state.IsLegalMove(other_vtx) && other_vtx != vertex) {
-
-                pattern_index = dict.GetIndex(main_state.board_.GetPattern3x3(other_vtx, color)());
-                if (pattern_index >= 0) {
-                    cteam_list.Insert(pattern_index);
-                }
+        // Gather winner participants.
+        auto winners = std::vector<int>{};
+        auto plist = main_state.board_.GetAllPatterns(vertex, color);
+        for (auto p : plist) {
+            const int pattern_index = dict.GetIndex(p());
+            if (pattern_index >= 0) {
+                winners.emplace_back(pattern_index);
             }
         }
 
-        WritePatterns(out, cteam_list);
+        if (!winners.empty()) {
+            team_list.InsertWinners(winners);
+
+            for (auto idx = 0; idx < num_intersections; ++idx) {
+                const auto x = idx % board_size;
+                const auto y = idx / board_size;
+                const auto other_vtx = main_state.GetVertex(x, y);
+
+                // Gather other participants.
+                if (main_state.IsLegalMove(other_vtx) && other_vtx != vertex) {
+                    auto participants = std::vector<int>{};
+                    plist = main_state.board_.GetAllPatterns(vertex, color);
+
+                    for (auto p : plist) {
+                        const int pattern_index = dict.GetIndex(p());
+                        if (pattern_index >= 0) {
+                            participants.emplace_back(pattern_index);
+                        }
+                    }
+                    if (!participants.empty()) {
+                        team_list.InsertParticipants(participants);
+                    }
+                }
+            }
+        }
+        WritePatterns(out, team_list);
     } while (game_ite.Next());
 }

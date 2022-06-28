@@ -18,6 +18,8 @@ public:
 
     bool ProbeGammas(std::uint64_t hash, float &val) const;
 
+    bool ProbeGammas(std::vector<LocPattern> &plist, float &val) const;
+
     int GetIndex(std::uint64_t hash) const;
 
     LocPattern GetPattern(int idx) const;

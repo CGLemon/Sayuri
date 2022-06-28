@@ -32,6 +32,23 @@ bool GammasDict::ProbeGammas(std::uint64_t hash, float &val) const {
     return true;
 }
 
+bool GammasDict::ProbeGammas(std::vector<LocPattern> &plist, float &val) const {
+    float gamma = 1.f;
+    int cnt = 0;
+    for (auto& p : plist) {
+        float pval;
+        if (ProbeGammas(p(), pval)) {
+            cnt++;
+            gamma *= pval;
+        }
+    }
+    if (cnt != 0) {
+        val = gamma;
+        return true;
+    }
+    return false;
+}
+
 int GammasDict::GetIndex(std::uint64_t hash) const {
     auto it = index_dict_.find(hash);
     if (it == std::end(index_dict_)) {

@@ -517,8 +517,9 @@ void GameState::PlayRandomMove() {
         }
 
         legal_moves.emplace_back(vtx);
+        auto plist = board_.GetAllPatterns(vtx, color);
 
-        if (GammasDict::Get().ProbeGammas(board_.GetPattern3x3(vtx, color)(), val)) {
+        if (GammasDict::Get().ProbeGammas(plist, val)) {
             int int_val = int(val * 100);
             if (int_val != 0) {
                 candidate_moves.emplace_back(int_val, vtx);
@@ -550,8 +551,9 @@ void GameState::PlayRandomMove() {
 float GameState::GetGammaValue(const int vtx) const {
     const int color = GetToMove();
     float val;
+    auto plist = board_.GetAllPatterns(vtx, color);
 
-    if (GammasDict::Get().ProbeGammas(board_.GetPattern3x3(vtx, color)(), val)) {
+    if (GammasDict::Get().ProbeGammas(plist, val)) {
         return val;
     }
     return 0.f;

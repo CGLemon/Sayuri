@@ -5,14 +5,16 @@
 #include <sstream>
 #include <vector>
 
-enum FeaturnType : std::uint32_t {
-    kNoFeature,
-    kSpatial3x3,
-    kLiberties,
-    kAtari
-};
-
 struct LocPattern {
+    enum FeaturnType : std::uint32_t {
+        kNoFeature,
+        kSpatial3x3,
+        kLiberties,
+        kDistToBorder,
+        kDistToLastMove,
+        kAtari,
+    };
+
     LocPattern() = default;
     LocPattern(std::uint32_t f, std::uint32_t v) : featurn(f), value(v) {}
 
@@ -31,4 +33,8 @@ struct LocPattern {
     static LocPattern FromHash(std::uint64_t hash);
 
     static LocPattern GetSpatial3x3(std::uint32_t v);
+    static LocPattern GetLiberties(std::uint32_t v);
+    static LocPattern GetDistToBorder(std::uint32_t v);
+    static LocPattern GetDistToLastMove(std::uint32_t v);
+    static LocPattern GetAtari(std::uint32_t v);
 };

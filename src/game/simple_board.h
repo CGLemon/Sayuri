@@ -85,7 +85,7 @@ public:
     // The GTP showboard.
     std::string GetBoardString(const int last_move, bool is_sgf) const;
 
-    LocPattern GetPattern3x3(const int vtx, const int color) const;
+    std::vector<LocPattern> GetAllPatterns(const int vtx, const int color) const;
 
     // Compute the symmetry Zobrist hashing.
     std::uint64_t ComputeSymmetryHash(int komove, int symmetry) const;
@@ -102,6 +102,13 @@ public:
     void RemoveMarkedStrings(std::vector<int> &marked);
 
 protected:
+    LocPattern GetPattern3x3(const int vtx, const int color) const;
+    LocPattern GetPatternDistBorderX(const int vtx) const;
+    LocPattern GetPatternDistBorderY(const int vtx) const;
+    LocPattern GetPatternLiberties(const int vtx) const;
+    LocPattern GetPatternDistLastMove(const int vtx) const;
+    LocPattern GetPatternAtari(const int vtx, const int color) const;
+
     // Compute the Zobrist hashing.
     std::uint64_t ComputeHash(int komove = kNullVertex) const;
 
