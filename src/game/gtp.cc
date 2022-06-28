@@ -491,15 +491,50 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
     } else if (const auto res = parser.Find("gogui-analyze_commands", 0)) {
         auto gogui_cmds = std::ostringstream{};
 
-        gogui_cmds << "gfx/Policy Heatmap/gogui-policy_heatmap";
+        gogui_cmds << "gfx/Winrate Rating/gogui-winrate_rating";
+        gogui_cmds << "\ngfx/Policy Heatmap/gogui-policy_heatmap";
         gogui_cmds << "\ngfx/Policy Rating/gogui-policy_rating";
         gogui_cmds << "\ngfx/Ownership Heatmap/gogui-ownership_heatmap 0";
         gogui_cmds << "\ngfx/Ownership Influence/gogui-ownership_influence 0";
         gogui_cmds << "\ngfx/MCTS Ownership Heatmap/gogui-ownership_heatmap 400";
         gogui_cmds << "\ngfx/MCTS Ownership Influence/gogui-ownership_influence 400";
+        gogui_cmds << "\ngfx/Book Rating/gogui-book_rating";
         gogui_cmds << "\ngfx/Gammas Heatmap/gogui-gammas_heatmap";
 
         out << GTPSuccess(gogui_cmds.str());
+    } else if (const auto res = parser.Find("gogui-winrate_rating", 0)) {
+        const auto result = agent_->GetNetwork().GetOutput(agent_->GetState(), Network::kNone);
+        const auto board_size = result.board_size;
+        const auto num_intersections = board_size * board_size;
+        const auto ave_pol = 1.f / (float)num_intersections;
+
+        auto first = true;
+        auto winrate_rating = std::ostringstream{};
+
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            const auto x = idx % board_size;
+            const auto y = idx / board_size;
+            const auto vtx = agent_->GetState().GetVertex(x,y);
+
+            auto prob = result.probabilities[idx];
+            if (prob > ave_pol) {
+                if (agent_->GetState().PlayMove(vtx)) {
+                    const auto next_result = agent_->GetNetwork().GetOutput(
+                                                 agent_->GetState(), Network::kNone);
+
+                    const float wl = (next_result.wdl[0] - next_result.wdl[2] + 1) / 2.f;
+                    if (!first) {
+                        winrate_rating << '\n';
+                    }
+                    winrate_rating << GoguiLable(1.f - wl, agent_->GetState().VertexToText(vtx));
+                    first = false;
+
+                    agent_->GetState().UndoMove();
+                }
+            }
+        }
+
+        out << GTPSuccess(winrate_rating.str());
     } else if (const auto res = parser.Find("gogui-policy_heatmap", 0)) {
         const auto result = agent_->GetNetwork().GetOutput(agent_->GetState(), Network::kNone);
         const auto board_size = result.board_size;
@@ -631,6 +666,28 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         }
 
         out << GTPSuccess(owner_map.str());
+    } else if (const auto res = parser.Find("gogui-book_rating", 0)) {
+        const auto move_list = Book::Get().GetCandidateMoves(agent_->GetState());
+        auto book_rating = std::ostringstream{};
+
+        if (!move_list.empty()) {
+            const auto vtx = move_list[0].second;
+            if (agent_->GetState().GetToMove() == kBlack) {
+                book_rating << Format("VAR b %s", agent_->GetState().VertexToText(vtx).c_str());
+            } else {
+                book_rating << Format("VAR w %s", agent_->GetState().VertexToText(vtx).c_str());
+            }
+        }
+
+        for (int i = 0; i < (int)move_list.size(); ++i) {
+            const auto prov = move_list[i].first;
+            const auto vtx = move_list[i].second;
+
+            book_rating << '\n';
+            book_rating << GoguiLable(prov, agent_->GetState().VertexToText(vtx));
+        }
+
+        out << GTPSuccess(book_rating.str());
     } else if (const auto res = parser.Find("gogui-gammas_heatmap", 0)) {
         const auto board_size = agent_->GetState().GetBoardSize();
         const auto num_intersections = board_size * board_size;

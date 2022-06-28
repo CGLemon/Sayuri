@@ -21,6 +21,8 @@ public:
     // no move in the book.
     int Probe(const GameState &state) const;
 
+    std::vector<std::pair<float, int>> GetCandidateMoves(const GameState &state) const;
+
 private:
     using VertexFrequencyList = std::vector<std::pair<int ,int>>;
     using VertexProbabilityList = std::vector<std::pair<int ,float>>;

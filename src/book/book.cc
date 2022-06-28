@@ -91,6 +91,10 @@ void Book::BookDataProcess(std::string sgfstring,
     auto game_ite = GameStateIterator(state);
     int book_move_num = std::min(kMaxBookMoves, (int)game_ite.MaxMoveNumber());
 
+    // TODO: Same postion may have variant paths. We should 
+    //       consider it. But if we direct use transposition
+    //       table, it will use too many memory and is very
+    //       slow. Try to find a well algorithm to deal with. 
     int i = 0;
     do {
         if (i++ >= book_move_num) {
@@ -189,7 +193,6 @@ int Book::Probe(const GameState &state) const {
         }
     }
 
-
     if (candidate_moves.empty()) return kPass;
 
     std::stable_sort(std::rbegin(candidate_moves), std::rend(candidate_moves));
@@ -200,11 +203,31 @@ int Book::Probe(const GameState &state) const {
 
     for (int i = 0; i < (int)candidate_moves.size(); ++i) {
         acc_score +=  candidate_moves[i].first;
-        if (rand < acc_score) {
+        if (rand < (unsigned)acc_score) {
             choice = i;
             break;
         }
     }
 
     return candidate_moves[choice].second;
+}
+
+std::vector<std::pair<float, int>> Book::GetCandidateMoves(const GameState &state) const {
+    auto candidate_moves = std::vector<std::pair<float, int>>{};
+    auto hash = state.GetKoHash();
+    auto it = data_.find(hash);
+
+    if (it != std::end(data_)) {
+        auto &vprob_list = it->second;
+
+        for (auto &vprob : vprob_list) {
+            int vtx = vprob.first;
+            float score = vprob.second;
+
+            candidate_moves.emplace_back(score, vtx);
+        }
+    }
+
+    std::stable_sort(std::rbegin(candidate_moves), std::rend(candidate_moves));
+    return candidate_moves;
 }
