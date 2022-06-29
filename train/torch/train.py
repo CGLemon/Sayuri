@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
-import random, time, math
+import random, time, math, os
 
 from network import Network
 from loader import Loader
@@ -133,12 +133,18 @@ class TrainingPipe():
         # how many cpu does the 'DataLoader' use?
         self.num_workers = cfg.num_workers
         self.train_dir = cfg.train_dir
+
+        # Store the last model per epoch. It also define the training data
+        # buffer size.
         self.steps_per_epoch =  cfg.steps_per_epoch
+
+        # Max steps per training task.
         self.max_steps =  cfg.max_steps
 
-        # which optimizer do we use?
+        # Which optimizer do we use?
         self.opt_name = cfg.optimizer
 
+        # Optimizer's parameters.
         self.learning_rate = cfg.learning_rate
         self.weight_decay = cfg.weight_decay
 
@@ -150,16 +156,22 @@ class TrainingPipe():
         self.net = Network(cfg)
         self.net.trainable(True)
 
-    def setup(self):
-        self.module  = self.net
+        # store root dir
+        self.store_path = cfg.store_path
+
+        self.__setup()
+
+    def __setup(self):
+        self.module = self.net # linking
 
         if self.use_gpu:
             self.net = self.net.to(self.device)
             self.net = DataParallel(self.net) 
             self.module  = self.net.module
 
+        # We may fail to load the optimizer. So init
+        # it before load it.
         self.opt = None
-
         if self.opt_name == "Adam":
             self.opt = torch.optim.Adam(
                 self.net.parameters(),
@@ -167,6 +179,8 @@ class TrainingPipe():
                 weight_decay=self.weight_decay,
             )
         elif self.opt_name == "SGD":
+            # Recommanded optimizer, the SGD is better than Adam
+            # in this kind training task.
             self.opt = torch.optim.SGD(
                 self.net.parameters(),
                 lr=self.learning_rate,
@@ -175,14 +189,75 @@ class TrainingPipe():
                 weight_decay=self.weight_decay,
             )
 
-    def fit_and_store(self, filename_prefix, init_steps, log_file):
+        model_path = os.path.join(self.store_path, "model")
+        if not os.path.isdir(model_path):
+            os.mkdir(model_path)
+            
+        opt_path = os.path.join(self.store_path, "opt")
+        if not os.path.isdir(opt_path):
+            os.mkdir(opt_path)
 
-        # Be sure the network is on the right device.
-        self.setup()
+        info_file = os.path.join(self.store_path, "info.txt")
+        with open(info_file, 'w') as f:
+            f.write(self.module.simple_info())
 
+    def __lr_scheduler(self):
+        pass
+
+    def __load_current_status(self):
+        #TODO: Merge optimizer status and model into one file.
+        last_steps = 0
+
+        steps_name = os.path.join(self.store_path, "last_steps.txt")
+        if os.path.isfile(steps_name):
+            with open(steps_name, 'r') as f:
+                last_steps = int(f.read())
+
+        model_path = os.path.join(self.store_path, "model")
+        model_name = os.path.join(model_path, "s{}.pt".format(last_steps))
+        if os.path.isfile(model_name):
+            self.module.load_state_dict(torch.load(model_name, map_location=torch.device('cpu')))
+            print("load model: {}".format(model_name))
+        else:
+            # If we fail to load another model, be sure that
+            # init steps is zero.
+            assert last_steps==0, ""
+
+        opt_path = os.path.join(self.store_path, "opt")
+        opt_name = os.path.join(opt_path, "s{}.pt".format(last_steps))
+        if os.path.isfile(opt_name):
+            # TODO: We may load different optimizers. Be sure that
+            #       program don't crash in any condition.
+            self.opt.load_state_dict(torch.load(opt_name, map_location=torch.device('cpu')))
+            print("load optimizer: {}".format(opt_name))
+
+        # update to current learning rate...
+        self.opt.param_groups[0]["lr"] = self.learning_rate
+        self.opt.param_groups[0]["weight_decay"] = self.weight_decay
+
+        return last_steps
+
+    def __store_current_status(self, steps):
+        # TODO: Automatically parse the last steps from model's name.
+
+        steps_name = os.path.join(self.store_path, "last_steps.txt")
+        with open(steps_name, 'w') as f:
+            f.write(str(steps))
+
+        model_path = os.path.join(self.store_path, "model")
+        model_name = os.path.join(model_path, "s{}.pt".format(steps))
+        torch.save(self.module.state_dict(), model_name)
+
+        opt_path = os.path.join(self.store_path, "opt")
+        opt_name = os.path.join(opt_path, "s{}.pt".format(steps))
+        torch.save(self.opt.state_dict(), opt_name)
+
+    def fit_and_store(self):
+        init_steps = self.__load_current_status()
         print("start training...")
 
         def get_running_loss_dict():
+            # get New dict 
             running_loss_dict = dict()
             running_loss_dict['loss'] = 0
             running_loss_dict['prob_loss'] = 0
@@ -206,6 +281,9 @@ class TrainingPipe():
         while keep_running:
             self.data_set.dummy_size = self.steps_per_epoch * self.batchsize
 
+            # DataLoader or we can call it data buffer. It will prepare
+            # some datas before they are used. To Shuffle the buffer is
+            # unuseful so we do not open this option.
             train_data = DataLoader(
                 self.data_set,
                 num_workers=self.num_workers,
@@ -213,6 +291,7 @@ class TrainingPipe():
             )
 
             for _, batch in enumerate(train_data):
+                # Fetch the next batch data from disk.
                 _, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
                 if self.use_gpu:
                     planes = planes.to(self.device)
@@ -223,7 +302,7 @@ class TrainingPipe():
                     target_stm = target_stm.to(self.device)
                     target_score = target_score.to(self.device)
 
-                # gather batch datag
+                # gather batch data
                 target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score)
 
                 # forward and backforwad
@@ -272,12 +351,14 @@ class TrainingPipe():
                         elapsed = time.time() - clock_time
                         clock_time = time.time()
 
-
+                        # The dump_outs contains more infomations. The log_outs
+                        # only stores short infomations because squeezing it in
+                        # one line.
                         dump_outs = "steps: {} -> ".format(num_steps)
                         dump_outs += "speed: {:.2f}, opt: {}, learning rate: {}, batch size: {}\n".format(
                                          verbose_steps/elapsed,
                                          self.opt_name,
-                                         self.learning_rate,
+                                         self.opt.param_groups[0]["lr"],
                                          self.batchsize)
                         dump_outs += "\tloss: {:.4f}\n".format(running_loss_dict['loss']/verbose_steps)
                         dump_outs += "\tprob loss: {:.4f}\n".format(running_loss_dict['prob_loss']/verbose_steps)
@@ -295,6 +376,7 @@ class TrainingPipe():
                                        self.opt_name,
                                        self.learning_rate,
                                        self.batchsize)
+                        log_file = os.path.join(self.store_path, "log.txt")
                         with open(log_file, 'a') as f:
                             f.write(log_outs + '\n')
 
@@ -305,9 +387,6 @@ class TrainingPipe():
                     keep_running = False
                     break
 
-            # save the last network
-            torch.save(self.module.state_dict(), "{}-s{}.pt".format(filename_prefix, num_steps))
+            # store the last network
+            self.__store_current_status(num_steps)
         print("Training is over.")
-
-    def load_pt(self, filename):
-        self.net.load_state_dict(torch.load(filename, map_location=torch.device('cpu')))

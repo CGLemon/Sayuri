@@ -16,6 +16,7 @@ class Config:
         self.steps_per_epoch = None
         self.max_steps = None
         self.fixup_batch_norm = None
+        self.store_path = None
 
         # Adjustable values
         self.stack = []
@@ -50,6 +51,7 @@ def parse_training_config(json_data, config):
     config.steps_per_epoch = train["StepsPerEpoch"]
     config.max_steps = train["MaxSteps"]
     config.fixup_batch_norm = train["FixUpBatchNorm"]
+    config.store_path = train["StorePath"]
 
     assert config.max_steps != None, ""
 

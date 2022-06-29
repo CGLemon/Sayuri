@@ -457,7 +457,6 @@ class Network(nn.Module):
         # in the inference time. We do not collect them. 
         self.layer_collector = []
 
-        self.cfg = cfg
         self.nntype = cfg.nntype
 
         self.fixup = cfg.fixup_batch_norm
@@ -675,7 +674,6 @@ class Network(nn.Module):
 
         fina_score_loss = 0.0012 * huber_loss(20 * pred_score, target_final_score, 12)
 
-
         return (prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, fina_score_loss)
 
     def trainable(self, t=True):
@@ -690,9 +688,25 @@ class Network(nn.Module):
     def load_pt(self, filename):
         self.load_state_dict(torch.load(filename, map_location=torch.device('cpu')))
 
+    def simple_info(self):
+        info = str()
+        info += "NN Type: {type}\n".format(type=self.nntype)
+        info += "NN size [x,y]: [{xsize}, {ysize}]\n".format(xsize=self.xsize, ysize=self.ysize)
+        info += "Input channels: {channels}\n".format(channels=self.input_channels)
+        info += "Residual channels: {channels}\n".format(channels=self.residual_channels)
+        info += "Residual tower: size -> {s} [\n".format(s=len(self.stack))
+        for s in self.stack:
+            info += "  {}\n".format(s)
+        info += "]\n"
+        info += "Policy extract channels: {policyextract}\n".format(policyextract=self.policy_extract)
+        info += "Value extract channels: {valueextract}\n".format(valueextract=self.value_extract)
+        info += "Value misc size: {valuemisc}\n".format(valuemisc=self.value_misc)
+
+        return info
+
     def dump_info(self):
         print("NN Type: {type}".format(type=self.nntype))
-        print("NN size [x,y]: [{xsize}, {ysize}] ".format(xsize=self.xsize, ysize=self.ysize))
+        print("NN size [x,y]: [{xsize}, {ysize}]".format(xsize=self.xsize, ysize=self.ysize))
         print("Input channels: {channels}".format(channels=self.input_channels))
         print("Residual channels: {channels}".format(channels=self.residual_channels))
         print("Residual tower: size -> {s} [".format(s=len(self.stack)))

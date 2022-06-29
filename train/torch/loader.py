@@ -187,6 +187,8 @@ class Loader:
         self.stream_end = True
         self.stream = None
         self.chunks = []
+
+        # TODO: Load training data from multi-directory.
         self.done = glob.glob(os.path.join(self.dirname, "*"))
 
     def next(self):

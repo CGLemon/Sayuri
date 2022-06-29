@@ -27,12 +27,10 @@
         "Workers": 4,
         "BatchSize": 256,
         "MacroFactor": 1,
-        "LearningRate": 5e-3,
+        "LearningRate": 1e-2,
         "WeightDecay": 1e-4,
         "FixUpBatchNorm": false,
-        "TrainDirectory": "train-dir"
+        "TrainDirectory": "train-dir",
+        "StorePath" : "workspace"
     }
 }
-
-
-
