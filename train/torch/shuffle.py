@@ -43,10 +43,10 @@ def write_data(filename, data_list):
                 f.write(data)
 
 def get_new_filename(new_dir, filename):
-    idx = filename.find('/')
-    post_fix = filename[idx+1:]
+    path_list = os.path.split(filename)
+    postfix = path_list[-1]
 
-    out_name = "{}/{}".format(new_dir, post_fix)
+    out_name = os.path.join(new_dir, postfix)
 
     if out_name.find(".gz") < 0:
         out_name += ".gz"
