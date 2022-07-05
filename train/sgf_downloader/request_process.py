@@ -10,10 +10,14 @@ class GameState:
         self.score = 'area'
         self.suicide = False
         self.handicap = '0'
+        self.is_normal = False
 
         self._parse(sgf)
 
     def _parse(self, sgf):
+        if sgf.find('gtype=normal') >= 0:
+            self.is_normal = True
+
         begin = sgf.find('SZ[')+3
         self.board_size = sgf[begin : sgf.find(']', begin)]
 
@@ -55,6 +59,7 @@ class RequestProcess:
 
         self.target_url = args.url
         self.target_area_only = args.area
+        self.target_normal_only = args.normal
         self.target_size = range(1, 26)
 
         if args.size != None:
@@ -157,6 +162,10 @@ class RequestProcess:
         sgf = r.text
 
         state = GameState(sgf)
+        if self.target_normal_only and not state.is_normal:
+            self.discarded_game_states.append(state)
+            return None
+
         if not is_int(state.board_size) or \
                not is_int(state.handicap) or \
                not is_float(state.komi):

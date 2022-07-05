@@ -23,8 +23,9 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--size', metavar='<int>',
                         help='Download the x size board.', type=int)
     parser.add_argument('-a', '--area', default=False,
-                        help='Download the score rule which is based on area.', action='store_true')
-
+                        help='Download the score rule which is area based.', action='store_true')
+    parser.add_argument('-n', '--normal', default=False,
+                        help='Download the normal game type.', action='store_true')
 
     args = parser.parse_args()
 
