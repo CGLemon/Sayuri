@@ -41,7 +41,7 @@ class GlobalPool(nn.Module):
         b_diff = div_sqrt - self.b_avg
 
         if self.is_value_head:
-            # Accordiog to KataGo, we compute three orthogonal values. There
+            # According to KataGo, we compute three orthogonal values. There
             # are 1, (x-14)/10, and (x-14)^2/100 - 0.1. They may the value head
             # performance. That because the winrate and score lead heads consist
             # of komi and intersections.
@@ -97,8 +97,8 @@ class BatchNorm2d(nn.Module):
             torch.zeros(num_features, dtype=torch.float)
         )
 
-        # TODO: Test Batch Renormalization.
-        self.use_renorm = False
+        # Enable the batch renorm if we set true, else will use the batch norm.
+        self.use_renorm = True
 
         self.use_gamma = use_gamma
         self.num_features = num_features
@@ -107,7 +107,7 @@ class BatchNorm2d(nn.Module):
 
         # Fix up Batch Normalization layer. According to kata Go, Batch Normalization may cause
         # some wierd reuslts that becuse the inference and training computation results are different.
-        # Fix up also speeds up the performance. May improve around x1.6 ~ x1.8 thae becuse we use
+        # Fix up also speeds up the performance. May improve around x1.6 ~ x1.8 that becuse we use
         # customized Batch Normalization layer. The performance of customized layer is very slow.
         self.fixup = fixup
 
@@ -178,7 +178,7 @@ class BatchNorm2d(nn.Module):
             self.running_var += self.momentum * (batch_var.detach() - self.running_var)
             self.num_batches_tracked += 1
         else:
-            # Inference step or fixup, they are same.
+            # Inference step or fixup, they are equal.
             x = self.__apply_norm(x, self.running_mean, self.running_var)
 
         if self.gamma is not None:
