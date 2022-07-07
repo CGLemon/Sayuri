@@ -73,15 +73,20 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         agent_->GetState().ShowBoard();
         out << GTPSuccess("");
     } else if (const auto res = parser.Find("boardsize", 0)){
-        auto bsize = agent_->GetState().GetBoardSize();
+        int bsize = -1;
         if (const auto input = parser.GetCommand(1)) {
             bsize = input->Get<int>();
+        }
+
+        if (bsize <= MAX_BOARD_SIZE &&
+                bsize <= kMaxGTPBoardSize &&
+                bsize >= kMinGTPBoardSize) {
+            agent_->GetState().Reset(bsize, agent_->GetState().GetKomi());
+            agent_->GetNetwork().Reload(bsize);
             out << GTPSuccess("");
         } else {
-            out << GTPFail("");
+            out << GTPFail("invalid board size");
         }
-        agent_->GetState().Reset(bsize, agent_->GetState().GetKomi());
-        agent_->GetNetwork().Reload(bsize);
     } else if (const auto res = parser.Find("clear_board", 0)){
         agent_->GetState().ClearBoard();
         agent_->GetNetwork().ClearCache();
@@ -92,7 +97,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             komi = input->Get<float>();
             out << GTPSuccess("");
         } else {
-            out << GTPFail("");
+            out << GTPFail("invalid komi");
         }
         agent_->GetState().SetKomi(komi);
     } else if (const auto res = parser.Find("play", 0)) {
@@ -105,7 +110,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         if (agent_->GetState().PlayTextMove(cmd)) {
             out << GTPSuccess("");
         } else {
-            out << GTPFail("");
+            out << GTPFail("invalid play");
         }
     } else if (const auto res = parser.Find("fixed_handicap", 0)) {
         auto handicap = -1;
@@ -113,10 +118,11 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             agent_->GetState().ClearBoard();
             handicap = input->Get<int>();
         }
-        if (agent_->GetState().SetFixdHandicap(handicap)) {
+        if (handicap >= 1 &&
+                agent_->GetState().SetFixdHandicap(handicap)) {
             out << GTPSuccess("");
         } else {
-            out << GTPFail("");
+            out << GTPFail("invalid handicap");
         }
     } else if (const auto res = parser.Find("place_free_handicap", 0)) {
         auto handicaps = -1;
@@ -134,7 +140,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
 
         auto stone_list = std::vector<int>{};
         for (int i = 0; i < handicaps; ++i) {
-            int vtx = agent_->GetNetwork().GetBestPolicyVertex(agent_->GetState(), false);
+            const int vtx = agent_->GetNetwork().GetBestPolicyVertex(agent_->GetState(), false);
             agent_->GetState().AppendMove(vtx, kBlack);
             stone_list.emplace_back(vtx);
         }
@@ -148,7 +154,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             }
             out << GTPSuccess(vtx_list.str());
         } else {
-            out << GTPFail("");
+            out << GTPFail("invalid handicap");
         }
     } else if (const auto res = parser.Find("set_free_handicap", 0)) {
         auto movelist = std::vector<std::string>{};
@@ -158,7 +164,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         if (agent_->GetState().SetFreeHandicap(movelist)) {
             out << GTPSuccess("");
         } else {
-            out << GTPFail("");
+            out << GTPFail("invalid handicap");
         }
     } else if (const auto res = parser.Find("loadsgf", 0)) {
         auto movenum = 9999;
@@ -173,9 +179,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             agent_->GetState() = Sgf::Get().FromFile(filename, movenum);
             out << GTPSuccess("");
         } catch (const char *err) {
-            LOGGING << "Fail to load the SGF file!" << std::endl
-                        << Format("    Cause: %s.", err) << std::endl;
-            out << GTPFail("");
+            out << GTPFail(Format("invalid SGF file, cause %s.", err));
         }
     } else if (const auto res = parser.Find("printsgf", 0)) {
         auto filename = std::string{};
@@ -233,7 +237,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         auto name = std::string{};
         auto message = std::string{};
         if (parser.GetCount() < 3) {
-            out << GTPFail("");
+            out << GTPFail("invalid chat settings");
         } else {
             type = parser.GetCommand(1)->Get<std::string>();
             name = parser.GetCommand(2)->Get<std::string>();
@@ -242,7 +246,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         }
     } else if (const auto res = parser.Find("analyze", 0)) {
         auto color = agent_->GetState().GetToMove();
-        auto interval = 100;
+        auto interval = 100; // one second
         if (const auto input = parser.GetCommand(1)) {
             auto color_str = input->Get<std::string>();
             if (color_str == "b" || color_str == "B" || color_str == "black") {
@@ -260,7 +264,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         DUMPING << "\n";
     } else if (const auto res = parser.Find("genmove_analyze", 0)) {
         auto color = agent_->GetState().GetToMove();
-        auto interval = 100;
+        auto interval = 100; // one second
         if (const auto input = parser.GetCommand(1)) {
             auto color_str = input->Get<std::string>();
             if (color_str == "b" || color_str == "B" || color_str == "black") {
@@ -282,7 +286,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         if (agent_->GetState().UndoMove()) {
             out << GTPSuccess("");
         } else {
-            out << GTPFail("");
+            out << GTPFail("can't do undo move");
         }
     } else if (const auto res = parser.Find("kgs-time_settings", 0)) {
         // none, absolute, byoyomi, or canadian
@@ -310,7 +314,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
                                                  byo_yomi_stones, byo_yomi_periods);
             out << GTPSuccess("");
         } else {
-            out << GTPFail("");
+            out << GTPFail("invalid time settings");
         }
 
     } else if (const auto res = parser.Find("time_settings", 0)) {
@@ -327,7 +331,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         }
 
         if (main_time == -1 || byo_yomi_time == -1 || byo_yomi_stones == -1) {
-            out << GTPFail("");
+            out << GTPFail("invalid time settings");
         } else {
             agent_->GetSearch().TimeSettings(main_time, byo_yomi_time, byo_yomi_stones, 0);
             out << GTPSuccess("");
@@ -351,7 +355,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         }
 
         if (color == kInvalid || time == -1 || stones == -1) {
-            out << GTPFail("");
+            out << GTPFail("invalid time settings");
         } else {
             agent_->GetSearch().TimeLeft(color, time, stones);
             out << GTPSuccess("");
@@ -383,7 +387,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             }
             out << GTPSuccess(vtx_list.str());
         } else {
-            out << GTPFail("");
+            out << GTPFail("invalid status type");
         }
     } else if (const auto res = parser.Find({"help", "list_commands"}, 0)) {
         auto list_commands = std::ostringstream{};
@@ -405,7 +409,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         if (ite != std::end(kGtpCommandsList)) {
             out << GTPSuccess("true");
         } else {
-            out << GTPFail("false");
+            out << GTPSuccess("false");
         }
     } else if (const auto res = parser.Find("supervised", 0)) {
         auto sgf_file = std::string{};
@@ -422,24 +426,32 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             Supervised::Get().FromSgfs(sgf_file, data_file);
             out << GTPSuccess("");
         } else {
-            out << GTPFail("");
+            out << GTPFail("file name is empty");
         }
     } else if (const auto res = parser.Find("planes", 0)) {
-        int symmetry = 0;
+        int symmetry = Symmetry::kIdentitySymmetry;
 
         if (const auto symm = parser.GetCommand(1)) {
             symmetry = symm->Get<int>();
         }
 
-        out << GTPSuccess(Encoder::Get().GetPlanesString(agent_->GetState(), symmetry));
+        if (symmetry <= 8 && symmetry >= 0) {
+            out << GTPSuccess(Encoder::Get().GetPlanesString(agent_->GetState(), symmetry));
+        } else {
+            out << GTPFail("symmetry must be from 0 to 7");
+        }
     } else if (const auto res = parser.Find("raw-nn", 0)) {
-        int symmetry = 0;
+        int symmetry = Symmetry::kIdentitySymmetry;
 
         if (const auto symm = parser.GetCommand(1)) {
             symmetry = symm->Get<int>();
         }
 
-        out << GTPSuccess(agent_->GetNetwork().GetOutputString(agent_->GetState(), Network::kDirect, symmetry));
+        if (symmetry <= 8 && symmetry >= 0) {
+            out << GTPSuccess(agent_->GetNetwork().GetOutputString(agent_->GetState(), Network::kDirect, symmetry));   
+        } else {
+            out << GTPFail("symmetry must be from 0 to 7");
+        }
     } else if (const auto res = parser.Find("genbook", 0)) {
         auto sgf_file = std::string{};
         auto data_file = std::string{};
@@ -455,7 +467,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             Book::Get().GenerateBook(sgf_file, data_file);
             out << GTPSuccess("");
         } else {
-            out << GTPFail("");
+            out << GTPFail("file name is empty");
         }
     } else if (const auto res = parser.Find("genpatterns", 0)) {
         auto sgf_file = std::string{};
@@ -472,7 +484,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             PatternsScan::Get().MMTraining(sgf_file, data_file);
             out << GTPSuccess("");
         } else {
-            out << GTPFail("");
+            out << GTPFail("file name is empty");
         }
     } else if (const auto res = parser.Find("pattern-test", 0)) {
         int mcnt = 1;
@@ -491,7 +503,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
     } else if (const auto res = parser.Find("gogui-analyze_commands", 0)) {
         auto gogui_cmds = std::ostringstream{};
 
-        gogui_cmds << "gfx/Winrate Rating/gogui-winrate_rating";
+        gogui_cmds << "gfx/Win-Draw-Loss Rating/gogui-wdl_rating";
         gogui_cmds << "\ngfx/Policy Heatmap/gogui-policy_heatmap";
         gogui_cmds << "\ngfx/Policy Rating/gogui-policy_rating";
         gogui_cmds << "\ngfx/Ownership Heatmap/gogui-ownership_heatmap 0";
@@ -502,14 +514,14 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         gogui_cmds << "\ngfx/Gammas Heatmap/gogui-gammas_heatmap";
 
         out << GTPSuccess(gogui_cmds.str());
-    } else if (const auto res = parser.Find("gogui-winrate_rating", 0)) {
+    } else if (const auto res = parser.Find("gogui-wdl_rating", 0)) {
         const auto result = agent_->GetNetwork().GetOutput(agent_->GetState(), Network::kNone);
         const auto board_size = result.board_size;
         const auto num_intersections = board_size * board_size;
         const auto ave_pol = 1.f / (float)num_intersections;
 
         auto first = true;
-        auto winrate_rating = std::ostringstream{};
+        auto wdl_rating = std::ostringstream{};
 
         for (int idx = 0; idx < num_intersections; ++idx) {
             const auto x = idx % board_size;
@@ -522,11 +534,11 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
                     const auto next_result = agent_->GetNetwork().GetOutput(
                                                  agent_->GetState(), Network::kNone);
 
-                    const float wl = (next_result.wdl[0] - next_result.wdl[2] + 1) / 2.f;
+                    const float wdl = next_result.wdl_winrate;
                     if (!first) {
-                        winrate_rating << '\n';
+                        wdl_rating << '\n';
                     }
-                    winrate_rating << GoguiLable(1.f - wl, agent_->GetState().VertexToText(vtx));
+                    wdl_rating << GoguiLable(1.f - wdl, agent_->GetState().VertexToText(vtx));
                     first = false;
 
                     agent_->GetState().UndoMove();
@@ -534,7 +546,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             }
         }
 
-        out << GTPSuccess(winrate_rating.str());
+        out << GTPSuccess(wdl_rating.str());
     } else if (const auto res = parser.Find("gogui-policy_heatmap", 0)) {
         const auto result = agent_->GetNetwork().GetOutput(agent_->GetState(), Network::kNone);
         const auto board_size = result.board_size;
@@ -587,20 +599,20 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             }
         }
 
-        auto policy_rating_val = std::ostringstream{};
+        auto policy_rating_var = std::ostringstream{};
 
         const auto x = max_idx % board_size;
         const auto y = max_idx / board_size;
         const auto max_vtx = agent_->GetState().GetVertex(x,y);
 
         if (agent_->GetState().GetToMove() == kBlack) {
-            policy_rating_val << Format("VAR b %s", agent_->GetState().VertexToText(max_vtx).c_str());
+            policy_rating_var << Format("VAR b %s", agent_->GetState().VertexToText(max_vtx).c_str());
         } else {
-            policy_rating_val << Format("VAR w %s", agent_->GetState().VertexToText(max_vtx).c_str());
+            policy_rating_var << Format("VAR w %s", agent_->GetState().VertexToText(max_vtx).c_str());
         }
-        policy_rating_val << policy_rating.str();
+        policy_rating_var << policy_rating.str();
 
-        out << GTPSuccess(policy_rating_val.str());
+        out << GTPSuccess(policy_rating_var.str());
     } else if (const auto res = parser.Find("gogui-ownership_heatmap", 0)) {
         int playouts = 0;
         if (const auto p = parser.GetCommand(1)) {
@@ -625,14 +637,13 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             const auto y = idx / board_size;
             const auto vtx = agent_->GetState().GetVertex(x,y);
 
-            // map -1 ~ 1 to 0 ~ 1
+            // map [-1 ~ 1] to [0 ~ 1]
             const auto owner_val = (result.root_ownership[idx] + 1.f) / 2.f;
 
             owner_map << GoguiGray(owner_val,
                                        agent_->GetState().VertexToText(vtx),
                                        color == kWhite);
         }
-
         out << GTPSuccess(owner_map.str());
     } else if (const auto res = parser.Find("gogui-ownership_influence", 0)) {
         int playouts = 0;

@@ -25,6 +25,9 @@ static std::vector<std::string> kGtpCommandsList = {
     "list_commands",
 
     // Part of GTP version 2 standard command
+    "help",
+
+    // Part of GTP version 2 standard command
     "boardsize",
 
     // Part of GTP version 2 standard command
@@ -71,6 +74,8 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "printsgf",
 
+    // "kgs-chat",
+
     "analyze",
 
     "genmove_analyze",
@@ -90,6 +95,8 @@ static std::vector<std::string> kGtpCommandsList = {
     "genpatterns",
 
     "gogui-analyze_commands",
+
+    "gogui-wdl_rating",
 
     "gogui-policy_heatmap",
 
