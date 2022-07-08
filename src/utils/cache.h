@@ -1,176 +1,134 @@
 #pragma once
 
 #include "utils/mutex.h"
-#include "cppattributes.h"
 
 #include <memory>
 #include <algorithm>
 #include <vector>
-#include <deque>
-#include <unordered_map>
 
-// Generic FIFO cache. Thread-safe.
 template<typename V>
-class FifoCache {
+class HashKeyCache {
 public:
-    FifoCache() {
+    HashKeyCache() {
         capacity_ = 0;
-        allocated_ = 0;
+        generation_ = 0;
     }
 
-    FifoCache(size_t capacity) {
-        capacity_ = capacity;
-        allocated_ = 0;
+    HashKeyCache(size_t capacity) {
+        SetCapacity(capacity);
+        generation_ = 0;
     }
 
-    FifoCache(FifoCache&& cache) {
-        capacity_ = cache.capacity_;
-        allocated_ = cache.allocated_;
+    HashKeyCache(HashKeyCache&& cache) {
+        SetCapacity(cache.capacity_);
+        generation_ = cache.generation_;
     }
 
     // Set the capacity.
     void SetCapacity(size_t size);
 
     // Insert the new item to the cache.
-    void Insert(std::uint64_t key, V value);
+    void Insert(std::uint64_t key, const V &value);
 
-    // Lookup the item and pin the item. The pined item is
-    // not allowed to release.
-    V* LookupAndPin(std::uint64_t key);
-
-    // Only lookup the item.
+    // Lookup the item.
     V* LookupItem(std::uint64_t key);
 
-    // Unpin the item to the cache.
-    void Unpin(std::uint64_t key);
-
+    // Clear the hash.
     void Clear();
 
 private:
-    void Evict() REQUIRES(mutex_);
+    struct Entry {
+        Entry() : generation{0} {}
+        std::uint64_t key;
+        std::uint64_t generation;
+        std::unique_ptr<V> value;
+    };
 
     SpinLock mutex_;
 
-    struct Entry {
-        std::unique_ptr<V> value;
-        int pines;
-    };
-    std::unordered_map<uint64_t, Entry> lookup_ GUARDED_BY(mutex_);
-    std::deque<uint64_t> order_ GUARDED_BY(mutex_);
-    std::deque<uint64_t> evicted_ GUARDED_BY(mutex_);
+    static constexpr size_t kClusterSize = 8;
+    static constexpr size_t kEntrySize = sizeof(Entry) + sizeof(V);
 
-    size_t allocated_ GUARDED_BY(mutex_);
+    std::vector<Entry> table_ GUARDED_BY(mutex_);
+
     size_t capacity_ GUARDED_BY(mutex_);
+    size_t blocks_ GUARDED_BY(mutex_);
+    std::uint64_t generation_ GUARDED_BY(mutex_);
 };
 
 template<typename V>
-void FifoCache<V>::SetCapacity(size_t size) {
+void HashKeyCache<V>::SetCapacity(size_t size) {
+    if (size % kClusterSize) {
+        auto t = size / kClusterSize;
+        size = (t+1) * kClusterSize;
+    }
+
     SpinLock::Lock lock(mutex_);
 
+    blocks_ = size / kClusterSize;
     capacity_ = size;
-    while (allocated_ > capacity_) {
-        Evict();
-    }
+    table_.resize(size);
+    table_.shrink_to_fit();
 }
 
 template<typename V>
-void FifoCache<V>::Insert(std::uint64_t key, V value) {
+void HashKeyCache<V>::Insert(std::uint64_t key, const V &value) {
+    const auto idx = (key % blocks_) * kClusterSize;
+    Entry *entry = table_.data() + idx;
+
     SpinLock::Lock lock(mutex_);
 
-    auto it = lookup_.find(key);
-    if (it != std::end(lookup_)) {
-        // Had existed.
-        return;
-    }
-    auto entry = Entry{};
-    entry.value = std::make_unique<V>(value);
-    entry.pines = 0;
-
-    lookup_.insert({key, std::move(entry)});
-    order_.emplace_back(key);
-    allocated_++;
-
-    while (allocated_ > capacity_) {
-        Evict();
-    }
-}
-
-template<typename V>
-V* FifoCache<V>::LookupAndPin(std::uint64_t key) {
-    SpinLock::Lock lock(mutex_);
-
-    auto it = lookup_.find(key);
-    if (it == std::end(lookup_)) {
-        // Not found.
-        return nullptr;
-    }
-    auto &entry = it->second;
-    entry.pines++;
-
-    return entry.value.get();
-}
-
-template<typename V>
-V* FifoCache<V>::LookupItem(std::uint64_t key) {
-    SpinLock::Lock lock(mutex_);
-
-    auto it = lookup_.find(key);
-    if (it == std::end(lookup_)) {
-        // Not found.
-        return nullptr;
-    }
-    auto &entry = it->second;
-
-    return entry.value.get();
-}
-
-template<typename V>
-void FifoCache<V>::Unpin(std::uint64_t key) {
-    SpinLock::Lock lock(mutex_);
-
-    auto it = lookup_.find(key);
-    if (it != std::end(lookup_)) {
-        auto &entry = it->second;
-        entry.pines--;
-        assert(entry.pines >= 0);
-
-        auto evicted = std::find(std::begin(evicted_), std::end(evicted_), key);
-        if (entry.pines == 0 &&
-                std::end(evicted_) != evicted) {
-            evicted_.erase(evicted);
-            lookup_.erase(it);
+    size_t min_i = 0;
+    size_t min_g = entry->generation;
+    for (size_t offset = 1; offset < kClusterSize; ++offset) {
+        Entry *e = entry + offset;
+        if (min_g > e->generation) {
+            min_g = e->generation;
+            min_i = offset;
         }
-
-        return;
     }
+
+    ++generation_;
+
+    Entry *new_entry = entry + min_i;
+    new_entry->key = key;
+    new_entry->generation = generation_;
+    new_entry->value = std::make_unique<V>(value);
 }
 
 template<typename V>
-void FifoCache<V>::Evict() {
-    if (allocated_ == 0) return;
+V* HashKeyCache<V>::LookupItem(std::uint64_t key) {
+    const auto idx = (key % blocks_) * kClusterSize;
+    Entry *entry = table_.data() + idx;
 
-    auto key = order_.front();
-    auto it = lookup_.find(key);
+    SpinLock::Lock lock(mutex_);
 
-    auto &entry = it->second;
-    if (entry.pines > 0) {
-        evicted_.emplace_back(key);
-    } else {
-        lookup_.erase(key);
+    for (size_t offset = 0; offset < kClusterSize; ++offset) {
+        Entry *e = entry + offset;
+        if (e->key == key && e->generation != 0) {
+            return e->value.get();
+        }
     }
-    order_.pop_front();
-    allocated_--;
+
+    return nullptr;
 }
 
 template<typename V>
-void FifoCache<V>::Clear() {
-    while (allocated_ > 0) {
-        Evict();
-    }
+void HashKeyCache<V>::Clear() {
+    SpinLock::Lock lock(mutex_);
+
+    generation_ = 0;
+    std::for_each(std::begin(table_), std::end(table_),
+                     [](auto &e){
+                         e.generation = 0;
+                         e.value.reset(nullptr);
+                     }
+                 );
+    
 }
 
 template<typename V>
-bool LookupCache(FifoCache<V> &cache, std::uint64_t key, V& val) {
+bool LookupCache(HashKeyCache<V> &cache, std::uint64_t key, V& val) {
     auto result = cache.LookupItem(key);
     if (result) {
         val = *result;

@@ -1,7 +1,7 @@
 #include "neural/network_basic.h"
 #include "neural/description.h"
 #include "game/game_state.h"
-#include "utils/cache_new.h"
+#include "utils/cache.h"
 
 #include <memory>
 #include <array>
