@@ -8,38 +8,30 @@
 #include "game/sgf.h"
 #include "game/iterator.h"
 
-
 class TeamList {
 public:
     void InsertWinners(std::vector<int> vals) {
         std::sort(std::begin(vals), std::end(vals));
-        vals.erase(std::unique(std::begin(vals),
-                                   std::end(vals)),
-                   std::end(vals));
-
         winners_ = vals;
         InsertParticipants(vals);
     }
 
     void InsertParticipants(std::vector<int> vals) {
         std::sort(std::begin(vals), std::end(vals));
-        vals.erase(std::unique(std::begin(vals),
-                                   std::end(vals)),
-                   std::end(vals));
-
         participants_.emplace_back(vals);
     }
 
     std::vector<int> winners_;
-
     std::vector<std::vector<int>> participants_;
 };
 
 void WritePatterns(std::ostream &out, TeamList list) {
-    if (list.participants_.empty()) {
+    if (list.participants_.size() <= 1) {
+        // Only winner.
         return;
     }
 
+    // Remove the same patterns.
     std::sort(std::begin(list.participants_),
                   std::end(list.participants_));
     list.participants_.erase(std::unique(std::begin(list.participants_),
@@ -48,7 +40,10 @@ void WritePatterns(std::ostream &out, TeamList list) {
 
     out << "\n#\n"; 
     for (int idx: list.winners_) {
-        out << idx << ' ';
+        out << idx << '\n';
+    }
+    for (int idx: list.winners_) {
+        out << idx;
     }
     for (auto &participant: list.participants_) {
         out << '\n';
@@ -58,10 +53,16 @@ void WritePatterns(std::ostream &out, TeamList list) {
     }
 }
 
-void WriteHeader(std::ostream &out, int size) {
-    out << Format("! %d\n", size);
-    out << "1\n";
-    out << Format("%d s3\n", size);
+void WriteHeader(std::ostream &out, GammasDict &dict) {
+    out << Format("! %d\n", dict.Size());
+    out << Format("%zu\n", dict.GetAllFeatures().size());
+
+    for (auto f : dict.GetAllFeatures()) {
+        out << dict.GetNumFeatures(f)
+                << " "
+                << kFeaturesNameMap[f]
+                << '\n';
+    }
     out << "!";
 }
 
@@ -88,25 +89,37 @@ void PatternsScan::MMTraining(std::string sgf_name, std::string filename) const 
 
     GammasDict dict;
 
+    // Collect all winner patterns from the data set as patterns set.
     for (const auto &sgf: sgfs) {
         CollectPatterns(sgf, dict);
     }
 
-    LOGGING << "Total " << dict.Size() << " features.\n";
+    // Sort the patterns set that beacuse the MM algorithm updating each
+    // features.
+    dict.Sort();
+
+    LOGGING << "Total " << dict.Size() << " gammas.\n";
+    LOGGING << "Total " << dict.GetAllFeatures().size() << " features.\n";
 
     CGameCollection gcol;
     std::stringstream ss;
-    WriteHeader(ss, dict.Size());
+    WriteHeader(ss, dict);
 
+    LOGGING << ss.str() << '\n';
+
+    // Collect winners and participants from the data set.
     int i = 0;
     for (const auto &sgf: sgfs) {
         CollectGammas(sgf, dict, ss);
-        if (++i % 50 == 0) {
+        if (++i % 100 == 0) {
             LOGGING << "Parsed " << i << " games\n";
         }
     }
 
+    // Start the MM training.
     MinorizationMaximizationTraining(gcol, ss);
+
+    // Save the training result.
     OutputGammas(gcol, dict, filename);
 }
 
@@ -125,12 +138,14 @@ void PatternsScan::CollectPatterns(std::string sgfstring, GammasDict &dict) cons
     if (game_ite.MaxMoveNumber() == 0) {
         return;
     }
+
     do {
         const auto vertex = game_ite.GetVertex();
         const auto color = game_ite.GetToMove();
         GameState& main_state = game_ite.GetState();
 
         auto plist = main_state.board_.GetAllPatterns(vertex, color);
+
         for (auto p : plist) {
             dict.InsertPattern(p);
         }
@@ -164,7 +179,7 @@ void PatternsScan::CollectGammas(std::string sgfstring,
         const auto color = game_ite.GetToMove();
         GameState& main_state = game_ite.GetState();
 
-        // Gather winner participants.
+        // Gather winner patterns.
         auto winners = std::vector<int>{};
         auto plist = main_state.board_.GetAllPatterns(vertex, color);
         for (auto p : plist) {
@@ -182,7 +197,7 @@ void PatternsScan::CollectGammas(std::string sgfstring,
                 const auto y = idx / board_size;
                 const auto other_vtx = main_state.GetVertex(x, y);
 
-                // Gather other participants.
+                // Gather other participant patterns.
                 if (main_state.IsLegalMove(other_vtx) && other_vtx != vertex) {
                     auto participants = std::vector<int>{};
                     plist = main_state.board_.GetAllPatterns(vertex, color);

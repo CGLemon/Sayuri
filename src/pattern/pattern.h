@@ -1,24 +1,22 @@
 #pragma once
 
-#include <unordered_map>
-#include <set>
-#include <sstream>
+#include <string>
 #include <vector>
 
 struct LocPattern {
-    enum FeaturnType : std::uint32_t {
-        kNoFeature,
-        kSpatial3x3,
-        kLiberties,
-        kDistToBorder,
-        kDistToLastMove,
-        kAtari,
+    enum FeatureType : std::uint32_t {
+        kNoFeature = 0,
+        kSpatial3x3 = 1,
+        kLiberties = 2,
+        kDistToBorder = 3,
+        kDistToLastMove = 4,
+        kAtari = 5
     };
 
     LocPattern() = default;
-    LocPattern(std::uint32_t f, std::uint32_t v) : featurn(f), value(v) {}
+    LocPattern(std::uint32_t f, std::uint32_t v) : feature(f), value(v) {}
 
-    std::uint32_t featurn{kNoFeature};
+    std::uint32_t feature{kNoFeature};
 
     std::uint32_t value;
 
@@ -27,14 +25,24 @@ struct LocPattern {
     }
 
     inline std::uint64_t operator()() {
-        return Bind(featurn, value);
+        return Bind(feature, value);
     }
 
     static LocPattern FromHash(std::uint64_t hash);
 
+    static LocPattern GetNoFeature();
     static LocPattern GetSpatial3x3(std::uint32_t v);
     static LocPattern GetLiberties(std::uint32_t v);
     static LocPattern GetDistToBorder(std::uint32_t v);
     static LocPattern GetDistToLastMove(std::uint32_t v);
     static LocPattern GetAtari(std::uint32_t v);
+};
+
+const static std::vector<std::string> kFeaturesNameMap = {
+    "NO", // kNoFeature
+    "s3", // kSpatial3x3
+    "l",  // kLiberties
+    "db", // kDistToBorder
+    "dm", // kDistToLastMove
+    "a"   // kAtari
 };

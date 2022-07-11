@@ -1,5 +1,9 @@
 #include "pattern/pattern.h"
 
+LocPattern LocPattern::GetNoFeature() {
+    return LocPattern(kNoFeature, 0);
+}
+
 LocPattern LocPattern::GetSpatial3x3(std::uint32_t v) {
     return LocPattern(kSpatial3x3, v);
 }

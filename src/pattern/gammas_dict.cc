@@ -1,6 +1,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <algorithm>
 
 #include "gammas_dict.h"
 
@@ -10,6 +11,10 @@ GammasDict& GammasDict::Get() {
 }
 
 bool GammasDict::InsertPattern(LocPattern pattern) {
+    if (pattern.feature == LocPattern::kNoFeature) {
+        return false;
+    }
+
     if (index_dict_.find(pattern()) == std::end(index_dict_)) {
         int idx = order_.size();
         index_dict_.insert({pattern(), idx});
@@ -67,7 +72,6 @@ void GammasDict::LoadPatternsGammas(std::string filename) {
 
     if (!file.is_open()) return;
 
-
     index_dict_.clear();
     gammas_dict_.clear();
     order_.clear();
@@ -89,4 +93,45 @@ void GammasDict::LoadPatternsGammas(std::string filename) {
     }
 
     file.close();
+}
+
+std::vector<std::uint32_t> GammasDict::GetAllFeatures() const {
+    auto flist = std::vector<std::uint32_t>{};
+    for (auto &p : order_) {
+        auto it = std::find(std::begin(flist), std::end(flist), p.feature);
+        if (it == std::end(flist)) {
+            flist.emplace_back(p.feature);
+        }
+    }
+
+    std::sort(std::begin(flist), std::end(flist));
+    return flist;
+}
+
+int GammasDict::GetNumFeatures(std::uint32_t feature) const {
+    int num = 0;
+    for (auto &p : order_) {
+        if (p.feature == feature) {
+            num++;
+        }
+    }
+    return num;
+}
+
+void GammasDict::Sort() {
+    auto order_buf = order_;
+    auto flist = GetAllFeatures();
+
+    index_dict_.clear();
+    order_.clear();
+
+    for (auto feature : flist) {
+        for (auto p : order_buf) {
+            if (p.feature == feature) {
+                int idx = order_.size();
+                index_dict_.insert({p(), idx});
+                order_.emplace_back(p);
+            }
+        }
+    }
 }

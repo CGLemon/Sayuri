@@ -103,9 +103,7 @@ public:
 
 protected:
     LocPattern GetPattern3x3(const int vtx, const int color) const;
-    LocPattern GetPatternDistBorderX(const int vtx) const;
-    LocPattern GetPatternDistBorderY(const int vtx) const;
-    LocPattern GetPatternLiberties(const int vtx) const;
+    LocPattern GetPatternDistBorder(const int vtx) const;
     LocPattern GetPatternDistLastMove(const int vtx) const;
     LocPattern GetPatternAtari(const int vtx, const int color) const;
 

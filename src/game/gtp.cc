@@ -714,8 +714,8 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             const auto y = idx / board_size;
             const auto vtx = agent_->GetState().GetVertex(x,y);
 
-            gammas_map << GoguiColor(agent_->GetState().GetGammaValue(vtx),
-                                         agent_->GetState().VertexToText(vtx));
+            const auto gval = std::tanh(agent_->GetState().GetGammaValue(vtx));
+            gammas_map << GoguiColor(gval, agent_->GetState().VertexToText(vtx));
         }
 
         out << GTPSuccess(gammas_map.str());
