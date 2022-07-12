@@ -1,6 +1,8 @@
-# Sayuri
-
-![picture](https://github.com/CGLemon/Sayuri/blob/master/img/sayuri-art.PNG)
+<div id="sayuri-art" align="center">
+    <br/>
+    <img src="https://github.com/CGLemon/Sayuri/blob/master/img/sayuri-art.PNG" alt="Sayuri Art" width="768"/>
+    <h3>Sayuri</h3>
+</div>
 
 ## Let's ROCK!
 
@@ -8,20 +10,15 @@ Sayuri is a GTP-compliant go engine which supports variable komi and board size.
 
 ## Requirements
 
-Following library is required.
+* Ubuntu or MacOS only.
+* GCC, Clang which C++14 compiler
+* CMake 3.15 or later
+* Optional: Eigen or OpenBLAS library
+* Optional: CUDA 10.x or 11.x library (GCC 7.x passed)
+* Optional: cuDNN 7.x or 8.x library
+* Optional: Fast Float library
 
-1. CMake(>=3.15)
-
-Following library are optional.
-
-1. Eigen
-2. OpenBLAS
-3. CUDA
-4. cuDNN
-
-## Build(Ubuntu/MacOS)
-
-The program is only available on Ubuntu/MacOS.
+## Default Compiling (Ubuntu or MacOS)
 
     $ git clone https://github.com/CGLemon/Sayuri
     $ cd Sayuri
@@ -30,9 +27,9 @@ The program is only available on Ubuntu/MacOS.
     $ cmake ..
     $ make -j
 
-## Optional Building
+## Optional Compiling
 
-Accelerate the network by CPU. OpenBlas and Eigen are required. OpenBlas and Eigen are significantly faster than built-in blas. OpenBlas is recommended on MacOS.
+Accelerate the network by CPU. OpenBlas or Eigen are required. OpenBlas and Eigen are significantly faster than built-in blas. OpenBlas is recommended on MacOS.
 
     $ cmake .. -DBLAS_BACKEND=OPENBLAS
 
@@ -40,83 +37,60 @@ or
 
     $ cmake .. -DBLAS_BACKEND=EIGEN
 
-Accelerate the network by GPUs. CUDA is required. It will be faster than cuDNN in only one batch size.
+Accelerate the network by GPUs. CUDA is required. It will be faster than cuDNN in only one batch size case.
 
     $ cmake .. -DBLAS_BACKEND=CUDA
 
-Accelerate the network by GPUs. CUDA and cuDNN are required. It will be faster than CUDA-only in multi batch size.
+Accelerate the network by GPUs. CUDA and cuDNN are required. It will be faster than CUDA-only in multi batch size case.
 
     $ cmake .. -DBLAS_BACKEND=CUDNN
 
 
-Accelerate loading network files. Fast Float library is required.
+Accelerate to load the network file. Fast Float library is required.
 
     $ cmake .. -USE_FAST_PARSER=1
 
 
 ## Weights and Book
 
-You may download the weights file and opening book from my [google drive](https://drive.google.com/drive/folders/1SgPL3Eyhllr6BCDyi_7D8LnOUYxPAAxQ?usp=sharing).The weights size is 15 blocks and 192 filters. The opening book is human-like book, trained on profession games. Force the Sayuri to play variable opening moves. It is just fun for playing.
+You may download the weights file and opening book from my [google drive](https://drive.google.com/drive/folders/1SgPL3Eyhllr6BCDyi_7D8LnOUYxPAAxQ?usp=sharing). The weights size is 15 blocks and 192 filters. The opening book is human-like book, trained on profession games. Force the Sayuri to play variable opening moves. It is just fun for playing.
 
 ## Engine Arguments
 
 Here are some useful arguments which you may need.
 
-    --weights, -w: File with network weights.
+| Arguments               | Param  | Description                                    |
+| :---------------------- | :----- | :--------------------------------------------- |
+|  --weights, -w          | string | File with network weights.                     |
+|  --book, -b             | string | File with opening book.                        |
+|  --playouts, -p         | int    | The number of maximum playouts.                |
+|  --const-time           | int    | Const time of search in seconds.               |
+|  --threads, -t          | int    | The number of threads used.                    |
+|  --batch-size, -b       | int    | The number of batches for a single evaluation. |
+|  --resign-threshold, -r | float  | Resign when winrate is less than x.            |
+|  --analysis-verbose, -a | None   | Output more search diagnostic verbose.         |
+|  --quiet, -q            | None   | Disable all diagnostic verbose.                |
+|  --ponder               | None   | Thinking on opponent's time.                   |
+|  --friendly-pass        | None   | Do pass move if we win the game.               |
+|  --reuse-tree           | None   | Will reuse the sub-tree.                       |
+|  --help, -h             | None   | Show the more arguments.                       |
     
-    $ ./Sayuri -w <weights file>
-    
-    
-    --book: File with opening book.
-    
-    $ ./Sayuri --book <book file>
-    
-    
-    --playouts, -p: Set the playouts limit. Larger is stronger.
-    
-    $ ./Sayuri -p 1600
-    
-    
-    --threads, -t: Set the search threads. Larger is faster. The default setting will select a reasonable number.
-    
-    $ ./Sayuri -t 4
-    
-    
-    --batch-size, -b: Set the network batch size. Larger is faster. The default setting will select a reasonable number.
-    
-    $ ./Sayuri -b 2
-    
-    
-    --resign-threshold, -r: Resign when winrate is less than x.
-    
-    $ ./Sayuri -r 0.2
-    
-    
-    --analysis-verbose, -a: Output more search diagnostic verbose.
-    
-    $ ./Sayuri --analysis-verbose
-    
-    
-    --quiet, -q: Disable all diagnostic verbose
-    
-    $ ./Sayuri --quiet
-    
-    
-    --ponder: Thinking on opponent's time.
-    
-    $ ./Sayuri --ponder
-    
-    
-    --help, -h: Display the more arguments.
-    
-    $ ./Sayuri --help
-    
-    
-    
-    Exmaple:
-    
-    $ ./Sayuri -w <weights file> -t 4 -b 2 -p 1600
 
+Default setting: will select reasonable thread and batch size, 15 seconds per move
+
+    $ ./Sayuri -w <weights file>
+
+Example setting 1: 4 thread, 2 batches and 12800 playouts
+    
+    $ ./Sayuri -w <weights file> -t 4 -b 2 -p 12800
+
+Example setting 2: quickly and friendly game
+    
+    $ ./Sayuri -w <weights file> -t 1 -b 1 --const-time 1 --friendly-pass --reuse-tree
+
+Example setting 3: Debug or analysis mode with Sabaki
+
+    $ ./Sayuri -w <weights file> --analysis-verbose
 
 ## Generate Opening book
 
@@ -126,15 +100,23 @@ You need to collect enough SGF games (at least over 10000 games). Then, go to th
 
 ## User Interface
 
-Sayuri supports any GTP interface application. [Sabaki](https://sabaki.yichuanshen.de/) and [GoGui](https://github.com/Remi-Coulom/gogui) are recommended.
+Sayuri is not complete engine. You need a graphical interface for playing with it. She supports any GTP (version 2) interface application. [Sabaki](https://sabaki.yichuanshen.de/) and [GoGui](https://github.com/Remi-Coulom/gogui) are recommended. 
+
+* Sabaki analysis mode
+
+![sabaki-sample01](https://github.com/CGLemon/Sayuri/blob/master/img/sabaki-sample01.png)
+
+* GoGui analysis command
+
+![gogui-sample01](https://github.com/CGLemon/Sayuri/blob/master/img/gogui-sample01.png)
 
 ## Features
 
-* Support sabaki analyzing mode.
-* Support some GoGui analyzing commands.
+* Support sabaki analysis mode.
+* Support some GoGui analysis commands.
 * Support handicap game.
 * Support variable komi.
-* Support variable board size(from 7x7 to 19x19).
+* Support variable board size (from 7x7 to 19x19).
 * Lock-free SMP MCTS.
 * Acceleration by multi-core processor and multi-Nvidia GPU.
 * Predict the current side winrate and draw-rate.
@@ -147,10 +129,14 @@ Sayuri supports any GTP interface application. [Sabaki](https://sabaki.yichuansh
 * Support half-float.
 * Support NHWC format.
 * Support distributed computation.
-* Including pattern system.
 * Store the networks as binary file.
-* Use the fixed cache memory.
+* Including pattern system (should finish it in beta version).
 
 ## LICENSE
 
 GNU GPL version 3 section 7
+
+## Contact
+
+cglemon000@gmail.com (Hung-Zhe Lin)
+
