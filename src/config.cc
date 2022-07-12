@@ -61,7 +61,8 @@ void InitOptionsMap() {
     options_map["defualt_komi"] << Option::setoption(kDefaultKomi);
 
     options_map["cache_memory_mib"] << Option::setoption(100);
-    options_map["playouts"] << Option::setoption(1600);
+    options_map["playouts"] << Option::setoption(0);
+    options_map["const_time"] << Option::setoption(0);
     options_map["batch_size"] << Option::setoption(0);
     options_map["threads"] << Option::setoption(0);
 
@@ -124,7 +125,8 @@ void InitBasicParameters() {
     int select_threads = GetOption<int>("threads");
     int select_batchsize = GetOption<int>("batch_size");
 
-    // try to select a reasonable number
+    // Try to select a reasonable number for threads and batch
+    // size.
     if (!already_set_thread && !already_set_batchsize) {
         select_threads = (1 + (int)use_gpu) * cores;
         select_batchsize = select_threads/2;
@@ -140,6 +142,17 @@ void InitBasicParameters() {
 
     SetOption("threads", std::max(select_threads, 1));
     SetOption("batch_size", std::max(select_batchsize, 1));
+
+    // Try to select a reasonable number for const time and playouts.
+    bool already_set_time = GetOption<int>("const_time") > 0;
+    bool already_set_playouts = GetOption<int>("playouts") > 0;
+
+    if (!already_set_time && !already_set_playouts) {
+        SetOption("const_time", 15); // 15 seconds
+    }
+    if (!already_set_playouts) {
+        SetOption("playouts", std::numeric_limits<int>::max() / 2);
+    }
 }
 
 ArgsParser::ArgsParser(int argc, char** argv) {
@@ -274,6 +287,13 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext({"--playouts", "-p"})) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("playouts", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--const-time")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("const_time", res->Get<int>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -494,7 +514,7 @@ void ArgsParser::DumpHelper() const {
                 << "\t\tWill reuse the sub-tree.\n\n"
 
                 << "\t--early-symm-cache\n"
-                << "\t\tAccelerate search on the opening step.\n\n"
+                << "\t\tAccelerate the searching on the opening stage.\n\n"
 
                 << "\t--cache-memory-mib\n"
                 << "\t\tSet the NN cache size.\n\n"
@@ -503,22 +523,28 @@ void ArgsParser::DumpHelper() const {
                 << "\t\tResign when winrate is less than x. Default is 0.1.\n\n"
 
                 << "\t--playouts, -p <integer>\n"
-                << "\t\tNumber of playouts.\n\n"
+                << "\t\tThe number of maximum playouts.\n\n"
+
+                << "\t--const-time <integer>\n"
+                << "\t\tConst time of search in seconds.\n\n"
 
                 << "\t--gpu, -g <integer>\n"
                 << "\t\tSelect a specific GPU device. Default is all devices.\n\n"
 
                 << "\t--threads, -t <integer>\n"
-                << "\t\tNumber of threads. Set 0 will select a reasonable number.\n\n"
+                << "\t\tThe number of threads used. Set 0 will select a reasonable number.\n\n"
 
                 << "\t--batch-size, -b <integer>\n"
-                << "\t\tNumber of batch size. Set 0 will select a reasonable number.\n\n"
+                << "\t\tThe number of batches for a single evaluation. Set 0 will select a reasonable number.\n\n"
 
                 << "\t--logfile, -l <log file name>\n"
                 << "\t\tFile to log input/output to.\n\n"
 
                 << "\t--lag-buffer <integer>\n"
                 << "\t\tSafety margin for time usage in seconds.\n\n"
+
+                << "\t--friendly-pass\n"
+                << "\t\tDo pass move if we win the game.\n\n"
 
                 << "\t--weights, -w <weight file name>\n"
                 << "\t\tFile with network weights.\n\n"

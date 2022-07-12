@@ -30,6 +30,8 @@ public:
     void TimeStream(std::ostream &out, int color) const;
     std::string ToString() const;
 
+    bool IsInfiniteTime(int color) const;
+
 private:
     void Reset();
     void CheckInByo();
@@ -50,6 +52,5 @@ private:
 
     Timer timer_;
 
-    bool IsInfiniteTime(int color) const;
     int EstimateMovesExpected(int boardsize, int move_num, int div_delta) const;
 };

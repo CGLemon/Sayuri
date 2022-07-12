@@ -12,6 +12,7 @@ public:
     void Reset() {
         threads = GetOption<int>("threads");
         playouts = GetOption<int>("playouts");
+        const_time = GetOption<int>("const_time");
 
         resign_threshold = GetOption<float>("resign_threshold");
         lcb_reduction = GetOption<float>("lcb_reduction");
@@ -50,6 +51,7 @@ public:
 
     int threads;
     int playouts;
+    int const_time;
     int random_min_visits;
     int random_moves_cnt;
 

@@ -247,7 +247,14 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
     timer.Clock();
     analyze_timer.Clock();
 
-    const auto thinking_time = time_control_.GetThinkingTime(color, board_size, move_num);
+    // Compute max thinking time.
+    const float bound_time = (param_->const_time > 0 &&
+                                 time_control_.IsInfiniteTime(color)) ?
+                                     param_->const_time : std::numeric_limits<float>::max();
+
+    const auto thinking_time = std::min(
+                                   bound_time,
+                                   time_control_.GetThinkingTime(color, board_size, move_num));
     PrepareRootNode();
 
     if (GetOption<bool>("analysis_verbose")) {
