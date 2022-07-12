@@ -18,7 +18,7 @@ void SelfPlayPipe::Initialize() {
     SetOption("threads", 1);
 
     engine_.Initialize();
-    engine_.SetCacheSize(GetOption<int>("playouts"));
+    // TODO: Re-compute the NN cache size.
 
     target_directory_ = GetOption<std::string>("target_directory");
     max_games_ = GetOption<int>("num_games");

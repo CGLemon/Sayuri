@@ -17,7 +17,6 @@ public:
     void SaveTrainingData(std::string filename, int g);
     void PrepareGame(int g);
     void Selfplay(int g);
-    void SetCacheSize(int playout);
 
     int GetParallelGames() const;
 

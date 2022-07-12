@@ -60,7 +60,7 @@ void InitOptionsMap() {
     options_map["defualt_boardsize"] << Option::setoption(kDefaultBoardSize);
     options_map["defualt_komi"] << Option::setoption(kDefaultKomi);
 
-    options_map["cache_buffer_factor"] << Option::setoption(30);
+    options_map["cache_memory_mib"] << Option::setoption(100);
     options_map["playouts"] << Option::setoption(1600);
     options_map["batch_size"] << Option::setoption(0);
     options_map["threads"] << Option::setoption(0);
@@ -264,9 +264,9 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
-    if (const auto res = parser.FindNext("--cache-buffer-factor")) {
+    if (const auto res = parser.FindNext("--cache-memory-mib")) {
         if (IsParameter(res->Get<std::string>())) {
-            SetOption("cache_buffer_factor", res->Get<int>());
+            SetOption("cache_memory_mib", res->Get<int>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -496,14 +496,17 @@ void ArgsParser::DumpHelper() const {
                 << "\t--early-symm-cache\n"
                 << "\t\tAccelerate search on the opening step.\n\n"
 
+                << "\t--cache-memory-mib\n"
+                << "\t\tSet the NN cache size.\n\n"
+
                 << "\t--resign-threshold, -r <float>\n"
-                << "\t\tResign when winrate is less than x. Defulat is 0.1.\n\n"
+                << "\t\tResign when winrate is less than x. Default is 0.1.\n\n"
 
                 << "\t--playouts, -p <integer>\n"
-                << "\t\tNumber of playouts. Defulat is 1600\n\n"
+                << "\t\tNumber of playouts.\n\n"
 
                 << "\t--gpu, -g <integer>\n"
-                << "\t\tSelect a specific GPU device. Defaul is all devices.\n\n"
+                << "\t\tSelect a specific GPU device. Default is all devices.\n\n"
 
                 << "\t--threads, -t <integer>\n"
                 << "\t\tNumber of threads. Set 0 will select a reasonable number.\n\n"

@@ -28,10 +28,6 @@ void Engine::Initialize() {
     ThreadPool::Get((GetOption<int>("threads") - 1) * parallel_games_); // one thread is main thread
 }
 
-void Engine::SetCacheSize(int playout) {
-    network_->SetCacheSize(parallel_games_ * playout);
-}
-
 void Engine::SaveSgf(std::string filename, int g) {
     Handel(g);
     std::lock_guard<std::mutex> lock(io_mtx_);

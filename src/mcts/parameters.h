@@ -43,7 +43,6 @@ public:
         ponder = GetOption<bool>("ponder");
         reuse_tree = GetOption<bool>("reuse_tree");
         friendly_pass = GetOption<bool>("friendly_pass");
-        cache_buffer_factor = GetOption<int>("cache_buffer_factor");
 
         root_policy_temp = GetOption<float>("root_policy_temp");
         policy_temp = GetOption<float>("policy_temp");
@@ -79,7 +78,6 @@ public:
 
     int cap_playouts;
     int lag_buffer;
-    int cache_buffer_factor;
 
     bool ponder;
     bool reuse_tree;

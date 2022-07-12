@@ -46,15 +46,20 @@ public:
 
     void Clear();
 
+    size_t GetEntrySize() const;
+
 private:
-    void Evict() REQUIRES(mutex_);
-
-    SpinLock mutex_;
-
     struct Entry {
         std::unique_ptr<V> value;
         int pines;
     };
+
+    static constexpr size_t kEntrySize = sizeof(Entry) + sizeof(V);
+
+    void Evict() REQUIRES(mutex_);
+
+    SpinLock mutex_;
+
     std::unordered_map<uint64_t, Entry> lookup_ GUARDED_BY(mutex_);
     std::deque<uint64_t> order_ GUARDED_BY(mutex_);
     std::deque<uint64_t> evicted_ GUARDED_BY(mutex_);
@@ -167,6 +172,11 @@ void FifoCache<V>::Clear() {
     while (allocated_ > 0) {
         Evict();
     }
+}
+
+template<typename V>
+size_t FifoCache<V>::GetEntrySize() const {
+    return kEntrySize;
 }
 
 template<typename V>

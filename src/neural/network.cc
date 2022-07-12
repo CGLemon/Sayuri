@@ -69,12 +69,23 @@ void Network::Initialize(const std::string &weightsfile) {
     }
 
     pipe_->Initialize(dnn_weights);
-    SetCacheSize(GetOption<int>("playouts"));
+    SetCacheSize(GetOption<int>("cache_memory_mib"));
 }
 
-void Network::SetCacheSize(int playouts) {
-    playouts = std::max(128, playouts);
-    nn_cache_.SetCapacity(playouts * GetOption<int>("cache_buffer_factor"));
+void Network::SetCacheSize(size_t MiB) {
+    const size_t mem_mib = std::min(
+                               std::max(size_t{5}, MiB), // min:   5 MB
+                               size_t{128 * 1024}        // max: 128 GB
+                           );
+
+    const size_t entry_byte = nn_cache_.GetEntrySize();
+    const size_t mem_byte = mem_mib * 1024 * 1024;
+    size_t num_entries = mem_byte / entry_byte + 1;
+
+    nn_cache_.SetCapacity(num_entries);
+
+    const double mem_used = static_cast<double>(num_entries * entry_byte) / (1024.f * 1024.f); 
+    LOGGING << Format("Allocate %.2f MiB memory for NN cache(%zu entries). \n", mem_used, num_entries);
 }
 
 void Network::ClearCache() {

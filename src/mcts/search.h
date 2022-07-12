@@ -147,6 +147,7 @@ private:
                         Node *const root_node, SearchResult &search_result);
 
     void PrepareRootNode();
+    int GetPonderPlayouts() const;
 
     int threads_;
     int max_playouts_; 

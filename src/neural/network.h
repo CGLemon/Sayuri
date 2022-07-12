@@ -39,7 +39,7 @@ public:
 
     void Reload(int board_size);
 
-    void SetCacheSize(int playouts);
+    void SetCacheSize(size_t MiB);
     void ClearCache();
 
 private:

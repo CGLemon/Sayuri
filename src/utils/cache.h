@@ -36,6 +36,8 @@ public:
     // Clear the hash.
     void Clear();
 
+    size_t GetEntrySize() const;
+
 private:
     struct Entry {
         Entry() : generation{0} {}
@@ -125,6 +127,11 @@ void HashKeyCache<V>::Clear() {
                      }
                  );
     
+}
+
+template<typename V>
+size_t HashKeyCache<V>::GetEntrySize() const {
+    return kEntrySize;
 }
 
 template<typename V>

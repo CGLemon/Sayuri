@@ -571,11 +571,8 @@ int Search::GetSelfPlayMove() {
 }
 
 void Search::TryPonder() {
-    // TODO: Select a reasonable number for ponder playouts.
     if (param_->ponder) {
-        int ponder_playouts = std::max(max_playouts_,
-                                           max_playouts_ * (param_->cache_buffer_factor/2));
-        Computation(ponder_playouts, 0, kPonder);
+        Computation(GetPonderPlayouts(), 0, kPonder);
     }
 }
 
@@ -586,9 +583,9 @@ int Search::Analyze(int interval, bool ponder) {
     auto ponder_tag = ponder ? (kAnalyze | kPonder) : (kAnalyze | kThinking);
     auto tag = reuse_tag | ponder_tag;
 
-    int playouts = ponder == true ? std::max(max_playouts_,
-                                                 max_playouts_ * (param_->cache_buffer_factor/2))
+    int playouts = ponder == true ? GetPonderPlayouts()
                                       : max_playouts_;
+
     auto result = Computation(playouts, interval, (OptionTag)tag);
     if (ShouldResign(root_state_, result, param_->resign_threshold)) {
         return kResign;
@@ -752,4 +749,23 @@ bool Search::AdvanceToNewRootState() {
         return false;
     }
     return true;
+}
+
+int Search::GetPonderPlayouts() const {
+    // We don't need to consider the NN cache size to set number
+    // of ponder playouts that because we apply lazy tree destruction
+    // and reuse the tree. They can efficiently use the large tree.
+    // Set the greatest number as we can.
+
+
+    // The factor means 'ponder_playouts = playouts x div_factor'.
+    const int div_factor = 100;
+
+    // TODO: We should consider tree memory limit. Avoid to use
+    //       too many system memory.
+    const int ponder_playouts_factor = std::min(param_->playouts,
+                                                    kMaxPlayouts/div_factor);
+    const int ponder_playouts = std::max(4 * 1024,
+                                             ponder_playouts_factor * div_factor);
+    return ponder_playouts;
 }
