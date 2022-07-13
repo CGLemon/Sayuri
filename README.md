@@ -6,11 +6,11 @@
 
 ## Let's ROCK!
 
-Sayuri is a GTP-compliant go engine which supports variable komi and board size. Strongly inspired by Leela Zero and Kata Go. Based on Deep Convolutional Neural Network, Monte Carlo Tree Search and other powerful techniques.
+Sayuri is a GTP-compliant go engine which supports variable komi and board size. Strongly inspired by Leela Zero and Kata Go. Based on Deep Convolutional Neural Network, Monte Carlo Tree Search and other techniques.
 
 ## Requirements
 
-* Ubuntu or MacOS only.
+* Ubuntu or MacOS only
 * GCC, Clang which C++14 compiler
 * CMake 3.15 or later
 * Optional: Eigen or OpenBLAS library
@@ -67,16 +67,17 @@ Here are some useful arguments which you may need.
 |  --const-time           | int    | Const time of search in seconds.               |
 |  --threads, -t          | int    | The number of threads used.                    |
 |  --batch-size, -b       | int    | The number of batches for a single evaluation. |
+|  --gpu, -g              | int    | Select a specific GPU device.                  |
 |  --resign-threshold, -r | float  | Resign when winrate is less than x.            |
 |  --analysis-verbose, -a | None   | Output more search diagnostic verbose.         |
 |  --quiet, -q            | None   | Disable all diagnostic verbose.                |
 |  --ponder               | None   | Thinking on opponent's time.                   |
-|  --friendly-pass        | None   | Do pass move if we win the game.               |
+|  --friendly-pass        | None   | Do pass move if the engine wins the game.      |
 |  --reuse-tree           | None   | Will reuse the sub-tree.                       |
 |  --help, -h             | None   | Show the more arguments.                       |
     
 
-Default setting: will select reasonable thread and batch size, 15 seconds per move
+Default setting: will select reasonable thread and batch size, 15 seconds per move, all GPU devices
 
     $ ./Sayuri -w <weights file>
 
@@ -88,11 +89,16 @@ Example setting 2: quickly and friendly game
     
     $ ./Sayuri -w <weights file> -t 1 -b 1 --const-time 1 --friendly-pass --reuse-tree
 
-Example setting 3: Debug or analysis mode with Sabaki
+Example setting 3: direct policy output 
 
-    $ ./Sayuri -w <weights file> --analysis-verbose
+    $ ./Sayuri -w <weights file> -t 1 -b 1 -p 1
 
-## Generate Opening book
+Example setting 4: use the GPU 0 and GPU 2
+
+    $ ./Sayuri -w <weights file> --gpu 0 --gpu 2
+
+
+## Generate Opening Book
 
 You need to collect enough SGF games (at least over 10000 games). Then, go to the GTP mode and enter follow command. Wait some time to generate a new opening book.
 
@@ -100,7 +106,7 @@ You need to collect enough SGF games (at least over 10000 games). Then, go to th
 
 ## User Interface
 
-Sayuri is not complete engine. You need a graphical interface for playing with it. She supports any GTP (version 2) interface application. [Sabaki](https://sabaki.yichuanshen.de/) and [GoGui](https://github.com/Remi-Coulom/gogui) are recommended. 
+Sayuri is not complete engine. You need a graphical interface for playing with her. She supports any GTP (version 2) interface application. [Sabaki](https://sabaki.yichuanshen.de/) and [GoGui](https://github.com/Remi-Coulom/gogui) are recommended. 
 
 * Sabaki analysis mode
 
@@ -132,11 +138,16 @@ Sayuri is not complete engine. You need a graphical interface for playing with i
 * Store the networks as binary file.
 * Including pattern system (should finish it in beta version).
 
-## LICENSE
+## Other Linkings
 
-GNU GPL version 3 section 7
+* Go Text Protocol, [https://www.gnu.org/software/gnugo/gnugo_19.html](https://www.gnu.org/software/gnugo/gnugo_19.html)
+* Leela Zero, [https://github.com/leela-zero/leela-zero](https://github.com/leela-zero/leela-zero)
+* 開發日誌, [https://hackmd.io/zulj1rvhQROsB7U3poEjQg?view](https://hackmd.io/zulj1rvhQROsB7U3poEjQg?view)
+
+## License
+
+The code is released under the GPLv3, except for threadpool.h, filesystem.h, filesystem.cc, cppattributes.h, mm.h, mm.cc, Eigen and Fast Float, which have specific licenses mentioned in those files.
 
 ## Contact
 
 cglemon000@gmail.com (Hung-Zhe Lin)
-

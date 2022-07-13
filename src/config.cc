@@ -50,11 +50,14 @@ OPTIONS_SET_EXPASSION(char)
 
 void InitOptionsMap() {
     options_map["help"] << Option::setoption(false);
-    options_map["quiet"] << Option::setoption(false);
+    options_map["mode"] << Option::setoption(std::string{"gtp"});
+
+    // engine options
     options_map["ponder"] << Option::setoption(false);
     options_map["reuse_tree"] << Option::setoption(false);
     options_map["friendly_pass"] << Option::setoption(false);
     options_map["analysis_verbose"] << Option::setoption(false);
+    options_map["quiet"] << Option::setoption(false);
     options_map["mode"] << Option::setoption(std::string{"gtp"});
 
     options_map["defualt_boardsize"] << Option::setoption(kDefaultBoardSize);
@@ -77,7 +80,7 @@ void InitOptionsMap() {
     options_map["resign_threshold"] << Option::setoption(0.1f, 1.f, 0.f);
 
     options_map["ci_alpha"] << Option::setoption(1e-5f, 1.f, 0.f);
-    options_map["lcb_reduction"] << Option::setoption(0.02f);
+    options_map["lcb_reduction"] << Option::setoption(0.02f, 1.f, 0.f);
     options_map["fpu_reduction"] << Option::setoption(0.25f);
     options_map["fpu_root_reduction"] << Option::setoption(0.25f);
     options_map["cpuct_init"] << Option::setoption(1.9f);
@@ -88,11 +91,14 @@ void InitOptionsMap() {
     options_map["draw_root_factor"] << Option::setoption(0.f);
     options_map["score_utility_factor"] << Option::setoption(0.05f);
 
+    options_map["root_policy_temp"] << Option::setoption(1.f, 1.f, 0.f);
+    options_map["policy_temp"] << Option::setoption(1.f, 1.f, 0.f);
+    options_map["lag_buffer"] << Option::setoption(0);
+    options_map["early_symm_cache"] << Option::setoption(false);
+
+    // self-play options
     options_map["random_min_visits"] << Option::setoption(1);
     options_map["random_moves_cnt"] << Option::setoption(0);
-
-    options_map["root_policy_temp"] << Option::setoption(0.8f, 1.f, 0.f);
-    options_map["policy_temp"] << Option::setoption(1.f, 1.f, 0.f);
 
     options_map["dirichlet_noise"] << Option::setoption(false);
     options_map["dirichlet_epsilon"] << Option::setoption(0.25f);
@@ -101,8 +107,6 @@ void InitOptionsMap() {
 
     options_map["forced_policy_factor"] << Option::setoption(0.f);
     options_map["cap_playouts"] << Option::setoption(0);
-    options_map["lag_buffer"] << Option::setoption(0);
-    options_map["early_symm_cache"] << Option::setoption(false);
 
     options_map["num_games"] << Option::setoption(0);
     options_map["parallel_games"] << Option::setoption(1);
@@ -516,11 +520,11 @@ void ArgsParser::DumpHelper() const {
                 << "\t--early-symm-cache\n"
                 << "\t\tAccelerate the searching on the opening stage.\n\n"
 
-                << "\t--cache-memory-mib\n"
-                << "\t\tSet the NN cache size.\n\n"
+                << "\t--friendly-pass\n"
+                << "\t\tDo pass move if the engine wins the game.\n\n"
 
-                << "\t--resign-threshold, -r <float>\n"
-                << "\t\tResign when winrate is less than x. Default is 0.1.\n\n"
+                << "\t--cache-memory-mib <integer>\n"
+                << "\t\tSet the NN cache size.\n\n"
 
                 << "\t--playouts, -p <integer>\n"
                 << "\t\tThe number of maximum playouts.\n\n"
@@ -537,20 +541,27 @@ void ArgsParser::DumpHelper() const {
                 << "\t--batch-size, -b <integer>\n"
                 << "\t\tThe number of batches for a single evaluation. Set 0 will select a reasonable number.\n\n"
 
-                << "\t--logfile, -l <log file name>\n"
-                << "\t\tFile to log input/output to.\n\n"
-
                 << "\t--lag-buffer <integer>\n"
                 << "\t\tSafety margin for time usage in seconds.\n\n"
 
-                << "\t--friendly-pass\n"
-                << "\t\tDo pass move if we win the game.\n\n"
+                << "\t--score-utility-factor <float>\n"
+                << "\t\tScore utility heuristic value.\n\n"
+
+                << "\t--lcb-reduction <float>\n"
+                << "\t\tReduce the LCB weights. Set 1 will select most visits node as best move in MCTS.\n\n"
+
+                << "\t--resign-threshold, -r <float>\n"
+                << "\t\tResign when winrate is less than x. Default is 0.1.\n\n"
 
                 << "\t--weights, -w <weight file name>\n"
                 << "\t\tFile with network weights.\n\n"
 
                 << "\t--book <book file name>\n"
                 << "\t\tFile with opening book.\n\n"
+
+                << "\t--logfile, -l <log file name>\n"
+                << "\t\tFile to log input/output to.\n\n"
+
           ;
     exit(-1);
 }
