@@ -4,8 +4,6 @@
 #include "utils/log.h"
 #include "utils/random.h"
 #include "utils/komi.h"
-#include "pattern/gammas_dict.h"
-#include "pattern/pattern.h"
 
 #include <random>
 
@@ -517,15 +515,6 @@ void GameState::PlayRandomMove() {
         }
 
         legal_moves.emplace_back(vtx);
-        auto plist = board_.GetAllPatterns(vtx, color);
-
-        if (GammasDict::Get().ProbeGammas(plist, val)) {
-            int int_val = int(val * 100);
-            if (int_val != 0) {
-                candidate_moves.emplace_back(int_val, vtx);
-                acc_score += int_val;
-            }
-        }
     }
 
     int select_move;
@@ -549,13 +538,6 @@ void GameState::PlayRandomMove() {
 }
 
 float GameState::GetGammaValue(const int vtx) const {
-    const int color = GetToMove();
-    float val;
-    auto plist = board_.GetAllPatterns(vtx, color);
-
-    if (GammasDict::Get().ProbeGammas(plist, val)) {
-        return val;
-    }
     return 0.f;
 }
 

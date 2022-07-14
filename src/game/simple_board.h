@@ -11,7 +11,6 @@
 #include "game/strings.h"
 #include "game/types.h"
 #include "game/zobrist.h"
-#include "pattern/pattern.h"
 
 class SimpleBoard {
 public:
@@ -85,8 +84,6 @@ public:
     // The GTP showboard.
     std::string GetBoardString(const int last_move, bool is_sgf) const;
 
-    std::vector<LocPattern> GetAllPatterns(const int vtx, const int color) const;
-
     // Compute the symmetry Zobrist hashing.
     std::uint64_t ComputeSymmetryHash(int komove, int symmetry) const;
 
@@ -102,11 +99,6 @@ public:
     void RemoveMarkedStrings(std::vector<int> &marked);
 
 protected:
-    LocPattern GetPattern3x3(const int vtx, const int color) const;
-    LocPattern GetPatternDistBorder(const int vtx) const;
-    LocPattern GetPatternDistLastMove(const int vtx) const;
-    LocPattern GetPatternAtari(const int vtx, const int color) const;
-
     // Compute the Zobrist hashing.
     std::uint64_t ComputeHash(int komove = kNullVertex) const;
 

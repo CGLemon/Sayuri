@@ -8,7 +8,6 @@
 
 #include "data/supervised.h"
 #include "neural/encoder.h"
-#include "pattern/patterns_scan.h"
 
 #include <iomanip>
 #include <iostream>
@@ -469,37 +468,6 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         } else {
             out << GTPFail("file name is empty");
         }
-    } else if (const auto res = parser.Find("genpatterns", 0)) {
-        auto sgf_file = std::string{};
-        auto data_file = std::string{};
-
-        if (const auto sgf = parser.GetCommand(1)) {
-            sgf_file = sgf->Get<std::string>();
-        }
-        if (const auto data = parser.GetCommand(2)) {
-            data_file = data->Get<std::string>();
-        }
-
-        if (!sgf_file.empty() && !data_file.empty()) {
-            PatternsScan::Get().MMTraining(sgf_file, data_file);
-            out << GTPSuccess("");
-        } else {
-            out << GTPFail("file name is empty");
-        }
-    } else if (const auto res = parser.Find("pattern-test", 0)) {
-        int mcnt = 1;
-
-        auto test_state = agent_->GetState();
-
-        if (const auto cnt = parser.GetCommand(1)) {
-            mcnt = cnt->Get<int>();
-        }
-
-        for (int i = 0; i < mcnt; ++i) {
-            test_state.PlayRandomMove();
-        }
-        test_state.ShowBoard();
-        out << GTPSuccess("");
     } else if (const auto res = parser.Find("gogui-analyze_commands", 0)) {
         auto gogui_cmds = std::ostringstream{};
 
@@ -511,7 +479,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         gogui_cmds << "\ngfx/MCTS Ownership Heatmap/gogui-ownership_heatmap 400";
         gogui_cmds << "\ngfx/MCTS Ownership Influence/gogui-ownership_influence 400";
         gogui_cmds << "\ngfx/Book Rating/gogui-book_rating";
-        gogui_cmds << "\ngfx/Gammas Heatmap/gogui-gammas_heatmap";
+        // gogui_cmds << "\ngfx/Gammas Heatmap/gogui-gammas_heatmap";
 
         out << GTPSuccess(gogui_cmds.str());
     } else if (const auto res = parser.Find("gogui-wdl_rating", 0)) {

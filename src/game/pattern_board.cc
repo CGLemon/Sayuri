@@ -1,23 +1,9 @@
 #include "game/simple_board.h"
 #include <algorithm>
-
+/*
 LocPattern SimpleBoard::GetPattern3x3(const int vtx, const int color) const {
     const int size = letter_box_size_;
 
-    /*
-     color order, each color takes 2 bits, totally take 16 bits
-
-     1 2 3
-     4 . 5
-     6 7 8
-
-     libs order, each libs takes 2 bits, totally take 8 bits
-
-       1
-     2 . 3
-       4 
-
-     */
 
     int color_invert[4] = {kWhite, kBlack, kEmpty, kInvalid};
     int color_cnt[4] = {0,0,0,0};
@@ -153,60 +139,4 @@ LocPattern SimpleBoard::GetPattern3x3(const int vtx, const int color) const {
 
     return LocPattern::GetSpatial3x3(*std::min_element(hash_arr, hash_arr+7));
 }
-
-LocPattern SimpleBoard::GetPatternDistBorder(const int vtx) const {
-    // distance to boarder
-    const int center = board_size_/2 + board_size_%2;
-
-    int x_dist = GetX(vtx) + 1;
-    if (x_dist > center) {
-        x_dist = board_size_ + 1 - x_dist;
-    }
-
-    int y_dist = GetY(vtx) + 1;
-    if (y_dist > center) {
-        y_dist = board_size_ + 1 - y_dist;
-    }
-
-    int dist = std::min(x_dist, y_dist);
-    if (dist >= 5) {
-        return LocPattern::GetNoFeature();
-    }
-    return LocPattern::GetDistToBorder(dist);
-}
-
-LocPattern SimpleBoard::GetPatternDistLastMove(const int vtx) const {
-    if (last_move_ == kNullVertex || last_move_ == kPass) {
-        return LocPattern::GetNoFeature();
-    }
-
-    const int dx = std::abs(GetX(last_move_) - GetX(vtx));
-    const int dy = std::abs(GetY(last_move_) - GetY(vtx));
-
-    int dist = dx + dy + std::max(dx, dy);
-    if (dist >= 17) {
-        dist = 17;
-    }
-    return LocPattern::GetDistToLastMove(dist);
-}
-
-LocPattern SimpleBoard::GetPatternAtari(const int vtx, const int color) const {
-    if (IsAtariMove(vtx, color)) {
-        return  LocPattern::GetAtari(1);
-    }
-    return LocPattern::GetAtari(2);
-}
-
-std::vector<LocPattern> SimpleBoard::GetAllPatterns(const int vtx, const int color) const {
-    auto patterns = std::vector<LocPattern>{};
-    if (vtx == kPass || state_[vtx] != kEmpty) {
-        return patterns;
-    }
-
-    patterns.emplace_back(GetPattern3x3(vtx, color));
-    // patterns.emplace_back(GetPatternDistBorder(vtx));
-    // patterns.emplace_back(GetPatternDistLastMove(vtx));
-    // patterns.emplace_back(GetPatternAtari(vtx, color));
-
-    return patterns;
-}
+*/
