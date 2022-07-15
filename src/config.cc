@@ -59,6 +59,7 @@ void InitOptionsMap() {
     options_map["analysis_verbose"] << Option::setoption(false);
     options_map["quiet"] << Option::setoption(false);
     options_map["rollout"] << Option::setoption(false);
+    options_map["no_dcnn"] << Option::setoption(false);
     options_map["mode"] << Option::setoption(std::string{"gtp"});
 
     options_map["defualt_boardsize"] << Option::setoption(kDefaultBoardSize);
@@ -229,6 +230,11 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 
     if (const auto res = parser.Find("--rollout")) {
         SetOption("rollout", true);
+        parser.RemoveCommand(res->Index());
+    }
+
+    if (const auto res = parser.Find("--no-dcnn")) {
+        SetOption("no_dcnn", true);
         parser.RemoveCommand(res->Index());
     }
 

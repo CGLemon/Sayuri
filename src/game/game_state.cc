@@ -585,6 +585,30 @@ float GameState::GetGammaValue(const int vtx, const int color) const {
     return val;
 }
 
+std::vector<float> GameState::GetGammasPolicy(const int color) const {
+    auto num_intersections = GetNumIntersections();
+    auto board_size = GetBoardSize();
+
+    auto policy = std::vector<float>(num_intersections, 0);
+    auto acc = 0.f;
+
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        const auto x = idx % board_size;
+        const auto y = idx / board_size;
+        const auto vtx = GetVertex(x,y);
+
+        const auto gval = GetGammaValue(vtx, color);
+        policy[idx] = gval;
+        acc += gval;
+    }
+
+    for (int idx = 0; idx < num_intersections; ++idx) {
+       policy[idx] /= acc;
+    } 
+
+    return policy;
+}
+
 std::vector<int> GameState::GetOwnershipAndRemovedDeadStrings(int playouts) const {
     auto fork_state = *this;
     fork_state.RemoveDeadStrings(playouts);

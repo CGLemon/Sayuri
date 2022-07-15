@@ -105,6 +105,7 @@ public:
 
     void PlayRandomMove();
     float GetGammaValue(const int vtx, const int color) const;
+    std::vector<float> GetGammasPolicy(const int color) const;
 
 private:
     using VertexColor = std::pair<int, int>;

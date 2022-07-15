@@ -55,9 +55,9 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
             // is expanding node. Skip this simulation.
             const bool success = node->ExpandChildren(network_, currstate, false);
 
-            if (param_->use_rollout) {
-                // Update the MC owner.
-                node->SetRolloutEvals(currstate, mcowner_);
+            if (param_->use_rollout || param_->no_dcnn) {
+                // Update the MC owner and mix rollout value
+                node->MixRolloutEvals(currstate, mcowner_, 1.0f);
             }
             if (!have_children && success) {
                 search_result.FromNetEvals(node->GetNodeEvals());

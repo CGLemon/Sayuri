@@ -48,6 +48,7 @@ public:
         root_policy_temp = GetOption<float>("root_policy_temp");
         policy_temp = GetOption<float>("policy_temp");
         use_rollout = GetOption<bool>("rollout");
+        no_dcnn = GetOption<bool>("rollout");
     }
 
     int threads;
@@ -86,6 +87,7 @@ public:
     bool reuse_tree;
     bool friendly_pass;
     bool use_rollout;
+    bool no_dcnn;
 
     std::array<float, kNumVertices + 10> dirichlet_buffer;
 };

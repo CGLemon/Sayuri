@@ -76,11 +76,16 @@ bool Node::ExpandChildren(Network &network,
     } else {
         temp = GetParameters()->policy_temp;
     }
-    const auto raw_netlist = network.GetOutput(state, Network::kRandom, temp);
-    const auto board_size = state.GetBoardSize();
-    const auto num_intersections = state.GetNumIntersections();
 
+    auto raw_netlist = Network::Result{};
     color_ = state.GetToMove();
+
+    if (GetParameters()->no_dcnn) {
+        ApplyNoDcnnPolicy(state, color_, raw_netlist);
+    } else {
+        raw_netlist = network.GetOutput(state, Network::kRandom, temp);
+    }
+
     LinkNetOutput(raw_netlist, color_);
 
     auto nodelist = std::vector<Network::PolicyVertexPair>{};
@@ -90,6 +95,8 @@ bool Node::ExpandChildren(Network &network,
     auto allow_pass = true;
     auto legal_accumulate = 0.0f;
 
+    const auto board_size = state.GetBoardSize();
+    const auto num_intersections = state.GetNumIntersections();
     const auto safe_area = state.GetStrictSafeArea();
 
     // Third, remove the illegl moves or some bad move.
@@ -189,8 +196,23 @@ void Node::LinkNetOutput(const Network::Result &raw_netlist, const int color){
     black_rollout_val_ = 0.5f;
 }
 
-void Node::SetRolloutEvals(GameState &state, std::vector<float> &mcowner) {
+void Node::MixRolloutEvals(GameState &state, std::vector<float> &mcowner, float factor) {
     black_rollout_val_ = GetRolloutWinrate(state, 1, kBlack, mcowner);
+    black_wl_ = factor * black_rollout_val_ + (1-factor) * black_wl_;
+}
+
+void Node::ApplyNoDcnnPolicy(GameState &state, const int color, Network::Result &raw_netlist) const {
+    raw_netlist.pass_probability = 0.f;
+
+    const auto num_intersections = state.GetNumIntersections();
+    auto policy = state.GetGammasPolicy(color);
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        raw_netlist.probabilities[idx] = policy[idx];
+        raw_netlist.ownership[idx] = 0.f;
+    }
+
+    raw_netlist.final_score = 0.f;
+    raw_netlist.wdl = {0.5f, 0, 0.5f};
 }
 
 // Experiment function.
@@ -441,7 +463,6 @@ void Node::Update(const NodeEvals *evals) {
     AtomicFetchAdd(accumulated_black_wl_, eval);
     AtomicFetchAdd(accumulated_draw_, evals->draw);
     AtomicFetchAdd(accumulated_black_fs_, evals->black_final_score);
-    AtomicFetchAdd(accumulated_black_rl_, evals->black_rollout_val);
 
     {
         std::lock_guard<std::mutex> lock(update_mtx_);
@@ -741,14 +762,6 @@ float Node::GetPolicy() const {
 
 int Node::GetVisits() const {
     return visits_.load(std::memory_order_relaxed);
-}
-
-float Node::GetRolloutEval(const int color) const {
-    auto rl = accumulated_black_rl_.load(std::memory_order_relaxed) / GetVisits();
-    if (color == kBlack) {
-        return rl;
-    }
-    return 0.0f - rl;
 }
 
 float Node::GetNetFinalScore(const int color) const {

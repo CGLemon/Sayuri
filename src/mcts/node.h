@@ -69,7 +69,7 @@ public:
     // Get best move(vertex) by LCB value.
     int GetBestMove();
 
-    void SetRolloutEvals(GameState &state, std::vector<float> &mcowner);
+    void MixRolloutEvals(GameState &state, std::vector<float> &mcowner, float factor);
 
     const std::vector<Edge> &GetChildren() const;
     bool HaveChildren() const;
@@ -87,7 +87,6 @@ public:
     float GetNetEval(const int color) const;
     float GetNetDraw() const;
 
-    float GetRolloutEval(const int color) const;
     float GetFinalScore(const int color) const;
     float GetEval(const int color, const bool use_virtual_loss=true) const;
     float GetDraw() const;
@@ -114,6 +113,7 @@ public:
     std::string GetPvString(GameState &state);
 
 private:
+    void ApplyNoDcnnPolicy(GameState &state, const int color, Network::Result &raw_netlist) const;
     void ApplyDirichletNoise(const float alpha);
     void SetPolicy(float p);
     void SetVisits(int v);
@@ -177,7 +177,6 @@ private:
     std::atomic<float> squared_eval_diff_{1e-4f};
     std::atomic<float> accumulated_black_fs_{0.0f};
     std::atomic<float> accumulated_black_wl_{0.0f};
-    std::atomic<float> accumulated_black_rl_{0.0f};
     std::atomic<float> accumulated_draw_{0.0f};
     std::array<float, kNumIntersections> accumulated_black_ownership_;
 
