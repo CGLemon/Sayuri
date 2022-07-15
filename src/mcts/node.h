@@ -113,7 +113,8 @@ public:
     std::string GetPvString(GameState &state);
 
 private:
-    void ApplyNoDcnnPolicy(GameState &state, const int color, Network::Result &raw_netlist) const;
+    void ApplyNoDcnnPolicy(GameState &state, const int color,
+                               Network::Result &raw_netlist) const;
     void ApplyDirichletNoise(const float alpha);
     void SetPolicy(float p);
     void SetVisits(int v);

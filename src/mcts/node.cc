@@ -197,8 +197,16 @@ void Node::LinkNetOutput(const Network::Result &raw_netlist, const int color){
 }
 
 void Node::MixRolloutEvals(GameState &state, std::vector<float> &mcowner, float factor) {
-    black_rollout_val_ = GetRolloutWinrate(state, 1, kBlack, mcowner);
-    black_wl_ = factor * black_rollout_val_ + (1-factor) * black_wl_;
+    float black_rollout_score;
+    black_rollout_val_ = GetRolloutWinrate(state, 1, kBlack, mcowner, black_rollout_score);
+
+    black_wl_ = factor * black_rollout_val_  + (1-factor) * black_wl_;
+    black_fs_ = factor * black_rollout_score + (1-factor) * black_fs_;
+
+    const auto num_intersections = state.GetNumIntersections();
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        black_ownership_[idx] = factor * mcowner[idx] + (1-factor) * black_ownership_[idx];
+    }
 }
 
 void Node::ApplyNoDcnnPolicy(GameState &state, const int color, Network::Result &raw_netlist) const {

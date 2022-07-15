@@ -48,7 +48,7 @@ public:
         root_policy_temp = GetOption<float>("root_policy_temp");
         policy_temp = GetOption<float>("policy_temp");
         use_rollout = GetOption<bool>("rollout");
-        no_dcnn = GetOption<bool>("rollout");
+        no_dcnn = GetOption<bool>("no_dcnn");
     }
 
     int threads;

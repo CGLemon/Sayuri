@@ -9,9 +9,12 @@ std::mutex mcowner_locker;
 float GetRolloutWinrate(GameState &state,
                             const int num_sims,
                             const int color,
-                            std::vector<float> &mcowner) {
+                            std::vector<float> &mcowner,
+                            float &black_score) {
     // TODO: The rollout performance is too slow. The PlayRandomMove()
     //       eats too much time.
+
+    black_score = 0;
 
     int black_wins_cnt = 0;
     int white_wins_cnt = 0;
@@ -59,6 +62,7 @@ float GetRolloutWinrate(GameState &state,
         } else if (black_acc_score < -1e-4f) {
             white_wins_cnt++;
         }
+        black_score += black_acc_score;
     }
 
     if (num_games == 0) {
@@ -68,6 +72,8 @@ float GetRolloutWinrate(GameState &state,
 
     float winrate = (float)black_wins_cnt/(float)num_games;
     winrate = 0.5f + (winrate-0.5f) * confidence;
+
+    black_score /= num_games;
 
     if (color == kWhite) {
         return 1.f - winrate;

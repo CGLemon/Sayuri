@@ -36,6 +36,8 @@ void Search::Initialize() {
 
     max_playouts_ = param_->playouts;
     playouts_.store(0, std::memory_order_relaxed);
+
+    mcowner_cache_.SetCapacity(1024);
 }
 
 void Search::PlaySimulation(GameState &currstate, Node *const node,
@@ -56,8 +58,14 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
             const bool success = node->ExpandChildren(network_, currstate, false);
 
             if (param_->use_rollout || param_->no_dcnn) {
+                // Select the mix factor.
+                float factor = 0.5f;
+                if (param_->no_dcnn) {
+                    factor = 1.0f;
+                }
+
                 // Update the MC owner and mix rollout value
-                node->MixRolloutEvals(currstate, mcowner_, 1.0f);
+                node->MixRolloutEvals(currstate, mcowner_, factor);
             }
             if (!have_children && success) {
                 search_result.FromNetEvals(node->GetNodeEvals());
@@ -216,8 +224,11 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
     computation_result.komi = root_state_.GetKomi();
     computation_result.movenum = root_state_.GetMoveNumber();
 
-    // TODO: Hash table store the MC owner.
-    mcowner_ = std::vector<float>(board_size * board_size, 0.f);
+    // Look up the MC owner from hash table.
+    if (!LookupCache(mcowner_cache_, root_state_.GetHash(), mcowner_)) {
+        // Not found. Set a new one.
+        mcowner_ = std::vector<float>(board_size * board_size, 0.f);
+    }
 
     if (root_state_.IsGameOver()) {
         // Always reture pass move if the passese number is greater than two.
@@ -338,6 +349,9 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
 
     // Save the last game state.
     last_state_ = root_state_;
+
+    // Save the current MC owner.
+    mcowner_cache_.Insert(root_state_.GetHash(), mcowner_);
     
     if (tag & kForced) {
         for (int i = 0; i < num_passes; ++i) {
