@@ -8,7 +8,7 @@
 #include "utils/parser.h"
 #include "utils/threadpool.h"
 #include "book/book.h"
-// #include "pattern/gammas_dict.h"
+#include "pattern/gammas_dict.h"
 
 #include <memory>
 
@@ -59,7 +59,7 @@ public:
         FastPolicy::Get().LoadWeights();
 
         Book::Get().LoadBook(GetOption<std::string>("book_file"));
-        // GammasDict::Get().LoadPatternsGammas(GetOption<std::string>("patterns_file"));
+        GammasDict::Get().Initialize();
 
         Loop();
     }

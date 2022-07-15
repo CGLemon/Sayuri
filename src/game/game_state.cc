@@ -4,6 +4,9 @@
 #include "utils/log.h"
 #include "utils/random.h"
 #include "utils/komi.h"
+#include "pattern/pattern.h"
+#include "pattern/gammas_dict.h"
+#include "pattern/featurn_gammas.h"
 
 #include <random>
 
@@ -497,35 +500,46 @@ void GameState::PlayRandomMove() {
     const int rand = Random<kXoroShiro128Plus>::Get().Generate();
     const int color = GetToMove();
     const int empty_cnt = board_.GetEmptyCount();
-    int acc_score = 0;
-
-    auto safe_area = std::vector<bool>(GetNumIntersections(), false);
-    board_.ComputeSafeArea(safe_area, true);
 
     for (int i = 0; i < empty_cnt; ++i) {
         const auto vtx = board_.GetEmpty(i);
-        float val;
-
         if (!IsLegalMove(vtx, color)) {
             continue;
         }
 
-        if (safe_area[GetIndex(GetX(vtx), GetY(vtx))]) {
+        if (board_.IsRealEye(vtx, color)) {
             continue;
         }
 
+        int int_val = int(GetGammaValue(vtx, color) * 100);
+        if (int_val != 0) {
+            candidate_moves.emplace_back(int_val, vtx);
+        }
         legal_moves.emplace_back(vtx);
     }
 
-    int select_move;
+    int select_move = kPass;
 
     if (candidate_moves.empty()) {
         select_move = legal_moves[rand % legal_moves.size()];
     } else {
+        std::sort(std::begin(candidate_moves),
+                      std::end(candidate_moves),
+                      [](auto &a, auto &b){
+                          return a.first > b.first;
+                      }
+                 );
+        auto max_size = std::min(6, (int)candidate_moves.size());
+
+        int acc_score = 0;
+        for (int i = 0; i < max_size; ++i) {
+            acc_score += candidate_moves[i].first;
+        }
+
         auto randx = rand % acc_score;
         acc_score = 0;
 
-        for (int i = 0; i < (int)candidate_moves.size(); ++i) {
+        for (int i = 0; i < max_size; ++i) {
             acc_score +=  candidate_moves[i].first;
             if (randx < acc_score) {
                 select_move = candidate_moves[i].second;
@@ -537,8 +551,34 @@ void GameState::PlayRandomMove() {
     PlayMoveFast(select_move, color);
 }
 
-float GameState::GetGammaValue(const int vtx) const {
-    return 0.f;
+float GameState::GetGammaValue(const int vtx, const int color) const {
+    if (board_.GetState(vtx) != kEmpty) {
+        return 0.f;
+    }
+
+    float val = 1.f;
+    bool hit = false;
+    for (int d = 2; d < kMaxPatternDist+1; ++d) {
+        float gamma = 0.f;
+        auto hash = board_.GetPatternHash(vtx, color, d);
+        if (GammasDict::Get().Probe(hash, gamma)) {
+            val *= gamma;
+            hit = true;
+        }
+    }
+    if (!hit) {
+        val = kNoSpatial;
+    }
+
+    int dist;
+    if (board_.GetBorderLevel(vtx, dist)) {
+        val *= kDistToBorder[dist];
+    }
+    if (board_.GetDistLevel(vtx, dist)) {
+        val *= kDistToLastMove[dist];
+    }
+
+    return val;
 }
 
 std::vector<int> GameState::GetOwnershipAndRemovedDeadStrings(int playouts) const {

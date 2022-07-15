@@ -69,7 +69,7 @@ public:
     // Reture true if the string is ladder.
     bool IsLadder(const int vtx, std::vector<int> &vital_moves) const;
 
-    // Reture true if the point is read eye.
+    // Reture true if the point is real eye.
     bool IsRealEye(const int vtx, const int color) const;
 
     // Reture true if the point is eye shape.
@@ -97,6 +97,10 @@ public:
 
 
     void RemoveMarkedStrings(std::vector<int> &marked);
+
+    std::uint64_t GetPatternHash(const int vtx, const int color, const int dist) const;
+    bool GetBorderLevel(const int vtx, int &dist) const;
+    bool GetDistLevel(const int vtx, int &dist) const;
 
 protected:
     // Compute the Zobrist hashing.

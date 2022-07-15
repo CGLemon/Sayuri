@@ -468,6 +468,20 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         } else {
             out << GTPFail("file name is empty");
         }
+    } else if (const auto res = parser.Find("pattern-test", 0)) {
+        int mcnt = 1;
+
+        auto test_state = agent_->GetState();
+
+        if (const auto cnt = parser.GetCommand(1)) {
+            mcnt = cnt->Get<int>();
+        }
+
+        for (int i = 0; i < mcnt; ++i) {
+            test_state.PlayRandomMove();
+        }
+        test_state.ShowBoard();
+        out << GTPSuccess("");
     } else if (const auto res = parser.Find("gogui-analyze_commands", 0)) {
         auto gogui_cmds = std::ostringstream{};
 
@@ -479,7 +493,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         gogui_cmds << "\ngfx/MCTS Ownership Heatmap/gogui-ownership_heatmap 400";
         gogui_cmds << "\ngfx/MCTS Ownership Influence/gogui-ownership_influence 400";
         gogui_cmds << "\ngfx/Book Rating/gogui-book_rating";
-        // gogui_cmds << "\ngfx/Gammas Heatmap/gogui-gammas_heatmap";
+        gogui_cmds << "\ngfx/Gammas Heatmap/gogui-gammas_heatmap";
 
         out << GTPSuccess(gogui_cmds.str());
     } else if (const auto res = parser.Find("gogui-wdl_rating", 0)) {
@@ -670,9 +684,18 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
     } else if (const auto res = parser.Find("gogui-gammas_heatmap", 0)) {
         const auto board_size = agent_->GetState().GetBoardSize();
         const auto num_intersections = board_size * board_size;
+        const auto color = agent_->GetState().GetToMove();
+
+        std::vector<float> gammas;
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            const auto x = idx % board_size;
+            const auto y = idx / board_size;
+            const auto vtx = agent_->GetState().GetVertex(x,y);
+            gammas.emplace_back(agent_->GetState().GetGammaValue(vtx, color));
+        }
+        float max_gamma = *std::max_element(std::begin(gammas), std::end(gammas));
 
         auto gammas_map = std::ostringstream{};
-
         for (int idx = 0; idx < num_intersections; ++idx) {
             if (idx != 0) {
                 gammas_map << '\n';
@@ -681,11 +704,9 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             const auto x = idx % board_size;
             const auto y = idx / board_size;
             const auto vtx = agent_->GetState().GetVertex(x,y);
-
-            const auto gval = std::tanh(agent_->GetState().GetGammaValue(vtx));
-            gammas_map << GoguiColor(gval, agent_->GetState().VertexToText(vtx));
+            const auto gnval = gammas[idx] / max_gamma;
+            gammas_map << GoguiColor(gnval, agent_->GetState().VertexToText(vtx));
         }
-
         out << GTPSuccess(gammas_map.str());
     } else {
         out << GTPFail("unknown command");
