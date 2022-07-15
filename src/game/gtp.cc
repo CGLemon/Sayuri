@@ -468,20 +468,6 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         } else {
             out << GTPFail("file name is empty");
         }
-    } else if (const auto res = parser.Find("pattern-test", 0)) {
-        int mcnt = 1;
-
-        auto test_state = agent_->GetState();
-
-        if (const auto cnt = parser.GetCommand(1)) {
-            mcnt = cnt->Get<int>();
-        }
-
-        for (int i = 0; i < mcnt; ++i) {
-            test_state.PlayRandomMove();
-        }
-        test_state.ShowBoard();
-        out << GTPSuccess("");
     } else if (const auto res = parser.Find("gogui-analyze_commands", 0)) {
         auto gogui_cmds = std::ostringstream{};
 

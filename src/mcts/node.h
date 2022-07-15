@@ -27,6 +27,7 @@ struct NodeEvals {
     float black_final_score{0.0f};
     float black_wl{0.0f};
     float draw{0.0f};
+    float black_rollout_val{0.0f};
 
     std::array<float, kNumIntersections> black_ownership;
 };
@@ -68,6 +69,8 @@ public:
     // Get best move(vertex) by LCB value.
     int GetBestMove();
 
+    void SetRolloutEvals(GameState &state, std::vector<float> &mcowner);
+
     const std::vector<Edge> &GetChildren() const;
     bool HaveChildren() const;
 
@@ -84,6 +87,7 @@ public:
     float GetNetEval(const int color) const;
     float GetNetDraw() const;
 
+    float GetRolloutEval(const int color) const;
     float GetFinalScore(const int color) const;
     float GetEval(const int color, const bool use_virtual_loss=true) const;
     float GetDraw() const;
@@ -162,6 +166,7 @@ private:
     void WaitExpanded() const;
 
     int color_{kInvalid};
+    float black_rollout_val_;
     float black_fs_;
     float black_wl_;
     float draw_;
@@ -172,6 +177,7 @@ private:
     std::atomic<float> squared_eval_diff_{1e-4f};
     std::atomic<float> accumulated_black_fs_{0.0f};
     std::atomic<float> accumulated_black_wl_{0.0f};
+    std::atomic<float> accumulated_black_rl_{0.0f};
     std::atomic<float> accumulated_draw_{0.0f};
     std::array<float, kNumIntersections> accumulated_black_ownership_;
 

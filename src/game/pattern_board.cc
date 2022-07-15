@@ -6,7 +6,7 @@
 std::uint64_t SimpleBoard::GetPatternHash(const int vtx, const int color, const int dist) const {
     std::uint64_t hash = PatternHash[0][kInvalid][0];
 
-    int color_map[2][4] = {
+    constexpr int color_map[2][4] = {
                     {kBlack, kWhite, kEmpty, kInvalid},
                     {kWhite, kBlack, kEmpty, kInvalid}
     };
@@ -15,6 +15,36 @@ std::uint64_t SimpleBoard::GetPatternHash(const int vtx, const int color, const 
     const int cy = GetY(vtx);
 
     for (int i = kPointIndex[2]; i < kPointIndex[dist + 1]; ++i) {
+        const int px = cx + kPointCoords[i].x;
+        const int py = cy + kPointCoords[i].y;
+        if (px >= board_size_ ||
+                py >= board_size_ ||
+                px < 0 || py < 0) {
+            continue;
+        }
+        const int pvtx = GetVertex(px,py);
+        const int c = color_map[color][state_[pvtx]];
+
+        hash ^= PatternHash[0][c][i];
+    }
+    return hash;
+}
+
+std::uint64_t SimpleBoard::GetSurroundPatternHash(std::uint64_t hash,
+                                                      const int vtx,
+                                                      const int color,
+                                                      const int dist) const {
+    if (dist == 2) {
+        hash = PatternHash[0][kInvalid][0];
+    }
+    constexpr int color_map[2][4] = {
+                    {kBlack, kWhite, kEmpty, kInvalid},
+                    {kWhite, kBlack, kEmpty, kInvalid}
+    };
+    const int cx = GetX(vtx);
+    const int cy = GetY(vtx);
+
+    for (int i = kPointIndex[dist]; i < kPointIndex[dist + 1]; ++i) {
         const int px = cx + kPointCoords[i].x;
         const int py = cy + kPointCoords[i].y;
         if (px >= board_size_ ||

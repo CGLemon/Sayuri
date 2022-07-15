@@ -60,6 +60,7 @@ public:
             nn_evals_->black_wl = 0.5f;
             nn_evals_->draw = 1.0f;
         }
+        nn_evals_->black_rollout_val = nn_evals_->black_wl;
     }
 
 private:
@@ -152,6 +153,7 @@ private:
     int threads_;
     int max_playouts_; 
 
+    std::vector<float> mcowner_;
     std::vector<Training> training_buffer_;
 
     std::atomic<bool> running_; 

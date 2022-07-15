@@ -69,6 +69,7 @@ set(MCTS_SOURCES
     ${MCTS_SOURCES_DIR}/time_control.cc
     ${MCTS_SOURCES_DIR}/node.cc
     ${MCTS_SOURCES_DIR}/search.cc
+    ${MCTS_SOURCES_DIR}/rollout.cc
     )
 
 set(SELFPLAY_SOURCES

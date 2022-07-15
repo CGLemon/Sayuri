@@ -54,6 +54,11 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
             // If we can not expand the node, that means another thread
             // is expanding node. Skip this simulation.
             const bool success = node->ExpandChildren(network_, currstate, false);
+
+            if (param_->use_rollout) {
+                // Update the MC owner.
+                node->SetRolloutEvals(currstate, mcowner_);
+            }
             if (!have_children && success) {
                 search_result.FromNetEvals(node->GetNodeEvals());
             }
@@ -210,6 +215,9 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
     computation_result.board_size = board_size;
     computation_result.komi = root_state_.GetKomi();
     computation_result.movenum = root_state_.GetMoveNumber();
+
+    // TODO: Hash table store the MC owner.
+    mcowner_ = std::vector<float>(board_size * board_size, 0.f);
 
     if (root_state_.IsGameOver()) {
         // Always reture pass move if the passese number is greater than two.

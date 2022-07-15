@@ -558,14 +558,18 @@ float GameState::GetGammaValue(const int vtx, const int color) const {
 
     float val = 1.f;
     bool hit = false;
+    std::uint64_t hash = 0ULL;
+
     for (int d = 2; d < kMaxPatternDist+1; ++d) {
         float gamma = 0.f;
-        auto hash = board_.GetPatternHash(vtx, color, d);
+        hash = board_.GetSurroundPatternHash(hash, vtx, color, d);
+
         if (GammasDict::Get().Probe(hash, gamma)) {
             val *= gamma;
             hit = true;
         }
     }
+
     if (!hit) {
         val = kNoSpatial;
     }

@@ -1,8 +1,9 @@
 #include "mcts/node.h"
 #include "mcts/lcb.h"
 #include "utils/atomic.h"
-#include <utils/random.h>
-#include <utils/format.h>
+#include "utils/random.h"
+#include "utils/format.h"
+#include "mcts/rollout.h"
 
 #include <cassert>
 #include <algorithm>
@@ -161,11 +162,10 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
 }
 
 void Node::LinkNetOutput(const Network::Result &raw_netlist, const int color){
-    auto wl = raw_netlist.wdl[0] - raw_netlist.wdl[2];
+    auto wl = (raw_netlist.wdl[0] - raw_netlist.wdl[2] + 1) * 0.5f;
     auto draw = raw_netlist.wdl[1];
     auto final_score = raw_netlist.final_score;
 
-    wl = (wl + 1) * 0.5f;
     if (color == kWhite) {
         wl = 1.0f - wl;
         final_score = 0.0f - final_score;
@@ -183,6 +183,14 @@ void Node::LinkNetOutput(const Network::Result &raw_netlist, const int color){
         black_ownership_[idx] = owner;
         accumulated_black_ownership_[idx] = 0;
     }
+
+    // Init rollout value here, Will update it later
+    // if apply mc rollout.
+    black_rollout_val_ = 0.5f;
+}
+
+void Node::SetRolloutEvals(GameState &state, std::vector<float> &mcowner) {
+    black_rollout_val_ = GetRolloutWinrate(state, 1, kBlack, mcowner);
 }
 
 // Experiment function.
@@ -433,6 +441,7 @@ void Node::Update(const NodeEvals *evals) {
     AtomicFetchAdd(accumulated_black_wl_, eval);
     AtomicFetchAdd(accumulated_draw_, evals->draw);
     AtomicFetchAdd(accumulated_black_fs_, evals->black_final_score);
+    AtomicFetchAdd(accumulated_black_rl_, evals->black_rollout_val);
 
     {
         std::lock_guard<std::mutex> lock(update_mtx_);
@@ -446,6 +455,7 @@ void Node::ApplyEvals(const NodeEvals *evals) {
     black_wl_ = evals->black_wl;
     draw_ = evals->draw;
     black_fs_ = evals->black_final_score;
+    black_rollout_val_ = evals->black_rollout_val;
 
     std::copy(std::begin(evals->black_ownership),
                   std::end(evals->black_ownership),
@@ -696,7 +706,7 @@ NodeEvals Node::GetNodeEvals() const {
     evals.black_wl = black_wl_;
     evals.draw = draw_;
     evals.black_final_score = black_fs_;
-
+    evals.black_rollout_val = black_rollout_val_;
 
     for (int idx = 0; idx < kNumIntersections; ++idx) {
         evals.black_ownership[idx] = black_ownership_[idx];
@@ -731,6 +741,14 @@ float Node::GetPolicy() const {
 
 int Node::GetVisits() const {
     return visits_.load(std::memory_order_relaxed);
+}
+
+float Node::GetRolloutEval(const int color) const {
+    auto rl = accumulated_black_rl_.load(std::memory_order_relaxed) / GetVisits();
+    if (color == kBlack) {
+        return rl;
+    }
+    return 0.0f - rl;
 }
 
 float Node::GetNetFinalScore(const int color) const {

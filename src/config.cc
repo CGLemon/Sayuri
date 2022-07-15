@@ -58,6 +58,7 @@ void InitOptionsMap() {
     options_map["friendly_pass"] << Option::setoption(false);
     options_map["analysis_verbose"] << Option::setoption(false);
     options_map["quiet"] << Option::setoption(false);
+    options_map["rollout"] << Option::setoption(false);
     options_map["mode"] << Option::setoption(std::string{"gtp"});
 
     options_map["defualt_boardsize"] << Option::setoption(kDefaultBoardSize);
@@ -71,7 +72,6 @@ void InitOptionsMap() {
 
     options_map["weights_file"] << Option::setoption(std::string{});
     options_map["book_file"] << Option::setoption(std::string{});
-    options_map["patterns_file"] << Option::setoption(std::string{});
 
     options_map["use_gpu"] << Option::setoption(false);
     options_map["gpus"] << Option::setoption(std::string{});
@@ -227,6 +227,11 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         parser.RemoveCommand(res->Index());
     }
 
+    if (const auto res = parser.Find("--rollout")) {
+        SetOption("rollout", true);
+        parser.RemoveCommand(res->Index());
+    }
+
     if (const auto res = parser.FindNext({"--resign-threshold", "-r"})) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("resign_threshold", res->Get<float>());
@@ -341,13 +346,6 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext("--book")) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("book_file", res->Get<std::string>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
-    }
-
-    if (const auto res = parser.FindNext("--patterns")) {
-        if (IsParameter(res->Get<std::string>())) {
-            SetOption("patterns_file", res->Get<std::string>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
