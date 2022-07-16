@@ -11,7 +11,7 @@ Sayuri is a GTP-compliant go engine which supports variable komi and board size.
 ## Requirements
 
 * Ubuntu or MacOS only
-* GCC, Clang which C++14 compiler
+* GCC, Clang, C++14 compiler
 * CMake 3.15 or later
 * Optional: Eigen or OpenBLAS library
 * Optional: CUDA 10.x or 11.x library (GCC 7.x passed)
@@ -98,7 +98,7 @@ Example setting 4: use the GPU 0 and GPU 2
 
     $ ./Sayuri -w <weights file> --gpu 0 --gpu 2
 
-Experiment setting: disable network forwarding pipe, very weak.
+Experiment setting: disable network forwarding pipe, very weak
 
     $ ./Sayuri -w <weights file> --no-dcnn
 
@@ -122,29 +122,30 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 
 ## Features
 
-* Support sabaki analysis mode.
-* Support some GoGui analysis commands.
+* Support Sabaki and GoGui analysis mode.
 * Support handicap game.
-* Support variable komi.
-* Support variable board size (from 7x7 to 19x19).
+* Support variable komi and board size (from 7x7 to 19x19).
 * Lock-free SMP MCTS.
 * Acceleration by multi-core processor and multi-Nvidia GPU.
 * Predict the current side winrate and draw-rate.
-* Predict the current side score lead.
-* Predict the death strings.
+* Predict the current side score lead and death strings.
 * Reuse the sub-tree.
+* Tromp-Taylor rules with forbidding suicide move.
 
 ## Todo
 
+* Sopport Windows platform.
 * Support half-float.
 * Support NHWC format.
 * Support distributed computation.
 * Store the networks as binary file.
+* Improve the non-DCNN mode strength.
 
 ## Other Linkings
 
 * Go Text Protocol, [https://www.gnu.org/software/gnugo/gnugo_19.html](https://www.gnu.org/software/gnugo/gnugo_19.html)
 * Leela Zero, [https://github.com/leela-zero/leela-zero](https://github.com/leela-zero/leela-zero)
+* [You Tube](https://www.youtube.com/watch?v=82UclNrXGxg), playing with Pachi.
 * 開發日誌, [https://hackmd.io/zulj1rvhQROsB7U3poEjQg?view](https://hackmd.io/zulj1rvhQROsB7U3poEjQg?view)
 
 ## License
