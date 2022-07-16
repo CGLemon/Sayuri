@@ -798,6 +798,31 @@ bool SimpleBoard::IsLadder(const int vtx, std::vector<int> &vital_moves) const {
     return res == LadderType::kGoodForHunter;
 }
 
+bool SimpleBoard::IsSelfAtariMove(const int vtx, const int color) const {
+    int my_libs = CountPliberties(vtx);
+    auto potential_libs_buf = std::vector<int>{};
+
+    for (int k = 0; k < 4; ++k) {
+        const auto avtx = vtx + directions_[k];
+        const auto libs =  strings_.GetLiberty(strings_.GetParent(avtx));
+        const auto state = GetState(avtx);
+
+        if (state == color) {
+            // Connect with my string.
+            FindStringLiberties(avtx, potential_libs_buf);
+        } else if (state == (!color) && libs <= 1) {
+            // We can capture opponent's string.
+            my_libs += 1;
+
+            // TODO: Full implement here.
+        }
+    }
+
+    int potential_libs = potential_libs_buf.size() - 1; // one is vtx
+
+    return (potential_libs + my_libs) == 1;
+}
+
 bool SimpleBoard::IsAtariMove(const int vtx, const int color) const {
     if (IsSuicide(vtx, color)) {
         return false;

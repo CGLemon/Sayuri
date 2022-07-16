@@ -55,6 +55,11 @@ public:
     bool IsLegalMove(const int vertex, const int color,
                      std::function<bool(int, int)> AvoidToMove) const;
 
+    // Return true if the move is self-atari. Notice that
+    // it is not full implement. We do not consider the 
+    // all libs from capture.
+    bool IsSelfAtariMove(const int vtx, const int color) const;
+
     // Reture true if the move can atari others.
     bool IsAtariMove(const int vtx, const int color) const;
 
