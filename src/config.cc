@@ -60,12 +60,11 @@ void InitOptionsMap() {
     options_map["quiet"] << Option::setoption(false);
     options_map["rollout"] << Option::setoption(false);
     options_map["no_dcnn"] << Option::setoption(false);
-    options_map["mode"] << Option::setoption(std::string{"gtp"});
 
     options_map["defualt_boardsize"] << Option::setoption(kDefaultBoardSize);
     options_map["defualt_komi"] << Option::setoption(kDefaultKomi);
 
-    options_map["cache_memory_mib"] << Option::setoption(100);
+    options_map["cache_memory_mib"] << Option::setoption(400);
     options_map["playouts"] << Option::setoption(0);
     options_map["const_time"] << Option::setoption(0);
     options_map["batch_size"] << Option::setoption(0);
@@ -531,7 +530,7 @@ void ArgsParser::DumpHelper() const {
                 << "\t\tDisable the Neural Network forwarding pipe. Very weak.\n\n"
 
                 << "\t--cache-memory-mib <integer>\n"
-                << "\t\tSet the NN cache size.\n\n"
+                << "\t\tSet the NN cache size in MiB.\n\n"
 
                 << "\t--playouts, -p <integer>\n"
                 << "\t\tThe number of maximum playouts.\n\n"
