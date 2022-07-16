@@ -527,6 +527,9 @@ void ArgsParser::DumpHelper() const {
                 << "\t--friendly-pass\n"
                 << "\t\tDo pass move if the engine wins the game.\n\n"
 
+                << "\t--no-dcnn\n"
+                << "\t\tDisable the Neural Network forwarding pipe. Very weak.\n\n"
+
                 << "\t--cache-memory-mib <integer>\n"
                 << "\t\tSet the NN cache size.\n\n"
 
