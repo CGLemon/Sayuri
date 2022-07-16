@@ -74,6 +74,7 @@ Here are some useful arguments which you may need.
 |  --ponder               | None   | Thinking on opponent's time.                   |
 |  --friendly-pass        | None   | Do pass move if the engine wins the game.      |
 |  --reuse-tree           | None   | Will reuse the sub-tree.                       |
+|  --no-dcnn              | None   | Experiment, disable network, very weak.        |
 |  --help, -h             | None   | Show the more arguments.                       |
     
 
@@ -97,6 +98,9 @@ Example setting 4: use the GPU 0 and GPU 2
 
     $ ./Sayuri -w <weights file> --gpu 0 --gpu 2
 
+Experiment setting: disable network forwarding pipe, very weak.
+
+    $ ./Sayuri -w <weights file> --no-dcnn
 
 ## Generate Opening Book
 
@@ -136,7 +140,6 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 * Support NHWC format.
 * Support distributed computation.
 * Store the networks as binary file.
-* Including pattern system (should finish it in beta version).
 
 ## Other Linkings
 
@@ -146,7 +149,7 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 
 ## License
 
-The code is released under the GPLv3, except for threadpool.h, filesystem.h, filesystem.cc, cppattributes.h, mm.h, mm.cc, Eigen and Fast Float, which have specific licenses mentioned in those files.
+The code is released under the GPLv3, except for threadpool.h, filesystem.h, filesystem.cc, cppattributes.h, Eigen and Fast Float, which have specific licenses mentioned in those files.
 
 ## Contact
 
