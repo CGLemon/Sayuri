@@ -493,8 +493,8 @@ void GameState::FillRandomMove() {
     PlayMoveFast(select_move, color);
 }
 
-void GameState::PlayRandomMove() {
-    auto candidate_moves = std::vector<std::pair<int, int>>{};
+void GameState::PlayRandomMove(bool heavy) {
+    auto candidate_moves = std::vector<int>{};
     auto legal_moves = std::vector<int>{ kPass };
 
     const int rand = Random<kXoroShiro128Plus>::Get().Generate();
@@ -511,11 +511,24 @@ void GameState::PlayRandomMove() {
             continue;
         }
 
-        int int_val = int(GetGammaValue(vtx, color) * 100);
-        if (int_val != 0) {
-            candidate_moves.emplace_back(int_val, vtx);
+        if (board_.IsRealEye(vtx, color)) {
+            continue;
         }
+
         legal_moves.emplace_back(vtx);
+
+        if (board_.IsCaptureMove(vtx, color)) {
+            candidate_moves.emplace_back(vtx);
+            continue;
+        }
+
+        if (heavy) {
+            auto hash = board_.GetPatternHash(vtx, color, 3);
+            if (GammasDict::Get().Hit3x3(hash, nullptr)) {
+                candidate_moves.emplace_back(vtx);
+                continue;
+            }
+        }
     }
 
     int select_move = kPass;
@@ -523,29 +536,7 @@ void GameState::PlayRandomMove() {
     if (candidate_moves.empty()) {
         select_move = legal_moves[rand % legal_moves.size()];
     } else {
-        std::sort(std::begin(candidate_moves),
-                      std::end(candidate_moves),
-                      [](auto &a, auto &b){
-                          return a.first > b.first;
-                      }
-                 );
-        auto max_size = std::min(6, (int)candidate_moves.size());
-
-        int acc_score = 0;
-        for (int i = 0; i < max_size; ++i) {
-            acc_score += candidate_moves[i].first;
-        }
-
-        auto randx = rand % acc_score;
-        acc_score = 0;
-
-        for (int i = 0; i < max_size; ++i) {
-            acc_score +=  candidate_moves[i].first;
-            if (randx < acc_score) {
-                select_move = candidate_moves[i].second;
-                break;
-            }
-        }
+        select_move = candidate_moves[rand % candidate_moves.size()];
     }
 
     PlayMoveFast(select_move, color);

@@ -3,10 +3,8 @@
 
 // Gamma value from the pachi
 
-static const std::string kPatternGammasSample = "0.508873 3 .........";
-
-static const std::string kPatternGammas =
-R"(0.508873 3 .........
+static const std::string kPatternGammas = R"(
+0.508873 3 .........
 1.53418 3 ...O...X.
 0.642983 4 .............
 1.50674 3 ..X.....O
@@ -18020,4 +18018,5 @@ R"(0.508873 3 .........
 1 10 .OOOOX.XO#OXO##XX...X#X##XX#.##XO#.#O#X##..###X#O##.O###.#.#O#O##X.###X#O
 2.26284 5 .OOOOXX..X..XX...O...
 2.51494 6 .OOOOXX..X..XX...O...X.O....O
-2.4937 7 .OOOOXX..X..XX...O...X.O....OOX......)";
+2.4937 7 .OOOOXX..X..XX...O...X.O....OOX......
+)";

@@ -352,7 +352,7 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
 
     // Save the current MC owner.
     mcowner_cache_.Insert(root_state_.GetHash(), mcowner_);
-    
+
     if (tag & kForced) {
         for (int i = 0; i < num_passes; ++i) {
             root_state_.PlayMove(kPass);

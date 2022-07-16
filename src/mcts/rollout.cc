@@ -11,9 +11,6 @@ float GetRolloutWinrate(GameState &state,
                             const int color,
                             std::vector<float> &mcowner,
                             float &black_score) {
-    // TODO: The rollout performance is too slow. The PlayRandomMove()
-    //       eats too much time.
-
     black_score = 0;
 
     int black_wins_cnt = 0;
@@ -28,8 +25,11 @@ float GetRolloutWinrate(GameState &state,
         auto fork_state = state;
         int curr_move = 0;
 
-        while (fork_state.GetPasses() < 2 && curr_move++ < 30) {
-            fork_state.PlayRandomMove();
+        while (fork_state.GetPasses() < 2 && curr_move++ < 10) {
+            fork_state.PlayRandomMove(true);
+        }
+        while (fork_state.GetPasses() < 2 && curr_move++ < 999) {
+            fork_state.PlayRandomMove(false);
         }
 
         float black_acc_score = 0.f;
@@ -55,6 +55,8 @@ float GetRolloutWinrate(GameState &state,
                 confidence_cnt += 1;
             }
         }
+
+        black_acc_score -= fork_state.GetKomi();
 
         num_games++;
         if (black_acc_score > 1e-4f) {

@@ -103,7 +103,7 @@ public:
     std::shared_ptr<const Board> GetPastBoard(unsigned int p) const;
     const std::vector<std::shared_ptr<const Board>>& GetHistory() const;
 
-    void PlayRandomMove();
+    void PlayRandomMove(bool);
     float GetGammaValue(const int vtx, const int color) const;
     std::vector<float> GetGammasPolicy(const int color) const;
 
