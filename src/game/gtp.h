@@ -3,7 +3,6 @@
 #include "game/game_state.h"
 #include "game/types.h"
 #include "config.h"
-#include "neural/fast_policy.h"
 #include "mcts/search.h"
 #include "utils/parser.h"
 #include "utils/threadpool.h"
@@ -56,7 +55,6 @@ public:
         agent_->ApplySearch();
 
         ThreadPool::Get(GetOption<int>("threads"));
-        FastPolicy::Get().LoadWeights();
 
         Book::Get().LoadBook(GetOption<std::string>("book_file"));
         GammasDict::Get().Initialize();

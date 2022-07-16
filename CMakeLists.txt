@@ -38,7 +38,6 @@ set(NEURAL_SOURCES
     ${NEURAL_SOURCES_DIR}/description.cc
     ${NEURAL_SOURCES_DIR}/encoder.cc
     ${NEURAL_SOURCES_DIR}/network.cc
-    ${NEURAL_SOURCES_DIR}/fast_policy.cc
 
     ${NEURAL_SOURCES_DIR}/blas/sgemm.cc
     ${NEURAL_SOURCES_DIR}/blas/blas.cc
