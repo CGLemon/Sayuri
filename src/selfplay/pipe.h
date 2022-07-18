@@ -24,7 +24,7 @@ private:
 
     std::string target_directory_;
     std::string sgf_filename_;
-    std::string data_filename_;
+    std::string data_directory_;
     std::string filename_hash_;
 
     std::vector<std::thread> workers_;

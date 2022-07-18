@@ -68,8 +68,17 @@ def do_shuffle(file_que, output_dir):
 
         print("Parsed done")
 
+def gather_recursive_files(root):
+    l = list()
+    for name in glob.glob(os.path.join(root, '*')):
+        if os.path.isdir(name):
+            l.extend(gather_recursive_files(name))
+        else:
+            l.append(name)
+    return l
+
 def shuffle_process(num_cores, target_dir, output_dir):
-    file_list = glob.glob(os.path.join(target_dir, "*"))
+    file_list = gather_recursive_files(target_dir)
 
     file_que = mp.Queue(len(file_list))
     for i in file_list:
@@ -88,7 +97,7 @@ def shuffle_process(num_cores, target_dir, output_dir):
 
 
 def valid(args):
-    if args.input_dir is None or args.input_dir is None:
+    if args.input_dir is None or args.output_dir is None:
        return False
     return True
 

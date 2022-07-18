@@ -33,7 +33,7 @@ void SelfPlayPipe::Initialize() {
 
     filename_hash_ = ss.str();
     sgf_filename_ = ConnectPath(target_directory_, filename_hash_ + ".sgf");
-    data_filename_ = ConnectPath(target_directory_, filename_hash_ + ".dat");
+    data_directory_ = ConnectPath(target_directory_, "data");
 }
 
 void SelfPlayPipe::Loop() {
@@ -42,31 +42,41 @@ void SelfPlayPipe::Loop() {
         LOGGING << "Please give the target directory name." << std::endl;
         return;
     }
+    if (!IsDirectoryExist(target_directory_)) {
+        LOGGING << "Target directory do not exist." << std::endl;
+        return;
+    }
     if (max_games_ == 0) {
         LOGGING << "The number of self-play games must be greater than one." << std::endl;
         return;
     }
 
     // Dump some infomations.
+    LOGGING << "============================================" << std::endl;
     LOGGING << "Hash value: " << filename_hash_ << std::endl;
     LOGGING << "Target self-play games: " << max_games_ << std::endl;
     LOGGING << "Directory for saving: " << target_directory_  << std::endl;
-    LOGGING << "Start time is: " << CurrentDateTime()  << std::endl;
+    LOGGING << "Starting time is: " << CurrentDateTime()  << std::endl;
 
-    // If the directory didn't exist, creating a new one.
-    if (!IsDirectoryExist(target_directory_)) {
-        CreateDirectory(target_directory_);
+    if (!IsDirectoryExist(data_directory_)) {
+        CreateDirectory(data_directory_);
     }
 
     for (int g = 0; g < engine_.GetParallelGames(); ++g) {
         workers_.emplace_back(
             [this, g]() -> void {
                 while (accmulate_games_.load(std::memory_order_relaxed) < max_games_) {
-                    accmulate_games_.fetch_add(1);
+                    int curr_games = accmulate_games_.fetch_add(1);
 
                     engine_.PrepareGame(g);
                     engine_.Selfplay(g);
-                    engine_.SaveTrainingData(data_filename_, g);
+
+                    auto data_filename = ConnectPath(data_directory_,
+                                                         filename_hash_ +
+                                                             "_" +
+                                                             std::to_string(curr_games/100) + // chop per 100 games
+                                                             ".dat");
+                    engine_.SaveTrainingData(data_filename, g);
                     engine_.SaveSgf(sgf_filename_, g);
 
                     played_games_.fetch_add(1);
