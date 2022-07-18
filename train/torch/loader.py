@@ -188,8 +188,16 @@ class Loader:
         self.stream = None
         self.chunks = []
 
-        # TODO: Load training data from multi-directory.
-        self.done = glob.glob(os.path.join(self.dirname, "*"))
+        def gather_recursive_files(root):
+            l = list()
+            for name in glob.glob(os.path.join(root, '*')):
+                if os.path.isdir(name):
+                    l.extend(gather_recursive_files(name))
+                else:
+                    l.append(name)
+            return l
+
+        self.done = gather_recursive_files(self.dirname)
 
     def next(self):
         if self.stream_end:
