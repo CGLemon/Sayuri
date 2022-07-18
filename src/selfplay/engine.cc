@@ -25,7 +25,7 @@ void Engine::Initialize() {
         search_pool_.emplace_back(std::make_unique<Search>(game_pool_[i], *network_));
     }
 
-    ThreadPool::Get((GetOption<int>("threads") - 1) * parallel_games_); // one thread is main thread
+    ThreadPool::Get(GetOption<int>("threads") * parallel_games_);
 }
 
 void Engine::SaveSgf(std::string filename, int g) {

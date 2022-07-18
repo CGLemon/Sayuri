@@ -506,8 +506,8 @@ std::string Sgf::ToString(GameState &state) {
     out << MakePropertyString("SZ", state.GetBoardSize());
     out << MakePropertyString("KM", state.GetKomi());
     out << MakePropertyString("RU", "chinese");
-    out << MakePropertyString("PB", "black bot");
-    out << MakePropertyString("PW", "white bot");
+    out << MakePropertyString("PB", "bot");
+    out << MakePropertyString("PW", "bot");
     out << MakePropertyString("DT", CurrentDateTime());
     if (state.GetHandicap() != 0) {
         out << MakePropertyString("HA", state.GetHandicap());

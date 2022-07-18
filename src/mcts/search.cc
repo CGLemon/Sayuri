@@ -640,7 +640,7 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
     fork_state.RemoveDeadStrings(200);
 
     auto num_intersections = fork_state.GetNumIntersections();
-    auto winner = fork_state.GetWinner();
+    auto winner = kUndecide;
     auto black_final_score = 0.f;
     auto ownership = fork_state.GetOwnership();
 
@@ -653,6 +653,13 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
     }
 
     black_final_score -= fork_state.GetKomi();
+    if (std::abs(black_final_score) < 1e-4f) {
+        winner = kDraw;
+    } else if (black_final_score > 0) {
+        winner = kBlackWon;
+    } else if (black_final_score < 0) {
+        winner = kWhiteWon;
+    }
 
     for (auto &buf : training_buffer_) {
         assert(winner != kUndecide);
@@ -669,7 +676,7 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
             const auto owner = ownership[idx];
             if (buf.side_to_move == owner) {
                 buf.ownership[idx] = 1;
-            } else if ((!buf.side_to_move) == owner) {
+            } else if (buf.side_to_move == !owner) {
                 buf.ownership[idx] = -1;
             } else {
                 buf.ownership[idx] = 0;
@@ -677,8 +684,10 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
         }
     }
 
+    // Force the last aux policy is pass move.
     auto aux_prob = std::vector<float>(num_intersections+1, 0);
     aux_prob[num_intersections] = 1.f;
+
     for (int i = training_buffer_.size()-1; i >= 0; --i) {
         auto &buf = training_buffer_[i];
 

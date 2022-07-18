@@ -1,5 +1,4 @@
 #include "selfplay/pipe.h"
-
 #include "utils/random.h"
 #include "utils/filesystem.h"
 #include "utils/log.h"
@@ -11,30 +10,34 @@ SelfPlayPipe::SelfPlayPipe() {
 }
 
 void SelfPlayPipe::Initialize() {
-    // Close all verbose.
+    // Close search verbose.
     SetOption("analysis_verbose", false);
 
     // Force that one game use one thread.
     SetOption("threads", 1);
+
+    if (GetOption<int>("playouts") == 0) {
+        SetOption("playouts", 200);
+    }
 
     engine_.Initialize();
     // TODO: Re-compute the NN cache size.
 
     target_directory_ = GetOption<std::string>("target_directory");
     max_games_ = GetOption<int>("num_games");
-    accmulate_games_.store(0);
-    played_games_.store(0);
+    accmulate_games_.store(0, std::memory_order_relaxed);
+    played_games_.store(0, std::memory_order_relaxed);
 
     auto ss = std::ostringstream();
     ss << std::hex << Random<kXoroShiro128Plus>::Get().Generate() << std::dec;
 
     filename_hash_ = ss.str();
     sgf_filename_ = ConnectPath(target_directory_, filename_hash_ + ".sgf");
-    data_filename_ = ConnectPath(target_directory_, filename_hash_ + ".data");
+    data_filename_ = ConnectPath(target_directory_, filename_hash_ + ".dat");
 }
 
 void SelfPlayPipe::Loop() {
-    // Check all data are ready.
+    // Be sure that all data are ready.
     if (target_directory_.size() == 0) {
         LOGGING << "Please give the target directory name." << std::endl;
         return;
@@ -58,7 +61,7 @@ void SelfPlayPipe::Loop() {
     for (int g = 0; g < engine_.GetParallelGames(); ++g) {
         workers_.emplace_back(
             [this, g]() -> void {
-                while (accmulate_games_.load() < max_games_) {
+                while (accmulate_games_.load(std::memory_order_relaxed) < max_games_) {
                     accmulate_games_.fetch_add(1);
 
                     engine_.PrepareGame(g);
@@ -67,9 +70,9 @@ void SelfPlayPipe::Loop() {
                     engine_.SaveSgf(sgf_filename_, g);
 
                     played_games_.fetch_add(1);
-                    auto played_games = played_games_.load();
+                    auto played_games = played_games_.load(std::memory_order_relaxed);
 
-                    if (played_games % 10 == 0) {
+                    if (played_games % 100 == 0) {
                         std::lock_guard<std::mutex> lock(log_mutex_);
                         LOGGING << '[' << CurrentDateTime() << ']' << "Played " << played_games << " games." << std::endl;
                     }
@@ -83,5 +86,5 @@ void SelfPlayPipe::Loop() {
     }
     LOGGING << '[' << CurrentDateTime() << ']'
                 << "Finish the self-play loop. Total Played "
-                << played_games_.load() << " games." << std::endl;
+                << played_games_.load(std::memory_order_relaxed) << " games." << std::endl;
 }
