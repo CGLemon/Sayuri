@@ -61,7 +61,7 @@ for ((i=0; i<$TRAINING_EPOCHES; i++)); do
 
     # step1: self-play
     ENGINE_PLAY_CMD="./$ENGINE_NAME --mode selfplay --noise --random-moves 10 --playouts 200 --komi 9 --board-size 7 --komi-variant 2"
-    ENGINE_PLAY_CMD="$ENGINE_PLAY_CMD --cache-mem- --parallel-games 8 --batch-size 4"
+    ENGINE_PLAY_CMD="$ENGINE_PLAY_CMD --parallel-games 16 --batch-size 8"
     ENGINE_PLAY_CMD="$ENGINE_PLAY_CMD --cache-memory-mib 400 --early-symm-cache"
     ENGINE_PLAY_CMD="$ENGINE_PLAY_CMD --target-directory $CURR_DIR --weights $CURR_WEIGHTS --num-games $GAMES_PER_EPOCH"
     $ENGINE_PLAY_CMD
