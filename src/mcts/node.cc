@@ -190,17 +190,13 @@ void Node::LinkNetOutput(const Network::Result &raw_netlist, const int color){
         black_ownership_[idx] = owner;
         accumulated_black_ownership_[idx] = 0;
     }
-
-    // Init rollout value here, Will update it later
-    // if apply mc rollout.
-    black_rollout_val_ = 0.5f;
 }
 
 void Node::MixRolloutEvals(GameState &state, std::vector<float> &mcowner, float factor) {
     float black_rollout_score;
-    black_rollout_val_ = GetRolloutWinrate(state, 1, kBlack, mcowner, black_rollout_score);
+    float black_rollout_val = GetRolloutWinrate(state, 1, kBlack, mcowner, black_rollout_score);
 
-    black_wl_ = factor * black_rollout_val_  + (1-factor) * black_wl_;
+    black_wl_ = factor * black_rollout_val  + (1-factor) * black_wl_;
     black_fs_ = factor * black_rollout_score + (1-factor) * black_fs_;
 
     const auto num_intersections = state.GetNumIntersections();
@@ -484,7 +480,6 @@ void Node::ApplyEvals(const NodeEvals *evals) {
     black_wl_ = evals->black_wl;
     draw_ = evals->draw;
     black_fs_ = evals->black_final_score;
-    black_rollout_val_ = evals->black_rollout_val;
 
     std::copy(std::begin(evals->black_ownership),
                   std::end(evals->black_ownership),
@@ -735,7 +730,6 @@ NodeEvals Node::GetNodeEvals() const {
     evals.black_wl = black_wl_;
     evals.draw = draw_;
     evals.black_final_score = black_fs_;
-    evals.black_rollout_val = black_rollout_val_;
 
     for (int idx = 0; idx < kNumIntersections; ++idx) {
         evals.black_ownership[idx] = black_ownership_[idx];

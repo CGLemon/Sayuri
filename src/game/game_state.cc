@@ -790,6 +790,15 @@ std::vector<bool> GameState::GetStrictSafeArea() const {
     return result;
 }
 
+int GameState::GetFirstPassColor() const {
+    for (auto &board : game_history_) {
+        if (board->GetLastMove() == kPass) {
+            return !(board->GetToMove());
+        }
+    }
+    return kInvalid;
+}
+
 std::uint64_t GameState::ComputeSymmetryHash(const int symm) const {
     return board_.ComputeSymmetryHash(board_.GetKoMove(), symm) ^ komi_hash_;
 }

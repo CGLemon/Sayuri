@@ -107,6 +107,7 @@ void InitOptionsMap() {
 
     options_map["forced_policy_factor"] << Option::setoption(0.f);
     options_map["cap_playouts"] << Option::setoption(0);
+    options_map["first_pass_bonus"] << Option::setoption(false);
 
     options_map["num_games"] << Option::setoption(0);
     options_map["parallel_games"] << Option::setoption(1);
@@ -234,6 +235,11 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 
     if (const auto res = parser.Find("--no-dcnn")) {
         SetOption("no_dcnn", true);
+        parser.RemoveCommand(res->Index());
+    }
+
+    if (const auto res = parser.Find("--first-pass-bonus")) {
+        SetOption("first_pass_bonus", true);
         parser.RemoveCommand(res->Index());
     }
 

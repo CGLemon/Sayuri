@@ -48,7 +48,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
     if (node->Expandable()) {
         if (currstate.GetPasses() >= 2) {
             // The game is over, gather the game result value.
-            search_result.FromGameover(currstate);
+            search_result.FromGameover(currstate); //, param_->first_pass_bonus);
             node->ApplyEvals(search_result.GetEvals());
         } else {
             const bool have_children = node->HaveChildren();
@@ -70,6 +70,9 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
             if (!have_children && success) {
                 search_result.FromNetEvals(node->GetNodeEvals());
             }
+        }
+        if (search_result.IsValid() && param_->first_pass_bonus) {
+            search_result.AddPassBouns(currstate);
         }
     }
 

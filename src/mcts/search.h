@@ -21,6 +21,35 @@ public:
     bool IsValid() const { return nn_evals_ != nullptr; }
     NodeEvals *GetEvals() const { return nn_evals_.get(); }
 
+    void AddPassBouns(GameState &state) {
+        // A half-point is awarded to the first player to be able 
+        // to pass. According to kata Go slightly rewarding endgame
+        // efficiency,
+        const auto first_pass_color = state.GetFirstPassColor();
+        float black_final_score = nn_evals_->black_final_score;
+
+        if (first_pass_color == kBlack) {
+            black_final_score += 0.5f;
+        } else if (first_pass_color == kWhite) {
+            black_final_score -= 0.5f;
+        }
+
+        nn_evals_->black_final_score = black_final_score;
+
+        if (state.GetPasses() >= 2) {
+            if (black_final_score > 1e-4) {
+                nn_evals_->black_wl = 1.0f;
+                nn_evals_->draw = 0.0f;
+            } else if (black_final_score < -1e-4) {
+                nn_evals_->black_wl = 0.0f;
+                nn_evals_->draw = 0.0f;
+            } else {
+                nn_evals_->black_wl = 0.5f;
+                nn_evals_->draw = 1.0f;
+            }
+        }
+    }
+
     void FromNetEvals(NodeEvals nn_evals) { 
         nn_evals_ = std::make_unique<NodeEvals>(nn_evals);
     }
@@ -49,7 +78,7 @@ public:
         }
 
         auto black_final_score = (float)black_score - state.GetKomi();
-        nn_evals_-> black_final_score = black_final_score;
+        nn_evals_->black_final_score = black_final_score;
 
         if (black_final_score > 1e-4) {
             nn_evals_->black_wl = 1.0f;
@@ -61,7 +90,6 @@ public:
             nn_evals_->black_wl = 0.5f;
             nn_evals_->draw = 1.0f;
         }
-        nn_evals_->black_rollout_val = nn_evals_->black_wl;
     }
 
 private:

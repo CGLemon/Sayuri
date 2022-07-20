@@ -27,7 +27,6 @@ struct NodeEvals {
     float black_final_score{0.0f};
     float black_wl{0.0f};
     float draw{0.0f};
-    float black_rollout_val{0.0f};
 
     std::array<float, kNumIntersections> black_ownership;
 };
@@ -167,7 +166,6 @@ private:
     void WaitExpanded() const;
 
     int color_{kInvalid};
-    float black_rollout_val_;
     float black_fs_;
     float black_wl_;
     float draw_;

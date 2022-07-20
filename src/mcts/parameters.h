@@ -49,6 +49,7 @@ public:
         policy_temp = GetOption<float>("policy_temp");
         use_rollout = GetOption<bool>("rollout");
         no_dcnn = GetOption<bool>("no_dcnn");
+        first_pass_bonus = GetOption<bool>("first_pass_bonus");
     }
 
     int threads;
@@ -88,6 +89,7 @@ public:
     bool friendly_pass;
     bool use_rollout;
     bool no_dcnn;
+    bool first_pass_bonus;
 
     std::array<float, kNumVertices + 10> dirichlet_buffer;
 };
