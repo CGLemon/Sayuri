@@ -18,6 +18,7 @@ class Node;
 struct NodeData {
     float policy{0.0f};
     int vertex{kNullVertex};
+    int depth{0};
 
     Parameters *parameters{nullptr};
     Node *parent{nullptr};
@@ -68,7 +69,8 @@ public:
     // Get best move(vertex) by LCB value.
     int GetBestMove();
 
-    void MixRolloutEvals(GameState &state, std::vector<float> &mcowner, float factor);
+    void MixRolloutEvals(GameState &state,
+                             std::vector<float> &mcowner, float factor);
 
     const std::vector<Edge> &GetChildren() const;
     bool HaveChildren() const;

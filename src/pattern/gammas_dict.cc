@@ -3,7 +3,6 @@
 #include "pattern/pattern_gammas.h"
 #include "game/types.h"
 
-#include <iostream>
 #include <fstream>
 #include <sstream>
 #include <string>

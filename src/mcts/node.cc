@@ -157,6 +157,7 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
 
     for (const auto &node : nodelist) {
         auto data = NodeData{};
+        data.depth = data_.depth + 1;
         data.vertex = node.second;
         data.policy = node.first;
         data.parameters = GetParameters();
@@ -194,7 +195,7 @@ void Node::LinkNetOutput(const Network::Result &raw_netlist, const int color){
 
 void Node::MixRolloutEvals(GameState &state, std::vector<float> &mcowner, float factor) {
     float black_rollout_score;
-    float black_rollout_val = GetRolloutWinrate(state, 1, kBlack, mcowner, black_rollout_score);
+    float black_rollout_val = GetRolloutWinrate(state, data_.depth, 1, kBlack, mcowner, black_rollout_score);
 
     black_wl_ = factor * black_rollout_val  + (1-factor) * black_wl_;
     black_fs_ = factor * black_rollout_score + (1-factor) * black_fs_;

@@ -3,10 +3,11 @@
 
 #include <mutex>
 #include <cmath>
-#include <iostream>
+
 std::mutex mcowner_locker;
 
 float GetRolloutWinrate(GameState &state,
+                            const int depth,
                             const int num_sims,
                             const int color,
                             std::vector<float> &mcowner,
@@ -15,7 +16,7 @@ float GetRolloutWinrate(GameState &state,
 
     int black_wins_cnt = 0;
     int white_wins_cnt = 0;
-    float moving_factor = 0.1f;
+    float moving_factor = 0.1f / std::pow(1.2f, depth);
 
     int num_games = 0;
     float confidence = 0.f; 
@@ -25,7 +26,7 @@ float GetRolloutWinrate(GameState &state,
         auto fork_state = state;
         int curr_move = 0;
 
-        while (fork_state.GetPasses() < 2 && curr_move++ < 10) {
+        while (fork_state.GetPasses() < 2 && curr_move++ < 150) {
             fork_state.PlayRandomMove(true);
         }
         while (fork_state.GetPasses() < 2 && curr_move++ < 999) {

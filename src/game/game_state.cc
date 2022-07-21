@@ -497,17 +497,13 @@ void GameState::PlayRandomMove(bool heavy) {
     auto candidate_moves = std::vector<int>{};
     auto legal_moves = std::vector<int>{ kPass };
 
-    const int rand = Random<kXoroShiro128Plus>::Get().Generate();
+    const auto rand = Random<kXoroShiro128Plus>::Get().Generate();
     const int color = GetToMove();
     const int empty_cnt = board_.GetEmptyCount();
 
     for (int i = 0; i < empty_cnt; ++i) {
         const auto vtx = board_.GetEmpty(i);
         if (!IsLegalMove(vtx, color)) {
-            continue;
-        }
-
-        if (board_.IsRealEye(vtx, color)) {
             continue;
         }
 
