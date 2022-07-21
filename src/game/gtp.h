@@ -57,7 +57,7 @@ public:
         ThreadPool::Get(GetOption<int>("threads"));
 
         Book::Get().LoadBook(GetOption<std::string>("book_file"));
-        GammasDict::Get().Initialize();
+        GammasDict::Get().Initialize(GetOption<std::string>("patterns_file"));
 
         Loop();
     }

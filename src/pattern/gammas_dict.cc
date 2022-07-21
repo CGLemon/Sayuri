@@ -4,6 +4,7 @@
 #include "game/types.h"
 
 #include <iostream>
+#include <fstream>
 #include <sstream>
 #include <string>
 
@@ -12,12 +13,25 @@ GammasDict& GammasDict::Get() {
     return dict;
 }
 
-void GammasDict::Initialize() {
+void GammasDict::Initialize(std::string filename) {
     PtcoordsInit();
     PatternHashInit();
 
-    std::istringstream iss{kPatternGammas};
+    std::stringstream iss;
     std::string line;
+
+    if (!filename.empty()) {
+        auto file = std::ifstream{};
+        file.open(filename.c_str());
+
+        if (file.is_open()) {
+            iss << file.rdbuf();
+            file.close();
+        }
+    }
+
+    iss << '\n'
+            << kPatternGammas;
 
     val_3x3_avg_ = 0;
 
@@ -63,15 +77,15 @@ void GammasDict::Initialize() {
         }
     }
     val_3x3_avg_ /= dict_3x3_.size();
-    val_3x3_avg_ *= 0.75f;
+    val_3x3_avg_ *= 0.1f;
 }
 
-bool GammasDict::Hit3x3(std::uint64_t hash, float *val) {
+bool GammasDict::Hit3x3(std::uint64_t hash, float *val, bool skip_bad) {
     auto it = dict_3x3_.find(hash);
     if (it == std::end(dict_3x3_)) {
         return false;
     }
-    if (it->second < val_3x3_avg_) {
+    if (skip_bad && it->second < val_3x3_avg_) {
         return false;
     }
 
@@ -82,7 +96,7 @@ bool GammasDict::Hit3x3(std::uint64_t hash, float *val) {
 }
 
 bool GammasDict::Insert3x3(std::uint64_t hash, float val) {
-    if (Hit3x3(hash, nullptr)) {
+    if (Hit3x3(hash, nullptr, false)) {
         return false;
     }
     dict_3x3_.insert({hash, val});

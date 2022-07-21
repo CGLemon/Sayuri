@@ -6,11 +6,11 @@ class GammasDict {
 public:
     static GammasDict& Get();
 
-    void Initialize();
+    void Initialize(std::string filename);
 
     bool Probe(std::uint64_t hash, float &val) const;
 
-    bool Hit3x3(std::uint64_t hash, float *val);
+    bool Hit3x3(std::uint64_t hash, float *val, bool skip_bad);
 
 private:
     float val_3x3_avg_;

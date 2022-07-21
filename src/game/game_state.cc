@@ -524,7 +524,7 @@ void GameState::PlayRandomMove(bool heavy) {
 
         if (heavy) {
             auto hash = board_.GetPatternHash(vtx, color, 3);
-            if (GammasDict::Get().Hit3x3(hash, nullptr)) {
+            if (GammasDict::Get().Hit3x3(hash, nullptr, true)) {
                 candidate_moves.emplace_back(vtx);
                 continue;
             }
