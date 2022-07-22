@@ -129,4 +129,7 @@ void PatternHashInit() {
 			PatternHash[r][kInvalid][i] = pthboard[kInvalid][bi];
 		}
 	}
+#undef PTH_VMIRROR
+#undef PTH_HMIRROR
+#undef PTH_90ROT
 }

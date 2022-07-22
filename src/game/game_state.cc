@@ -519,11 +519,16 @@ void GameState::PlayRandomMove(bool heavy) {
         }
 
         if (heavy) {
-            auto hash = board_.GetPatternHash(vtx, color, 3);
-            if (GammasDict::Get().Hit3x3(hash, nullptr, true)) {
+            if (board_.MatchPattern3(vtx, color)) {
                 candidate_moves.emplace_back(vtx);
                 continue;
             }
+
+            // auto hash = board_.GetPatternHash(vtx, color, 3);
+            // if (GammasDict::Get().Hit3x3(hash, nullptr, true)) {
+            //     candidate_moves.emplace_back(vtx);
+            //     continue;
+            // }
         }
     }
 
