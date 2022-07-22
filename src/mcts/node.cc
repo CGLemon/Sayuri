@@ -193,14 +193,16 @@ void Node::LinkNetOutput(const Network::Result &raw_netlist, const int color){
     }
 }
 
-void Node::MixRolloutEvals(GameState &state, std::vector<float> &mcowner, float factor) {
+void Node::MixRolloutEvals(GameState &state, float factor) {
+    const auto num_intersections = state.GetNumIntersections();
+    auto mcowner = std::vector<float>(num_intersections, 0.f);
+
     float black_rollout_score;
     float black_rollout_val = GetRolloutWinrate(state, data_.depth, 1, kBlack, mcowner, black_rollout_score);
 
     black_wl_ = factor * black_rollout_val  + (1-factor) * black_wl_;
     black_fs_ = factor * black_rollout_score + (1-factor) * black_fs_;
 
-    const auto num_intersections = state.GetNumIntersections();
     for (int idx = 0; idx < num_intersections; ++idx) {
         black_ownership_[idx] = factor * mcowner[idx] + (1-factor) * black_ownership_[idx];
     }

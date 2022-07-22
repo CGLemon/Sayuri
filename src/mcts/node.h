@@ -69,8 +69,7 @@ public:
     // Get best move(vertex) by LCB value.
     int GetBestMove();
 
-    void MixRolloutEvals(GameState &state,
-                             std::vector<float> &mcowner, float factor);
+    void MixRolloutEvals(GameState &state, float factor);
 
     const std::vector<Edge> &GetChildren() const;
     bool HaveChildren() const;

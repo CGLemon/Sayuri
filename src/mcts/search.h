@@ -8,7 +8,6 @@
 #include "data/training.h"
 #include "utils/threadpool.h"
 #include "utils/time.h"
-#include "utils/cache.h"
 
 #include <thread>
 #include <memory>
@@ -198,7 +197,4 @@ private:
 
     std::unique_ptr<Parameters> param_;
     std::unique_ptr<ThreadGroup<void>> group_;
-
-    std::vector<float> mcowner_;
-    HashKeyCache<std::vector<float>> mcowner_cache_; 
 };
