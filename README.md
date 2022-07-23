@@ -74,7 +74,7 @@ Here are some useful arguments which you may need.
 |  --ponder               | None   | Thinking on opponent's time.                   |
 |  --friendly-pass        | None   | Do pass move if the engine wins the game.      |
 |  --reuse-tree           | None   | Will reuse the sub-tree.                       |
-|  --no-dcnn              | None   | Experiment, disable network, very weak.        |
+|  --no-dcnn              | None   | Experimental, disable network, very weak.      |
 |  --help, -h             | None   | Show the more arguments.                       |
     
 
@@ -86,7 +86,7 @@ Example setting 1: 4 thread, 2 batches and 12800 playouts
     
     $ ./Sayuri -w <weights file> -t 4 -b 2 -p 12800
 
-Example setting 2: quickly and friendly game
+Example setting 2: quickly and friendly pass game
     
     $ ./Sayuri -w <weights file> -t 1 -b 1 --const-time 1 --friendly-pass --reuse-tree
 
@@ -98,7 +98,7 @@ Example setting 4: use the GPU 0 and GPU 2
 
     $ ./Sayuri -w <weights file> --gpu 0 --gpu 2
 
-Experiment setting: disable network forwarding pipe, very weak
+Experimental setting: disable network forwarding pipe, very weak
 
     $ ./Sayuri -w <weights file> --no-dcnn
 
@@ -108,9 +108,9 @@ You need to collect enough SGF games (at least over 10000 games). Then, go to th
 
     genbook <SGF file> <output name>
 
-## User Interface
+## Graphical Interface
 
-Sayuri is not complete engine. You need a graphical interface for playing with her. She supports any GTP (version 2) interface application. [Sabaki](https://sabaki.yichuanshen.de/) and [GoGui](https://github.com/Remi-Coulom/gogui) are recommended. 
+Sayuri is not complete engine. You need a graphical interface for playing with her. She supports any GTP (version 2) interface application. [Sabaki](https://sabaki.yichuanshen.de/) and [GoGui](https://github.com/Remi-Coulom/gogui) are recommended that because Sayuri implements some analysis commands for them. 
 
 * Sabaki analysis mode
 
@@ -150,7 +150,7 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 
 ## License
 
-The code is released under the GPLv3, except for threadpool.h, filesystem.h, filesystem.cc, cppattributes.h, Eigen and Fast Float, which have specific licenses mentioned in those files.
+The code is released under the GPLv3, except for threadpool.h, cppattributes.h, Eigen and Fast Float, which have specific licenses mentioned in those files.
 
 ## Contact
 

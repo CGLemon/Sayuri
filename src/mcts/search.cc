@@ -83,7 +83,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
             next = node->ProbSelectChild();
         } else {
             // Go to the next node by PUCT algoritim.
-            next = node->UctSelectChild(color, node == root_node);
+            next = node->PuctSelectChild(color, node == root_node);
         }
         auto vtx = next->GetVertex();
 

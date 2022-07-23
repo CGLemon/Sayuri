@@ -53,7 +53,7 @@ public:
     Node *ProbSelectChild();
 
     // Select the best PUCT value node.
-    Node *UctSelectChild(const int color, const bool is_root);
+    Node *PuctSelectChild(const int color, const bool is_root);
 
     void PolicyTargetPruning();
 
@@ -136,7 +136,7 @@ private:
     int GetThreads() const;
     int GetVirtualLoss() const;
 
-    void ComputeStats(size_t &nodes, size_t &edges);
+    void ComputeNodeCount(size_t &nodes, size_t &edges);
 
     Parameters *GetParameters();
 

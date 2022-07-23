@@ -70,12 +70,7 @@ bool Node::ExpandChildren(Network &network,
     }
 
     // Second, get network computation result.
-    float temp;
-    if (is_root) {
-        temp = GetParameters()->root_policy_temp;
-    } else {
-        temp = GetParameters()->policy_temp;
-    }
+    const float temp = is_root ? GetParameters()->root_policy_temp : GetParameters()->policy_temp;
 
     auto raw_netlist = Network::Result{};
     color_ = state.GetToMove();
@@ -89,9 +84,6 @@ bool Node::ExpandChildren(Network &network,
     LinkNetOutput(raw_netlist, color_);
 
     auto nodelist = std::vector<Network::PolicyVertexPair>{};
-
-    // TODO: Some conditions may forbid the pass. Like, the move
-    //       number is too low.
     auto allow_pass = true;
     auto legal_accumulate = 0.0f;
 
@@ -99,24 +91,21 @@ bool Node::ExpandChildren(Network &network,
     const auto num_intersections = state.GetNumIntersections();
     const auto safe_area = state.GetStrictSafeArea();
 
-    // Third, remove the illegl moves or some bad move.
+    // Third, remove the illegal moves or some bad move.
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto x = idx % board_size;
         const auto y = idx / board_size;
         const auto vtx = state.GetVertex(x, y);
         const auto policy = raw_netlist.probabilities[idx];
 
-        if (!state.IsLegalMove(vtx, color_)) {
-            continue;
-        }
-
-        if (safe_area[idx]) {
+        if (!state.IsLegalMove(vtx, color_) || safe_area[idx]) {
             continue;
         }
 
         if (is_root) {
             auto fork_state = state;
             fork_state.PlayMove(vtx);
+
             if (fork_state.IsSuperko()) {
                 continue;
             }
@@ -126,13 +115,17 @@ bool Node::ExpandChildren(Network &network,
         legal_accumulate += policy;
     }
 
-    if (allow_pass) {
+    if ((int)nodelist.size() > 3*num_intersections/4) {
+        allow_pass = false;
+    }
+
+    if (allow_pass || nodelist.empty()) {
         nodelist.emplace_back(raw_netlist.pass_probability, kPass);
         legal_accumulate += raw_netlist.pass_probability;
     }
 
-    if (legal_accumulate <= 0.0f) {
-        // It will be happened if the policy focus on illegl moves.
+    if (legal_accumulate < 1e-6f) {
+        // It will be happened if the policy focuses on illegal moves.
         for (auto &node : nodelist) {
             node.first = 1.f/nodelist.size();
         }
@@ -157,11 +150,11 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
 
     for (const auto &node : nodelist) {
         auto data = NodeData{};
+
         data.depth = data_.depth + 1;
         data.vertex = node.second;
         data.policy = node.first;
         data.parameters = GetParameters();
-
         data.parent = Get();
 
         children_.emplace_back(data);
@@ -209,20 +202,22 @@ void Node::MixRolloutEvals(GameState &state, float factor) {
 }
 
 void Node::ApplyNoDcnnPolicy(GameState &state, const int color, Network::Result &raw_netlist) const {
-    raw_netlist.pass_probability = 0.f;
-
     const auto num_intersections = state.GetNumIntersections();
     auto policy = state.GetGammasPolicy(color);
+
     for (int idx = 0; idx < num_intersections; ++idx) {
         raw_netlist.probabilities[idx] = policy[idx];
         raw_netlist.ownership[idx] = 0.f;
     }
 
+    // Give a little value for pass policy avoid bug
+    // if there is no legal moves.
+    raw_netlist.pass_probability = 0.1f/num_intersections;
     raw_netlist.final_score = 0.f;
     raw_netlist.wdl = {0.5f, 0, 0.5f};
 }
 
-// Experiment function.
+// Experimental function.
 void Node::PolicyTargetPruning() {
     WaitExpanded();
     assert(HaveChildren());
@@ -268,7 +263,7 @@ void Node::PolicyTargetPruning() {
     }
 
     while (true) {
-        auto node = UctSelectChild(color_, false);
+        auto node = PuctSelectChild(color_, false);
         if (node->GetVertex() == most_visits_move) {
             break;
         }
@@ -315,7 +310,7 @@ Node *Node::ProbSelectChild() {
     return best_node->Get();
 }
 
-Node *Node::UctSelectChild(const int color, const bool is_root) {
+Node *Node::PuctSelectChild(const int color, const bool is_root) {
     WaitExpanded();
     assert(HaveChildren());
     assert(color == color_);
@@ -576,19 +571,18 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
 
     auto nodes = size_t{0};
     auto edges = size_t{0};
-    ComputeStats(nodes, edges);
+    ComputeNodeCount(nodes, edges);
 
     const auto node_mem = sizeof(Node) + sizeof(Edge);
     const auto edge_mem = sizeof(Edge);
 
-    // There is some error to computing memory used. It is because
-    // that there is no edge link to node and we may not collect all
-    // nodes.
+    // There is some error to compute memory used. It is because that
+    // we may not collect all node conut. 
     const auto mem_used = static_cast<double>(nodes * node_mem + edges * edge_mem) / (1024.f * 1024.f);
 
     out << "Tree Status:" << std::endl
-            << std::setw(9) << "nodes:" << ' ' << nodes  << std::endl
-            << std::setw(9) << "edges:" << ' ' << edges  << std::endl
+            << std::setw(9) << "nodes:"  << ' ' << nodes    << std::endl
+            << std::setw(9) << "edges:"  << ' ' << edges    << std::endl
             << std::setw(9) << "memory:" << ' ' << mem_used << ' ' << "(MiB)" << std::endl;
 
     return out.str();
@@ -981,7 +975,7 @@ void Node::SetPolicy(float p) {
     data_.policy = p;
 }
 
-void Node::ComputeStats(size_t &nodes, size_t &edges) {
+void Node::ComputeNodeCount(size_t &nodes, size_t &edges) {
     // Use DFS to search all nodes.
     auto stk = std::stack<Node *>{};
 
