@@ -561,7 +561,7 @@ class Network(nn.Module):
         )
         self.value_intermediate_fc = FullyConnect(
             in_size=self.value_extract * 3,
-            out_size=self.value_extract * 2,
+            out_size=self.value_extract * 3,
             relu=True,
             collector=self.layer_collector
         )
@@ -573,7 +573,7 @@ class Network(nn.Module):
             collector=self.layer_collector
         )
         self.value_misc_fc = FullyConnect(
-            in_size=self.value_extract * 2,
+            in_size=self.value_extract * 3,
             out_size=self.value_misc,
             relu=False,
             collector=self.layer_collector

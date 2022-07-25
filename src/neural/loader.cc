@@ -366,6 +366,11 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
     if (prob_conv_shape[1] != kOuputProbabilitiesChannels) {
         throw "The number of policy ouput size is wrong";
     }
+    if (p_inter_fc_shape[1] != pass_fc_shape[0] ||
+            p_inter_fc_shape[0] != 3 * weights->policy_extract_channels ||
+            p_inter_fc_shape[1] != 1 * weights->policy_extract_channels) {
+        throw "The number of policy fully connect size is wrong";
+    }
     if (pass_fc_shape[1] != kOuputPassProbability) {
         throw "The number of pass ouput size is wrong";
     }
@@ -406,6 +411,11 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
     }
     if (v_os_conv_shape[1] != kOuputOwnershipChannels) {
         throw "The number of ownership ouput size is wrong";
+    }
+    if (v_inter_fc_shape[1] != misc_fc_shape[0] ||
+            v_inter_fc_shape[0] != 3 * weights->value_extract_channels ||
+            v_inter_fc_shape[1] != 3 * weights->value_extract_channels) {
+        throw "The number of value fully connect size is wrong";
     }
     if (misc_fc_shape[1] != kOuputValueMisc) {
         throw "The misc value layer size is wrong";

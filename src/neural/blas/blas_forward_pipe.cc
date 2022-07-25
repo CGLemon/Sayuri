@@ -37,7 +37,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     auto conv_out = std::vector<float>(output_channels * num_intersections);
     auto conv_in = std::vector<float>(output_channels * num_intersections);
     auto res = std::vector<float>(output_channels * num_intersections);
-    auto intermediate = std::vector<float>(2 * max_intermediates);
+    auto intermediate = std::vector<float>(3 * max_intermediates);
     auto pooling = std::vector<float>(3 * max_intermediates); 
 
     // Copy input plane to buffer. 
@@ -175,15 +175,11 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     GlobalPool<true>::Forward(board_size, value_extract_channels,
                               value_conv, pooling);
 
-    FullyConnect::Forward(3 * value_extract_channels, 2 * value_extract_channels,
+    FullyConnect::Forward(3 * value_extract_channels, 3 * value_extract_channels,
                           pooling,
                           weights_->v_inter_fc.GetWeights(),
                           weights_->v_inter_fc.GetBiases(),
                           intermediate, true);
-
-    // AddSpatialBiases::Forward(board_size, value_extract_channels,
-    //                           value_conv,
-    //                           intermediate, false);
 
     // value outs
     Convolution1::Forward(board_size, value_extract_channels, kOuputOwnershipChannels,
@@ -195,7 +191,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                               output_ownership,
                               weights_->v_ownership.GetBiases(), false);
 
-    FullyConnect::Forward(2 * value_extract_channels, kOuputValueMisc,
+    FullyConnect::Forward(3 * value_extract_channels, kOuputValueMisc,
                           intermediate,
                           weights_->v_misc.GetWeights(),
                           weights_->v_misc.GetBiases(),
