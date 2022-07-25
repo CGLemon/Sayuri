@@ -65,12 +65,13 @@ class DataSet():
             input_planes[p, 0:board_size, 0:board_size] = np.reshape(plane, (board_size, board_size))[:, :]
 
         if data.to_move == 1:
-            input_planes[self.input_channels-4, 0:board_size, 0:board_size] = data.komi/20
+            input_planes[self.input_channels-4, 0:board_size, 0:board_size] =  data.komi/20
+            input_planes[self.input_channels-3, 0:board_size, 0:board_size] = -data.komi/20
         else:
             input_planes[self.input_channels-4, 0:board_size, 0:board_size] = -data.komi/20
+            input_planes[self.input_channels-3, 0:board_size, 0:board_size] =  data.komi/20
 
-        input_planes[self.input_channels-3, 0:board_size, 0:board_size] = (data.board_size**2)/361
-        input_planes[self.input_channels-2, 0:board_size, 0:board_size] = 0 # fill zeros
+        input_planes[self.input_channels-2, 0:board_size, 0:board_size] = (data.board_size**2)/361
         input_planes[self.input_channels-1, 0:board_size, 0:board_size] = 1 # fill ones
 
         # probabilities
@@ -204,6 +205,20 @@ class TrainingPipe():
     def __lr_scheduler(self):
         pass
 
+    def __optimizer_to(self, optim, device):
+        for param in optim.state.values():
+            # Not sure there are any global tensors in the state dict
+            if isinstance(param, torch.Tensor):
+                param.data = param.data.to(device)
+                if param._grad is not None:
+                    param._grad.data = param._grad.data.to(device)
+            elif isinstance(param, dict):
+                for subparam in param.values():
+                    if isinstance(subparam, torch.Tensor):
+                        subparam.data = subparam.data.to(device)
+                        if subparam._grad is not None:
+                            subparam._grad.data = subparam._grad.data.to(device)
+
     def __load_current_status(self):
         #TODO: Merge optimizer status and model into one file.
         last_steps = 0
@@ -234,6 +249,8 @@ class TrainingPipe():
         # update to current learning rate...
         self.opt.param_groups[0]["lr"] = self.learning_rate
         self.opt.param_groups[0]["weight_decay"] = self.weight_decay
+
+        self.__optimizer_to(self.opt, self.device)
 
         return last_steps
 

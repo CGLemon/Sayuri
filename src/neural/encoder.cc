@@ -240,13 +240,12 @@ void Encoder::FillMisc(const Board* board,
     std::fill(misc_it+ 0 * num_intersections,
                   misc_it+ 1 * num_intersections, komi/20.f);
 
-    // intersections
     std::fill(misc_it+ 1 * num_intersections,
-                  misc_it+ 2 * num_intersections, static_cast<float>(num_intersections)/361.f);
+                  misc_it+ 2 * num_intersections, -komi/20.f);
 
-    // zeros
+    // intersections
     std::fill(misc_it+ 2 * num_intersections,
-                  misc_it+ 3 * num_intersections, static_cast<float>(false));
+                  misc_it+ 3 * num_intersections, static_cast<float>(num_intersections)/361.f);
 
     // ones
     std::fill(misc_it+ 3 * num_intersections,
