@@ -356,7 +356,7 @@ class TrainingPipe():
                 if macro_steps % self.macrofactor == 0:
                     # clip grad
                     if self.cfg.fixup_batch_norm:
-                        gnorm = torch.nn.utils.clip_grad_norm_(self.net.parameters(), 1.0)
+                        gnorm = torch.nn.utils.clip_grad_norm_(self.net.parameters(), 400.0)
 
                     # update network
                     self.opt.step()
