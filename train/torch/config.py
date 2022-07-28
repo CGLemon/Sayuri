@@ -10,7 +10,7 @@ class Config:
         self.batchsize = None
         self.macrobatchsize = None
         self.macrofactor = None
-        self.learning_rate = None
+        self.lr_schelude = None
         self.weight_decay = None
         self.train_dir = None
         self.steps_per_epoch = None
@@ -39,8 +39,8 @@ def parse_training_config(json_data, config):
 
     config.optimizer = train["Optimizer"]
     config.use_gpu = train["UseGPU"]
-    config.learning_rate = train["LearningRate"]
     config.weight_decay = train["WeightDecay"]
+    config.lr_schedule = train["LearningRateSchedule"]
 
     config.train_dir = train["TrainDirectory"]
     config.batchsize = train["BatchSize"]
@@ -49,7 +49,7 @@ def parse_training_config(json_data, config):
 
     config.num_workers = train["Workers"]
     config.steps_per_epoch = train["StepsPerEpoch"]
-    config.max_steps = train["MaxSteps"]
+    config.max_steps = train["MaxStepsPerRunning"]
     config.fixup_batch_norm = train["FixUpBatchNorm"]
     config.store_path = train["StorePath"]
 

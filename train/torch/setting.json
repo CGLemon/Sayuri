@@ -23,11 +23,20 @@
         "UseGPU": null,
         "Optimizer": "SGD",
         "StepsPerEpoch" : 1000,
-        "MaxSteps": 128000,
+        "MaxStepsPerRunning": 1024000,
         "Workers": 4,
         "BatchSize": 256,
         "MacroFactor": 1,
-        "LearningRate": 1e-2,
+
+        "LearningRateSchedule": [
+            [0,      1e-2],
+            [128000, 3e-3],
+            [256000, 1e-3],
+            [384000, 3e-4],
+            [512000, 1e-4],
+            [768000, 1e-5]
+         ],
+
         "WeightDecay": 1e-4,
         "FixUpBatchNorm": false,
         "TrainDirectory": "train-dir",

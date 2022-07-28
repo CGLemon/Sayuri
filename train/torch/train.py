@@ -146,8 +146,8 @@ class TrainingPipe():
         self.opt_name = cfg.optimizer
 
         # Optimizer's parameters.
-        self.learning_rate = cfg.learning_rate
         self.weight_decay = cfg.weight_decay
+        self.lr_schedule = cfg.lr_schedule
 
         self.use_gpu = cfg.use_gpu
         self.device = torch.device('cpu')
@@ -170,21 +170,23 @@ class TrainingPipe():
             self.net = DataParallel(self.net) 
             self.module  = self.net.module
 
+        init_lr = self.__get_lr_schedule(0)
+
         # We may fail to load the optimizer. So init
-        # it before load it.
+        # it before loading it.
         self.opt = None
         if self.opt_name == "Adam":
             self.opt = torch.optim.Adam(
                 self.net.parameters(),
-                lr=self.learning_rate,
+                lr=init_lr,
                 weight_decay=self.weight_decay,
             )
         elif self.opt_name == "SGD":
             # Recommanded optimizer, the SGD is better than Adam
-            # in this kind training task.
+            # in this kind of training task.
             self.opt = torch.optim.SGD(
                 self.net.parameters(),
-                lr=self.learning_rate,
+                lr=init_lr,
                 momentum=0.9,
                 nesterov=True,
                 weight_decay=self.weight_decay,
@@ -202,22 +204,15 @@ class TrainingPipe():
         with open(info_file, 'w') as f:
             f.write(self.module.simple_info())
 
-    def __lr_scheduler(self):
-        pass
-
-    def __optimizer_to(self, optim, device):
-        for param in optim.state.values():
-            # Not sure there are any global tensors in the state dict
-            if isinstance(param, torch.Tensor):
-                param.data = param.data.to(device)
-                if param._grad is not None:
-                    param._grad.data = param._grad.data.to(device)
-            elif isinstance(param, dict):
-                for subparam in param.values():
-                    if isinstance(subparam, torch.Tensor):
-                        subparam.data = subparam.data.to(device)
-                        if subparam._grad is not None:
-                            subparam._grad.data = subparam._grad.data.to(device)
+    def __get_lr_schedule(self, num_steps):
+        # Get current learning rate with schedule.
+        curr_lr = 0.2
+        for s, lr in self.lr_schedule:
+            if s <= num_steps:
+                curr_lr = lr
+            else:
+                break
+        return curr_lr
 
     def __load_current_status(self):
         #TODO: Merge optimizer status and model into one file.
@@ -247,16 +242,17 @@ class TrainingPipe():
             print("load optimizer: {}".format(opt_name))
 
         # update to current learning rate...
-        self.opt.param_groups[0]["lr"] = self.learning_rate
-        self.opt.param_groups[0]["weight_decay"] = self.weight_decay
+        curr_lr = self.__get_lr_schedule(last_steps)
 
-        self.__optimizer_to(self.opt, self.device)
+        for param in self.opt.param_groups:
+            param["lr"] = curr_lr
+            param["weight_decay"] = self.weight_decay
+
+        print("Current steps is {}, learning rate is {}".format(last_steps, curr_lr))
 
         return last_steps
 
     def __store_current_status(self, steps):
-        # TODO: Automatically parse the last steps from model's name.
-
         steps_name = os.path.join(self.store_path, "last_steps.txt")
         with open(steps_name, 'w') as f:
             f.write(str(steps))
@@ -285,9 +281,9 @@ class TrainingPipe():
             running_loss_dict['fina_score_loss'] = 0
             return running_loss_dict
 
-        keep_running = True
         running_loss_dict = get_running_loss_dict()
         num_steps = init_steps
+        keep_running = True
         macro_steps = 0
 
         verbose_steps = 1000
@@ -361,7 +357,11 @@ class TrainingPipe():
                     # update network
                     self.opt.step()
                     self.opt.zero_grad()
+
+                    # update learning rate
                     num_steps += 1
+                    for param in self.opt.param_groups:
+                        param["lr"] = self.__get_lr_schedule(num_steps) 
 
                     # dump the verbose
                     if num_steps % verbose_steps == 0:
@@ -384,14 +384,14 @@ class TrainingPipe():
                         dump_outs += "\twdl loss: {:.4f}\n".format(running_loss_dict['wdl_loss']/verbose_steps)
                         dump_outs += "\tstm loss: {:.4f}\n".format(running_loss_dict['stm_loss']/verbose_steps)
                         dump_outs += "\tfina score loss: {:.4f}".format(running_loss_dict['fina_score_loss']/verbose_steps)
-
                         print(dump_outs)
+
                         log_outs = "steps: {} -> loss: {:.4f}, speed: {:.2f} | opt: {}, learning rate: {}, batch size: {}".format(
                                        num_steps,
                                        running_loss_dict['loss']/verbose_steps,
                                        verbose_steps/elapsed,
                                        self.opt_name,
-                                       self.learning_rate,
+                                       self.opt.param_groups[0]["lr"],
                                        self.batchsize)
                         log_file = os.path.join(self.store_path, "log.txt")
                         with open(log_file, 'a') as f:
@@ -399,7 +399,7 @@ class TrainingPipe():
 
                         running_loss_dict = get_running_loss_dict()
 
-                # should we stop?
+                # should we stop it?
                 if num_steps >= self.max_steps + init_steps:
                     keep_running = False
                     break
