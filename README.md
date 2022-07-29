@@ -53,7 +53,7 @@ Accelerate to load the network file. Fast Float library is required.
 
 ## Weights and Book
 
-You may download the weights file and opening book from my [google drive](https://drive.google.com/drive/folders/1SgPL3Eyhllr6BCDyi_7D8LnOUYxPAAxQ?usp=sharing). The weights size is 15 blocks and 192 filters. The opening book is human-like book, trained on profession games. Force the Sayuri to play variable opening moves. It is just fun for playing.
+You may download the weights file and opening book from my [google drive](https://drive.google.com/drive/folders/1OiVcIwewcIh5nnmR8pBFKMSdkbBYNF2c?usp=sharing). The weights size is 15 blocks and 192 filters. The opening book is human-like book, trained on profession games. Force the Sayuri to play variable opening moves. It is just fun for playing.
 
 ## Engine Arguments
 
