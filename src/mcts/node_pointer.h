@@ -15,8 +15,8 @@ template<typename NodeType, typename DataType>
 class NodePointer {
 public:
     NodePointer() = default;
-    NodePointer(DataType data);
-    NodePointer(NodePointer &&n);
+    explicit NodePointer(DataType data);
+    explicit NodePointer(NodePointer &&n);
     NodePointer& operator=(NodePointer&&);
     
     // Construct with left value. Forbid it because

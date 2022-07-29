@@ -36,7 +36,7 @@ class Node {
 public:
     using Edge = NodePointer<Node, NodeData>;
 
-    Node(NodeData data);
+    explicit Node(NodeData data);
     ~Node();
 
     // Expand this node.
