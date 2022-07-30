@@ -9,6 +9,7 @@
 #include "neural/encoder.h"
 #include "utils/log.h"
 #include "utils/format.h"
+#include "utils/operators.h"
 #include "book/book.h"
 
 #ifdef WIN32
@@ -18,6 +19,8 @@
 #endif
 
 constexpr int Search::kMaxPlayouts;
+
+ENABLE_BITWISE_OPERATORS_ON(Search::OptionTag);
 
 Search::~Search() {
     ReleaseTree();
@@ -564,7 +567,7 @@ bool ShouldPass(GameState &state, ComputationResult &result, bool friendly_pass)
 
 int Search::ThinkBestMove() {
     auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
-    auto result = Computation(max_playouts_, 0, (OptionTag)tag);
+    auto result = Computation(max_playouts_, 0, tag);
 
     if (ShouldResign(root_state_, result, param_->resign_threshold)) {
         return kResign;
@@ -579,7 +582,7 @@ int Search::ThinkBestMove() {
 
 int Search::GetSelfPlayMove() {
     auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
-    auto result = Computation(max_playouts_, 0, (OptionTag)tag);
+    auto result = Computation(max_playouts_, 0, tag);
 
     int move = result.best_move;
     if (param_->random_moves_cnt > result.movenum) {
@@ -608,7 +611,7 @@ int Search::Analyze(int interval, bool ponder) {
     int playouts = ponder == true ? GetPonderPlayouts()
                                       : max_playouts_;
 
-    auto result = Computation(playouts, interval, (OptionTag)tag);
+    auto result = Computation(playouts, interval, tag);
     if (ShouldResign(root_state_, result, param_->resign_threshold)) {
         return kResign;
     }
