@@ -10,16 +10,15 @@
 
 #include <limits>
 
-std::unordered_map<std::string, Option> options_map;
+std::unordered_map<std::string, Option> kOptionsMap;
 
 #define OPTIONS_EXPASSION(T)                        \
 template<>                                          \
 T GetOption<T>(std::string name) {                  \
-    return options_map.find(name)->second.Get<T>(); \
+    return kOptionsMap.find(name)->second.Get<T>(); \
 }                                                   \
 
 OPTIONS_EXPASSION(std::string)
-OPTIONS_EXPASSION(const char*)
 OPTIONS_EXPASSION(bool)
 OPTIONS_EXPASSION(int)
 OPTIONS_EXPASSION(float)
@@ -30,8 +29,8 @@ OPTIONS_EXPASSION(char)
 #define OPTIONS_SET_EXPASSION(T)                    \
 template<>                                          \
 bool SetOption<T>(std::string name, T val) {        \
-    auto res = options_map.find(name);              \
-    if (res != std::end(options_map)) {             \
+    auto res = kOptionsMap.find(name);              \
+    if (res != std::end(kOptionsMap)) {             \
         res->second.Set<T>(val);                    \
         return true;                                \
     }                                               \
@@ -39,7 +38,6 @@ bool SetOption<T>(std::string name, T val) {        \
 }
 
 OPTIONS_SET_EXPASSION(std::string)
-OPTIONS_SET_EXPASSION(const char*)
 OPTIONS_SET_EXPASSION(bool)
 OPTIONS_SET_EXPASSION(int)
 OPTIONS_SET_EXPASSION(float)
@@ -49,72 +47,72 @@ OPTIONS_SET_EXPASSION(char)
 
 
 void InitOptionsMap() {
-    options_map["help"] << Option::setoption(false);
-    options_map["mode"] << Option::setoption(std::string{"gtp"});
+    kOptionsMap["help"] << Option::setoption(false);
+    kOptionsMap["mode"] << Option::setoption(std::string{"gtp"});
 
     // engine options
-    options_map["ponder"] << Option::setoption(false);
-    options_map["reuse_tree"] << Option::setoption(false);
-    options_map["friendly_pass"] << Option::setoption(false);
-    options_map["analysis_verbose"] << Option::setoption(false);
-    options_map["quiet"] << Option::setoption(false);
-    options_map["rollout"] << Option::setoption(false);
-    options_map["no_dcnn"] << Option::setoption(false);
+    kOptionsMap["ponder"] << Option::setoption(false);
+    kOptionsMap["reuse_tree"] << Option::setoption(false);
+    kOptionsMap["friendly_pass"] << Option::setoption(false);
+    kOptionsMap["analysis_verbose"] << Option::setoption(false);
+    kOptionsMap["quiet"] << Option::setoption(false);
+    kOptionsMap["rollout"] << Option::setoption(false);
+    kOptionsMap["no_dcnn"] << Option::setoption(false);
 
-    options_map["defualt_boardsize"] << Option::setoption(kDefaultBoardSize);
-    options_map["defualt_komi"] << Option::setoption(kDefaultKomi);
+    kOptionsMap["defualt_boardsize"] << Option::setoption(kDefaultBoardSize);
+    kOptionsMap["defualt_komi"] << Option::setoption(kDefaultKomi);
 
-    options_map["cache_memory_mib"] << Option::setoption(400);
-    options_map["playouts"] << Option::setoption(0);
-    options_map["const_time"] << Option::setoption(0);
-    options_map["batch_size"] << Option::setoption(0);
-    options_map["threads"] << Option::setoption(0);
+    kOptionsMap["cache_memory_mib"] << Option::setoption(400);
+    kOptionsMap["playouts"] << Option::setoption(0);
+    kOptionsMap["const_time"] << Option::setoption(0);
+    kOptionsMap["batch_size"] << Option::setoption(0);
+    kOptionsMap["threads"] << Option::setoption(0);
 
-    options_map["weights_file"] << Option::setoption(std::string{});
-    options_map["book_file"] << Option::setoption(std::string{});
-    options_map["patterns_file"] << Option::setoption(std::string{});
+    kOptionsMap["weights_file"] << Option::setoption(std::string{});
+    kOptionsMap["book_file"] << Option::setoption(std::string{});
+    kOptionsMap["patterns_file"] << Option::setoption(std::string{});
 
-    options_map["use_gpu"] << Option::setoption(false);
-    options_map["gpus"] << Option::setoption(std::string{});
-    options_map["gpu_waittime"] << Option::setoption(2);
+    kOptionsMap["use_gpu"] << Option::setoption(false);
+    kOptionsMap["gpus"] << Option::setoption(std::string{});
+    kOptionsMap["gpu_waittime"] << Option::setoption(2);
 
-    options_map["resign_threshold"] << Option::setoption(0.1f, 1.f, 0.f);
+    kOptionsMap["resign_threshold"] << Option::setoption(0.1f, 1.f, 0.f);
 
-    options_map["ci_alpha"] << Option::setoption(1e-5f, 1.f, 0.f);
-    options_map["lcb_reduction"] << Option::setoption(0.02f, 1.f, 0.f);
-    options_map["fpu_reduction"] << Option::setoption(0.25f);
-    options_map["fpu_root_reduction"] << Option::setoption(0.25f);
-    options_map["cpuct_init"] << Option::setoption(1.9f);
-    options_map["cpuct_root_init"] << Option::setoption(1.9f);
-    options_map["cpuct_base"] << Option::setoption(19652.f);
-    options_map["cpuct_root_base"] << Option::setoption(19652.f);
-    options_map["draw_factor"] << Option::setoption(0.f);
-    options_map["draw_root_factor"] << Option::setoption(0.f);
-    options_map["score_utility_factor"] << Option::setoption(0.05f);
+    kOptionsMap["ci_alpha"] << Option::setoption(1e-5f, 1.f, 0.f);
+    kOptionsMap["lcb_reduction"] << Option::setoption(0.02f, 1.f, 0.f);
+    kOptionsMap["fpu_reduction"] << Option::setoption(0.25f);
+    kOptionsMap["fpu_root_reduction"] << Option::setoption(0.25f);
+    kOptionsMap["cpuct_init"] << Option::setoption(1.9f);
+    kOptionsMap["cpuct_root_init"] << Option::setoption(1.9f);
+    kOptionsMap["cpuct_base"] << Option::setoption(19652.f);
+    kOptionsMap["cpuct_root_base"] << Option::setoption(19652.f);
+    kOptionsMap["draw_factor"] << Option::setoption(0.f);
+    kOptionsMap["draw_root_factor"] << Option::setoption(0.f);
+    kOptionsMap["score_utility_factor"] << Option::setoption(0.05f);
 
-    options_map["root_policy_temp"] << Option::setoption(1.f, 1.f, 0.f);
-    options_map["policy_temp"] << Option::setoption(1.f, 1.f, 0.f);
-    options_map["lag_buffer"] << Option::setoption(0);
-    options_map["early_symm_cache"] << Option::setoption(false);
+    kOptionsMap["root_policy_temp"] << Option::setoption(1.f, 1.f, 0.f);
+    kOptionsMap["policy_temp"] << Option::setoption(1.f, 1.f, 0.f);
+    kOptionsMap["lag_buffer"] << Option::setoption(0);
+    kOptionsMap["early_symm_cache"] << Option::setoption(false);
 
     // self-play options
-    options_map["random_min_visits"] << Option::setoption(1);
-    options_map["random_moves_cnt"] << Option::setoption(0);
+    kOptionsMap["random_min_visits"] << Option::setoption(1);
+    kOptionsMap["random_moves_cnt"] << Option::setoption(0);
 
-    options_map["dirichlet_noise"] << Option::setoption(false);
-    options_map["dirichlet_epsilon"] << Option::setoption(0.25f);
-    options_map["dirichlet_init"] << Option::setoption(0.03f);
-    options_map["dirichlet_factor"] << Option::setoption(361.f);
+    kOptionsMap["dirichlet_noise"] << Option::setoption(false);
+    kOptionsMap["dirichlet_epsilon"] << Option::setoption(0.25f);
+    kOptionsMap["dirichlet_init"] << Option::setoption(0.03f);
+    kOptionsMap["dirichlet_factor"] << Option::setoption(361.f);
 
-    options_map["forced_policy_factor"] << Option::setoption(0.f);
-    options_map["cap_playouts"] << Option::setoption(0);
-    options_map["first_pass_bonus"] << Option::setoption(false);
+    kOptionsMap["forced_policy_factor"] << Option::setoption(0.f);
+    kOptionsMap["cap_playouts"] << Option::setoption(0);
+    kOptionsMap["first_pass_bonus"] << Option::setoption(false);
 
-    options_map["num_games"] << Option::setoption(0);
-    options_map["parallel_games"] << Option::setoption(1);
-    options_map["komi_mean"] << Option::setoption(0.f);
-    options_map["komi_variant"] << Option::setoption(0.f);
-    options_map["target_directory"] << Option::setoption(std::string{});
+    kOptionsMap["num_games"] << Option::setoption(0);
+    kOptionsMap["parallel_games"] << Option::setoption(1);
+    kOptionsMap["komi_mean"] << Option::setoption(0.f);
+    kOptionsMap["komi_variant"] << Option::setoption(0.f);
+    kOptionsMap["target_directory"] << Option::setoption(std::string{});
 }
 
 void InitBasicParameters() {
