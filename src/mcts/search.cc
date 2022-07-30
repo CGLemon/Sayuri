@@ -708,8 +708,8 @@ void Search::GatherData(const GameState &state, ComputationResult &result) {
     }
 
     auto data = Training{};
-    data.version = GetTrainigVersion();
-    data.mode = GetTrainigMode();
+    data.version = GetTrainingVersion();
+    data.mode = GetTrainingMode();
 
     data.board_size = result.board_size;
     data.komi = result.komi;

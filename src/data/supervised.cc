@@ -192,8 +192,8 @@ bool Supervised::SgfProcess(std::string &sgfstring,
 
         auto buf = Training{};
 
-        buf.version = GetTrainigVersion();
-        buf.mode = GetTrainigMode();
+        buf.version = GetTrainingVersion();
+        buf.mode = GetTrainingMode();
         buf.board_size = board_size;
         buf.komi = komi;
         buf.side_to_move = main_state.GetToMove();

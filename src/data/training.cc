@@ -83,10 +83,10 @@ void Training::StreamOut(std::ostream &out) const {
     out << final_score << std::endl;
 }
 
-int GetTrainigVersion() {
+int GetTrainingVersion() {
     return 1;
 }
 
-int GetTrainigMode() {
+int GetTrainingMode() {
     return 0;
 }

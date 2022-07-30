@@ -5,6 +5,7 @@
 #include "utils/komi.h"
 #include "utils/format.h"
 #include "utils/gogui_helper.h"
+#include "version.h"
 
 #include "data/supervised.h"
 #include "neural/encoder.h"
@@ -65,9 +66,9 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
     if (const auto res = parser.Find("protocol_version", 0)) {
         out << GTPSuccess(std::to_string(kProtocolVerion));
     } else if (const auto res = parser.Find("name", 0)) {
-        out << GTPSuccess(kProgram);
+        out << GTPSuccess(GetProgramName());
     } else if (const auto res = parser.Find("version", 0)) {
-        out << GTPSuccess(kVersion);
+        out << GTPSuccess(GetProgramVersion());
     } else if (const auto res = parser.Find("showboard", 0)) {
         agent_->GetState().ShowBoard();
         out << GTPSuccess("");

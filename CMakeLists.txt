@@ -18,6 +18,7 @@ include_directories(${IncludePath})
 set(BASIC_SOURCES
     ${SOURCE_DIR}/main.cc
     ${SOURCE_DIR}/config.cc
+    ${SOURCE_DIR}/version.cc
     )
 
 set(GAME_SOURCES

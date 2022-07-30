@@ -55,6 +55,6 @@ struct Training {
     void StreamOut(std::ostream &out) const;
 };
 
-int GetTrainigVersion();
+int GetTrainingVersion();
 
-int GetTrainigMode();
+int GetTrainingMode();

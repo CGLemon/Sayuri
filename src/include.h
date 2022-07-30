@@ -4,4 +4,6 @@
 #include "selfplay/pipe.h"
 #include "utils/threadpool.h"
 #include "utils/log.h"
+#include "utils/format.h"
 #include "config.h"
+#include "version.h"
