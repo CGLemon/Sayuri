@@ -59,6 +59,8 @@ public:
         Book::Get().LoadBook(GetOption<std::string>("book_file"));
         GammasDict::Get().Initialize(GetOption<std::string>("patterns_file"));
 
+        curr_id_ = -1;
+
         Loop();
     }
 
@@ -73,4 +75,6 @@ private:
     std::string Execute(CommandParser &parser, bool &try_ponder);
 
     std::unique_ptr<Agent> agent_{nullptr};
+
+    int curr_id_;
 };

@@ -24,6 +24,22 @@ void GtpLoop::Loop() {
             auto parser = CommandParser(input);
             WRITING << ">>" << ' ' << input << std::endl;
 
+            curr_id_ = -1;
+
+            // check the command id here
+            if (const auto toke = parser.GetCommand(0)) {
+                auto toke_str = toke->Get<std::string>();
+                bool is_digit = true;
+
+                for (char c : toke_str) {
+                    is_digit &= isdigit(c);
+                }
+                if (is_digit) {
+                    curr_id_ = toke->Get<int>();
+                    parser.RemoveCommand(toke->Index());
+                }
+            }
+
             if (!parser.Valid()) {
                 continue;
             }
@@ -258,7 +274,11 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         if (const auto input = parser.GetCommand(2)) {
             interval = input->Get<int>();
         }
-        DUMPING << "=\n";
+        if (curr_id_ >= 0) {
+            DUMPING << "=" << curr_id_ << "\n";
+        } else {
+            DUMPING << "=\n";
+        }
         agent_->GetState().SetToMove(color);
         agent_->GetSearch().Analyze(interval, true);
         DUMPING << "\n";
@@ -276,7 +296,11 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         if (const auto input = parser.GetCommand(2)) {
             interval = input->Get<int>();
         }
-        DUMPING << "=\n";
+        if (curr_id_ >= 0) {
+            DUMPING << "=" << curr_id_ << "\n";
+        } else {
+            DUMPING << "=\n";
+        }
         agent_->GetState().SetToMove(color);
         auto move = agent_->GetSearch().Analyze(interval, false);
         agent_->GetState().PlayMove(move);
@@ -703,10 +727,16 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
 
 std::string GtpLoop::GTPSuccess(std::string response) {
     auto out = std::ostringstream{};
-    auto prefix = std::string{"= "};
+    auto prefix = std::string{"="};
     auto suffix = std::string{"\n\n"};
 
-    out << prefix << response << suffix;
+    out << prefix;
+    if (curr_id_ >= 0) {
+        out << curr_id_ << " ";
+    } else {
+        out << " ";
+    }
+    out << response << suffix;
 
     return out.str();
 }
