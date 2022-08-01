@@ -5,7 +5,6 @@
 #include "mcts/node_pointer.h"
 #include "mcts/parameters.h"
 #include "neural/network.h"
-#include "utils/mutex.h"
 
 #include <array>
 #include <vector>
@@ -91,6 +90,8 @@ public:
     float GetEval(const int color, const bool use_virtual_loss=true) const;
     float GetDraw() const;
 
+    // Get ownership map. Because we don't protect it, we should take it after
+    // the search finished.
     std::array<float, kNumIntersections> GetOwnership(int color) const;
     NodeEvals GetNodeEvals() const;
     void ApplyEvals(const NodeEvals *evals);

@@ -20,7 +20,7 @@
 
 constexpr int Search::kMaxPlayouts;
 
-ENABLE_BITWISE_OPERATORS_ON(Search::OptionTag);
+ENABLE_BITWISE_OPERATORS_ON(Search::OptionTag)
 
 Search::~Search() {
     ReleaseTree();

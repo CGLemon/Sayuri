@@ -798,7 +798,8 @@ float Node::GetEval(const int color, const bool use_virtual_loss) const {
     auto virtual_loss = 0;
 
     if (use_virtual_loss) {
-        // If the node is seaching, punish it.
+        // Punish the node if there are some threads in this 
+        // sub-tree.
         virtual_loss = GetVirtualLoss();
     }
 
@@ -902,13 +903,13 @@ void Node::ExpandCancel() {
 
 void Node::WaitExpanded() const {
     while (true) {
-        //TODO: Sleep some time because it is not busy lock. Implement
-        //      it and test the performance.
-
         auto v = expand_state_.load(std::memory_order_acquire);
         if (v == ExpandState::kExpanded) {
             break;
         }
+
+        // Wait some time to avoid busy waiting.
+        std::this_thread::yield();
     }
 }
 
