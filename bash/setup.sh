@@ -19,4 +19,4 @@ SOURCE_DIR=$source
 ENGINE_NAME="Sayuri"
 
 cp "$SOURCE_DIR/build/$ENGINE_NAME" "."
-cp "$SOURCE_DIR/torch" "."
+cp -r "$SOURCE_DIR/train/torch" "."
