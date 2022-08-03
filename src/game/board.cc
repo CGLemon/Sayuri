@@ -37,7 +37,10 @@ void Board::ComputeReachArea(std::vector<int> &result) const {
         return state_[vtx];
     };
 
+    // Compute black area.
     ComputeReachColor(kBlack, kEmpty, black, PeekState);
+
+    // Compute white area.
     ComputeReachColor(kWhite, kEmpty, white, PeekState);
 
     for (int y = 0; y < board_size_; ++y) {
@@ -46,8 +49,10 @@ void Board::ComputeReachArea(std::vector<int> &result) const {
             const auto vtx = GetVertex(x, y);
 
             if (black[vtx] && !white[vtx]) {
+                // The point is black.
                 result[idx] = kBlack;  
             } else if (white[vtx] && !black[vtx]) {
+                // The white is white.
                 result[idx] = kWhite;
             } else {
                 //The point belongs to both.
@@ -191,6 +196,7 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
         }
     }
 
+    // empty regions list
     auto regions_index = std::vector<int>(num_vertices_, -1);
     auto regions_next = std::vector<int>(num_vertices_, kNullVertex);
     auto regions_head = ClassifyGroups(kEmpty, ocupied, regions_index, regions_next);
@@ -199,8 +205,10 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
     // TODO: Do we need to think about sucide move?
     constexpr bool allow_sucide = false;
 
-    // Compute the potential vital regions.
-    // TODO: Do we need to compute potential vital regions here?
+   // TODO: Do we need to compute potential vital regions here?
+
+    // Compute the potential vital regions. That means that the region is
+    // possible to becomes vital area for any adjacent strings.
     for (int vtx : regions_head) {
         bool success = true;
         int pos = vtx;
@@ -213,12 +221,16 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
             if (state == kEmpty) { 
                 for (int k = 0; k < 4; ++k) {
                     const auto apos = directions_[k] + pos;
+
+                    // Empty point must be adjacent my string if the it is vital, Otherwise 
+                    // the point opp's potential eye.
                     if (ocupied[apos] == color) {
                         is_vital = true;
                         break;
                     }
                 }
             } else if (state == !color) {
+                // Opp's stone can not become opp's eye if we forbid the sucide move.
                 is_vital = true;
             }
 
@@ -239,6 +251,7 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
         }
     }
 
+    // my strings list
     auto strings_index = std::vector<int>(num_vertices_, -1);
     auto strings_next = std::vector<int>(num_vertices_, kNullVertex);
     auto strings_head = ClassifyGroups(color, ocupied, strings_index, strings_next);
@@ -255,7 +268,7 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
 
             if (!IsPassAliveString(vtx, allow_sucide, vitals, ocupied,
                                        regions_index, regions_next, strings_index, strings_next)) {
-                // The string is not pass alive. Remove the uncertainty life string.
+                // The string is not pass-alive. Remove the uncertainty life string.
 
                 int pos = vtx;
                 do {
@@ -263,6 +276,8 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
                     ocupied[pos] = kEmpty;
                     pos = strings_next[pos];
 
+                    // The adjacent empty regions of removed string are not
+                    // vital any more. Remove they.
                     for (int k = 0; k < 4; ++k) {
                         const auto apos = directions_[k] + pos;
                         if (vitals[apos]) {
@@ -302,7 +317,7 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
         } while(pos != vtx);
     }
 
-    // Fill the pass alive vitals.
+    // Fill the pass-alive vitals.
     if (mark_vitals) {
         for (int vtx : regions_head) {
             int pos = vtx;
@@ -355,7 +370,7 @@ bool Board::IsPassAliveString(const int vtx,
         for (int k = 0; k < 4; ++k) {
             const auto apos = directions_[k] + pos;
             if (vitals[apos]) {
-                // This region is potential vital region. Try to search it.
+                // This region is potential vital region for my string. Check it.
                 int rpos = apos;
                 bool success = true;
                 do {
@@ -363,7 +378,7 @@ bool Board::IsPassAliveString(const int vtx,
                     int state = allow_sucide == true ? features[rpos] : GetState(rpos);
                     if (state == kEmpty) {
                         for (int k = 0; k < 4; ++k) {
-                            // Check points of adjacent empty.
+                            // Check that points of adjacent are empty.
                             const auto aapos = directions_[k] + rpos;                         
                             if(strings_index[aapos] == my_index) {
                                 is_adjacent = true;
@@ -388,6 +403,8 @@ bool Board::IsPassAliveString(const int vtx,
         pos = strings_next[pos];
     } while(pos != vtx);
 
+    // We say a string is pass-alive. There must be two or more 
+    // vitals adjacent to it.
     return vitals_list.size() >= 2;
 }
 
@@ -401,11 +418,17 @@ bool Board::IsPassDeadRegion(const int vtx,
                                            bool allow_sucide,
                                            std::vector<int> &features,
                                            std::vector<bool> &inner_regions) {
+        // This is greedy algorithm, we only promise that the position is not
+        // potential eye if it return false. It is possible that the position
+        // is fake eye even if it return true. 
+
         if (!allow_sucide && GetState(vertex) == color) {
+            // My stone can not become to my eye if we forbid the sucide move.
             return false;
         }
 
-        // The potential eye is possible to become the real eye in the region.
+        // The potential eye is possible to become the real eye in the postion if 
+        // four adjacent point is mine or empty.
         std::array<int, 4> side_count = {0, 0, 0, 0};
 
         for (int k = 0; k < 4; ++k) {
@@ -417,6 +440,8 @@ bool Board::IsPassDeadRegion(const int vtx,
             return false;
         }
 
+        // The potential eye is possible to become the real eye in the postion if 
+        // three adjacent corner is mine or empty or out of border.
         std::array<int, 4> corner_count = {0, 0, 0, 0};
 
         for (int k = 4; k < 8; ++k) {
@@ -443,30 +468,39 @@ bool Board::IsPassDeadRegion(const int vtx,
     // we want to search.
     auto inner_regions = std::vector<bool>(features.size(), false);
 
-    // The inner regions may cause the false-eye life. The false will
-    // become the potential eye in this condition.
+    // The inner regions may cause the false-eye life (Two-Headed Dragon). The 
+    // false eyes will become the potential eyes in this condition.
+    // 
+    // false-eye life: https://senseis.xmp.net/?TwoHeadedDragon
     ComputeInnerRegions(vtx, color, regions_next, inner_regions);
 
-    auto potentia_eyes = std::vector<int>{};
+    auto potential_eyes = std::vector<int>{};
     int pos = vtx;
     do {
         // Search all potential eyes in this region.
         if (IsPotentialEye(pos, color, allow_sucide, features, inner_regions)) {
-            potentia_eyes.emplace_back(pos);
+            potential_eyes.emplace_back(pos);
         }
         pos = regions_next[pos];
     } while(pos != vtx);
 
-    int eyes_count = potentia_eyes.size();
+    int eyes_count = potential_eyes.size();
 
     if (eyes_count == 2) {
         // It is possible to be pass-dead, if there are only two potential eyes. The
         // case is two eyes are adjacent to each others.
-        if (IsNeighbor(potentia_eyes[0], potentia_eyes[1])) {
+        //
+        // ..ox..
+        // ooox..  // two potential eyes are adjacent to each others,
+        // xxxx..  // white string is only one eye.
+        // ......
+
+        if (IsNeighbor(potential_eyes[0], potential_eyes[1])) {
             eyes_count -= 1;
         }
     }
 
+    // We say a string is pass-dead if the maximum potential eye is lower than 2.
     return eyes_count < 2;
 }
 
@@ -531,9 +565,13 @@ std::vector<int> Board::ClassifyGroups(const int target,
                                            std::vector<int> &features,
                                            std::vector<int> &regions_index,
                                            std::vector<int> &regions_next) const {
+    // Set -1 is out of border area.
     std::fill(std::begin(regions_index), std::end(regions_index), -1);
+
+    // Set kNullVertex is out of border area.
     std::fill(std::begin(regions_next), std::end(regions_next), kNullVertex);
 
+    // All invalid strings (groups) 's index is 0.
     for (int y = 0; y < board_size_; ++y) {
         for (int x = 0; x < board_size_; ++x) {
             const auto vtx = GetVertex(x, y);
@@ -542,9 +580,10 @@ std::vector<int> Board::ClassifyGroups(const int target,
         }
     }
 
-    auto head_list = std::vector<int>{};
-    auto marked = std::vector<bool>(num_vertices_, false);
-    auto groups_index = 1;
+    auto head_list = std::vector<int>{}; // all string heads vertex postion
+    auto marked = std::vector<bool>(num_vertices_, false); // true if the vertex is usesd.
+    auto groups_index = 1; // valid index is from 1.
+
     for (int y = 0; y < board_size_; ++y) {
         for (int x = 0; x < board_size_; ++x) {
             const auto vtx = GetVertex(x, y);
@@ -552,10 +591,13 @@ std::vector<int> Board::ClassifyGroups(const int target,
             if (!marked[vtx] && features[vtx] == target) {
                 auto buf = std::vector<bool>(num_vertices_, false);
 
+                // Gather all vertices which connect with head vertex.
                 ComputeReachGroup(vtx, target, buf, [&](int v){ return features[v]; });
 
                 auto vertices = GatherVertices(buf);
                 auto next_vertex = kNullVertex;
+
+                // Link this string.
                 for (const auto v : vertices) {
                     regions_next[v] = next_vertex;
                     regions_index[v] = groups_index;
@@ -566,6 +608,7 @@ std::vector<int> Board::ClassifyGroups(const int target,
                     regions_next[vertices[0]] = next_vertex;
                 }
 
+                // Gather this string head.
                 groups_index += 1;
                 head_list.emplace_back(vtx);
             }

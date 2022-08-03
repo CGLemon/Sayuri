@@ -22,29 +22,67 @@ public:
     void SetToMove(int color);
     void SetLastMove(int vertex);
 
+    // Get the current board size.
     int GetBoardSize() const;
+
+    // Get the current letter box size (board size + 2).
     int GetLetterBoxSize() const;
+
+    // Get the current number of vertices (letter box).
     int GetNumVertices() const;
+
+    // Get the current number of intersections.
     int GetNumIntersections() const;
+
+    // Get the side to move color.
     int GetToMove() const;
+
+    // Get the last move.
     int GetLastMove() const;
+
+    // Get ko move if last move is ko move. Will reture null vertex
+    // if last move is not ko move.
     int GetKoMove() const;
+
+    // Number of accumulated pass move played.  Will reture 0 if last
+    // move is not pass move.
     int GetPasses() const;
+
+    // Get ko hash.
     std::uint64_t GetKoHash() const;
+
+    // Get zobrist hash.
     std::uint64_t GetHash() const;
+
+    // Get number of captured stones.
     int GetPrisoner(const int color) const;
+
+    // Get board state on this vertex position
     int GetState(const int vtx) const;
     int GetState(const int x, const int y) const;
+
+    // Get the number liberties of string.
     int GetLiberties(const int vtx) const;
+
+    // Get the number stones of string.
     int GetStones(const int vtx) const;
+
+    // Get the number of empty points. 
     int GetEmptyCount() const;
+
+    // Empty index to vertex.
     int GetEmpty(const int idx) const;
+
+    // Get all vertices of a string.
     std::vector<int> GetStringList(const int vtx) const;
 
+    // The vertex to x.
     int GetX(const int vtx) const;
+
+    // The vertex to y.
     int GetY(const int vtx) const;
 
-    // Get the vertex board move.
+    // Get the vertex position.
     int GetVertex(const int x, const int y) const;
 
     // Get the index board.
@@ -53,7 +91,7 @@ public:
     // Reture true if the move is legal.
     bool IsLegalMove(const int vertex, const int color) const;
     bool IsLegalMove(const int vertex, const int color,
-                     std::function<bool(int, int)> AvoidToMove) const;
+                         std::function<bool(int, int)> AvoidToMove) const;
 
     // Return true if the move is self-atari. Notice that
     // it is not full implement. We do not consider the 
@@ -86,8 +124,8 @@ public:
     // Play the move assume the move is legal.
     void PlayMoveAssumeLegal(const int vtx, const int color);
 
-    // The GTP showboard.
-    std::string GetBoardString(const int last_move, bool is_sgf) const;
+    // Get the current board states and informations, for GTP showboard.
+    std::string GetBoardString(const int last_move, bool y_invert) const;
 
     // Compute the symmetry Zobrist hashing.
     std::uint64_t ComputeSymmetryHash(int komove, int symmetry) const;
@@ -96,13 +134,16 @@ public:
     std::uint64_t ComputeKoHash(int symmetry) const;
 
     int ComputeReachGroup(int start_vertex, int spread_color,
-                          std::vector<bool> &buf,
-                          std::function<int(int)> Peek) const;
+                              std::vector<bool> &buf,
+                              std::function<int(int)> Peek) const;
     int ComputeReachGroup(int start_vertex, int spread_color, std::vector<bool> &buf) const;
 
 
+    // Remove the marked strings from board.
     void RemoveMarkedStrings(std::vector<int> &marked);
 
+
+    // for patterns...
     bool MatchPattern3(const int vtx, const int color) const;
     std::uint64_t GetPatternHash(const int vtx, const int color, const int dist) const;
     std::uint64_t GetSurroundPatternHash(std::uint64_t hash,
@@ -155,7 +196,7 @@ protected:
     // The board size.
     int board_size_;
 
-    // The letter box size.
+    // The letter box size (board size + 2).
     int letter_box_size_;
 
     // The vertices number.
@@ -176,7 +217,7 @@ protected:
     // The count of empties.
     int empty_cnt_;
 
-    // The passes number.
+    // The accumulated passes number.
     int passes_;
 
     // The move number.
@@ -236,7 +277,7 @@ private:
     // About to display the board information.
     bool IsStar(const int x, const int y) const;
     std::string GetStateString(const VertexType color, bool is_star) const;
-    std::string GetSpcacesString(const int times) const;
+    std::string GetSpacesString(const int times) const;
     std::string GetColumnsString(const int bsize) const;
     std::string GetPrisonersString() const;
     std::string GetHashingString() const;
@@ -258,7 +299,7 @@ private:
 
     void IncrementPrisoner(const int color, const int val);
 
-    // Update the board after do a move.
+    // Update the board after doing a legal move.
     int UpdateBoard(const int vtx, const int color);
 
     void SetPasses(int val);

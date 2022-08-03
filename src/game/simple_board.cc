@@ -113,7 +113,7 @@ std::string SimpleBoard::GetStateString(const VertexType color, bool is_star) co
     return res.str();
 }
 
-std::string SimpleBoard::GetSpcacesString(const int times) const {
+std::string SimpleBoard::GetSpacesString(const int times) const {
     auto res = std::ostringstream{};
     for (int i = 0; i < times; ++i) {
         res << ' ';
@@ -137,42 +137,43 @@ std::string SimpleBoard::GetColumnsString(const int bsize) const {
 
 std::string SimpleBoard::GetHashingString() const {
     auto out = std::ostringstream{};
-    out << std::hex;
-    out << "Hash: " << GetHash() << " | ";
-    out << "Ko Hash: " << GetKoHash();
-    out << std::dec << std::endl;
+    out << std::hex
+            << "Hash: " << GetHash() << " | "
+            << "Ko Hash: " << GetKoHash()
+            << std::dec // cancel hex
+            << std::endl;
     return out.str();
 }
 
 std::string SimpleBoard::GetPrisonersString() const {
     auto out = std::ostringstream{};
-    out << "BLACK (X) has captured ";
-    out << std::to_string(GetPrisoner(kBlack));
-    out << " stones" << std::endl;
-    out << "WHITE (O) has captured ";
-    out << std::to_string(GetPrisoner(kWhite));
-    out << " stones" << std::endl;
+    out << "BLACK (X) has captured "
+            << std::to_string(GetPrisoner(kBlack))
+            << " stones" << std::endl
+            << "WHITE (O) has captured "
+            << std::to_string(GetPrisoner(kWhite))
+            << " stones" << std::endl;
     return out.str();
 }
 
-std::string SimpleBoard::GetBoardString(const int last_move, bool is_sgf) const {
+std::string SimpleBoard::GetBoardString(const int last_move, bool y_invert) const {
     auto out = std::ostringstream{};
     auto boardsize = GetBoardSize();
-    boardsize > 9 ? (out << GetSpcacesString(3))
-                  : (out << GetSpcacesString(2));
+    boardsize > 9 ? (out << GetSpacesString(3))
+                  : (out << GetSpacesString(2));
     out << GetColumnsString(boardsize);
 
     for (int y = 0; y < boardsize; y++) {
-        const auto row = is_sgf ? y : boardsize - y - 1;
+        const auto row = y_invert ? y : boardsize - y - 1;
 
         out << std::to_string(row + 1);
         if (row < 9 && boardsize > 9) {
-            out << GetSpcacesString(1);
+            out << GetSpacesString(1);
         }
         if (last_move == GetVertex(0, row)) {
-            out << "(";
+            out << '(';
         } else {
-            out << GetSpcacesString(1);
+            out << GetSpacesString(1);
         }
 
         for (int x = 0; x < boardsize; x++) {
@@ -182,18 +183,18 @@ std::string SimpleBoard::GetBoardString(const int last_move, bool is_sgf) const 
                        static_cast<VertexType>(state), IsStar(x, row));
 
             if (last_move == GetVertex(x, row)) {
-                out << ")";
+                out << ')';
             } else if (x != boardsize - 1 && last_move == GetVertex(x, row) + 1) {
-                out << "(";
+                out << '(';
             } else {
-                out << GetSpcacesString(1);
+                out << GetSpacesString(1);
             }
         }
         out << std::to_string(row + 1);
         out << std::endl;
     }
-    boardsize > 9 ? (out << GetSpcacesString(3))
-                  : (out << GetSpcacesString(2));
+    boardsize > 9 ? (out << GetSpacesString(3))
+                  : (out << GetSpacesString(2));
     out << GetColumnsString(boardsize);
     out << GetPrisonersString();
     out << GetHashingString();
@@ -814,7 +815,7 @@ bool SimpleBoard::IsSelfAtariMove(const int vtx, const int color) const {
             // We can capture opponent's string.
             my_libs += 1;
 
-            // TODO: Full implement here.
+            // TODO: Fully implement it here.
         }
     }
 
@@ -1427,9 +1428,9 @@ int SimpleBoard::UpdateBoard(const int vtx, const int color) {
 void SimpleBoard::SetPasses(int val) {
     if (val > 4) {
         val = 4;
-     }
-     UpdateZobristPass(val, passes_);
-     passes_ = val;
+    }
+    UpdateZobristPass(val, passes_);
+    passes_ = val;
 }
 
 void SimpleBoard::IncrementPasses() {

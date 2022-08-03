@@ -78,6 +78,7 @@ enum LadderType {
 
 static constexpr int KLibertiesReset = 16384;
 
+#undef MAX_BOARD_SIZE
 #undef BLACK_NUMBER
 #undef WHITE_NUMBER
 #undef EMPTY_NUMBER

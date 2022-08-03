@@ -19,7 +19,7 @@ public:
     std::string GetDebugString(int boardsize) const;
 
 private:
-    static constexpr int kTableSize = kBoardSize + 1; // Allocate big enough tables.
+    static constexpr int kTableSize = kBoardSize + 1; // Allocate the big enough tables.
 
     void PartInitialize(int boardsize);
 
