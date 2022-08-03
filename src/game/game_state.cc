@@ -154,7 +154,7 @@ int GameState::TextToVertex(std::string text) {
     return board_.GetVertex(x, y);
 }
 
-std::string GameState::VertexToSgf(const int vtx) {
+std::string GameState::VertexToSgf(const int vtx) const {
     assert(vtx != kNullVertex);
 
     if (vtx == kPass || vtx == kResign) {
@@ -180,7 +180,7 @@ std::string GameState::VertexToSgf(const int vtx) {
     return out.str();
 }
 
-std::string GameState::VertexToText(const int vtx) {
+std::string GameState::VertexToText(const int vtx) const {
     assert(vtx != kNullVertex);
 
     if (vtx == kPass) {
@@ -232,6 +232,15 @@ bool GameState::PlayTextMove(std::string input) {
     }
 
     return PlayMove(vertex, color);
+}
+
+void GameState::ShowMoveTypes(int vtx, int color) const {
+    if (color == kBlack) {
+        LOGGING << "Black ";
+    } else {
+        LOGGING << "White ";
+    }
+    LOGGING << VertexToText(vtx) << ' ' << board_.GetMoveTypesString(vtx, color) << '\n';
 }
 
 std::string GameState::GetStateString() const {

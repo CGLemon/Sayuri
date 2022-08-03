@@ -32,9 +32,12 @@ public:
 
     int TextToVertex(std::string text);
 
-    std::string VertexToSgf(const int vtx);
+    std::string VertexToSgf(const int vtx) const;
 
-    std::string VertexToText(const int vtx);
+    std::string VertexToText(const int vtx) const;
+
+    // for debug
+    void ShowMoveTypes(int vtx, int color) const;
 
     // GTP interface to play move.
     bool PlayTextMove(std::string input);

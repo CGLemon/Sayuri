@@ -796,30 +796,34 @@ bool SimpleBoard::IsLadder(const int vtx, std::vector<int> &vital_moves) const {
     }
 
     assert(res != LadderType::kGoodForNeither);
-    return res == LadderType::kGoodForHunter;
+    return !vital_moves.empty();
 }
 
 bool SimpleBoard::IsSelfAtariMove(const int vtx, const int color) const {
     int my_libs = CountPliberties(vtx);
     auto potential_libs_buf = std::vector<int>{};
+    auto my_parent_strings = std::vector<int>{};
 
     for (int k = 0; k < 4; ++k) {
         const auto avtx = vtx + directions_[k];
-        const auto libs =  strings_.GetLiberty(strings_.GetParent(avtx));
+        const auto aip = strings_.GetParent(avtx);
+        const auto libs =  strings_.GetLiberty(aip);
         const auto state = GetState(avtx);
 
         if (state == color) {
             // Connect with my string.
             FindStringLiberties(avtx, potential_libs_buf);
+            my_parent_strings.emplace_back(aip);
         } else if (state == (!color) && libs <= 1) {
             // We can capture opponent's string.
             my_libs += 1;
 
-            // TODO: Fully implement it here.
+            // TODO: Fully implement it here. Find gaining liberties by
+            //       capturing.
         }
     }
 
-    int potential_libs = potential_libs_buf.size() - 1; // one is vtx
+    int potential_libs = potential_libs_buf.size() - (int)(!my_parent_strings.empty());
 
     return (potential_libs + my_libs) == 1;
 }

@@ -1,5 +1,6 @@
 #include "game/board.h"
 
+#include <sstream>
 #include <algorithm>
 #include <set>
 
@@ -627,4 +628,60 @@ std::vector<int> Board::GatherVertices(std::vector<bool> &buf) const {
     }
 
     return result;
+}
+
+std::string Board::GetMoveTypesString(int vtx, int color) const {
+    auto out = std::ostringstream{};
+    out << '{';
+    int i = 0;
+
+    if (IsCaptureMove(vtx, color)) {
+        if (i++ != 0) out << ", ";
+        out << "Capture";
+    }
+    if (IsEscapeMove(vtx, color)) {
+        if (i++ != 0) out << ", ";
+        out << "Escape";
+    }
+    if (IsRealEye(vtx, color)) {
+        if (i++ != 0) out << ", ";
+        out << "Real Eye";
+    }
+    if (IsSimpleEye(vtx, color)) {
+        if (i++ != 0) out << ", ";
+        out << "Eye Shape";
+    }
+    if (IsSeki(vtx)) {
+        if (i++ != 0) out << ", ";
+        out << "Seki";
+    }
+    if (IsAtariMove(vtx, color)) {
+        if (i++ != 0) out << ", ";
+        out << "Atari";
+    }
+    if (IsSelfAtariMove(vtx, color)) {
+        if (i++ != 0) out << ", ";
+        out << "Self Atari";
+    }
+
+    for (int k = 0; k < 4; ++k) {
+        auto vital_moves = std::vector<int>{};
+        const auto avtx = vtx + directions_[k];
+
+        if (IsLadder(avtx, vital_moves)) {
+            auto libs = GetLiberties(avtx);
+            if (libs == 1) {
+                if (i++ != 0) out << ", ";
+                out << "Ladder Escape";
+            } else if (libs == 2) {
+                if (i++ != 0) out << ", ";
+                out << "Ladder Atari";
+            } else {
+                if (i++ != 0) out << ", ";
+                out << "Ladder Error";
+            }
+        }
+    }
+    out << ')';
+    return out.str();
 }

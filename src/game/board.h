@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <string>
 
 #include "game/simple_board.h"
 #include "game/types.h"
@@ -29,6 +30,8 @@ public:
 
     // Compute the seki area.
     void ComputeSekiPoints(std::vector<bool> &result) const;
+
+    std::string GetMoveTypesString(int vtx, int color) const;
 
 private:
     // Compute all pass-alive string.
