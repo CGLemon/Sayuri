@@ -1,10 +1,10 @@
 import torch
 
 # input shape must [batch, channel, x, y]
-def torch_symmetry(symm, plane, inves=False):
-    if not inves:
+def torch_symmetry(symm, plane, invert=False):
+    if not invert:
         return __symmetry_planes(symm, plane)
-    return __symmetry_planes_inves(symm, plane)
+    return __symmetry_planes_invert(symm, plane)
 
 
 def __symmetry_planes(symm, plane):
@@ -16,7 +16,7 @@ def __symmetry_planes(symm, plane):
     return transformed
 
 
-def __symmetry_planes_inves(symm, plane):
+def __symmetry_planes_invert(symm, plane):
     rot, use_flip = __get_direction(symm)
 
     if use_flip:

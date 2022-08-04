@@ -582,7 +582,7 @@ class Network(nn.Module):
     def forward(self, planes, target=None, use_symm=False):
         symm = int(np.random.choice(8, 1)[0])
         if use_symm:
-            planes = torch_symmetry(symm, planes, inves=False)
+            planes = torch_symmetry(symm, planes, invert=False)
 
         # mask buffers
         mask = planes[:, (self.input_channels-1):self.input_channels , :, :]
@@ -610,7 +610,7 @@ class Network(nn.Module):
         prob_without_pass = self.prob(pol, mask) + (1.0-mask) * CRAZY_NEGATIVE_VALUE
 
         if use_symm:
-            prob_without_pass = torch_symmetry(symm, prob_without_pass, inves=True)
+            prob_without_pass = torch_symmetry(symm, prob_without_pass, invert=True)
         prob_without_pass = torch.flatten(prob_without_pass, start_dim=1, end_dim=3)
         prob_pass = self.prob_pass_fc(pol_inter)
         prob = torch.cat((prob_without_pass, prob_pass), 1)
@@ -619,7 +619,7 @@ class Network(nn.Module):
         # policy will be zero after softmax 
         aux_prob_without_pass = self.aux_prob(pol, mask) + (1.0-mask) * CRAZY_NEGATIVE_VALUE
         if use_symm:
-            aux_prob_without_pass = torch_symmetry(symm, aux_prob_without_pass, inves=True)
+            aux_prob_without_pass = torch_symmetry(symm, aux_prob_without_pass, invert=True)
         aux_prob_without_pass = torch.flatten(aux_prob_without_pass, start_dim=1, end_dim=3)
         aux_prob_pass = self.aux_prob_pass_fc(pol_inter)
         aux_prob = torch.cat((aux_prob_without_pass, aux_prob_pass), 1)
@@ -634,7 +634,7 @@ class Network(nn.Module):
 
         ownership = self.ownership_conv(val, mask)
         if use_symm:
-            ownership = torch_symmetry(symm, ownership, inves=True)
+            ownership = torch_symmetry(symm, ownership, invert=True)
         ownership = torch.flatten(ownership, start_dim=1, end_dim=3)
         ownership = torch.tanh(ownership)
 

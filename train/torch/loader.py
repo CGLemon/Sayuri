@@ -199,7 +199,7 @@ class Loader:
 
         self.done = gather_recursive_files(self.dirname)
 
-    def next(self):
+    def next(self, parse):
         if self.stream_end:
             if len(self.chunks) == 0:
                 self.chunks, self.done = self.done, self.chunks
@@ -224,6 +224,7 @@ class Loader:
             line = self.stream.readline()
             if len(line) == 0:
                 self.stream_end = True
-                return self.next()
-            data.fill_v1(cnt, line)
+                return self.next(parse)
+            if parse:
+                data.fill_v1(cnt, line)
         return data
