@@ -500,7 +500,7 @@ std::string Sgf::ToString(GameState &state) {
     auto out = std::ostringstream{};
     auto &history = state.GetHistory();
 
-    out << '(' << ';';
+    out << '(' <<';';
     out << MakePropertyString("GM", 1);
     out << MakePropertyString("FF", 4);
     out << MakePropertyString("SZ", state.GetBoardSize());
@@ -529,7 +529,7 @@ std::string Sgf::ToString(GameState &state) {
     }
 
     if (state.GetWinner() != kUndecide) {
-        out << "RE" << '[';
+        out << "RE[";
         if (state.GetWinner() == kBlackWon) {
             out << "B+";
             if (pass_end) out << score;
@@ -554,9 +554,7 @@ std::string Sgf::ToString(GameState &state) {
             } else if (color == kWhite) {
                 out << 'W';
             }
-            out << '[';
-            out << state.VertexToSgf(lastmove);
-            out << ']';
+            out << '[' << state.VertexToSgf(lastmove) << ']';
         }
     }
     out << ')';

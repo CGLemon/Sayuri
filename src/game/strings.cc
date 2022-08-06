@@ -10,7 +10,7 @@ void Strings::Reset() {
         stones_[vtx] = 0;
         liberties_[vtx] = 0;
     }
-    liberties_[kNumVertices] = KLibertiesReset;
+    liberties_[kNumVertices] = KLibertiesReset; // set a large number
 }
 
 void Strings::AddStone(const int vtx, const int lib) {

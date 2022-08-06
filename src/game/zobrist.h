@@ -7,6 +7,7 @@
 class Zobrist {
 private:
     using KEY = std::uint64_t;
+
     static constexpr auto kZobristSize = kNumVertices;
     static constexpr KEY kInitSeed = 0xabcdabcd12345678;
 

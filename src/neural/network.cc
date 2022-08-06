@@ -117,16 +117,17 @@ Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
 Network::Result
 Network::GetOutputInternal(const GameState &state, const int symmetry) {
     Network::Result out_result;
-    Network::Result result;
+    Network::Result result_buf;
 
+    // apply symmetry
     auto inputs = Encoder::Get().GetInputs(state, symmetry);
 
     if (pipe_->Valid()) {
-        result = pipe_->Forward(inputs);
+        result_buf = pipe_->Forward(inputs);
     } else {
-        result = DummyForward(inputs);
+        result_buf = DummyForward(inputs);
     }
-    out_result = result;
+    out_result = result_buf;
 
     const auto boardsize = inputs.board_size;
     const auto num_intersections = boardsize * boardsize;
@@ -134,33 +135,35 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
     auto probabilities_buffer = std::vector<float>(num_intersections);
     auto ownership_buffer = std::vector<float>(num_intersections);
 
-    for (int idx = 0; idx < num_intersections; ++idx) {
-        probabilities_buffer[idx] = result.probabilities[idx];
-        ownership_buffer[idx] = result.ownership[idx];
-    }
+    // copy result to buffer
+    std::copy(std::begin(result_buf.probabilities),
+                  std::begin(result_buf.probabilities) + num_intersections,
+                  std::begin(probabilities_buffer));
+    std::copy(std::begin(result_buf.ownership),
+                  std::begin(result_buf.ownership) + num_intersections,
+                  std::begin(ownership_buffer));
 
-    // Probabilities, ownership
+    // apply invert symmetry for probabilities, ownership
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto symm_index = Symmetry::Get().TransformIndex(boardsize, symmetry, idx);
         out_result.probabilities[symm_index] = probabilities_buffer[idx];
         out_result.ownership[symm_index] = std::tanh(ownership_buffer[idx]);
     }
 
-    // Final score
-    out_result.final_score = 20 * result.final_score;
+    // final score
+    out_result.final_score = 20 * result_buf.final_score;
 
     // winrate
     auto wdl_buffer = std::vector<float>(3);
-    wdl_buffer[0] = result.wdl[0];
-    wdl_buffer[1] = result.wdl[1];
-    wdl_buffer[2] = result.wdl[2];
+    wdl_buffer[0] = result_buf.wdl[0];
+    wdl_buffer[1] = result_buf.wdl[1];
+    wdl_buffer[2] = result_buf.wdl[2];
     wdl_buffer = Softmax(wdl_buffer, 1);
 
     out_result.wdl[0] = wdl_buffer[0];
     out_result.wdl[1] = wdl_buffer[1];
     out_result.wdl[2] = wdl_buffer[2];
-    out_result.wdl_winrate = wdl_buffer[0] - wdl_buffer[2];
-    out_result.wdl_winrate = (out_result.wdl_winrate + 1.f) / 2;
+    out_result.wdl_winrate = (wdl_buffer[0] - wdl_buffer[2] + 1.f) / 2;
     out_result.stm_winrate = (std::tanh(out_result.stm_winrate) + 1.f) / 2;
 
     return out_result;
@@ -195,7 +198,7 @@ bool Network::ProbeCache(const GameState &state,
                               std::begin(result.ownership) + num_intersections,
                               std::begin(ownership_buffer));
 
-                // transfer them
+                // apply invert symmetry
                 for (int idx = 0; idx < num_intersections; ++idx) {
                     const auto symm_index = Symmetry::Get().TransformIndex(boardsize, symm, idx);
                     result.probabilities[idx] = probabilities_buffer[symm_index];

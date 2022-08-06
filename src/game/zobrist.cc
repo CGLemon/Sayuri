@@ -18,25 +18,16 @@ std::array<Zobrist::KEY, Zobrist::kZobristSize> Zobrist::kKoMove;
 std::array<Zobrist::KEY, 5> Zobrist::KPass;
 std::array<Zobrist::KEY, Zobrist::kZobristSize> Zobrist::kKomi;
 
+
+// Reture true if there are same elements in the array.
 template<typename T>
 bool Collision(std::vector<T> &array) {
-    const auto s = array.size();
-    if (s <= 1) {
-        return false;
-    }
+    std::sort(std::begin(array), std::end(array));
+    auto ite = std::unique(std::begin(array), std::end(array));
 
-    for (auto i = size_t{0}; i < (s-1); ++i) {
-        auto begin = std::cbegin(array);
-        auto element = std::next(begin, i);
-        auto start = std::next(element, 1);
-        auto end = std::cend(array);
-        auto res = std::find(start, end, *element);
-        if (res != end) {
-            return true;
-        }
-    }
-    return false;
+    return ite != std::end(array);
 }
+
 
 void Zobrist::Initialize() {
     Random<kXoroShiro128Plus> rng(kInitSeed);

@@ -579,7 +579,6 @@ void ArgsParser::DumpHelper() const {
 
                 << "\t--logfile, -l <log file name>\n"
                 << "\t\tFile to log input/output to.\n\n"
-
           ;
     exit(-1);
 }

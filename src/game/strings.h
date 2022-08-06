@@ -22,7 +22,10 @@ struct Strings {
     int GetLiberty(int vtx) const;
     int GetStones(int vtx) const;
 
+    // Reset all strings status.
     void Reset();
+
+    // Place a stone on the board
     void AddStone(const int vtx, const int lib);
 
     std::string GetDebugString(const int boardsize) const;
