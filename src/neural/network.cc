@@ -85,7 +85,7 @@ void Network::SetCacheSize(size_t MiB) {
     nn_cache_.SetCapacity(num_entries);
 
     const double mem_used = static_cast<double>(num_entries * entry_byte) / (1024.f * 1024.f); 
-    LOGGING << Format("Allocate %.2f MiB memory for NN cache(%zu entries). \n", mem_used, num_entries);
+    LOGGING << Format("Allocated %.2f MiB memory for NN cache(%zu entries). \n", mem_used, num_entries);
 }
 
 void Network::ClearCache() {

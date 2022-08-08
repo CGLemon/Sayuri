@@ -467,7 +467,7 @@ void Node::Update(const NodeEvals *evals) {
     AtomicFetchAdd(accumulated_black_fs_, evals->black_final_score);
 
     {
-        std::lock_guard<std::mutex> lock(update_mtx_);
+        std::lock_guard<std::mutex> lock(os_mtx_);
         for (int idx = 0; idx < kNumIntersections; ++idx) {
             accumulated_black_ownership_[idx] += evals->black_ownership[idx];
         }
@@ -484,7 +484,9 @@ void Node::ApplyEvals(const NodeEvals *evals) {
                   std::begin(black_ownership_));
 }
 
-std::array<float, kNumIntersections> Node::GetOwnership(int color) const {
+std::array<float, kNumIntersections> Node::GetOwnership(int color) {
+    std::lock_guard<std::mutex> lock(os_mtx_);
+
     const auto visits = GetVisits();
     auto out = std::array<float, kNumIntersections>{};
     for (int idx = 0; idx < kNumIntersections; ++idx) {

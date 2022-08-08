@@ -284,4 +284,3 @@ int TimeControl::EstimateMovesExpected(int boardsize, int move_num, int div_delt
 
     return std::max(estimate_moves, moves_buffer);
 }
-

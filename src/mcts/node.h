@@ -90,9 +90,7 @@ public:
     float GetEval(const int color, const bool use_virtual_loss=true) const;
     float GetDraw() const;
 
-    // Get ownership map. Because we don't protect it, we should take it after
-    // the search finished.
-    std::array<float, kNumIntersections> GetOwnership(int color) const;
+    std::array<float, kNumIntersections> GetOwnership(int color);
     NodeEvals GetNodeEvals() const;
     void ApplyEvals(const NodeEvals *evals);
 
@@ -173,8 +171,11 @@ private:
     float draw_;
     std::array<float, kNumIntersections> black_ownership_;
 
-    std::mutex update_mtx_;
+    std::mutex os_mtx_; // the ownership accumulated lock
 
+    // TODO: Do we need to use the double instead of float?
+    //       The double type is more reliable but waste more
+    //       memory.
     std::atomic<float> squared_eval_diff_{1e-4f};
     std::atomic<float> accumulated_black_fs_{0.0f};
     std::atomic<float> accumulated_black_wl_{0.0f};
