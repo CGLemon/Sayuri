@@ -1,3 +1,4 @@
+
 <div id="sayuri-art" align="center">
     <br/>
     <img src="https://github.com/CGLemon/Sayuri/blob/master/img/sayuri-art.PNG" alt="Sayuri Art" width="768"/>
@@ -11,7 +12,7 @@ Sayuri is a GTP-compliant go engine which supports variable komi and board size.
 ## Requirements
 
 * Ubuntu or MacOS only
-* GCC, Clang, C++14 compiler
+* GCC, Clang, must support C++14 or higher
 * CMake 3.15 or later
 * Optional: Eigen or OpenBLAS library
 * Optional: CUDA 10.x or 11.x library (GCC 7.x passed)
@@ -53,7 +54,9 @@ Accelerate to load the network file. Fast Float library is required.
 
 ## Weights and Book
 
-You may download the weights file and opening book from my [google drive](https://drive.google.com/drive/folders/1OiVcIwewcIh5nnmR8pBFKMSdkbBYNF2c?usp=sharing). The weights size is 15 blocks and 192 filters. The opening book is human-like book, trained on profession games. Force the Sayuri to play variable opening moves. It is just fun for playing.
+You may download the weights file and opening book from my [google drive](https://drive.google.com/drive/folders/1OiVcIwewcIh5nnmR8pBFKMSdkbBYNF2c?usp=sharing). The current weights size is 15 blocks and 192 filters. The opening book is human-like book, trained on profession games. Force Sayuri to play variable opening moves. It is just fun for playing.
+
+* The renorm prefix means that we apply batch renormalization, and the fixup means fixup initialization.
 
 ## Engine Arguments
 
@@ -116,7 +119,7 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 
 ![sabaki-sample01](https://github.com/CGLemon/Sayuri/blob/master/img/sabaki-sample01.png)
 
-* GoGui analysis command
+* GoGui analysis commands
 
 ![gogui-sample01](https://github.com/CGLemon/Sayuri/blob/master/img/gogui-sample01.png)
 
@@ -138,13 +141,14 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 * Support half-float.
 * Support NHWC format.
 * Support distributed computation.
-* Store the networks as binary file.
+* Store the network weights as binary file.
 * Improve the non-DCNN mode strength.
 
 ## Other Linkings
 
 * Go Text Protocol, [https://www.gnu.org/software/gnugo/gnugo_19.html](https://www.gnu.org/software/gnugo/gnugo_19.html)
 * Leela Zero, [https://github.com/leela-zero/leela-zero](https://github.com/leela-zero/leela-zero)
+* Kata Go methods, [https://github.com/lightvector/KataGo/blob/master/docs/KataGoMethods.md](https://github.com/lightvector/KataGo/blob/master/docs/KataGoMethods.md)
 * [You Tube](https://www.youtube.com/watch?v=82UclNrXGxg), playing with Pachi.
 * 開發日誌, [https://hackmd.io/zulj1rvhQROsB7U3poEjQg?view](https://hackmd.io/zulj1rvhQROsB7U3poEjQg?view)
 
