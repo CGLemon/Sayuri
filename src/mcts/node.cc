@@ -217,6 +217,45 @@ void Node::ApplyNoDcnnPolicy(GameState &state, const int color, Network::Result 
     raw_netlist.wdl = {0.5f, 0, 0.5f};
 }
 
+float Node::ComputeKlComplexity() {
+    const auto vtx = GetBestMove();
+    int parentvisits = 0;
+    int best_visits = 0;
+
+    for (const auto &child : children_) {
+        const auto node = child.Get();
+        if (node) {
+            const auto visits = node->GetVisits();
+
+            parentvisits += visits;
+            if (node->GetVertex() == vtx) {
+                best_visits = visits;
+            }
+        }
+    }
+
+    if (parentvisits == best_visits) {
+        return 0;
+    }
+    if (parentvisits == 0 || best_visits == 0) {
+        return -1;
+    }
+
+    return -std::log((float)best_visits / parentvisits);
+}
+
+float Node::ComputeTreeComplexity() {
+    const auto visits = GetVisits();
+    if (visits <= 1) {
+        return 0;
+    }
+
+    const auto variance = GetVariance(1.0f, visits);
+    const auto stddev = std::sqrt(100 * variance);
+
+    return stddev;
+}
+
 // Experimental function.
 void Node::PolicyTargetPruning() {
     WaitExpanded();
@@ -530,16 +569,16 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     const auto lcblist = GetLcbList(color);
     const auto parentvisits = static_cast<float>(GetVisits());
 
-    const auto space = 7;
+    const auto space1 = 7;
     out << "Search List:" << std::endl;
     out << std::setw(6) << "move"
             << std::setw(10) << "visits"
-            << std::setw(space) << "WL(%)"
-            << std::setw(space) << "LCB(%)"
-            << std::setw(space) << "D(%)"
-            << std::setw(space) << "P(%)"
-            << std::setw(space) << "N(%)"
-            << std::setw(space) << "S"
+            << std::setw(space1) << "WL(%)"
+            << std::setw(space1) << "LCB(%)"
+            << std::setw(space1) << "D(%)"
+            << std::setw(space1) << "P(%)"
+            << std::setw(space1) << "N(%)"
+            << std::setw(space1) << "S"
             << std::endl;
 
     for (auto &lcb : lcblist) {
@@ -561,12 +600,12 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
         out << std::fixed << std::setprecision(2)
                 << std::setw(6) << state.VertexToText(vertex)  // move
                 << std::setw(10) << visits                     // visits
-                << std::setw(space) << eval * 100.f            // win loss eval
-                << std::setw(space) << lcb_value * 100.f       // LCB eval
-                << std::setw(space) << draw * 100.f            // draw probability
-                << std::setw(space) << pobability * 100.f      // move probability
-                << std::setw(space) << visit_ratio * 100.f     // visits ratio
-                << std::setw(space) << final_score             // score leading
+                << std::setw(space1) << eval * 100.f            // win loss eval
+                << std::setw(space1) << lcb_value * 100.f       // LCB eval
+                << std::setw(space1) << draw * 100.f            // draw probability
+                << std::setw(space1) << pobability * 100.f      // move probability
+                << std::setw(space1) << visit_ratio * 100.f     // visits ratio
+                << std::setw(space1) << final_score             // score leading
                 << std::setw(6) << "| PV:" << ' ' << pv_string // principal variation
                 << std::endl;
     }
@@ -582,10 +621,14 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     // we may not collect all node conut. 
     const auto mem_used = static_cast<double>(nodes * node_mem + edges * edge_mem) / (1024.f * 1024.f);
 
+    const auto space2 = 12;
     out << "Tree Status:" << std::endl
-            << std::setw(9) << "nodes:"  << ' ' << nodes    << std::endl
-            << std::setw(9) << "edges:"  << ' ' << edges    << std::endl
-            << std::setw(9) << "memory:" << ' ' << mem_used << ' ' << "(MiB)" << std::endl;
+            << std::fixed << std::setprecision(4)
+            << std::setw(space2) << "root KL:"    << ' ' << ComputeKlComplexity() << std::endl
+            << std::setw(space2) << "complexity:" << ' ' << ComputeTreeComplexity() << std::endl
+            << std::setw(space2) << "nodes:"      << ' ' << nodes    << std::endl
+            << std::setw(space2) << "edges:"      << ' ' << edges    << std::endl
+            << std::setw(space2) << "memory:"     << ' ' << mem_used << ' ' << "(MiB)" << std::endl;
 
     return out.str();
 }

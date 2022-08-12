@@ -107,6 +107,9 @@ public:
     bool IsActive() const;
     bool IsValid() const;
 
+    float ComputeKlComplexity();
+    float ComputeTreeComplexity();
+
     std::string ToAnalyzeString(GameState &state, const int color);
     std::string ToVerboseString(GameState &state, const int color);
     std::string GetPvString(GameState &state);
