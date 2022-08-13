@@ -217,7 +217,7 @@ void Node::ApplyNoDcnnPolicy(GameState &state, const int color, Network::Result 
     raw_netlist.wdl = {0.5f, 0, 0.5f};
 }
 
-float Node::ComputeKlComplexity() {
+float Node::ComputeKlDivergence() {
     const auto vtx = GetBestMove();
     int parentvisits = 0;
     int best_visits = 0;
@@ -581,9 +581,9 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
             << std::setw(space1) << "S"
             << std::endl;
 
-    for (auto &lcb : lcblist) {
-        const auto lcb_value = lcb.first > 0.0f ? lcb.first : 0.0f;
-        const auto vertex = lcb.second;
+    for (auto &lcb_pair : lcblist) {
+        const auto lcb = lcb_pair.first > 0.0f ? lcb_pair.first : 0.0f;
+        const auto vertex = lcb_pair.second;
 
         auto child = GetChild(vertex);
         const auto visits = child->GetVisits();
@@ -600,12 +600,12 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
         out << std::fixed << std::setprecision(2)
                 << std::setw(6) << state.VertexToText(vertex)  // move
                 << std::setw(10) << visits                     // visits
-                << std::setw(space1) << eval * 100.f            // win loss eval
-                << std::setw(space1) << lcb_value * 100.f       // LCB eval
-                << std::setw(space1) << draw * 100.f            // draw probability
-                << std::setw(space1) << pobability * 100.f      // move probability
-                << std::setw(space1) << visit_ratio * 100.f     // visits ratio
-                << std::setw(space1) << final_score             // score leading
+                << std::setw(space1) << eval * 100.f           // win loss eval
+                << std::setw(space1) << lcb * 100.f            // LCB eval
+                << std::setw(space1) << draw * 100.f           // draw probability
+                << std::setw(space1) << pobability * 100.f     // move probability
+                << std::setw(space1) << visit_ratio * 100.f    // visits ratio
+                << std::setw(space1) << final_score            // score leading
                 << std::setw(6) << "| PV:" << ' ' << pv_string // principal variation
                 << std::endl;
     }
@@ -624,7 +624,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     const auto space2 = 12;
     out << "Tree Status:" << std::endl
             << std::fixed << std::setprecision(4)
-            << std::setw(space2) << "root KL:"    << ' ' << ComputeKlComplexity() << std::endl
+            << std::setw(space2) << "root KL:"    << ' ' << ComputeKlDivergence() << std::endl
             << std::setw(space2) << "complexity:" << ' ' << ComputeTreeComplexity() << std::endl
             << std::setw(space2) << "nodes:"      << ' ' << nodes    << std::endl
             << std::setw(space2) << "edges:"      << ' ' << edges    << std::endl
@@ -633,7 +633,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     return out.str();
 }
 
-std::string Node::ToAnalyzeString(GameState &state, const int color) {
+std::string Node::ToAnalyzeString(GameState &state, const int color, bool is_sayuri) {
     // Gather analyzing string, you can see the detail here
     // https://github.com/SabakiHQ/Sabaki/blob/master/docs/guides/engine-analysis-integration.md
 
@@ -642,27 +642,44 @@ std::string Node::ToAnalyzeString(GameState &state, const int color) {
 
     int i = 0;
 
-    for (auto &lcb : lcblist) {
-        const auto lcb_value = lcb.first > 0.0f ? lcb.first : 0.0f;
-        const auto vertex = lcb.second;
+    for (auto &lcb_pair : lcblist) {
+        const auto lcb = lcb_pair.first > 0.0f ? lcb_pair.first : 0.0f;
+        const auto vertex = lcb_pair.second;
 
         auto child = GetChild(vertex);
         const auto final_score = child->GetFinalScore(color);
-        const auto winrate = std::min(10000, (int)(10000 * child->GetEval(color, false)));
+        const auto winrate = child->GetEval(color, false);
         const auto visits = child->GetVisits();
-        const auto prior = std::min(10000, (int)(10000 * child->GetPolicy()));
+        const auto prior = child->GetPolicy();
         const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
 
-        out << Format("info move %s visits %d winrate %d scoreLead %f prior %d lcb %d order %d pv %s",
-                         state.VertexToText(vertex).c_str(),
-                         visits,
-                         winrate,
-                         final_score,
-                         prior,
-                         std::min(10000, (int)(10000 * lcb_value)),
-                         i++,
-                         pv_string.c_str()
-                     );
+        if (is_sayuri) {
+            const auto kl = child->ComputeKlDivergence();
+            const auto complexity = child->ComputeTreeComplexity();
+            out << Format("info move %s visits %d winrate %.6f score %.6f prior %.6f lcb %.6f kl %.6f complexity %.6f order %d pv %s",
+                             state.VertexToText(vertex).c_str(),
+                             visits,
+                             winrate,
+                             final_score,
+                             prior,
+                             lcb,
+                             kl,
+                             complexity,
+                             i++,
+                             pv_string.c_str()
+                         );
+        } else {
+            out << Format("info move %s visits %d winrate %d scoreLead %.6f prior %d lcb %d order %d pv %s",
+                             state.VertexToText(vertex).c_str(),
+                             visits,
+                             std::min(10000, (int)(10000 * winrate)),
+                             final_score,
+                             std::min(10000, (int)(10000 * prior)),
+                             std::min(10000, (int)(10000 * lcb)),
+                             i++,
+                             pv_string.c_str()
+                         );
+        }
     }
 
     out << std::endl;

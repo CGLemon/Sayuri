@@ -260,7 +260,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             message = parser.GetCommands(3)->Get<std::string>();
             out << GTPSuccess("I'm a go bot, not a chat bot.");
         }
-    } else if (const auto res = parser.Find("analyze", 0)) {
+    } else if (const auto res = parser.Find({"lz-analyze", "sayuri-analyze"}, 0)) {
         auto color = agent_->GetState().GetToMove();
         auto interval = 100; // one second
         if (const auto input = parser.GetCommand(1)) {
@@ -280,9 +280,10 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             DUMPING << "=\n";
         }
         agent_->GetState().SetToMove(color);
-        agent_->GetSearch().Analyze(interval, true);
+        agent_->GetSearch().Analyze(interval, true,
+                                        res->Get<std::string>() == "sayuri-analyze");
         DUMPING << "\n";
-    } else if (const auto res = parser.Find("genmove_analyze", 0)) {
+    } else if (const auto res = parser.Find({"lz-genmove_analyze", "sayuri-genmove_analyze"}, 0)) {
         auto color = agent_->GetState().GetToMove();
         auto interval = 100; // one second
         if (const auto input = parser.GetCommand(1)) {
@@ -302,7 +303,8 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             DUMPING << "=\n";
         }
         agent_->GetState().SetToMove(color);
-        auto move = agent_->GetSearch().Analyze(interval, false);
+        auto move = agent_->GetSearch().Analyze(interval, false,
+                                                    res->Get<std::string>() == "sayuri-genmove_analyze");
         agent_->GetState().PlayMove(move);
         DUMPING << "play " << agent_->GetState().VertexToText(move) << "\n\n";
         try_ponder = true;

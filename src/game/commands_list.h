@@ -76,9 +76,13 @@ static std::vector<std::string> kGtpCommandsList = {
 
     // "kgs-chat",
 
-    "analyze",
+    "sayuri-analyze",
 
-    "genmove_analyze",
+    "sayuri-genmove_analyze",
+
+    "lz-analyze",
+
+    "lz-genmove_analyze",
 
     "kgs-game_over",
 

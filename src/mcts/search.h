@@ -7,6 +7,7 @@
 #include "game/game_state.h"
 #include "data/training.h"
 #include "utils/threadpool.h"
+#include "utils/operators.h"
 #include "utils/time.h"
 
 #include <thread>
@@ -123,12 +124,16 @@ public:
 
     enum OptionTag : int {
         kNullTag  = 0,
-        kThinking = 1 << 1, // use time control
-        kPonder   = 1 << 2, // thinking on opponent's time
-        kAnalyze  = 1 << 3, // open analyzing mode
-        kForced   = 1 << 4, // remove all pass move before search
-        kUnreused = 1 << 5  // don't reuse the tree
+        kSayuri   = 1 << 1,
+        kThinking = 1 << 2, // use time control
+        kPonder   = 1 << 3, // thinking on opponent's time
+        kAnalyze  = 1 << 4, // open analyzing mode
+        kForced   = 1 << 5, // remove all pass move before search
+        kUnreused = 1 << 7  // don't reuse the tree
     };
+
+    // Enable OptionTag operations.
+    ENABLE_FRIEND_BITWISE_OPERATORS_ON(OptionTag);
 
     Search(GameState &state, Network &network) : root_state_(state), network_(network) {
         Initialize();
@@ -146,8 +151,10 @@ public:
     // Get the self play move.
     int GetSelfPlayMove();
 
-    int Analyze(int interval, bool ponder);
+    // Will dump analyzing information.
+    int Analyze(int interval, bool ponder, bool is_sayuri);
 
+    // Try to do the pondor.
     void TryPonder();
 
     // Set the time control.
@@ -159,11 +166,14 @@ public:
     // Set time left.
     void TimeLeft(const int color, const int time, const int stones);
 
+    // Save the training data.
     void SaveTrainingBuffer(std::string filename, GameState &state);
 
+    // Release the whole trees.
     void ReleaseTree();
 
 private:
+    // Try to reuse the sub-tree.
     bool AdvanceToNewRootState();
 
     bool InputPending(Search::OptionTag tag) const;
