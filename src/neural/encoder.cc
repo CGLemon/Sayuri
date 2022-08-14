@@ -29,7 +29,7 @@ InputData Encoder::GetInputs(const GameState &state, int symmetry) const {
 std::vector<float> Encoder::GetPlanes(const GameState &state, int symmetry) const {
     auto num_intersections = state.GetNumIntersections();
     auto plane_size = num_intersections * kPlaneChannels;
-    auto planes = std::vector<float>(plane_size);
+    auto planes = std::vector<float>(plane_size, 0.f);
     auto it = std::begin(planes);
 
     EncoderHistoryMove(state, kHistoryMoves, it);
