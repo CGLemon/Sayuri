@@ -22,7 +22,8 @@ Supervised &Supervised::Get() {
     return supervised;
 }
 
-void Supervised::FromSgfs(std::string sgf_name,
+void Supervised::FromSgfs(bool general,
+                              std::string sgf_name,
                               std::string out_name_prefix) {
     file_cnt_.store(0);
     worker_cnt_.store(0);
@@ -31,7 +32,7 @@ void Supervised::FromSgfs(std::string sgf_name,
 
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
 
-    auto Worker = [this, out_name_prefix]() -> void {
+    auto Worker = [this, general, out_name_prefix]() -> void {
         auto file = std::ofstream{};
         bool closed = true;
         int games = 0;
@@ -74,7 +75,14 @@ void Supervised::FromSgfs(std::string sgf_name,
 
             constexpr int kChopPerGames = 200;
 
-            if (SgfProcess(sgf, file)) {
+            bool success = false;
+            if (general) {
+                success = GeneralSgfProcess(sgf, file);
+            } else {
+                success = SgfProcess(sgf, file);
+            }
+
+            if (success) {
                 games += 1;
                 tot_games_.fetch_add(1, std::memory_order_relaxed);
                 if (games % kChopPerGames == 0) {
@@ -115,6 +123,102 @@ void Supervised::FromSgfs(std::string sgf_name,
 
     running_.store(false, std::memory_order_relaxed);
     group.WaitToJoin();
+}
+
+bool Supervised::GeneralSgfProcess(std::string &sgfstring,
+                                       std::ostream &out_file) const {
+    GameState state;
+
+    try {
+        state = Sgf::Get().FromString(sgfstring, 9999);
+    } catch (const char *err) {
+        LOGGING << "Fail to load the SGF file! Discard it." << std::endl
+                    << Format("\tCause: %s.", err) << std::endl;
+        return false;
+    }
+
+    const auto board_size = state.GetBoardSize();
+    const auto num_intersections = state.GetNumIntersections();
+    const auto komi = state.GetKomi();
+    const auto winner = state.GetWinner();
+
+    if (winner == kUndecide) {
+        LOGGING << "The SGF file is no reulst! Discard it." << std::endl;
+        return false;
+    }
+
+    const auto zero_ownership = std::vector<float>(num_intersections, 0.f);
+    const auto zero_final_score = 0.f;
+
+    auto game_ite = GameStateIterator(state);
+    auto train_datas = std::vector<Training>{};
+
+    const auto VertexToIndex = [](GameState &state, int vertex) -> int {
+        if (vertex == kPass) {
+            return state.GetNumIntersections();
+        }
+
+        auto x = state.GetX(vertex);
+        auto y = state.GetY(vertex);
+        return state.GetIndex(x, y);
+    };
+
+    if (game_ite.MaxMoveNumber() == 0) {
+        return false;
+    }
+
+    do {
+        auto vtx = game_ite.GetVertex();
+        auto aux_vtx = game_ite.GetNextVertex();
+        GameState& main_state = game_ite.GetState();
+
+        auto buf = Training{};
+
+        buf.version = GetTrainingVersion();
+        buf.mode = GetTrainingMode();
+        buf.board_size = board_size;
+        buf.komi = komi;
+        buf.side_to_move = main_state.GetToMove();
+
+        buf.planes = Encoder::Get().GetPlanes(main_state);
+
+        buf.probabilities = std::vector<float>(num_intersections+1, 0);
+        buf.auxiliary_probabilities = std::vector<float>(num_intersections+1, 0);
+        buf.ownership = std::vector<int>(num_intersections, 0);
+
+        buf.probabilities_index = VertexToIndex(main_state, vtx);
+        buf.probabilities[VertexToIndex(main_state, vtx)] = 1.0f;
+
+        buf.auxiliary_probabilities_index = VertexToIndex(main_state, aux_vtx);
+        buf.auxiliary_probabilities[VertexToIndex(main_state, aux_vtx)] = 1.0f;
+
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            if (zero_ownership[idx] == buf.side_to_move) {
+                buf.ownership[idx] = 1; 
+            } else if (zero_ownership[idx] == !buf.side_to_move) {
+                buf.ownership[idx] = -1;
+            }
+        }
+
+        assert(winner != kUndecide);
+        if (winner == kDraw) {
+            buf.final_score = 0;
+            buf.q_value = 0;
+            buf.result = 0;
+        } else {
+            buf.result = (int)winner == (int)buf.side_to_move ? 1 : -1;
+            buf.q_value = buf.result;
+            buf.final_score = zero_final_score;
+        }
+
+        train_datas.emplace_back(buf);
+    } while (game_ite.Next());
+
+    for (const auto &buf : train_datas) {
+        buf.StreamOut(out_file);
+    }
+
+    return true;
 }
 
 bool Supervised::SgfProcess(std::string &sgfstring,

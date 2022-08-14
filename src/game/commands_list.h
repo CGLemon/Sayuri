@@ -94,6 +94,8 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "supervised",
 
+    "sayuri-supervised"
+
     "planes",
 
     "raw-nn",

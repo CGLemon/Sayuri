@@ -441,7 +441,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         } else {
             out << GTPSuccess("false");
         }
-    } else if (const auto res = parser.Find("supervised", 0)) {
+    } else if (const auto res = parser.Find({"supervised", "sayuri-supervised"}, 0)) {
         auto sgf_file = std::string{};
         auto data_file = std::string{};
 
@@ -453,7 +453,9 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         }
 
         if (!sgf_file.empty() && !data_file.empty()) {
-            Supervised::Get().FromSgfs(sgf_file, data_file);
+            bool is_general = res->Get<std::string>() != "sayuri-supervised";
+
+            Supervised::Get().FromSgfs(is_general, sgf_file, data_file);
             out << GTPSuccess("");
         } else {
             out << GTPFail("file name is empty");
