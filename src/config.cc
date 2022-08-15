@@ -157,7 +157,7 @@ void InitBasicParameters() {
     bool already_set_playouts = GetOption<int>("playouts") > 0;
 
     if (!already_set_time && !already_set_playouts) {
-        SetOption("const_time", 15); // 15 seconds
+        SetOption("const_time", 10); // 10 seconds
     }
     if (!already_set_playouts) {
         SetOption("playouts", std::numeric_limits<int>::max() / 2);
