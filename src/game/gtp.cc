@@ -484,6 +484,27 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         } else {
             out << GTPFail("symmetry must be from 0 to 7");
         }
+    } else if (const auto res = parser.Find("benchmark", 0)) {
+        int playouts = 3200;
+
+        if (const auto p = parser.GetCommand(1)) {
+            playouts = std::max(p->Get<int>(), 1);
+        }
+
+        // clean current state
+        agent_->GetSearch().ReleaseTree();
+        agent_->GetNetwork().ClearCache();
+
+        auto result = agent_->GetSearch().Computation(playouts, 0, Search::kNullTag);
+
+        auto benchmark_out = std::ostringstream{};
+        benchmark_out <<  "Benchmark Result\n"
+                          << Format("Use %d threads, the batch size is %d\n.",
+                                        result.threads, result.batch_size)
+                          << Format("Do %d playouts in %.2f sec.",
+                                        result.playouts, result.seconds);
+
+        out << GTPSuccess(benchmark_out.str());
     } else if (const auto res = parser.Find("genbook", 0)) {
         auto sgf_file = std::string{};
         auto data_file = std::string{};

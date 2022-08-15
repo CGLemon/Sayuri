@@ -11,6 +11,7 @@ public:
 
     void Reset() {
         threads = GetOption<int>("threads");
+        batch_size = GetOption<int>("batch_size");
         playouts = GetOption<int>("playouts");
         const_time = GetOption<int>("const_time");
 
@@ -53,6 +54,7 @@ public:
     }
 
     int threads;
+    int batch_size;
     int playouts;
     int const_time;
     int random_min_visits;
@@ -93,5 +95,3 @@ public:
 
     std::array<float, kNumVertices + 10> dirichlet_buffer;
 };
-
-

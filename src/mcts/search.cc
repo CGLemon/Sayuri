@@ -225,6 +225,10 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
     computation_result.board_size = board_size;
     computation_result.komi = root_state_.GetKomi();
     computation_result.movenum = root_state_.GetMoveNumber();
+    computation_result.playouts = 0;
+    computation_result.seconds = 0.f;
+    computation_result.threads = param_->threads;
+    computation_result.batch_size = param_->batch_size;
 
     if (root_state_.IsGameOver()) {
         // Always reture pass move if the passese number is greater than two.
@@ -341,6 +345,11 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
                                       timer.GetDuration() << "(p/sec)\n";
     }
 
+    // Record perfomance infomation.
+    computation_result.seconds = timer.GetDuration();
+    computation_result.playouts = playouts_.load(std::memory_order_relaxed);
+
+    // Gather computation infomation and training data.
     GatherComputationResult(computation_result);
 
     // Save the last game state.
@@ -365,7 +374,6 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     result.random_move = root_node_->RandomizeFirstProportionally(1);
     result.root_eval = root_node_->GetEval(color, false);
     result.root_final_score = root_node_->GetFinalScore(color);
-
 
     // Resize the childern status buffer.
     result.root_ownership.resize(num_intersections);

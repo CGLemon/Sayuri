@@ -144,6 +144,11 @@ void InitBasicParameters() {
         select_batchsize = select_threads/2;
     }
 
+    // The batch size of cpu pipe is always 1. 
+    if (!use_gpu) {
+        select_batchsize = 1;
+    }
+
     SetOption("threads", std::max(select_threads, 1));
     SetOption("batch_size", std::max(select_batchsize, 1));
 

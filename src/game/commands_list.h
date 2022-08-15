@@ -100,6 +100,8 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "raw-nn",
 
+    "benchmark",
+
     "genbook",
 
     "gogui-analyze_commands",

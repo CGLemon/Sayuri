@@ -116,6 +116,10 @@ struct ComputationResult {
     std::vector<std::vector<int>> dead_strings;
 
     int movenum;
+    int playouts;
+    int threads;
+    int batch_size;
+    float seconds;
 };
 
 class Search {
