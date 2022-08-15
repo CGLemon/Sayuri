@@ -81,7 +81,7 @@ Here are some useful arguments which you may need.
 |  --help, -h             | None   | Show the more arguments.                       |
     
 
-Default setting: will select reasonable thread and batch size, 15 seconds per move, all GPU devices
+Default setting: will select reasonable thread and batch size, 10 seconds per move, all GPU devices
 
     $ ./Sayuri -w <weights file>
 
