@@ -67,3 +67,26 @@ int GameStateIterator::GetNextVertex() const {
 int GameStateIterator::MaxMoveNumber() const {
     return move_history_.size();
 }
+
+void GameStateIterator::RemoveUnusedDoublePass() {
+    auto copy_move_history_ = std::vector<ColorVertex>{};
+
+    for (int i = 0; i < (int)move_history_.size(); ++i) {
+        bool skip = false;
+        const auto cv = move_history_[i];
+
+        if (cv.vertex == kPass) {
+            if ((i+1) < (int)move_history_.size()-1 &&
+                     move_history_[i+1].vertex == kPass) {
+                skip = true;
+            }
+        }
+
+        if (!skip) {
+            copy_move_history_.emplace_back(cv);
+        } else {
+            i++; // also skip next move
+        }
+    }
+    move_history_ = copy_move_history_;
+}

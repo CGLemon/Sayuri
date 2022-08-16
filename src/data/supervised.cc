@@ -285,6 +285,9 @@ bool Supervised::SgfProcess(std::string &sgfstring,
         return state.GetIndex(x, y);
     };
 
+    // remove double pass moves
+    game_ite.RemoveUnusedDoublePass();
+
     if (game_ite.MaxMoveNumber() == 0) {
         return false;
     }

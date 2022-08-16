@@ -36,6 +36,10 @@ public:
     // Return number of move.
     int MaxMoveNumber() const;
 
+    // There are some unused pass moves (4 pass moves) in the Kata Go self-play
+    // games. We can just simply remove it.
+    void RemoveUnusedDoublePass();
+
 private:
     struct ColorVertex {
         int to_move;
