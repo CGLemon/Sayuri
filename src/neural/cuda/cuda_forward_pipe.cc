@@ -31,7 +31,7 @@ OutputResult CudaForwardPipe::Forward(const InputData &inpnt) {
         cv_.notify_one(); // Wake up one worker if there are enough batch size.
     }
     entry->cv.wait(lock); // Wait for batch forwarding worker.
-    entry->done.store(true);
+    entry->done.store(true, std::memory_order_relaxed);
 
     return output;
 }
@@ -605,21 +605,23 @@ void CudaForwardPipe::PrepareWorkers() {
 }
 
 void CudaForwardPipe::Worker(int gpu) {
-    const auto gether_batches = [this](){
-        const auto gpu_waittime = GetOption<int>("gpu_waittime");
+    const auto gpu_waittime_base = GetOption<int>("gpu_waittime");
+    waittime_.store(gpu_waittime_base, std::memory_order_relaxed);
+
+    const auto gether_batches = [this, gpu_waittime_base](){
         auto entries = std::vector<std::shared_ptr<ForwawrdEntry>>{};
 
         // Running the loop until there are enough entry size.
         while(true) {
-            if (!worker_running_.load()) {
+            if (!worker_running_.load(std::memory_order_relaxed)) {
                 return entries;
             }
 
-            bool narrow_pipe = narrow_pipe_.exchange(false);
-            int waittime = waittime_.load();
+            bool narrow_pipe = narrow_pipe_.exchange(false, std::memory_order_relaxed);
+            int waittime = waittime_.load(std::memory_order_relaxed);
 
             if ((int)entry_queue_.size() >= max_batch_) {
-                break; // Out of the loop.
+                break; // Finish the loop.
             }
 
             // Wait some time in order to avoid busy waiting.
@@ -630,32 +632,32 @@ void CudaForwardPipe::Worker(int gpu) {
 
             // Reset the waiting time.
             if (!entry_queue_.empty()) {
-                waittime = std::min(waittime, gpu_waittime);
+                waittime = std::min(waittime, gpu_waittime_base);
 
                 if (timeout && narrow_pipe) {
-                    // Set zero if there still some(small than max batch size) entry in
-                    // the queue.
+                    // Set zero if there are still some(small than max batch size) entries
+                    // in the queue.
                     waittime = 0;
                 } else if (waittime > 0) {
-                    // Decreese waiting time if it is time out.
+                    // Decrease waiting time if it is time out.
                     waittime -= 2;
                 }
 
                 // Set next waiting time.
-                waittime_.store(std::max(waittime, 0));
+                waittime_.store(std::max(waittime, 0), std::memory_order_relaxed);
 
-                // Out of the loop.
+                // Finish the loop.
                 break;
             } else {
-                if (waittime < gpu_waittime) {
-                    waittime_.store(waittime+1);
-                } else if (waittime < 20 * gpu_waittime) {
-                    waittime_.store(waittime+10);
+                if (waittime < gpu_waittime_base) {
+                    waittime_.store(waittime+1, std::memory_order_relaxed);
+                } else if (waittime < 20 * gpu_waittime_base) {
+                    waittime_.store(waittime+10, std::memory_order_relaxed);
                 }
             }
         }
 
-        // Gather entries.
+        // Gather the entries.
         std::lock_guard<std::mutex> queue_lock(queue_mutex_);
         auto count = entry_queue_.size();
         if (count > (size_t)max_batch_) {
@@ -671,7 +673,7 @@ void CudaForwardPipe::Worker(int gpu) {
     };
 
     while (true) {
-        if (!worker_running_.load()) return;
+        if (!worker_running_.load(std::memory_order_relaxed)) return;
 
         auto entries = gether_batches();
         const auto batch_size = entries.size();
@@ -689,13 +691,13 @@ void CudaForwardPipe::Worker(int gpu) {
 
         for (auto b = size_t{0}; b < batch_size; ++b) {
             entries[b]->output = outputs[b];
-            while (!entries[b]->done.load()) {
+            while (!entries[b]->done.load(std::memory_order_relaxed)) {
                 entries[b]->cv.notify_all();
             }
         }
 
         if (batch_size <= (size_t)max_batch_) {
-            narrow_pipe_.store(false);
+            narrow_pipe_.store(false, std::memory_order_relaxed);
         }
     }
 }

@@ -121,7 +121,7 @@ private:
 
     std::condition_variable cv_;
 
-    std::atomic<int> waittime_{20};
+    std::atomic<int> waittime_{0};
     std::atomic<bool> worker_running_;
     std::atomic<bool> narrow_pipe_;
 

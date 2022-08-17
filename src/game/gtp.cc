@@ -541,8 +541,8 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         auto result = agent_->GetSearch().Computation(playouts, 0, Search::kNullTag);
 
         auto benchmark_out = std::ostringstream{};
-        benchmark_out <<  "Benchmark Result\n"
-                          << Format("Use %d threads, the batch size is %d\n.",
+        benchmark_out <<  "Benchmark Result:\n"
+                          << Format("Use %d threads, the batch size is %d.\n",
                                         result.threads, result.batch_size)
                           << Format("Do %d playouts in %.2f sec.",
                                         result.playouts, result.seconds);
