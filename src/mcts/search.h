@@ -133,7 +133,7 @@ public:
         kPonder   = 1 << 3, // thinking on opponent's time
         kAnalyze  = 1 << 4, // open analyzing mode
         kForced   = 1 << 5, // remove all pass move before search
-        kUnreused = 1 << 7  // don't reuse the tree
+        kUnreused = 1 << 6  // don't reuse the tree
     };
 
     // Enable OptionTag operations.

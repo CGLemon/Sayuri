@@ -208,6 +208,10 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             out << GTPSuccess("");
             Sgf::Get().ToFile(filename, agent_->GetState());
         }
+    } else if (const auto res = parser.Find("get_komi", 0)) {
+        out << GTPSuccess(std::to_string(agent_->GetState().GetKomi()));
+    } else if (const auto res = parser.Find("get_handicap", 0)) {
+        out << GTPSuccess(std::to_string(agent_->GetState().GetHandicap()));
     } else if (const auto res = parser.Find("final_score", 0)) {
         auto result = agent_->GetSearch().Computation(400, 0, Search::kForced);
         auto color = agent_->GetState().GetToMove();
@@ -316,7 +320,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         if (agent_->GetState().UndoMove()) {
             out << GTPSuccess("");
         } else {
-            out << GTPFail("can't do undo move");
+            out << GTPFail("can't do the undo move");
         }
     } else if (const auto res = parser.Find("kgs-time_settings", 0)) {
         // none, absolute, byoyomi, or canadian
@@ -394,6 +398,8 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         auto result = agent_->GetSearch().Computation(400, 0, Search::kForced);
         auto vtx_list = std::ostringstream{};
 
+        // TODO: support seki
+
         if (const auto input = parser.Find("alive", 1)) {
             for (size_t i = 0; i < result.alive_strings.size(); i++) {
                 vtx_list << (i == 0 ? "" : "\n");
@@ -414,6 +420,43 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
                     vtx_list << agent_->GetState().VertexToText(vtx);
                     if (j != string.size() - 1) vtx_list << ' ';
                 }
+            }
+            out << GTPSuccess(vtx_list.str());
+        } else if (const auto input = parser.Find({"black_area",
+                                                       "white_area",
+                                                       "black_territory",
+                                                       "white_territory"}, 1)) {
+            bool counted = false;
+            const bool is_black = (input->Get<std::string>().find("black") != std::string::npos);
+            const bool is_area = (input->Get<std::string>().find("area") != std::string::npos);
+
+            const auto color = agent_->GetState().GetToMove();
+            const auto board_size = agent_->GetState().GetBoardSize();
+            const auto num_intersections = board_size * board_size;
+
+            for (int idx = 0; idx < num_intersections; ++idx) {
+                const auto x = idx % board_size;
+                const auto y = idx / board_size;
+                const auto vtx = agent_->GetState().GetVertex(x,y);
+
+                // -1 ~ 1
+                auto owner_val = result.root_ownership[idx];
+                if (color == kWhite) {
+                    owner_val = 0.f - owner_val;
+                }
+
+                static constexpr float kThreshold = 0.35f; // the low threshold
+                if ((is_black && owner_val >= kThreshold) ||
+                        (!is_black && owner_val <= -kThreshold)) {
+                    if (is_area || agent_->GetState().GetState(vtx) == kEmpty) {
+                        vtx_list << agent_->GetState().VertexToText(vtx) << ' ';
+                        counted = true;
+                    }
+                }
+            }
+            if (counted) {
+                int pos = vtx_list.tellp();
+                vtx_list.seekp(pos-1);
             }
             out << GTPSuccess(vtx_list.str());
         } else {
