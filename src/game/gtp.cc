@@ -430,6 +430,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             const bool is_black = (input->Get<std::string>().find("black") != std::string::npos);
             const bool is_area = (input->Get<std::string>().find("area") != std::string::npos);
 
+            auto check_color = is_black == true ? kBlack : kWhite;
             const auto color = agent_->GetState().GetToMove();
             const auto board_size = agent_->GetState().GetBoardSize();
             const auto num_intersections = board_size * board_size;
@@ -445,10 +446,10 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
                     owner_val = 0.f - owner_val;
                 }
 
-                static constexpr float kThreshold = 0.35f; // the low threshold
+                static constexpr float kThreshold = 0.35f; // give the low threshold
                 if ((is_black && owner_val >= kThreshold) ||
                         (!is_black && owner_val <= -kThreshold)) {
-                    if (is_area || agent_->GetState().GetState(vtx) == kEmpty) {
+                    if (is_area || agent_->GetState().GetState(vtx) != check_color) {
                         vtx_list << agent_->GetState().VertexToText(vtx) << ' ';
                         counted = true;
                     }
