@@ -17,7 +17,7 @@
 
 namespace CUDA {
 
-static constexpr int kMaxSupportCPUs = 256; // Give it a large value.
+static constexpr int kMaxSupportGPUs = 256; // Give it a large value.
 
 #define KBLOCKSIZE 256
 

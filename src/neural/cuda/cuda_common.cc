@@ -74,12 +74,12 @@ void WaitToFinish(cudaStream_t s) {
     ReportCUDAErrors(cudaStreamSynchronize(s));
 }
 
-static bool handles_init[kMaxSupportCPUs] = {false};
+static bool handles_init[kMaxSupportGPUs] = {false};
 
 void CudaHandles::ApplyOnCurrentDevice() {
     int i = GetDevice();
 
-    if (i >= kMaxSupportCPUs) {
+    if (i >= kMaxSupportGPUs) {
         throw std::runtime_error("Out of supported GPU number.");
     }
 
