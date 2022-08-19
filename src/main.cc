@@ -24,10 +24,6 @@ void StartSelfplayLoop() {
     auto loop = std::make_unique<SelfPlayPipe>();
 }
 
-void StartMatchLoop() {
-    auto loop = std::make_unique<Arena>();
-}
-
 int main(int argc, char **argv) {
     ArgsParser(argc, argv);
 
@@ -39,9 +35,6 @@ int main(int argc, char **argv) {
         StartGtpLoop();
     } else if (GetOption<std::string>("mode") == "selfplay") {
         StartSelfplayLoop();
-    } else if (GetOption<std::string>("mode") == "match") {
-        StartMatchLoop(); // exprient function, will crash on the 
-                          // CUDA platfrom...
     }
     return 0;
 }

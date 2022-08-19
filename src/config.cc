@@ -71,7 +71,6 @@ void InitOptionsMap() {
     kOptionsMap["weights_file"] << Option::setoption(std::string{});
     kOptionsMap["book_file"] << Option::setoption(std::string{});
     kOptionsMap["patterns_file"] << Option::setoption(std::string{});
-    kOptionsMap["match_weights"] << Option::setoption(std::string{});
 
     kOptionsMap["use_gpu"] << Option::setoption(false);
     kOptionsMap["gpus"] << Option::setoption(std::string{});
@@ -369,15 +368,6 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext("--patterns")) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("patterns_file", res->Get<std::string>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
-    }
-
-    while (const auto res = parser.FindNext("--match-weights")) {
-        if (IsParameter(res->Get<std::string>())) {
-            auto mw = GetOption<std::string>("match_weights");
-            mw += (res->Get<std::string>() + " ");
-            SetOption("match_weights", mw);
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
