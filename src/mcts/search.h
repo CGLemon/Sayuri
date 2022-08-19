@@ -173,6 +173,9 @@ public:
     // Save the training data.
     void SaveTrainingBuffer(std::string filename, GameState &state);
 
+    // Clear the training data in the buffer.
+    void ClearTrainingBuffer();
+
     // Release the whole trees.
     void ReleaseTree();
 

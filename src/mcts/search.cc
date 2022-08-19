@@ -629,6 +629,10 @@ int Search::Analyze(int interval, bool ponder, bool is_sayuri) {
     return result.best_move;
 }
 
+void Search::ClearTrainingBuffer() {
+    training_buffer_.clear();
+}
+
 void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
     auto file = std::ofstream{};
     file.open(filename, std::ios_base::app);

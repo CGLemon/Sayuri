@@ -78,7 +78,19 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "get_handicap",
 
-    // "kgs-chat",
+    "query_boardsize",
+
+    "clear_cache",
+
+    "selfplay-genmove",      // debug
+
+    "selfplay",              // debug
+
+    "dump_training_buffer",  // debug
+
+    "clear_training_buffer", // debug
+
+    // "kgs-chat", // may crush on the KgsGtp
 
     "analyze",
 

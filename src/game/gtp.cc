@@ -105,7 +105,6 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         }
     } else if (const auto res = parser.Find("clear_board", 0)){
         agent_->GetState().ClearBoard();
-        agent_->GetNetwork().ClearCache();
         out << GTPSuccess("");
     } else if (const auto res = parser.Find("komi", 0)) {
         auto komi = agent_->GetState().GetKomi();
@@ -205,13 +204,19 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         if (filename.empty()) {
             out << GTPSuccess(Sgf::Get().ToString(agent_->GetState()));
         } else {
-            out << GTPSuccess("");
             Sgf::Get().ToFile(filename, agent_->GetState());
+            out << GTPSuccess("");
         }
     } else if (const auto res = parser.Find("get_komi", 0)) {
         out << GTPSuccess(std::to_string(agent_->GetState().GetKomi()));
     } else if (const auto res = parser.Find("get_handicap", 0)) {
         out << GTPSuccess(std::to_string(agent_->GetState().GetHandicap()));
+    } else if (const auto res = parser.Find("query_boardsize", 0)) {
+        out << GTPSuccess(std::to_string(agent_->GetState().GetBoardSize()));
+    } else if (const auto res = parser.Find("clear_cache", 0)) {
+        agent_->GetSearch().ReleaseTree();
+        agent_->GetNetwork().ClearCache();
+        out << GTPSuccess("");
     } else if (const auto res = parser.Find("final_score", 0)) {
         auto result = agent_->GetSearch().Computation(400, 0, Search::kForced);
         auto color = agent_->GetState().GetToMove();
@@ -249,7 +254,45 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         agent_->GetState().PlayMove(move);
         out << GTPSuccess(agent_->GetState().VertexToText(move));
         try_ponder = true;
-    } else if (const auto res = parser.Find("kgs-game_over", 0)) {
+    } else if (const auto res = parser.Find("selfplay-genmove", 0)) {
+        auto color = agent_->GetState().GetToMove();
+        if (const auto input = parser.GetCommand(1)) {
+            auto color_str = input->Get<std::string>();
+            if (color_str == "b" || color_str == "B" || color_str == "black") {
+                color = kBlack;
+            } else if (color_str == "w" || color_str == "W" || color_str == "white") {
+                color = kWhite;
+            }
+        }
+        agent_->GetState().SetToMove(color);
+        auto move = agent_->GetSearch().GetSelfPlayMove();
+        agent_->GetState().PlayMove(move);
+        out << GTPSuccess(agent_->GetState().VertexToText(move));
+        // try_ponder = true;
+    } else if (const auto res = parser.Find("selfplay", 0)) {
+        while (!agent_->GetState().IsGameOver()) {
+            agent_->GetState().PlayMove(agent_->GetSearch().GetSelfPlayMove());
+            agent_->GetState().ShowBoard();
+        }
+        out << GTPSuccess("");
+    } else if (const auto res = parser.Find("dump_training_buffer", 0)) {
+        auto filename = std::string{};
+        if (const auto input = parser.GetCommand(1)) {
+            filename = input->Get<std::string>();
+        }
+
+        if (!agent_->GetState().IsGameOver()) {
+            out << GTPFail("it is not game over yet");
+        } else if (filename.empty()) {
+            out << GTPFail("invalid file name");
+        } else {
+            agent_->GetSearch().SaveTrainingBuffer(filename, agent_->GetState());
+            out << GTPSuccess("");
+        }
+    } else if (const auto res = parser.Find("clear_training_buffer", 0)) {
+        agent_->GetSearch().ClearTrainingBuffer();
+        out << GTPSuccess("");
+    }else if (const auto res = parser.Find("kgs-game_over", 0)) {
         agent_->GetNetwork().ClearCache();
         out << GTPSuccess("");
     } else if (const auto res = parser.Find("kgs-chat", 0)) {
