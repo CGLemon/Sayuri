@@ -17,11 +17,15 @@ void DumpLicense() {
 }
 
 void StartGtpLoop() {
-    auto gtp_loop = std::make_unique<GtpLoop>();
+    auto loop = std::make_unique<GtpLoop>();
 }
 
 void StartSelfplayLoop() {
-    auto selfplay_loop = std::make_unique<SelfPlayPipe>();
+    auto loop = std::make_unique<SelfPlayPipe>();
+}
+
+void StartMatchLoop() {
+    auto loop = std::make_unique<Arena>();
 }
 
 int main(int argc, char **argv) {
@@ -35,6 +39,9 @@ int main(int argc, char **argv) {
         StartGtpLoop();
     } else if (GetOption<std::string>("mode") == "selfplay") {
         StartSelfplayLoop();
+    } else if (GetOption<std::string>("mode") == "match") {
+        StartMatchLoop(); // exprient function, will crash on the 
+                          // CUDA platfrom...
     }
     return 0;
 }

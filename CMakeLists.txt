@@ -9,6 +9,7 @@ set(BOOK_SOURCES_DIR ${SOURCE_DIR}/book)
 set(PATTERN_SOURCES_DIR ${SOURCE_DIR}/pattern)
 set(MCTS_SOURCES_DIR ${SOURCE_DIR}/mcts)
 set(SELFPLAY_SOURCES_DIR ${SOURCE_DIR}/selfplay)
+set(MATCH_SOURCES_DIR ${SOURCE_DIR}/match)
 set(UTILS_SOURCES_DIR ${SOURCE_DIR}/utils)
 
 set(IncludePath "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -75,6 +76,11 @@ set(MCTS_SOURCES
 set(SELFPLAY_SOURCES
     ${SELFPLAY_SOURCES_DIR}/pipe.cc
     ${SELFPLAY_SOURCES_DIR}/engine.cc
+    )
+
+set(MATCH_SOURCES
+    ${MATCH_SOURCES_DIR}/arena.cc
+    ${MATCH_SOURCES_DIR}/match_player.cc
     )
 
 set(UTILS_SOURCES
@@ -309,6 +315,7 @@ add_executable(Sayuri
     ${NEURAL_SOURCES}
     ${UTILS_SOURCES}
     ${SELFPLAY_SOURCES}
+    ${MATCH_SOURCES}
     ${CUDA_SOURCES}
     )
 
