@@ -112,6 +112,8 @@ public:
 
     int GetFirstPassColor() const;
 
+    std::uint64_t GetMoveHash(const int vtx, const int color) const;
+
 private:
     using VertexColor = std::pair<int, int>;
 

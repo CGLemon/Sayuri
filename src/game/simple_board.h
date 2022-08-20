@@ -133,6 +133,8 @@ public:
     // Compute the symmetry Zobrist ko hashing.
     std::uint64_t ComputeKoHash(int symmetry) const;
 
+    std::uint64_t GetMoveHash(const int vtx, const int color) const;
+
     int ComputeReachGroup(int start_vertex, int spread_color,
                               std::vector<bool> &buf,
                               std::function<int(int)> Peek) const;
@@ -423,6 +425,14 @@ inline std::uint64_t SimpleBoard::GetKoHash() const {
 
 inline std::uint64_t SimpleBoard::GetHash() const {
     return hash_;
+}
+
+inline std::uint64_t SimpleBoard::GetMoveHash(const int vtx, const int color) const {
+    std::uint64_t hash = Zobrist::kState[color][vtx];
+    if (color == to_move_) {
+        hash ^= Zobrist::kBlackToMove; 
+    }
+    return hash;
 }
 
 inline int SimpleBoard::GetState(const int vtx) const {

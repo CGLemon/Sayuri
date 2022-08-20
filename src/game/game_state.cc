@@ -761,6 +761,10 @@ std::uint64_t GameState::GetHash() const {
     return board_.GetHash() ^ komi_hash_;
 }
 
+std::uint64_t GameState::GetMoveHash(const int vtx, const int color) const {
+    return board_.GetMoveHash(vtx, color);
+}
+
 int GameState::GetState(const int vtx) const {
     return board_.GetState(vtx);
 }

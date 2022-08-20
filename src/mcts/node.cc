@@ -1,9 +1,10 @@
 #include "mcts/node.h"
 #include "mcts/lcb.h"
+#include "mcts/rollout.h"
 #include "utils/atomic.h"
 #include "utils/random.h"
 #include "utils/format.h"
-#include "mcts/rollout.h"
+#include "game/symmetry.h"
 
 #include <cassert>
 #include <algorithm>
@@ -91,7 +92,18 @@ bool Node::ExpandChildren(Network &network,
     const auto num_intersections = state.GetNumIntersections();
     const auto safe_area = state.GetStrictSafeArea();
 
-    // Third, remove the illegal moves or some bad move.
+    // For symmetriy pruning.
+    bool apply_symm_pruning = GetParameters()->symm_pruning &&
+                                  board_size >= state.GetMoveNumber();
+    auto moves_hash = std::vector<std::uint64_t>{};
+    auto symm_base_hash = std::vector<std::uint64_t>(Symmetry::kNumSymmetris, 0ULL);
+
+    for (int symm = Symmetry::kIdentitySymmetry;
+             apply_symm_pruning && symm < Symmetry::kNumSymmetris; ++symm) {
+        symm_base_hash[symm] = state.ComputeSymmetryHash(symm);
+    }
+
+    // Third, prune the illegal moves or some bad move.
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto x = idx % board_size;
         const auto y = idx / board_size;
@@ -100,6 +112,24 @@ bool Node::ExpandChildren(Network &network,
 
         if (!state.IsLegalMove(vtx, color_) || safe_area[idx]) {
             continue;
+        }
+
+        // Prune the symmetry moves. May reduce some perfomance and 
+        // change the policy value of the children. 
+        if (apply_symm_pruning) {
+            bool hash_found = false;
+            for (int symm = Symmetry::kIdentitySymmetry+1;
+                     symm < Symmetry::kNumSymmetris && !hash_found; ++symm) {
+                const auto symm_vtx = Symmetry::Get().TransformVertex(board_size, symm, vtx);
+                const auto symm_hash = symm_base_hash[symm] ^ state.GetMoveHash(symm_vtx, color_);
+                hash_found = (std::find(std::begin(moves_hash), std::end(moves_hash), symm_hash) != std::end(moves_hash));
+            }
+
+            if (!hash_found) {
+                moves_hash.emplace_back(state.GetHash() ^ state.GetMoveHash(vtx, color_));
+            } else {
+                continue;
+            }
         }
 
         if (is_root) {
@@ -131,6 +161,7 @@ bool Node::ExpandChildren(Network &network,
         }
     } else {
         for (auto &node : nodelist) {
+            // Resize the policy.
             node.first /= legal_accumulate;
         }
     }

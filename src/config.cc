@@ -94,6 +94,7 @@ void InitOptionsMap() {
     kOptionsMap["policy_temp"] << Option::setoption(1.f, 1.f, 0.f);
     kOptionsMap["lag_buffer"] << Option::setoption(0);
     kOptionsMap["early_symm_cache"] << Option::setoption(false);
+    kOptionsMap["symm_pruning"] << Option::setoption(false);
 
     // self-play options
     kOptionsMap["random_min_visits"] << Option::setoption(1);
@@ -229,6 +230,11 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 
     if (const auto res = parser.Find("--early-symm-cache")) {
         SetOption("early_symm_cache", true);
+        parser.RemoveCommand(res->Index());
+    }
+
+    if (const auto res = parser.Find("--symm-pruning")) {
+        SetOption("symm_pruning", true);
         parser.RemoveCommand(res->Index());
     }
 

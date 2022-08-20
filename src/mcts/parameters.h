@@ -51,6 +51,7 @@ public:
         use_rollout = GetOption<bool>("rollout");
         no_dcnn = GetOption<bool>("no_dcnn");
         first_pass_bonus = GetOption<bool>("first_pass_bonus");
+        symm_pruning = GetOption<bool>("symm_pruning");
     }
 
     int threads;
@@ -92,6 +93,7 @@ public:
     bool use_rollout;
     bool no_dcnn;
     bool first_pass_bonus;
+    bool symm_pruning;
 
     std::array<float, kNumVertices + 10> dirichlet_buffer;
 };
