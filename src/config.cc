@@ -525,6 +525,7 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (ErrorCommands(parser) || GetOption<bool>("help")) {
         DumpHelper();
     }
+    DumpWarning();
 
     InitBasicParameters();
 }
@@ -592,4 +593,15 @@ void ArgsParser::DumpHelper() const {
                 << "\t\tFile to log input/output to.\n\n"
           ;
     exit(-1);
+}
+
+void ArgsParser::DumpWarning() const {
+    bool dump = false;
+    if (GetOption<bool>("rollout") || GetOption<bool>("no_dcnn")) {
+        LOGGING << "--WARNING! the rollout and no_dcnn options are experimental."
+                << " Propose to disable them.\n";
+            ;
+        dump = true;
+    }
+    if (dump) LOGGING << '\n';
 }
