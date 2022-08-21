@@ -68,6 +68,7 @@ void InitOptionsMap() {
     kOptionsMap["batch_size"] << Option::setoption(0);
     kOptionsMap["threads"] << Option::setoption(0);
 
+    kOptionsMap["kgs_hint"] << Option::setoption(std::string{});
     kOptionsMap["weights_file"] << Option::setoption(std::string{});
     kOptionsMap["book_file"] << Option::setoption(std::string{});
     kOptionsMap["patterns_file"] << Option::setoption(std::string{});
@@ -165,6 +166,22 @@ void InitBasicParameters() {
     }
 }
 
+std::string ParseHint(std::string raw_hint) {
+    auto hint = std::string{};
+
+    for (auto i = size_t{0}; i < raw_hint.size(); ++i) {
+        char c = raw_hint[i];
+
+        if (c == '+') {
+            hint += ' ';
+        } else {
+            hint += c;
+        }
+    }
+
+    return hint;
+}
+
 ArgsParser::ArgsParser(int argc, char** argv) {
     auto parser = CommandParser(argc, argv);
     const auto IsParameter = [](const std::string &param) -> bool {
@@ -258,6 +275,13 @@ ArgsParser::ArgsParser(int argc, char** argv) {
             SetOption("resign_threshold", res->Get<float>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
+    }
+
+    if (const auto res = parser.FindNext("--kgs-hint")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("kgs_hint", ParseHint(res->Get<std::string>()));
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        } 
     }
 
     if (const auto res = parser.Find({"--analysis-verbose", "-a"})) {

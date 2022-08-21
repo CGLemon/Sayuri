@@ -6,8 +6,10 @@
 #include "mcts/search.h"
 #include "utils/parser.h"
 #include "utils/threadpool.h"
+#include "utils/format.h"
 #include "book/book.h"
 #include "pattern/gammas_dict.h"
+#include "version.h"
 
 #include <memory>
 
@@ -59,6 +61,19 @@ public:
         Book::Get().LoadBook(GetOption<std::string>("book_file"));
         GammasDict::Get().Initialize(GetOption<std::string>("patterns_file"));
 
+        auto kgs_hint = GetOption<std::string>("kgs_hint");
+        if (kgs_hint.empty()) {
+            version_verbose_ = Format("%s(%s)",
+                                          GetProgramVersion().c_str(),
+                                          GetVersionName().c_str()
+                                     );
+        } else {
+            version_verbose_ = Format("%s(%s). %s",
+                                          GetProgramVersion().c_str(),
+                                          GetVersionName().c_str(),
+                                          kgs_hint.c_str()
+                                     );
+        }
         curr_id_ = -1;
 
         Loop();
@@ -77,4 +92,5 @@ private:
     std::unique_ptr<Agent> agent_{nullptr};
 
     int curr_id_;
+    std::string version_verbose_;
 };

@@ -3,9 +3,7 @@
 #include "game/commands_list.h"
 #include "utils/log.h"
 #include "utils/komi.h"
-#include "utils/format.h"
 #include "utils/gogui_helper.h"
-#include "version.h"
 
 #include "data/supervised.h"
 #include "neural/encoder.h"
@@ -80,11 +78,11 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
     auto out = std::ostringstream{};
 
     if (const auto res = parser.Find("protocol_version", 0)) {
-        out << GTPSuccess(std::to_string(kProtocolVerion));
+        out << GTPSuccess(std::to_string(kProtocolVersion));
     } else if (const auto res = parser.Find("name", 0)) {
         out << GTPSuccess(GetProgramName());
     } else if (const auto res = parser.Find("version", 0)) {
-        out << GTPSuccess(GetProgramVersion());
+        out << GTPSuccess(version_verbose_);
     } else if (const auto res = parser.Find("showboard", 0)) {
         agent_->GetState().ShowBoard();
         out << GTPSuccess("");

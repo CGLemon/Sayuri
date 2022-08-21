@@ -3,7 +3,7 @@
 #include <vector>
 #include <string>
 
-static constexpr auto kProtocolVerion = 2;
+static constexpr auto kProtocolVersion = 2;
 
 static std::vector<std::string> kGtpCommandsList = {
     // Part of GTP version 2 standard command
