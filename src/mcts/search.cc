@@ -725,7 +725,8 @@ void Search::GatherData(const GameState &state, ComputationResult &result) {
     data.komi = result.komi;
     data.side_to_move = result.to_move;
 
-    data.q_value = result.root_eval;
+    // map the root eval from [0 ~ 1] to [-1 ~ 1]
+    data.q_value = 2 * result.root_eval - 1.f;
     data.planes = Encoder::Get().GetPlanes(state);
     data.probabilities = result.target_probabilities;
 
@@ -738,7 +739,7 @@ bool Search::AdvanceToNewRootState() {
     }
 
     if (param_->dirichlet_noise) {
-        // Need re-build the trees if we apply noise. Reuse the
+        // Need to re-build the trees if we apply noise. Reuse the
         // tree will ignore the noise. 
         return false;
     }
