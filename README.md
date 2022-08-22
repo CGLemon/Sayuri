@@ -1,13 +1,15 @@
 
 <div id="sayuri-art" align="center">
     <br/>
-    <img src="https://github.com/CGLemon/Sayuri/blob/master/img/sayuri-art.PNG" alt="Sayuri Art" width="768"/>
+    <img src="./img/sayuri-art.PNG" alt="Sayuri Art" width="768"/>
     <h3>Sayuri</h3>
 </div>
 
 ## Let's ROCK!
 
-Sayuri is a GTP-compliant go engine which supports variable komi and board size. Strongly inspired by Leela Zero and Kata Go. Based on Deep Convolutional Neural Network, Monte Carlo Tree Search and other techniques.
+Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. She is strongly inspired by Leela Zero and Kata Go. The board data structure and network format are borrowed from Leela Zero in the beginning. Current version follow the Kata Go research, the engine supports variable komi and board size now. Some methods you may see my hackmd article(chinese).
+
+* [開發日誌](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/BJgfay0Yc)
 
 ## Requirements
 
@@ -93,7 +95,7 @@ Example setting 2: quickly and friendly pass game
     
     $ ./Sayuri -w <weights file> -t 1 -b 1 --const-time 1 --friendly-pass --reuse-tree
 
-Example setting 3: direct policy output 
+Example setting 3: directly policy output 
 
     $ ./Sayuri -w <weights file> -t 1 -b 1 -p 1
 
@@ -117,11 +119,23 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 
 * Sabaki analysis mode
 
-![sabaki-sample01](https://github.com/CGLemon/Sayuri/blob/master/img/sabaki-sample01.png)
+![sabaki-sample01](./img/sabaki-sample01.png)
 
 * GoGui analysis commands
 
-![gogui-sample01](https://github.com/CGLemon/Sayuri/blob/master/img/gogui-sample01.png)
+![gogui-sample01](./img/gogui-sample01.png)
+
+## Status
+
+Before the AlphaGo (2016s), the most state-of-the-art computer go combine the MCTS and MM (Minorization-Maximization). Crazy Stone and Zen use that. Or combining the MCTS and SB (Simulation Balancing). The Eric (predecessor of AlphaGo) and Leela use that. Ray, one of the strongest open source go engine before AlphaGo, writed by Yuki Kobayashi which based on the MM algorithm. I am surprised that it can play the game well wihout much human knowledge and Neural Network. What's more, it can beats high level go player on 9x9 if we provide it enough computation. Thanks for deep learning technique, the computer go engine is significantly stronger than before. Sayuri can crush the Ray on 19x19 with only policy network. This result show the advantage of deep Neural Network.
+
+Although the Neural Network base engines are more powerful, you may still try some engine with non Neural Network and feel the power of ancient technique. Here is the list.
+
+* [Leela](https://www.sjeng.org/leela.html), need to add the option ```--nonets``` to disable DCNN.
+* [Pachi](https://github.com/pasky/pachi), need to add the option ```--nodcnn``` to disable DCNN.
+* [Ray](https://github.com/kobanium/Ray), may strongest open source engine in the 2016s.
+
+I am try to implement this ancient technique currently. Merge the MM patterns base and the DCNN base technique to provide widely dynamic strength. It should be fun.
 
 ## Features
 
@@ -150,7 +164,6 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 * Leela Zero, [https://github.com/leela-zero/leela-zero](https://github.com/leela-zero/leela-zero)
 * Kata Go methods, [https://github.com/lightvector/KataGo/blob/master/docs/KataGoMethods.md](https://github.com/lightvector/KataGo/blob/master/docs/KataGoMethods.md)
 * [You Tube](https://www.youtube.com/watch?v=82UclNrXGxg), playing with Pachi.
-* 開發日誌, [https://hackmd.io/zulj1rvhQROsB7U3poEjQg?view](https://hackmd.io/zulj1rvhQROsB7U3poEjQg?view)
 
 ## License
 
