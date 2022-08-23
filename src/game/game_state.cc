@@ -108,7 +108,7 @@ bool GameState::UndoMove() {
     return false;
 }
 
-int GameState::TextToVertex(std::string text) {
+int GameState::TextToVertex(std::string text) const {
     if (text.size() < 2) {
         return kNullVertex;
     }
@@ -152,6 +152,19 @@ int GameState::TextToVertex(std::string text) {
         return kNullVertex;
     }
     return board_.GetVertex(x, y);
+}
+
+int GameState::TextToColor(std::string text) const {
+    if (text == "b" ||
+            text == "B" ||
+            text == "black") {
+        return kBlack;
+    } else if (text == "w" ||
+                   text == "W" ||
+                   text == "white") {
+        return kWhite;
+    }
+    return kInvalid;
 }
 
 std::string GameState::VertexToSgf(const int vtx) const {

@@ -30,7 +30,9 @@ public:
 
     void SetWinner(GameResult result);
 
-    int TextToVertex(std::string text);
+    int TextToVertex(std::string text) const;
+
+    int TextToColor(std::string text) const;
 
     std::string VertexToSgf(const int vtx) const;
 

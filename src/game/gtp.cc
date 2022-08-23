@@ -240,11 +240,9 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
     } else if (const auto res = parser.Find("genmove", 0)) {
         auto color = agent_->GetState().GetToMove();
         if (const auto input = parser.GetCommand(1)) {
-            auto color_str = input->Get<std::string>();
-            if (color_str == "b" || color_str == "B" || color_str == "black") {
-                color = kBlack;
-            } else if (color_str == "w" || color_str == "W" || color_str == "white") {
-                color = kWhite;
+            auto get_color = agent_->GetState().TextToColor(input->Get<std::string>());
+            if (get_color != kInvalid) {
+                color = get_color;
             }
         }
         agent_->GetState().SetToMove(color);
@@ -255,11 +253,9 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
     } else if (const auto res = parser.Find("selfplay-genmove", 0)) {
         auto color = agent_->GetState().GetToMove();
         if (const auto input = parser.GetCommand(1)) {
-            auto color_str = input->Get<std::string>();
-            if (color_str == "b" || color_str == "B" || color_str == "black") {
-                color = kBlack;
-            } else if (color_str == "w" || color_str == "W" || color_str == "white") {
-                color = kWhite;
+            auto get_color = agent_->GetState().TextToColor(input->Get<std::string>());
+            if (get_color != kInvalid) {
+                color = get_color;
             }
         }
         agent_->GetState().SetToMove(color);
@@ -309,11 +305,9 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         auto color = agent_->GetState().GetToMove();
         auto interval = 100; // one second
         if (const auto input = parser.GetCommand(1)) {
-            auto color_str = input->Get<std::string>();
-            if (color_str == "b" || color_str == "B" || color_str == "black") {
-                color = kBlack;
-            } else if (color_str == "w" || color_str == "W" || color_str == "white") {
-                color = kWhite;
+            auto get_color = agent_->GetState().TextToColor(input->Get<std::string>());
+            if (get_color != kInvalid) {
+                color = get_color;
             }
         }
         if (const auto input = parser.GetCommand(2)) {
@@ -334,11 +328,9 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         auto color = agent_->GetState().GetToMove();
         auto interval = 100; // one second
         if (const auto input = parser.GetCommand(1)) {
-            auto color_str = input->Get<std::string>();
-            if (color_str == "b" || color_str == "B" || color_str == "black") {
-                color = kBlack;
-            } else if (color_str == "w" || color_str == "W" || color_str == "white") {
-                color = kWhite;
+            auto get_color = agent_->GetState().TextToColor(input->Get<std::string>());
+            if (get_color != kInvalid) {
+                color = get_color;
             }
         }
         if (const auto input = parser.GetCommand(2)) {
@@ -415,11 +407,9 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         int color = kInvalid, time = -1, stones = -1;
 
         if (const auto input = parser.GetCommand(1)) {
-            auto color_str = input->Get<std::string>();
-            if (color_str == "b" || color_str == "B" || color_str == "black") {
-                color = kBlack;
-            } else if (color_str == "w" || color_str == "W" || color_str == "white") {
-                color = kWhite;
+            auto get_color = agent_->GetState().TextToColor(input->Get<std::string>());
+            if (get_color != kInvalid) {
+                color = get_color;
             }
         }
         if (const auto input = parser.GetCommand(2)) {

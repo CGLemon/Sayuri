@@ -1,7 +1,6 @@
 #include "game/iterator.h"
 
 #include <algorithm>
-#include <iostream>
 
 GameStateIterator::GameStateIterator(GameState &state) {
     curr_state_ = state;
