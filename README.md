@@ -7,7 +7,7 @@
 
 ## Let's ROCK!
 
-Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. She is strongly inspired by Leela Zero and Kata Go. The board data structure and network format are borrowed from Leela Zero in the beginning. Current version follow the Kata Go research, the engine supports variable komi and board size now. Some methods you may see my hackmd article(chinese).
+Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. She is strongly inspired by Leela Zero and Kata Go. The board data structure and network format are borrowed from Leela Zero in the beginning. Current version follow the Kata Go research, the engine supports variable komi and board size now. Some methods you may see my Hackmd article (chinese).
 
 * [開發日誌](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/BJgfay0Yc)
 
@@ -125,15 +125,17 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 
 ![gogui-sample01](./img/gogui-sample01.png)
 
-## Status
+## Others
 
-Before the AlphaGo (2016s), the most state-of-the-art computer go combine the MCTS and MM (Minorization-Maximization). Crazy Stone and Zen use that. Or combining the MCTS and SB (Simulation Balancing). The Eric (predecessor of AlphaGo) and Leela use that. Ray, one of the strongest open source go engine before AlphaGo, writed by Yuki Kobayashi which based on the MM algorithm. I am surprised that it can play the game well wihout much human knowledge and Neural Network. What's more, it can beats high level go player on 9x9 if we provide it enough computation. Thanks for deep learning technique, the computer go engine is significantly stronger than before. Sayuri can crush the Ray on 19x19 with only policy network. This result show the advantage of deep Neural Network.
+### About the ancient technique
+
+Before the AlphaGo (2016s), the most state-of-the-art computer go combine the MCTS and MM (Minorization-Maximization). Crazy Stone and Zen use that. Or combining the MCTS and SB (Simulation Balancing). The Eric (predecessor of AlphaGo) and Leela use that. Ray, one of the strongest open source go engine before AlphaGo, writed by Yuki Kobayashi which based on the MM algorithm. I am surprised that it can play the game well wihout much human knowledge and Neural Network. What's more, it can beats high level go player on 9x9 if we provide it enough computation. But thanks for deep learning technique, the computer go engine is significantly stronger than before. Sayuri can beat the Ray on 19x19 with only policy network. This result show the advantage of deep Neural Network.
 
 Although the Neural Network base engines are more powerful, you may still try some engine with non Neural Network and feel the power of ancient technique. Here is the list.
 
 * [Leela](https://www.sjeng.org/leela.html), need to add the option ```--nonets``` to disable DCNN.
 * [Pachi](https://github.com/pasky/pachi), need to add the option ```--nodcnn``` to disable DCNN.
-* [Ray](https://github.com/kobanium/Ray), may strongest open source engine in the 2016s.
+* [Ray](https://github.com/kobanium/Ray), may be strongest open source engine in the 2016s.
 
 I am try to implement this ancient technique currently. Merge the MM patterns base and the DCNN base technique to provide widely dynamic strength. It should be fun.
 
