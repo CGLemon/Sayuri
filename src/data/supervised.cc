@@ -147,7 +147,7 @@ bool Supervised::GeneralSgfProcess(std::string &sgfstring,
         return false;
     }
 
-    const auto zero_ownership = std::vector<float>(num_intersections, 0.f);
+    const auto zero_ownership = std::vector<int>(num_intersections, 0.f);
     const auto zero_final_score = 0.f;
 
     auto game_ite = GameStateIterator(state);
@@ -166,6 +166,9 @@ bool Supervised::GeneralSgfProcess(std::string &sgfstring,
     if (game_ite.MaxMoveNumber() == 0) {
         return false;
     }
+
+    // Remove the double pass moves in the middle.
+    game_ite.RemoveUnusedDoublePass();
 
     do {
         auto vtx = game_ite.GetVertex();
@@ -193,11 +196,7 @@ bool Supervised::GeneralSgfProcess(std::string &sgfstring,
         buf.auxiliary_probabilities[VertexToIndex(main_state, aux_vtx)] = 1.0f;
 
         for (int idx = 0; idx < num_intersections; ++idx) {
-            if (zero_ownership[idx] == buf.side_to_move) {
-                buf.ownership[idx] = 1; 
-            } else if (zero_ownership[idx] == !buf.side_to_move) {
-                buf.ownership[idx] = -1;
-            }
+            buf.ownership[idx] = zero_ownership[idx]; 
         }
 
         assert(winner != kUndecide);
@@ -285,7 +284,7 @@ bool Supervised::SgfProcess(std::string &sgfstring,
         return state.GetIndex(x, y);
     };
 
-    // remove double pass moves
+    // Remove the double pass moves in the middle.
     game_ite.RemoveUnusedDoublePass();
 
     if (game_ite.MaxMoveNumber() == 0) {
