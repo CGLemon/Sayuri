@@ -9,6 +9,7 @@
 #include "utils/format.h"
 #include "utils/random.h"
 #include "utils/threadpool.h"
+#include "utils/time.h"
 
 #include "config.h"
 
@@ -38,12 +39,14 @@ void Supervised::FromSgfs(bool general,
         int games = 0;
         int worker_cnt = worker_cnt_.fetch_add(1);
 
-        LOGGING << Format("Thread %d is ready", worker_cnt+1) << std::endl;
+        LOGGING << Format("[%s] Thread %d is ready\n", CurrentDateTime().c_str(), worker_cnt+1);
 
         while (true) {
             if (!running_.load(std::memory_order_relaxed) && tasks_.empty()) {
-                LOGGING << Format("Thread %d is terminate, totally parsed %d games.",
-                                          worker_cnt+1, tot_games_.load(std::memory_order_relaxed)) << std::endl;
+                LOGGING << Format("[%s] Thread %d is terminate, totally parsed %d games.\n",
+                                          CurrentDateTime().c_str(),
+                                          worker_cnt+1, tot_games_.load(std::memory_order_relaxed)
+                                 );
                 break;
             }
 
@@ -90,8 +93,10 @@ void Supervised::FromSgfs(bool general,
                         file.close();
                         closed = true;
                     }
-                    LOGGING << Format("Thread %d parsed %d games, totally parsed %d games.",
-                                          worker_cnt+1, games, tot_games_.load(std::memory_order_relaxed)) << std::endl;
+                    LOGGING << Format("[%s] Thread %d parsed %d games, totally parsed %d games.",
+                                          CurrentDateTime().c_str(),
+                                          worker_cnt+1, games, tot_games_.load(std::memory_order_relaxed)
+                                     );
                 }
             }
         }
@@ -284,12 +289,12 @@ bool Supervised::SgfProcess(std::string &sgfstring,
         return state.GetIndex(x, y);
     };
 
-    // Remove the double pass moves in the middle.
-    game_ite.RemoveUnusedDoublePass();
-
     if (game_ite.MaxMoveNumber() == 0) {
         return false;
     }
+
+    // Remove the double pass moves in the middle.
+    game_ite.RemoveUnusedDoublePass();
 
     do {
         auto vtx = game_ite.GetVertex();

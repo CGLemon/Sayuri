@@ -20,5 +20,4 @@ public:
 
 private:
     std::chrono::steady_clock::time_point clock_time_;
-
 };
