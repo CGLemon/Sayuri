@@ -26,30 +26,31 @@ Supervised &Supervised::Get() {
 void Supervised::FromSgfs(bool general,
                               std::string sgf_name,
                               std::string out_name_prefix) {
-    file_cnt_.store(0);
-    worker_cnt_.store(0);
-    tot_games_.store(0);
-    running_.store(true);
+    // Init all status.
+    file_cnt_.store(0, std::memory_order_relaxed);
+    worker_cnt_.store(0, std::memory_order_relaxed);
+    tot_games_.store(0, std::memory_order_relaxed);
+    running_threads_.store(0, std::memory_order_relaxed);
+    running_.store(true, std::memory_order_relaxed);
 
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
 
     auto Worker = [this, general, out_name_prefix]() -> void {
         auto file = std::ofstream{};
-        bool closed = true;
+        bool file_closed = true;
         int games = 0;
-        int worker_cnt = worker_cnt_.fetch_add(1);
+
+        running_threads_.fetch_add(1, std::memory_order_relaxed);
+        int worker_cnt = worker_cnt_.fetch_add(1, std::memory_order_relaxed);
 
         LOGGING << Format("[%s] Thread %d is ready\n", CurrentDateTime().c_str(), worker_cnt+1);
 
         while (true) {
             if (!running_.load(std::memory_order_relaxed) && tasks_.empty()) {
-                LOGGING << Format("[%s] Thread %d is terminate, totally parsed %d games.\n",
-                                          CurrentDateTime().c_str(),
-                                          worker_cnt+1, tot_games_.load(std::memory_order_relaxed)
-                                 );
                 break;
             }
 
+            // Get the SGF string from the queue.
             auto sgf = std::string{};
 
             {
@@ -61,23 +62,27 @@ void Supervised::FromSgfs(bool general,
             }
 
             if (sgf.empty()) {
+                // Fail to get the SGF string from the queue.
                 std::this_thread::yield();
                 continue;
             }
 
-            if (closed) {
+            if (file_closed) {
+                // Create the new storage file.
                 auto out_name = Format("%s_%d.txt", out_name_prefix.c_str(), file_cnt_.fetch_add(1));
                 file.open(out_name, std::ios_base::app);
 
                 if (!file.is_open()) {
                     LOGGING << "Fail to create the file: " << out_name << '!' << std::endl; 
-                    return;
+                    running_threads_.store(-1, std::memory_order_relaxed);
+                    break;
                 }
-                closed = false;
+                file_closed = false;
             }
 
             constexpr int kChopPerGames = 200;
 
+            // Parse the SGF string.
             bool success = false;
             if (general) {
                 success = GeneralSgfProcess(sgf, file);
@@ -89,9 +94,9 @@ void Supervised::FromSgfs(bool general,
                 games += 1;
                 tot_games_.fetch_add(1, std::memory_order_relaxed);
                 if (games % kChopPerGames == 0) {
-                    if (!closed) {
+                    if (!file_closed) {
                         file.close();
-                        closed = true;
+                        file_closed = true;
                     }
                     LOGGING << Format("[%s] Thread %d parsed %d games, totally parsed %d games.\n",
                                           CurrentDateTime().c_str(),
@@ -101,9 +106,14 @@ void Supervised::FromSgfs(bool general,
             }
         }
 
-        if (!closed) {
+        if (!file_closed) {
             file.close();
         }
+        running_threads_.fetch_sub(1, std::memory_order_relaxed);
+        LOGGING << Format("[%s] Thread %d is terminate, totally parsed %d games.\n",
+                                  CurrentDateTime().c_str(),
+                                  worker_cnt+1, tot_games_.load(std::memory_order_relaxed)
+                         );
     };
 
     auto threads = GetOption<int>("threads");
@@ -122,6 +132,10 @@ void Supervised::FromSgfs(bool general,
                 sgfs.pop_back();
             } else {
                 std::this_thread::yield();
+            }
+            if (running_threads_.load(std::memory_order_relaxed) < 0) {
+                // Can not open the storage file, stop running.
+                break;
             }
         }
     }

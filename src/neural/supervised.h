@@ -32,5 +32,6 @@ private:
     std::atomic<int> tot_games_;
     std::atomic<int> file_cnt_;
     std::atomic<int> worker_cnt_;
+    std::atomic<int> running_threads_;
     std::atomic<bool> running_;
 };
