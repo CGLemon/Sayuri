@@ -1,5 +1,5 @@
-#include "data/training.h"
 #include "game/types.h"
+#include "neural/training.h"
 #include "neural/network_basic.h"
 
 void ArrayStreamOut(std::ostream &out, const std::vector<float> &arr) {

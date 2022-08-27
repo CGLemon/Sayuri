@@ -3,9 +3,8 @@
 #include "mcts/time_control.h"
 #include "mcts/parameters.h"
 #include "mcts/node.h"
-
 #include "game/game_state.h"
-#include "data/training.h"
+#include "neural/training.h"
 #include "utils/threadpool.h"
 #include "utils/operators.h"
 #include "utils/time.h"

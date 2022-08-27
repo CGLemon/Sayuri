@@ -4,7 +4,6 @@ cmake_minimum_required(VERSION 3.15)
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(GAME_SOURCES_DIR ${SOURCE_DIR}/game)
 set(NEURAL_SOURCES_DIR ${SOURCE_DIR}/neural)
-set(DATA_SOURCES_DIR ${SOURCE_DIR}/data)
 set(BOOK_SOURCES_DIR ${SOURCE_DIR}/book)
 set(PATTERN_SOURCES_DIR ${SOURCE_DIR}/pattern)
 set(MCTS_SOURCES_DIR ${SOURCE_DIR}/mcts)
@@ -39,7 +38,8 @@ set(NEURAL_SOURCES
     ${NEURAL_SOURCES_DIR}/description.cc
     ${NEURAL_SOURCES_DIR}/encoder.cc
     ${NEURAL_SOURCES_DIR}/network.cc
-
+    ${NEURAL_SOURCES_DIR}/supervised.cc
+    ${NEURAL_SOURCES_DIR}/training.cc
     ${NEURAL_SOURCES_DIR}/blas/sgemm.cc
     ${NEURAL_SOURCES_DIR}/blas/blas.cc
     ${NEURAL_SOURCES_DIR}/blas/convolution.cc
@@ -58,11 +58,6 @@ set(BOOK_SOURCES
 set(PATTERN_SOURCES
     ${PATTERN_SOURCES_DIR}/pattern.cc
     ${PATTERN_SOURCES_DIR}/gammas_dict.cc
-    )
-
-set(DATA_SOURCES
-    ${DATA_SOURCES_DIR}/supervised.cc
-    ${DATA_SOURCES_DIR}/training.cc
     )
 
 set(MCTS_SOURCES
@@ -304,7 +299,6 @@ add_executable(Sayuri
     ${GAME_SOURCES}
     ${BOOK_SOURCES}
     ${PATTERN_SOURCES}
-    ${DATA_SOURCES}
     ${MCTS_SOURCES}
     ${NEURAL_SOURCES}
     ${UTILS_SOURCES}

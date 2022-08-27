@@ -4,8 +4,7 @@
 #include "utils/log.h"
 #include "utils/komi.h"
 #include "utils/gogui_helper.h"
-
-#include "data/supervised.h"
+#include "neural/supervised.h"
 #include "neural/encoder.h"
 
 #include <iomanip>
