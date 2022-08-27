@@ -93,7 +93,7 @@ void Supervised::FromSgfs(bool general,
                         file.close();
                         closed = true;
                     }
-                    LOGGING << Format("[%s] Thread %d parsed %d games, totally parsed %d games.",
+                    LOGGING << Format("[%s] Thread %d parsed %d games, totally parsed %d games.\n",
                                           CurrentDateTime().c_str(),
                                           worker_cnt+1, games, tot_games_.load(std::memory_order_relaxed)
                                      );

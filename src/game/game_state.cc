@@ -459,7 +459,10 @@ void GameState::FillRandomMove() {
     const int rand = Random<kXoroShiro128Plus>::Get().Generate() % empty_cnt;
     int select_move = kPass;
 
+    auto filled_area = std::vector<int>(GetNumIntersections(), kInvalid);
     auto safe_area = std::vector<bool>(GetNumIntersections(), false);
+
+    board_.ComputeScoreArea(filled_area);
     board_.ComputeSafeArea(safe_area, true);
 
     for (int i = 0; i < empty_cnt; ++i) {
@@ -506,6 +509,10 @@ void GameState::FillRandomMove() {
         if (board_.IsSimpleEye(vtx, color) &&
                 !board_.IsCaptureMove(vtx, color) &&
                 !board_.IsEscapeMove(vtx, color)) {
+            continue;
+        }
+
+        if (filled_area[GetIndex(x, y)] != kEmpty) {
             continue;
         }
 
@@ -628,7 +635,7 @@ std::vector<int> GameState::GetOwnershipAndRemovedDeadStrings(int playouts) cons
     fork_state.RemoveDeadStrings(playouts);
     return fork_state.GetOwnership();
 }
-
+#include <iostream>
 std::vector<int> GameState::MarKDeadStrings(int playouts) const {
     auto num_intersections = GetNumIntersections();
     auto buffer = std::vector<int>(num_intersections, 0);
@@ -636,27 +643,38 @@ std::vector<int> GameState::MarKDeadStrings(int playouts) const {
     static constexpr int kMaxPlayoutsCount = 32 * 16384;
 
     playouts = std::min(playouts, kMaxPlayoutsCount);
+    bool already_removed = false;
 
     for (int p = 0; p < playouts; ++p) {
         int moves = 0;
-        auto state = *this;
+        auto fork_state = *this;
         if (p%2==0) {
-            state.board_.SetToMove(!GetToMove());
+            fork_state.board_.SetToMove(!GetToMove());
         }
         while(true) {
-            state.FillRandomMove();
+            fork_state.FillRandomMove();
 
-            if (state.GetPasses() >= 4) {
+            if (p == 0 &&
+                    moves == 0 &&
+                    fork_state.GetLastMove() == kPass) {
+                // The first move is pass. That means all dead strings
+                // are removed.
+                p = kMaxPlayoutsCount+1; // stop the playouts
+                already_removed = true;
+                break;
+            }
+
+            if (fork_state.GetPasses() >= 4) {
                 break;
             }
 
             if (moves++ >= 2 * num_intersections) {
-                // Too many moves.
+                // too many moves
                 break;
             }
         }
 
-        auto final_ownership = state.GetOwnership();
+        auto final_ownership = fork_state.GetOwnership();
 
         for (int idx = 0; idx < num_intersections; ++idx) {
             auto owner = final_ownership[idx];
@@ -668,6 +686,10 @@ std::vector<int> GameState::MarKDeadStrings(int playouts) const {
         }
     }
 
+    if (already_removed) {
+        playouts = 1; // in order to resize the thes
+    }
+
     const auto board_size = GetBoardSize();
     const auto thes = (int)(0.7 * playouts);
     auto dead = std::vector<int>{};
@@ -677,10 +699,10 @@ std::vector<int> GameState::MarKDeadStrings(int playouts) const {
         const auto y = idx / board_size;
         const auto state = GetState(x, y);
         if (buffer[idx] >= thes) {
-            // It mean that this area belongs to black.
+            // It means that this point belongs to black.
             if (state == kWhite) dead.emplace_back(GetVertex(x, y));
         } else if (buffer[idx] <= -thes) {
-            // It mean that this area belongs to white.
+            // It means that this point belongs to white.
             if (state == kBlack) dead.emplace_back(GetVertex(x, y));
         } 
     }
