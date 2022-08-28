@@ -2,6 +2,7 @@ import numpy as np
 import glob, os, random, time, io, gzip
 
 FIXED_DATA_VERSION = 1
+DATA_LINES = 45
 
 '''
 ------- claiming -------
@@ -149,8 +150,8 @@ class Data():
     @staticmethod
     def get_datalines(version):
         if version == 1:
-            return 45
-        return -1
+            return DATA_LINES
+        return 0
 
     def __str__(self):
         out = str()
@@ -180,13 +181,15 @@ class Data():
 
         return out
 
-class Loader:
+class LazyLoader:
     def __init__(self, dirname):
         self.dirname = dirname
-
-        self.stream_end = True
-        self.stream = None
         self.chunks = []
+        self.shuf_buf = [] # shuffle buffer.
+
+        # Use a random sample input data read. This helps improve the spread of
+        # games in the shuffle buffer.
+        self.down_sample_rate = 16
 
         def gather_recursive_files(root):
             l = list()
@@ -199,8 +202,24 @@ class Loader:
 
         self.done = gather_recursive_files(self.dirname)
 
-    def next(self, parse):
-        if self.stream_end:
+    def __fill_buf(self, stream):
+        while True:
+            datalines = Data.get_datalines(FIXED_DATA_VERSION);
+            data_str = []
+
+            for cnt in range(datalines):
+                line = stream.readline()
+                if len(line) == 0:
+                    return # it is end
+                else:
+                    data_str.append(line)
+
+            if self.down_sample_rate > 1:
+                if random.randint(0, self.down_sample_rate-1) == 0:
+                    self.shuf_buf.append(data_str)
+
+    def next(self):
+        while len(self.shuf_buf) == 0:
             if len(self.chunks) == 0:
                 self.chunks, self.done = self.done, self.chunks
                 random.shuffle(self.chunks)
@@ -208,23 +227,26 @@ class Loader:
             filename = self.chunks.pop()
             self.done.append(filename)
 
+            stream = None
             if filename.find(".gz") >= 0:
                 with gzip.open(filename, 'rt') as f:
-                    self.stream = io.StringIO(f.read())
-                    self.stream_end = False
+                    stream = io.StringIO(f.read())
             else:
                 with open(filename, 'r') as f:
-                    self.stream = io.StringIO(f.read())
-                    self.stream_end = False
+                    stream = io.StringIO(f.read())
 
-        datalines = Data.get_datalines(FIXED_DATA_VERSION);
+            # TODO: Performance is bad if the network is small. Maybe we load too
+            #       many data strings at the same time.
+            self.__fill_buf(stream)
+
+            if len(self.shuf_buf) > 1:
+                random.shuffle(self.shuf_buf)
+
+        data_str = self.shuf_buf.pop()
         data = Data()
 
-        for cnt in range(datalines):
-            line = self.stream.readline()
-            if len(line) == 0:
-                self.stream_end = True
-                return self.next(parse)
-            if parse:
-                data.fill_v1(cnt, line)
+        for cnt in range(data.get_datalines(FIXED_DATA_VERSION)):
+            line = data_str[cnt]
+            data.fill_v1(cnt, line)
+
         return data

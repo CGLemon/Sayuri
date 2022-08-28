@@ -4,7 +4,7 @@ import numpy as np
 import random, time, math, os
 
 from network import Network
-from loader import Loader
+from loader import LazyLoader
 
 from torch.nn import DataParallel
 from torch.utils.data import DataLoader, Subset
@@ -21,21 +21,13 @@ class DataSet():
 
         self.dummy_size = 0
 
-        # Use a random sample input data read. This helps improve the spread of
-        # games in the shuffle buffer.
-        self.down_sample_rate = 16
-
-        self.data_loaders = []
+        self.lazy_loaders = []
         num_workers = max(cfg.num_workers, 1)
         for _ in range(num_workers):
-            self.data_loaders.append(Loader(dirname))
+            self.lazy_loaders.append(LazyLoader(dirname))
 
     def __wrap_data(self, worker_id):
-        # Downsample, using only 1/Nth of the items.
-        while random.randint(0, self.down_sample_rate-1) != 0:
-            self.data_loaders[worker_id].next(False)
-
-        data = self.data_loaders[worker_id].next(True)
+        data = self.lazy_loaders[worker_id].next()
 
         nn_board_size = self.nn_board_size
         nn_num_intersections = self.nn_num_intersections
