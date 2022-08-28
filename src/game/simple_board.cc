@@ -642,7 +642,7 @@ LadderType SimpleBoard::HunterSelections(const int prey_color,
     return LadderType::kGoodForNeither; // keep running
 }
 
-LadderType SimpleBoard::PreyMove(std::shared_ptr<SimpleBoard> board,
+LadderType SimpleBoard::PreyMove(SimpleBoard* board,
                                  const int hunter_vtx, const int prey_color,
                                  const int ladder_vtx, size_t& ladder_nodes, bool fork) const {
 
@@ -651,9 +651,10 @@ LadderType SimpleBoard::PreyMove(std::shared_ptr<SimpleBoard> board,
         return LadderType::kGoodForPrey;
     }
 
-    std::shared_ptr<SimpleBoard> ladder_board;
+    SimpleBoard* ladder_board;
     if (fork) {
-        ladder_board = std::make_shared<SimpleBoard>(*board);
+        // Need to delete it before the return.
+        ladder_board = new SimpleBoard(*board);
     } else {
         ladder_board = board;
     }
@@ -667,6 +668,9 @@ LadderType SimpleBoard::PreyMove(std::shared_ptr<SimpleBoard> board,
     auto res = ladder_board->PreySelections(prey_color, ladder_vtx, selections, hunter_vtx != kNullVertex);
 
     if (res != LadderType::kGoodForNeither) {
+        if (fork) {
+            delete ladder_board;
+        }
         return res;
     }
 
@@ -693,10 +697,13 @@ LadderType SimpleBoard::PreyMove(std::shared_ptr<SimpleBoard> board,
         }
     }
 
+    if (fork) {
+        delete ladder_board;
+    }
     return best;
 }
 
-LadderType SimpleBoard::HunterMove(std::shared_ptr<SimpleBoard> board,
+LadderType SimpleBoard::HunterMove(SimpleBoard* board,
                                    const int prey_vtx, const int prey_color,
                                    const int ladder_vtx, size_t& ladder_nodes, bool fork) const {
     if ((++ladder_nodes) >= kMaxLadderNodes) {
@@ -704,9 +711,10 @@ LadderType SimpleBoard::HunterMove(std::shared_ptr<SimpleBoard> board,
         return LadderType::kGoodForPrey;
     }
 
-    std::shared_ptr<SimpleBoard> ladder_board;
+    SimpleBoard* ladder_board;
     if (fork) {
-        ladder_board = std::make_shared<SimpleBoard>(*board);
+        // Need to delete it before the return.
+        ladder_board = new SimpleBoard(*board);
     } else {
         ladder_board = board;
     }
@@ -721,6 +729,9 @@ LadderType SimpleBoard::HunterMove(std::shared_ptr<SimpleBoard> board,
     auto res = ladder_board->HunterSelections(prey_color, ladder_vtx, selections);
 
     if (res != LadderType::kGoodForNeither) {
+        if (fork) {
+            delete ladder_board;
+        }
         return res;
     }
   
@@ -747,6 +758,9 @@ LadderType SimpleBoard::HunterMove(std::shared_ptr<SimpleBoard> board,
         }
     }
 
+    if (fork) {
+        delete ladder_board;
+    }
     return best;
 }
 
@@ -769,7 +783,7 @@ bool SimpleBoard::IsLadder(const int vtx, std::vector<int> &vital_moves) const {
     auto res = LadderType::kGoodForNeither;
 
     if (libs == 1) {
-        auto ladder_board = std::make_shared<SimpleBoard>(*this);
+        auto ladder_board = new SimpleBoard(*this);
         res = PreyMove(ladder_board,
                        kNullVertex, prey_color,
                        ladder_vtx, searched_nodes, false);
@@ -777,9 +791,10 @@ bool SimpleBoard::IsLadder(const int vtx, std::vector<int> &vital_moves) const {
         if (res == LadderType::kGoodForHunter) {
             vital_moves.emplace_back(buf[0]);
         }
+        delete ladder_board;
     } else if (libs == 2) {
         for (auto vvtx: buf) {
-            auto ladder_board = std::make_shared<SimpleBoard>(*this);
+            auto ladder_board = new SimpleBoard(*this);
             if (ladder_board->IsLegalMove(vvtx, !prey_color)) {
 
                 // force the hunter do atari move first
@@ -790,6 +805,7 @@ bool SimpleBoard::IsLadder(const int vtx, std::vector<int> &vital_moves) const {
                     vital_moves.emplace_back(vvtx);
                 }
             }
+            delete ladder_board;
         }
     } else if (libs >= 3) {
         res = LadderType::kGoodForPrey;

@@ -4,7 +4,6 @@
 #include <vector>
 #include <string>
 #include <cassert>
-#include <memory>
 #include <functional>
 #include <algorithm>
 
@@ -260,12 +259,12 @@ protected:
                                 const int ladder_vtx, std::vector<int>& selections) const;
 
     // Prey do move to try to escape from hunter.
-    LadderType PreyMove(std::shared_ptr<SimpleBoard> board,
+    LadderType PreyMove(SimpleBoard* board,
                         const int hunter_vtx, const int prey_color,
                         const int ladder_vtx, size_t& ladder_nodes, bool fork) const;
 
     // Hunter do move to try to capture the prey.
-    LadderType HunterMove(std::shared_ptr<SimpleBoard> board,
+    LadderType HunterMove(SimpleBoard* board,
                           const int prey_vtx, const int prey_color,
                           const int ladder_vtx, size_t& ladder_nodes, bool fork) const;
 
