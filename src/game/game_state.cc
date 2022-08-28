@@ -227,12 +227,7 @@ bool GameState::PlayTextMove(std::string input) {
     if (parser.GetCount() == 2) {
         const auto color_str = parser.GetCommand(0)->Get<std::string>();
         const auto vtx_str = parser.GetCommand(1)->Get<std::string>();
-
-        if (color_str == "B" || color_str == "b" || color_str == "black") {
-            color = kBlack;
-        } else if (color_str == "W" || color_str == "w" || color_str == "white") {
-            color = kWhite;
-        }
+        color = TextToColor(color_str);
         vertex = TextToVertex(vtx_str);
     } else if (parser.GetCount() == 1) {
         const auto vtx_str = parser.GetCommand(0)->Get<std::string>();
@@ -635,7 +630,7 @@ std::vector<int> GameState::GetOwnershipAndRemovedDeadStrings(int playouts) cons
     fork_state.RemoveDeadStrings(playouts);
     return fork_state.GetOwnership();
 }
-#include <iostream>
+
 std::vector<int> GameState::MarKDeadStrings(int playouts) const {
     auto num_intersections = GetNumIntersections();
     auto buffer = std::vector<int>(num_intersections, 0);

@@ -2,7 +2,6 @@
 
 #include <array>
 #include <string>
-#include <iostream>
 
 #include "utils/time.h"
 
