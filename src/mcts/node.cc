@@ -365,8 +365,8 @@ Node *Node::ProbSelectChild() {
             continue;
         }
 
-        // The node was expending. Give it very bad value.
-        if (is_pointer && node->IsExpending()) {
+        // The node was expanding. Give it very bad value.
+        if (is_pointer && node->IsExpanding()) {
             prob = -1.0f + prob;
         }
 
@@ -429,13 +429,13 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
             continue;
         }
 
-        // Apply First Play Urgency(FPU). We tend to search the expended
-        // node in the PUCT algorithm. So give the unexpended node a little
+        // Apply First Play Urgency(FPU). We tend to search the expanded
+        // node in the PUCT algorithm. So give the unexpanded node a little
         // bad value.
         float q_value = fpu_value;
 
         if (is_pointer) {
-            if (node->IsExpending()) {
+            if (node->IsExpanding()) {
                 // Like virtual loss, give it a bad value because there is another
                 // thread in this node.
                 q_value = -1.0f - fpu_reduction;
@@ -1014,11 +1014,11 @@ bool Node::Expandable() const {
     return expand_state_.load(std::memory_order_relaxed) == ExpandState::kInitial;
 }
 
-bool Node::IsExpending() const {
+bool Node::IsExpanding() const {
     return expand_state_.load(std::memory_order_relaxed) == ExpandState::kExpanding;
 }
 
-bool Node::IsExpended() const {
+bool Node::IsExpanded() const {
     return expand_state_.load(std::memory_order_relaxed) == ExpandState::kExpanded;
 }
 
@@ -1094,8 +1094,8 @@ void Node::ComputeNodeCount(size_t &nodes, size_t &edges) {
             const bool is_pointer = node == nullptr ? false : true;
 
             if (is_pointer) {
-                if (!(node->IsExpending())) {
-                    // If the node is expending, skip the
+                if (!(node->IsExpanding())) {
+                    // If the node is expanding, skip the
                     // the node.
                     stk.emplace(node);
                 }

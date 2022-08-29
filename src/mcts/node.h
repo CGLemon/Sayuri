@@ -98,8 +98,8 @@ public:
     void DecrementThreads();
 
     bool Expandable() const;
-    bool IsExpending() const;
-    bool IsExpended() const;
+    bool IsExpanding() const;
+    bool IsExpanded() const;
 
     bool IsPruned() const;
     void SetActive(const bool active);
