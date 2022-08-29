@@ -109,10 +109,8 @@ void Search::PrepareRootNode() {
         NodeData node_data;
 
         node_data.parameters = param_.get();
-        node_data.depth  = 0;
         node_data.vertex = kPass;   // unused
         node_data.policy = 1.0f;    // unused
-        node_data.parent = nullptr; // unused
 
         root_node_ = std::make_unique<Node>(node_data);
     }

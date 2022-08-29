@@ -12,22 +12,16 @@
 #include <string>
 #include <mutex>
 
-class Node;
-
 struct NodeData {
     float policy{0.0f};
     int vertex{kNullVertex};
-    int depth{0};
-
-    Parameters *parameters{nullptr};
-    Node *parent{nullptr};
+    Parameters * parameters{nullptr};
 };
 
 struct NodeEvals {
     float black_final_score{0.0f};
     float black_wl{0.0f};
     float draw{0.0f};
-
     std::array<float, kNumIntersections> black_ownership;
 };
 

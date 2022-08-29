@@ -4,13 +4,10 @@
 #include <cmath>
 
 float GetRolloutWinrate(GameState &state,
-                            const int depth,
                             const int num_sims,
                             const int color,
                             std::vector<float> &mcowner,
                             float &black_score) {
-    (void) depth;
-
     black_score = 0;
 
     int black_wins_cnt = 0;
