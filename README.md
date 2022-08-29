@@ -7,7 +7,7 @@
 
 ## Let's ROCK!
 
-Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. She is strongly inspired by Leela Zero and Kata Go. The board data structure and network format are borrowed from Leela Zero in the beginning. Current version follow the Kata Go research, the engine supports variable komi and board size now. Some methods you may see my Hackmd article (chinese).
+Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. She is strongly inspired by Leela Zero and Kata Go. The board data structure, search algorithm and network format are borrowed from Leela Zero in the beginning. Current version follow the Kata Go research, the engine supports variable komi and board size now. Some methods you may see my Hackmd article (chinese).
 
 * [開發日誌](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/BJgfay0Yc)
 
@@ -115,7 +115,7 @@ You need to collect enough SGF games (at least over 10000 games). Then, go to th
 
 ## Graphical Interface
 
-Sayuri is not complete engine. You need a graphical interface for playing with her. She supports any GTP (version 2) interface application. [Sabaki](https://sabaki.yichuanshen.de/) and [GoGui](https://github.com/Remi-Coulom/gogui) are recommended that because Sayuri implements some analysis commands for them. 
+Sayuri is not complete engine. You need a graphical interface for playing with her. She supports any GTP (version 2) interface application. [Sabaki](https://sabaki.yichuanshen.de/) and [GoGui](https://github.com/Remi-Coulom/gogui) are recommended that because Sayuri support some specific analysis commands. 
 
 * Sabaki analysis mode
 
@@ -125,7 +125,7 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 
 ![gogui-sample01](./img/gogui-sample01.png)
 
-## Others
+## Misc
 
 ### About the ancient technique
 
@@ -157,8 +157,9 @@ I am try to implement this ancient technique currently. Merge the MM patterns ba
 * Support half-float.
 * Support NHWC format.
 * Support distributed computation.
-* Store the network weights as binary file.
 * Improve the non-DCNN mode strength.
+* Store the network weights as binary file. (should be finished in the v0.1.1)
+* Implement the MM training algorithm. (should be finished in the v0.1.1)
 
 ## Other Linkings
 
