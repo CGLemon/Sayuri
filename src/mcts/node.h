@@ -169,6 +169,8 @@ private:
     void WaitExpanded() const;
 
     int color_{kInvalid};
+
+    // network outputs
     float black_fs_;
     float black_wl_;
     float draw_;
@@ -176,14 +178,12 @@ private:
 
     std::mutex os_mtx_; // the ownership accumulated lock
 
-    // TODO: Do we need to use the double instead of float?
-    //       The double type is more reliable but waste more
-    //       memory.
-    std::atomic<float> squared_eval_diff_{1e-4f};
-    std::atomic<float> accumulated_black_fs_{0.0f};
-    std::atomic<float> accumulated_black_wl_{0.0f};
-    std::atomic<float> accumulated_draw_{0.0f};
-    std::array<float, kNumIntersections> accumulated_black_ownership_;
+    // accumulated value
+    std::atomic<double> squared_eval_diff_{1e-4f};
+    std::atomic<double> accumulated_black_fs_{0.0f};
+    std::atomic<double> accumulated_black_wl_{0.0f};
+    std::atomic<double> accumulated_draw_{0.0f};
+    std::array<double, kNumIntersections> accumulated_black_ownership_;
 
     std::atomic<int> visits_{0};
     std::atomic<int> running_threads_{0};

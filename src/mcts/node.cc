@@ -213,7 +213,7 @@ void Node::LinkNetOutput(const Network::Result &raw_netlist, const int color){
             owner = 0.f - owner;
         }
         black_ownership_[idx] = owner;
-        accumulated_black_ownership_[idx] = 0;
+        accumulated_black_ownership_[idx] = 0.f;
     }
 }
 
@@ -517,29 +517,33 @@ int Node::RandomizeFirstProportionally(float random_temp) {
 }
 
 void Node::Update(const NodeEvals *evals) {
-    const float eval = evals->black_wl;
-    const float old_eval = accumulated_black_wl_.load(std::memory_order_relaxed);
-    const float old_visits = visits_.load(std::memory_order_relaxed);
+    // type casting
+    const double eval = evals->black_wl;
+    const double draw = evals->draw;
+    const double black_final_score = evals->black_final_score;
 
-    const float old_delta = old_visits > 0 ? eval - old_eval / old_visits : 0.0f;
-    const float new_delta = eval - (old_eval + eval) / (old_visits + 1);
+    const double old_eval = accumulated_black_wl_.load(std::memory_order_relaxed);
+    const double old_visits = visits_.load(std::memory_order_relaxed);
+
+    const double old_delta = old_visits > 0 ? eval - old_eval / old_visits : 0.0f;
+    const double new_delta = eval - (old_eval + eval) / (old_visits + 1);
 
     // TODO: According to Kata Go, It is not necessary to use
     //       Welford's online algorithm. The accuracy of simplify
     //       algorithm is enough.
     // Welford's online algorithm for calculating variance.
-    const float delta = old_delta * new_delta;
+    const double delta = old_delta * new_delta;
 
     visits_.fetch_add(1, std::memory_order_relaxed);
-    AtomicFetchAdd(squared_eval_diff_, delta);
+    AtomicFetchAdd(squared_eval_diff_   , delta);
     AtomicFetchAdd(accumulated_black_wl_, eval);
-    AtomicFetchAdd(accumulated_draw_, evals->draw);
-    AtomicFetchAdd(accumulated_black_fs_, evals->black_final_score);
+    AtomicFetchAdd(accumulated_draw_    , draw);
+    AtomicFetchAdd(accumulated_black_fs_, black_final_score);
 
     {
         std::lock_guard<std::mutex> lock(os_mtx_);
         for (int idx = 0; idx < kNumIntersections; ++idx) {
-            accumulated_black_ownership_[idx] += evals->black_ownership[idx];
+            accumulated_black_ownership_[idx] += (double)(evals->black_ownership[idx]);
         }
     }
 }
@@ -901,9 +905,9 @@ float Node::GetEval(const int color, const bool use_virtual_loss) const {
 
     auto accumulated_wl = accumulated_black_wl_.load(std::memory_order_relaxed);
     if (color == kWhite && use_virtual_loss) {
-        accumulated_wl += static_cast<float>(virtual_loss);
+        accumulated_wl += static_cast<double>(virtual_loss);
     }
-    auto eval = accumulated_wl / static_cast<float>(visits);
+    auto eval = accumulated_wl / visits;
 
     if (color == kBlack) {
         return eval;
