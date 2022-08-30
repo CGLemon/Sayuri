@@ -15,8 +15,7 @@
 
 #define VIRTUAL_LOSS_COUNT (3)
 
-Node::Node(NodeData data) {
-    assert(data->parameters != nullptr);
+Node::Node(EdgeData data) {
     data_ = data;
 }
 
@@ -180,11 +179,10 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
     std::stable_sort(std::rbegin(nodelist), std::rend(nodelist));
 
     for (const auto &node : nodelist) {
-        auto data = NodeData{};
+        auto data = EdgeData{};
 
         data.vertex = node.second;
         data.policy = node.first;
-        data.parameters = GetParameters();
 
         children_.emplace_back(data);
     }
@@ -835,7 +833,11 @@ const std::vector<Node::Edge> &Node::GetChildren() const {
 }
 
 Parameters *Node::GetParameters() {
-    return data_.parameters;
+    return param_;
+}
+
+void Node::SetParameters(Parameters * param) {
+    param_ = param;
 }
 
 int Node::GetThreads() const {
@@ -927,7 +929,7 @@ void Node::ReleaseAllChildren() {
 
 void Node::Inflate(Edge& child) {
     if (child.Inflate()) {
-        // do nothing...
+        child.Get()->SetParameters(param_);
     }
 }
 

@@ -12,10 +12,9 @@
 #include <string>
 #include <mutex>
 
-struct NodeData {
+struct EdgeData {
     float policy{0.0f};
     int vertex{kNullVertex};
-    Parameters * parameters{nullptr};
 };
 
 struct NodeEvals {
@@ -27,9 +26,9 @@ struct NodeEvals {
 
 class Node {
 public:
-    using Edge = NodePointer<Node, NodeData>;
+    using Edge = NodePointer<Node, EdgeData>;
 
-    explicit Node(NodeData data);
+    explicit Node(EdgeData data);
     ~Node();
 
     // Expand this node.
@@ -66,6 +65,8 @@ public:
 
     const std::vector<Edge> &GetChildren() const;
     bool HaveChildren() const;
+
+    void SetParameters(Parameters * param);
 
     Node *Get();
     Node *GetChild(const int vertex);
@@ -164,6 +165,8 @@ private:
 
     int color_{kInvalid};
 
+    Parameters *param_;
+
     // network outputs
     float black_fs_;
     float black_wl_;
@@ -172,7 +175,7 @@ private:
 
     std::mutex os_mtx_; // the ownership accumulated lock
 
-    // accumulated value
+    // accumulated values
     std::atomic<double> squared_eval_diff_{1e-4f};
     std::atomic<double> accumulated_black_fs_{0.0f};
     std::atomic<double> accumulated_black_wl_{0.0f};
@@ -183,5 +186,5 @@ private:
     std::atomic<int> running_threads_{0};
 
     std::vector<Edge> children_;
-    NodeData data_;
+    EdgeData data_;
 };
