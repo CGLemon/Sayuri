@@ -185,6 +185,12 @@ class LazyLoader:
     def __init__(self, dirname):
         self.dirname = dirname
         self.chunks = []
+
+        self.stream = None
+        self.buffer_size = 10000
+        self.reload_size = 1000
+        self.reload_thes = self.buffer_size - self.reload_size
+
         self.shuf_buf = [] # shuffle buffer.
 
         # Use a random sample input data read. This helps improve the spread of
@@ -203,44 +209,59 @@ class LazyLoader:
         self.done = gather_recursive_files(self.dirname)
 
     def __fill_buf(self, stream):
-        while True:
+        while len(self.shuf_buf) < self.buffer_size:
             datalines = Data.get_datalines(FIXED_DATA_VERSION);
             data_str = []
 
             for cnt in range(datalines):
                 line = stream.readline()
                 if len(line) == 0:
-                    return # it is end
+                    return True # stream is end
                 else:
                     data_str.append(line)
 
             if self.down_sample_rate > 1:
                 if random.randint(0, self.down_sample_rate-1) == 0:
                     self.shuf_buf.append(data_str)
+        return False # stream is not end
 
-    def next(self):
-        while len(self.shuf_buf) == 0:
-            if len(self.chunks) == 0:
-                self.chunks, self.done = self.done, self.chunks
-                random.shuffle(self.chunks)
+    def __open_new_stream(self):
+        if len(self.chunks) == 0:
+            self.chunks, self.done = self.done, self.chunks
+            random.shuffle(self.chunks)
 
-            filename = self.chunks.pop()
-            self.done.append(filename)
+        filename = self.chunks.pop()
+        self.done.append(filename)
 
-            stream = None
-            if filename.find(".gz") >= 0:
-                with gzip.open(filename, 'rt') as f:
-                    stream = io.StringIO(f.read())
-            else:
-                with open(filename, 'r') as f:
-                    stream = io.StringIO(f.read())
+        stream = None
+        if filename.find(".gz") >= 0:
+            with gzip.open(filename, 'rt') as f:
+                stream = io.StringIO(f.read())
+        else:
+            with open(filename, 'r') as f:
+                stream = io.StringIO(f.read())
+        return stream
+
+    def __reload(self):
+        while len(self.shuf_buf) < self.buffer_size:
+            if self.stream is None:
+                self.stream = self.__open_new_stream()
 
             # TODO: Performance is bad if the network is small. Maybe we load too
             #       many data strings at the same time.
-            self.__fill_buf(stream)
+            stream_end = self.__fill_buf(self.stream)
 
-            if len(self.shuf_buf) > 1:
-                random.shuffle(self.shuf_buf)
+            if stream_end:
+                # Current stream is end. Open the new one
+                # next turn.
+                self.stream = None
+
+        if len(self.shuf_buf) > 1:
+            random.shuffle(self.shuf_buf)
+
+    def next(self):
+        if len(self.shuf_buf) < self.reload_thes:
+            self.__reload()
 
         data_str = self.shuf_buf.pop()
         data = Data()
