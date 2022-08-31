@@ -137,7 +137,7 @@ Although the Neural Network base engines are more powerful, you may still try so
 * [Pachi](https://github.com/pasky/pachi), need to add the option ```--nodcnn``` to disable DCNN.
 * [Ray](https://github.com/kobanium/Ray), may be strongest open source engine in the 2016s.
 
-I am try to implement this ancient technique currently. Merge the MM patterns base and the DCNN base technique to provide widely dynamic strength. It should be fun.
+I am trying to implement this ancient technique currently. Merge the MM patterns base and the DCNN base technique to provide widely dynamic strength. It should be fun.
 
 ## Features
 
@@ -158,8 +158,8 @@ I am try to implement this ancient technique currently. Merge the MM patterns ba
 * Support NHWC format.
 * Support distributed computation.
 * Improve the non-DCNN mode strength.
-* Store the network weights as binary file. (should be finished in the v0.1.1)
-* Implement the MM training algorithm. (should be finished in the v0.1.1)
+* Store the network weights as binary file. (should be finished before next version)
+* Implement the MM training algorithm. (should be finished before next version)
 
 ## Other Linkings
 
