@@ -223,6 +223,8 @@ class LazyLoader:
             if self.down_sample_rate > 1:
                 if random.randint(0, self.down_sample_rate-1) == 0:
                     self.shuf_buf.append(data_str)
+            else:
+                self.shuf_buf.append(data_str)
         return False # stream is not end
 
     def __open_new_stream(self):
