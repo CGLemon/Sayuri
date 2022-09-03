@@ -687,7 +687,7 @@ std::string Node::ToAnalyzeString(GameState &state, const int color, bool is_say
         if (is_sayuri) {
             const auto kl = child->ComputeKlDivergence();
             const auto complexity = child->ComputeTreeComplexity();
-            out << Format("info move %s visits %d winrate %.6f score %.6f prior %.6f lcb %.6f kl %.6f complexity %.6f order %d pv %s",
+            out << Format("info move %s visits %d winrate %.6f scoreLead %.6f prior %.6f lcb %.6f kl %.6f complexity %.6f order %d pv %s",
                              state.VertexToText(vertex).c_str(),
                              visits,
                              winrate,
