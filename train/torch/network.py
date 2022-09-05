@@ -735,6 +735,8 @@ class Network(nn.Module):
 
             f.write("get info\n")
             f.write("NNType {}\n".format(self.nntype))
+            f.write("Version {}\n".format(1))
+            f.write("FloatType {}\n".format("float32"))
             f.write("InputChannels {}\n".format(self.input_channels))
             f.write("ResidualChannels {}\n".format(self.residual_channels))
             f.write("ResidualBlocks {}\n".format(len(self.stack)))
