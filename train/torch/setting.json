@@ -3,17 +3,12 @@
         "NNType": "Residual",
         "MaxBoardSize": 19,
         "InputChannels": 38,
-        "ResidualChannels": 128,
+        "ResidualChannels": 64,
         "PolicyExtract": 32,
         "ValueExtract": 32,
         "ValueMisc": 5,
 
         "Stack" : [
-            "ResidualBlock",
-            "ResidualBlock",
-            "ResidualBlock-SE",
-
-            "ResidualBlock",
             "ResidualBlock",
             "ResidualBlock-SE"
         ]
@@ -23,23 +18,24 @@
         "UseGPU": null,
         "Optimizer": "SGD",
         "StepsPerEpoch" : 1000,
-        "MaxStepsPerRunning": 1024000,
+        "MaxStepsPerRunning": 128000,
         "Workers": 4,
         "BatchSize": 256,
+        "BufferSize" : 16384,
         "MacroFactor": 1,
 
         "LearningRateSchedule": [
-            [0,      1e-2],
-            [128000, 3e-3],
-            [256000, 1e-3],
-            [384000, 3e-4],
-            [512000, 1e-4],
+            [0,      5e-3],
+            [128000, 1e-3],
+            [256000, 3e-4],
+            [384000, 1e-4],
+            [512000, 3e-5],
             [768000, 1e-5]
          ],
 
         "WeightDecay": 1e-4,
         "FixUpBatchNorm": false,
-        "TrainDirectory": "train-dir",
-        "StorePath" : "workspace"
+        "TrainDirectory": "no-pass-fixed",
+        "StorePath" : "19x19"
     }
 }

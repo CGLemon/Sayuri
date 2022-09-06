@@ -8,6 +8,7 @@ class Config:
         self.num_workers = None
         self.use_gpu = None
         self.batchsize = None
+        self.buffersize = None
         self.macrobatchsize = None
         self.macrofactor = None
         self.lr_schelude = None
@@ -44,6 +45,7 @@ def parse_training_config(json_data, config):
 
     config.train_dir = train["TrainDirectory"]
     config.batchsize = train["BatchSize"]
+    config.buffersize = train["BufferSize"]
     config.macrofactor = train["MacroFactor"]
     config.macrobatchsize = config.batchsize // config.macrofactor
 

@@ -1,34 +1,53 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
-import random, time, math, os
+import random, time, math, os, glob, io, gzip
 
 from network import Network
-from loader import LazyLoader
+from data import Data, FIXED_DATA_VERSION
 
 from torch.nn import DataParallel
-from torch.utils.data import DataLoader, Subset
+from lazy_loader import LazyLoader
 
-def dump_dependent_version():
-    print("Name: {name} ->  Version: {ver}".format(name =  "NumPy", ver = np.__version__))
-    print("Name: {name} ->  Version: {ver}".format(name =  "Torch", ver = torch.__version__))
+def gather_filenames(root):
+    def gather_recursive_files(root):
+        l = list()
+        for name in glob.glob(os.path.join(root, "*")):
+            if os.path.isdir(name):
+                l.extend(gather_recursive_files(name))
+            else:
+                l.append(name)
+        return l
+    return gather_recursive_files(root)
 
-class DataSet():
-    def __init__(self, cfg, dirname):
-        self.nn_board_size = cfg.boardsize
+class StreamLoader:
+    def __init__(self):
+        pass
+
+    def func(self, filename):
+        stream = None
+        if not os.path.isfile(filename):
+            return stream
+
+        if filename.find(".gz") >= 0:
+            with gzip.open(filename, 'rt') as f:
+                stream = io.StringIO(f.read())
+        else:
+            with open(filename, 'r') as f:
+                stream = io.StringIO(f.read())
+        return stream
+
+class StreamParser:
+    def __init__(self, boardsize, input_channels):
+        self.nn_board_size = boardsize
         self.nn_num_intersections = self.nn_board_size * self.nn_board_size
-        self.input_channels = cfg.input_channels
+        self.input_channels = input_channels
 
-        self.dummy_size = 0
+        # Use a random sample input data read. This helps improve the spread of
+        # games in the shuffle buffer.
+        self.down_sample_rate = 16
 
-        self.lazy_loaders = []
-        num_workers = max(cfg.num_workers, 1)
-        for _ in range(num_workers):
-            self.lazy_loaders.append(LazyLoader(dirname))
-
-    def __wrap_data(self, worker_id):
-        data = self.lazy_loaders[worker_id].next()
-
+    def __wrap_data(self, data):
         nn_board_size = self.nn_board_size
         nn_num_intersections = self.nn_num_intersections
 
@@ -85,28 +104,80 @@ class DataSet():
 
         return (
             data.board_size,
-            torch.tensor(input_planes).float(),
-            torch.tensor(prob).float(),
-            torch.tensor(aux_prob).float(),
-            torch.tensor(ownership).float(),
-            torch.tensor(wdl).float(),
-            torch.tensor(stm).float(),
-            torch.tensor(final_score).float()
+            input_planes,
+            prob,
+            aux_prob,
+            ownership,
+            wdl,
+            stm,
+            final_score
         )
 
-    def __getitem__(self, idx):
-        worker_info = torch.utils.data.get_worker_info()
-        worker_id = None
-        if worker_info == None:
-            worker_id = 0
-        else:
-            worker_id = worker_info.id
+    def func(self, stream):
+        if stream is None:
+            return None
 
-        return self.__wrap_data(worker_id)
+        datalines = Data.get_datalines(FIXED_DATA_VERSION);
+        data_str = []
 
+        while True:
+            for cnt in range(datalines):
+                line = stream.readline()
+                if len(line) == 0:
+                    return None # stream is end
+                else:
+                    data_str.append(line)
 
-    def __len__(self):
-        return self.dummy_size
+            if self.down_sample_rate > 1:
+                if random.randint(0, self.down_sample_rate-1) != 0:
+                    data_str = []
+                    continue
+            break
+
+        data = Data()
+
+        for cnt in range(datalines):
+            line = data_str[cnt]
+            data.fill_v1(cnt, line)
+
+        return self.__wrap_data(data)
+
+class BatchGenerator:
+    def __init__(self):
+        pass
+
+    def func(self, data_list):
+        batch_bsize = list()
+        batch_planes = list()
+        batch_prob = list()
+        batch_aux_prob = list()
+        batch_ownership = list()
+        batch_wdl = list()
+        batch_stm = list()
+        batch_score = list()
+
+        for data in data_list:
+            bsize, planes, prob, aux_prob, ownership, wdl, stm, score = data
+
+            batch_bsize.append(bsize)
+            batch_planes.append(planes)
+            batch_prob.append(prob)
+            batch_aux_prob.append(aux_prob)
+            batch_ownership.append(ownership)
+            batch_wdl.append(wdl)
+            batch_stm.append(stm)
+            batch_score.append(score)
+
+        return (
+            batch_bsize,
+            torch.tensor(np.array(batch_planes)).float(),
+            torch.tensor(np.array(batch_prob)).float(),
+            torch.tensor(np.array(batch_aux_prob)).float(),
+            torch.tensor(np.array(batch_ownership)).float(),
+            torch.tensor(np.array(batch_wdl)).float(),
+            torch.tensor(np.array(batch_stm)).float(),
+            torch.tensor(np.array(batch_score)).float()
+        )
 
 class TrainingPipe():
     def __init__(self, cfg):
@@ -126,6 +197,8 @@ class TrainingPipe():
         # Store the last model per epoch. It also define the training data
         # buffer size.
         self.steps_per_epoch =  cfg.steps_per_epoch
+
+        self.buffer_size = self.cfg.buffersize
 
         # Max steps per training task.
         self.max_steps =  cfg.max_steps
@@ -253,8 +326,40 @@ class TrainingPipe():
         opt_name = os.path.join(opt_path, "s{}.pt".format(steps))
         torch.save(self.opt.state_dict(), opt_name)
 
+    def __init_loader(self):
+        self.__stream_loader = StreamLoader()
+        self.__stream_parser = StreamParser(self.cfg.boardsize, self.cfg.input_channels)
+        self.__batch_gen = BatchGenerator()
+
+        self.lazy_loader = LazyLoader(
+            filenames = gather_filenames(self.train_dir),
+            stream_loader = self.__stream_loader,
+            stream_parser = self.__stream_parser,
+            batch_generator = self.__batch_gen,
+            down_sample_rate = 0,
+            num_workers = self.num_workers,
+            buffer_size = self.buffer_size,
+            batch_size = self.batchsize
+        )
+
+        batch = next(self.lazy_loader) # Try to get the first batch, be sure that
+                                       # the loader is ready.
+
+    def test_loader(self):
+        self.__init_loader()
+
+        batch = next(self.lazy_loader)
+        bsizes, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
+
+        print(bsizes)
+        print(target_stm)
+
     def fit_and_store(self):
         init_steps = self.__load_current_status()
+
+        print("init loader...")
+        self.__init_loader()
+
         print("start training...")
 
         def get_running_loss_dict():
@@ -277,23 +382,14 @@ class TrainingPipe():
         verbose_steps = 1000
         clock_time = time.time()
 
-        self.data_set = DataSet(self.cfg, self.train_dir)
-
         while keep_running:
-            self.data_set.dummy_size = self.steps_per_epoch * self.batchsize
+            for _ in range(self.steps_per_epoch):
 
-            # DataLoader or we can call it data buffer. It will prepare
-            # some datas before they are used. To Shuffle the buffer is
-            # unuseful so we do not open this option.
-            train_data = DataLoader(
-                self.data_set,
-                num_workers=self.num_workers,
-                batch_size=self.macrobatchsize
-            )
-
-            for _, batch in enumerate(train_data):
                 # Fetch the next batch data from disk.
+                batch = next(self.lazy_loader)
                 _, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
+
+                # Move to the current device.
                 if self.use_gpu:
                     planes = planes.to(self.device)
                     target_prob = target_prob.to(self.device)
