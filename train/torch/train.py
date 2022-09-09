@@ -47,6 +47,41 @@ class StreamParser:
         # games in the shuffle buffer.
         self.down_sample_rate = 16
 
+    def func(self, stream):
+        if stream is None:
+            return None
+
+        datalines = Data.get_datalines(FIXED_DATA_VERSION);
+        data_str = []
+
+        while True:
+            for cnt in range(datalines):
+                line = stream.readline()
+                if len(line) == 0:
+                    return None # stream is end
+                else:
+                    data_str.append(line)
+
+            if self.down_sample_rate > 1:
+                if random.randint(0, self.down_sample_rate-1) != 0:
+                    data_str = []
+                    continue
+            break
+
+        data = Data()
+
+        for cnt in range(datalines):
+            line = data_str[cnt]
+            data.fill_v1(cnt, line)
+
+        return data
+
+class BatchGenerator:
+    def __init__(self, boardsize, input_channels):
+        self.nn_board_size = boardsize
+        self.nn_num_intersections = self.nn_board_size * self.nn_board_size
+        self.input_channels = input_channels
+
     def __wrap_data(self, data):
         nn_board_size = self.nn_board_size
         nn_num_intersections = self.nn_num_intersections
@@ -113,39 +148,6 @@ class StreamParser:
             final_score
         )
 
-    def func(self, stream):
-        if stream is None:
-            return None
-
-        datalines = Data.get_datalines(FIXED_DATA_VERSION);
-        data_str = []
-
-        while True:
-            for cnt in range(datalines):
-                line = stream.readline()
-                if len(line) == 0:
-                    return None # stream is end
-                else:
-                    data_str.append(line)
-
-            if self.down_sample_rate > 1:
-                if random.randint(0, self.down_sample_rate-1) != 0:
-                    data_str = []
-                    continue
-            break
-
-        data = Data()
-
-        for cnt in range(datalines):
-            line = data_str[cnt]
-            data.fill_v1(cnt, line)
-
-        return self.__wrap_data(data)
-
-class BatchGenerator:
-    def __init__(self):
-        pass
-
     def func(self, data_list):
         batch_bsize = list()
         batch_planes = list()
@@ -157,7 +159,7 @@ class BatchGenerator:
         batch_score = list()
 
         for data in data_list:
-            bsize, planes, prob, aux_prob, ownership, wdl, stm, score = data
+            bsize, planes, prob, aux_prob, ownership, wdl, stm, score = self.__wrap_data(data)
 
             batch_bsize.append(bsize)
             batch_planes.append(planes)
@@ -329,7 +331,7 @@ class TrainingPipe():
     def __init_loader(self):
         self.__stream_loader = StreamLoader()
         self.__stream_parser = StreamParser(self.cfg.boardsize, self.cfg.input_channels)
-        self.__batch_gen = BatchGenerator()
+        self.__batch_gen = BatchGenerator(self.cfg.boardsize, self.cfg.input_channels)
 
         self.lazy_loader = LazyLoader(
             filenames = gather_filenames(self.train_dir),
@@ -371,7 +373,7 @@ class TrainingPipe():
             running_loss_dict['ownership_loss'] = 0
             running_loss_dict['wdl_loss'] = 0
             running_loss_dict['stm_loss'] = 0
-            running_loss_dict['fina_score_loss'] = 0
+            running_loss_dict['final_score_loss'] = 0
             return running_loss_dict
 
         running_loss_dict = get_running_loss_dict()
@@ -405,7 +407,7 @@ class TrainingPipe():
                 # forward and backforwad
                 _, all_loss = self.net(planes, target, use_symm=True)
 
-                prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, fina_score_loss = all_loss
+                prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, final_score_loss = all_loss
 
                 # compute loss
                 prob_loss = prob_loss.mean() / self.macrofactor
@@ -413,9 +415,9 @@ class TrainingPipe():
                 ownership_loss = ownership_loss.mean() / self.macrofactor
                 wdl_loss = wdl_loss.mean() / self.macrofactor
                 stm_loss = stm_loss.mean() / self.macrofactor
-                fina_score_loss = fina_score_loss.mean() / self.macrofactor
+                final_score_loss = final_score_loss.mean() / self.macrofactor
 
-                loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + fina_score_loss
+                loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + final_score_loss
                 loss.backward()
                 macro_steps += 1
 
@@ -426,7 +428,7 @@ class TrainingPipe():
                 running_loss_dict['ownership_loss'] += ownership_loss.item()
                 running_loss_dict['wdl_loss'] += wdl_loss.item()
                 running_loss_dict['stm_loss'] += stm_loss.item()
-                running_loss_dict['fina_score_loss'] += fina_score_loss.item()
+                running_loss_dict['final_score_loss'] += final_score_loss.item()
 
                 if math.isnan(running_loss_dict['loss']):
                     print("The gradient is explosion. Stop training...")
@@ -467,7 +469,7 @@ class TrainingPipe():
                         dump_outs += "\townership loss: {:.4f}\n".format(running_loss_dict['ownership_loss']/verbose_steps)
                         dump_outs += "\twdl loss: {:.4f}\n".format(running_loss_dict['wdl_loss']/verbose_steps)
                         dump_outs += "\tstm loss: {:.4f}\n".format(running_loss_dict['stm_loss']/verbose_steps)
-                        dump_outs += "\tfina score loss: {:.4f}".format(running_loss_dict['fina_score_loss']/verbose_steps)
+                        dump_outs += "\tfinal score loss: {:.4f}".format(running_loss_dict['final_score_loss']/verbose_steps)
                         print(dump_outs)
 
                         log_outs = "steps: {} -> loss: {:.4f}, speed: {:.2f} | opt: {}, learning rate: {}, batch size: {}".format(

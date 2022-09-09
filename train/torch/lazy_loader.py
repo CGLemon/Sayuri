@@ -1,4 +1,5 @@
 import multiprocessing as mp
+import threading
 import random
 
 class ShuffleBuffer:
@@ -20,13 +21,13 @@ class ShuffleBuffer:
         return item
 
 class DataLoader:
-    def __init__(self, filenames, data_queue, down_sample_rate, stream_loader, stream_parser):
+    def __init__(self, filenames, data_writer, down_sample_rate, stream_loader, stream_parser):
         self.done = filenames
         self.tasks = list()
 
         self.parser = stream_parser
         self.loader = stream_loader
-        self.queue = data_queue
+        self.writer = data_writer
         self.stream = None
 
         # Use a random sample input data read. This helps improve the spread of
@@ -60,7 +61,7 @@ class DataLoader:
                 if random.randint(0, self.rate-1) != 0:
                     continue
 
-            self.queue.put(data, block=True, timeout=None)
+            self.writer.send(data)
             break
 
 class LoaderConfig:
@@ -85,10 +86,10 @@ class LoaderConfig:
             return False
         return True
 
-def __load_from_files(config, data_queue):
+def __load_from_files(config, data_writer):
     loader = DataLoader(
                  filenames = config.filenames,
-                 data_queue = data_queue,
+                 data_writer = data_writer,
                  down_sample_rate = config.down_sample_rate,
                  stream_loader = config.stream_loader,
                  stream_parser = config.stream_parser
@@ -97,25 +98,28 @@ def __load_from_files(config, data_queue):
     while True:
         loader.next()
 
-def __gather_batch(config, data_queue, batch_writer):
+def __gather_batch(config, data_readers, batch_writer):
     shuf_buff = ShuffleBuffer(config.buffer_size)
     batch_gen = config.batch_generator
 
-    while True:
+    stop = False
+    while not stop:
         # fill the buffer until it is full
-        item = data_queue.get(block=True, timeout=None)
-        outs = shuf_buff.insert_item_and_pop(item)
-        if outs is not None:
-            break
+        for r in data_readers:
+            item = r.recv()
+            outs = shuf_buff.insert_item_and_pop(item)
+            if outs is not None:
+                stop = True
 
     while True:
         data_list = list()
 
         while len(data_list) < config.batch_size:
-            item = data_queue.get(block=True, timeout=None)
-            outs = shuf_buff.insert_item_and_pop(item)
-            if outs is not None:
-                data_list.append(outs)
+            for r in data_readers:
+                item = r.recv()
+                outs = shuf_buff.insert_item_and_pop(item)
+                if outs is not None:
+                    data_list.append(outs)
 
         batch = batch_gen.func(data_list)
         batch_writer.send(batch)
@@ -131,33 +135,31 @@ def LazyLoader(*args, **kwargs):
     config.num_workers = kwargs.get("num_workers", 0)
     config.buffer_size = kwargs.get("buffer_size", 0)
     config.batch_size = kwargs.get("batch_size", 0)
-    data_queue_factor = kwargs.get("data_queue_factor", 16)
 
     if not config.valid():
         return None
 
-    # TODO : Use the mp.Pipe instead of data_queue.
-    data_que_size = data_queue_factor * config.batch_size * config.num_workers
-    data_queue = mp.Queue(maxsize=data_que_size)
-
-    reader, write = mp.Pipe(duplex=False)
+    data_readers = list()
+    batch_reader, batch_writer = mp.Pipe(duplex=False)
 
     for _ in range(config.num_workers):
-        # N workers read the data from files and write the data
-        # to queue.
+        data_reader, data_writer = mp.Pipe(duplex=False)
+        data_readers.append(data_reader)
+
         mp.Process(
             target=__load_from_files,
-            args=(config, data_queue),
+            args=(config, data_writer),
             daemon=True
         ).start()
+        data_writer.close()
 
-    # One worker read the data from queue.
-    mp.Process(
+    threading.Thread(
         target=__gather_batch,
-        args=(config, data_queue, write),
+        args=(config, data_readers, batch_writer),
         daemon=True
     ).start()
+    # batch_writer.close()
 
     while True:
-        batch = reader.recv()
+        batch = batch_reader.recv()
         yield batch
