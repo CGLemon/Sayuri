@@ -1,4 +1,5 @@
 import numpy as np
+from symmetry import numpy_symmetry_planes, numpy_symmetry_plane, numpy_symmetry_prob
 
 FIXED_DATA_VERSION = 1
 DATA_LINES = 45
@@ -151,6 +152,21 @@ class Data():
         if version == 1:
             return DATA_LINES
         return 0
+
+    def apply_symmetry(self, symm):
+        channels       = self.planes.shape[0]
+        bsize          = self.board_size
+
+        self.planes    = np.reshape(self.planes, (channels, bsize, bsize))
+        self.planes    = numpy_symmetry_planes(symm, self.planes)
+        self.planes    = np.reshape(self.planes, (channels, bsize * bsize))
+
+        self.ownership = np.reshape(self.ownership, (bsize, bsize))
+        self.ownership = numpy_symmetry_plane(symm, self.ownership)
+        self.ownership = np.reshape(self.ownership, (bsize * bsize))
+
+        self.prob      = numpy_symmetry_prob(symm, self.prob)
+        self.aux_prob  = numpy_symmetry_prob(symm, self.aux_prob)
 
     def __str__(self):
         out = str()

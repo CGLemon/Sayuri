@@ -5,6 +5,7 @@ import numpy as np
 import math
 
 from symmetry import torch_symmetry
+
 CRAZY_NEGATIVE_VALUE = -5000.0
 
 def conv_to_text(in_channels, out_channels, kernel_size):

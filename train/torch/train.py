@@ -38,11 +38,7 @@ class StreamLoader:
         return stream
 
 class StreamParser:
-    def __init__(self, boardsize, input_channels):
-        self.nn_board_size = boardsize
-        self.nn_num_intersections = self.nn_board_size * self.nn_board_size
-        self.input_channels = input_channels
-
+    def __init__(self):
         # Use a random sample input data read. This helps improve the spread of
         # games in the shuffle buffer.
         self.down_sample_rate = 16
@@ -73,6 +69,8 @@ class StreamParser:
         for cnt in range(datalines):
             line = data_str[cnt]
             data.fill_v1(cnt, line)
+
+        data.apply_symmetry(random.randint(0, 7))
 
         return data
 
@@ -330,7 +328,7 @@ class TrainingPipe():
 
     def __init_loader(self):
         self.__stream_loader = StreamLoader()
-        self.__stream_parser = StreamParser(self.cfg.boardsize, self.cfg.input_channels)
+        self.__stream_parser = StreamParser()
         self.__batch_gen = BatchGenerator(self.cfg.boardsize, self.cfg.input_channels)
 
         self.lazy_loader = LazyLoader(
