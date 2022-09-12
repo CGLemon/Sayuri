@@ -53,9 +53,11 @@ def numpy_symmetry_prob(symm, prob):
     buf = np.reshape(buf, (size, size))
     buf = numpy_symmetry_plane(symm, buf)
     buf = np.reshape(buf, (size * size))
-    prob[0:last] = buf[0:last]
+    outs = np.zeros((size * size + 1))
+    outs[0:last] = buf[0:last]
+    outs[last] = prob[last]
 
-    return prob
+    return outs
 
 def __get_direction(symm):
     use_flip = False
