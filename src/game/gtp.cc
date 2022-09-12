@@ -193,6 +193,26 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         } catch (const char *err) {
             out << GTPFail(Format("invalid SGF file, cause %s.", err));
         }
+    } else if (const auto res = parser.Find("is_legal", 0)) {
+        auto color = agent_->GetState().GetToMove();;
+        auto move = kNullVertex;
+
+        if (const auto input = parser.GetCommand(1)) {
+            color = agent_->GetState().TextToColor(input->Get<std::string>());
+        }
+        if (const auto input = parser.GetCommand(2)) {
+            move = agent_->GetState().TextToVertex(input->Get<std::string>());
+        }
+
+        if (color == kInvalid || move == kNullVertex) {
+            out << GTPFail("invalid is_legal");
+        } else {
+            if (agent_->GetState().IsLegalMove(move, color)) {
+                out << GTPSuccess("1"); // legal move
+            } else {
+                out << GTPSuccess("0"); // illegal move
+            }
+        }
     } else if (const auto res = parser.Find("printsgf", 0)) {
         auto filename = std::string{};
         if (const auto input = parser.GetCommand(1)) {

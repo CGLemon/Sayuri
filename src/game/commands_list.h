@@ -74,6 +74,8 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "printsgf",
 
+    "is_legal",
+
     "get_komi",
 
     "get_handicap",
