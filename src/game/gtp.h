@@ -84,8 +84,8 @@ public:
 private:
     void Loop();
 
-    std::string GTPSuccess(std::string);
-    std::string GTPFail(std::string);
+    std::string GtpSuccess(std::string);
+    std::string GtpFail(std::string);
 
     std::string Execute(CommandParser &parser, bool &try_ponder);
 
