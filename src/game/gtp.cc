@@ -213,6 +213,27 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
                 out << GtpSuccess("0"); // illegal move
             }
         }
+    } else if (const auto res = parser.Find("color", 0)) {
+        auto move = kNullVertex;
+
+        if (const auto input = parser.GetCommand(1)) {
+            move = agent_->GetState().TextToVertex(input->Get<std::string>());
+        }
+
+        if (move != kNullVertex) {
+            auto color = agent_->GetState().GetState(move);
+            if (color == kBlack) {
+                out << GtpSuccess("black");
+            } else if (color == kWhite) {
+                out << GtpSuccess("white");
+            } else if (color == kEmpty) {
+                out << GtpSuccess("empty");
+            } else {
+                out << GtpSuccess("invalid");
+            }
+        } else {
+            out << GtpFail("invalid color");
+        }
     } else if (const auto res = parser.Find("printsgf", 0)) {
         auto filename = std::string{};
         if (const auto input = parser.GetCommand(1)) {
