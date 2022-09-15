@@ -70,4 +70,7 @@ public:
 
     // Import the game state as SGF file.
     void ToFile(std::string filename, GameState &state);
+
+    // Remove unused SGF elements for this program and save it.
+    void CleanSgf(std::string in, std::string out);
 };

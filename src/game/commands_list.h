@@ -6,73 +6,53 @@
 static constexpr auto kProtocolVersion = 2;
 
 static std::vector<std::string> kGtpCommandsList = {
-    // Part of GTP version 2 standard command
-    "protocol_version",
+    "protocol_version",    // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "name",
+    "name",                // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "version",
+    "version",             // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "quit",
+    "quit",                // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "known_command",
+    "known_command",       // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "list_commands",
+    "list_commands",       // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "help",
+    "help",                // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "boardsize",
+    "boardsize",           // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "clear_board",
+    "clear_board",         // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "komi",
+    "komi",                // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "play",
+    "play",                // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "genmove",
+    "genmove",             // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "showboard",
+    "showboard",           // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "undo",
+    "undo",                // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "final_score",
+    "final_score",         // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "final_status_list",
+    "final_status_list",   // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "time_settings",
+    "time_settings",       // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "time_left",
+    "time_left",           // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "fixed_handicap",
+    "fixed_handicap",      // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "place_free_handicap",
+    "place_free_handicap", // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "set_free_handicap",
+    "set_free_handicap",   // Part of GTP version 2 standard command.
 
-    // Part of GTP version 2 standard command
-    "loadsgf",
+    "loadsgf",             // Part of GTP version 2 standard command.
 
     "printsgf",
+
+    "cleansgf",
 
     "is_legal",
 
@@ -86,13 +66,13 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "clear_cache",
 
-    "selfplay-genmove",      // debug
+    "selfplay-genmove",      // For self-play debug.
 
-    "selfplay",              // debug
+    "selfplay",              // For self-play debug.
 
-    "dump_training_buffer",  // debug
+    "dump_training_buffer",  // For self-play debug.
 
-    "clear_training_buffer", // debug
+    "clear_training_buffer", // For self-play debug.
 
     // "kgs-chat", // may crush on the KgsGtp
 

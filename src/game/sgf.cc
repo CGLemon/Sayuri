@@ -568,3 +568,23 @@ void Sgf::ToFile(std::string filename, GameState &state) {
         out.close();
     }
 }
+
+void Sgf::CleanSgf(std::string in, std::string out) {
+    auto all_sgfs = SgfParser::Get().ChopAll(in);
+
+    std::ofstream fout(out.c_str(), std::ofstream::app | std::ofstream::out);
+    if (!fout.is_open()) {
+        return;
+    }
+    for (auto &sgf : all_sgfs) {
+        try {
+            auto game_state = FromString(sgf, 9999);
+            fout << ToString(game_state) << std::endl;
+        } catch (const char *err) {
+            // Include illegal element for this program. We directly
+            // copy it.
+            fout << sgf << std::endl; 
+        }
+    }
+    fout.close();
+}

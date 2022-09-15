@@ -245,6 +245,23 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             Sgf::Get().ToFile(filename, agent_->GetState());
             out << GtpSuccess("");
         }
+    } else if (const auto res = parser.Find("cleansgf", 0)) {
+        auto fin = std::string{};
+        auto fout = std::string{};
+
+        if (const auto input = parser.GetCommand(1)) {
+            fin = input->Get<std::string>();
+        }
+        if (const auto input = parser.GetCommand(2)) {
+            fout = input->Get<std::string>();
+        }
+
+        if (fin.empty() || fout.empty()) {
+            out << GtpFail("invalid cleansgf");
+        } else {
+            Sgf::Get().CleanSgf(fin, fout);
+            out << GtpSuccess("");
+        }
     } else if (const auto res = parser.Find("get_komi", 0)) {
         out << GtpSuccess(std::to_string(agent_->GetState().GetKomi()));
     } else if (const auto res = parser.Find("get_handicap", 0)) {
