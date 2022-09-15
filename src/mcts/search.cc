@@ -42,17 +42,24 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
                             Node *const root_node, SearchResult &search_result) {
     node->IncrementThreads();
 
+    const bool end_by_passes = (currstate.GetPasses() >= 2);
+    if (end_by_passes) {
+        search_result.FromGameover(currstate);
+    }
+
     // Terminated node, try to expand it. 
     if (node->Expandable()) {
-        if (currstate.GetPasses() >= 2) {
-            // The game is over, gather the game result value.
-            search_result.FromGameover(currstate); //, param_->first_pass_bonus);
-            node->ApplyEvals(search_result.GetEvals());
+        if (end_by_passes) {
+            if (node->SetTerminal() &&
+                    search_result.IsValid()) {
+                // The game is over, setting the game result value.
+                node->ApplyEvals(search_result.GetEvals());
+            }
         } else {
             const bool have_children = node->HaveChildren();
 
-            // If we can not expand the node, that means another thread
-            // is expanding node. Skip this simulation.
+            // If we can not expand the node, it means that another thread
+            // is expanding this node. Skip the simulation this time.
             const bool success = node->ExpandChildren(network_, currstate, false);
 
             if (param_->use_rollout || param_->no_dcnn) {
@@ -62,14 +69,15 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
                     factor = 1.0f;
                 }
 
-                // Update the MC owner and mix rollout value
+                // Update the mix rollout value
                 node->MixRolloutEvals(currstate, factor);
             }
             if (!have_children && success) {
                 search_result.FromNetEvals(node->GetNodeEvals());
             }
         }
-        if (search_result.IsValid() && param_->first_pass_bonus) {
+        if (search_result.IsValid() &&
+                param_->first_pass_bonus) {
             search_result.AddPassBouns(currstate);
         }
     }

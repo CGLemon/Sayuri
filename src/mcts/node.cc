@@ -213,6 +213,17 @@ void Node::LinkNetOutput(const Network::Result &raw_netlist, const int color){
     }
 }
 
+bool Node::SetTerminal() {
+    if (!AcquireExpanding()) {
+        return false;
+    }
+
+    color_ = kInvalid; // no children
+
+    ExpandDone();
+    return true;
+}
+
 void Node::MixRolloutEvals(GameState &state, float factor) {
     const auto num_intersections = state.GetNumIntersections();
     auto mcowner = std::vector<float>(num_intersections, 0.f);

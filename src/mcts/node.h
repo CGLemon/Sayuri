@@ -65,6 +65,7 @@ public:
 
     const std::vector<Edge> &GetChildren() const;
     bool HaveChildren() const;
+    bool SetTerminal();
 
     void SetParameters(Parameters * param);
 
