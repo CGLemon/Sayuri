@@ -5,6 +5,7 @@
 #include "mcts/node_pointer.h"
 #include "mcts/parameters.h"
 #include "neural/network.h"
+#include "utils/operators.h"
 
 #include <array>
 #include <vector>
@@ -106,7 +107,17 @@ public:
     float ComputeKlDivergence();
     float ComputeTreeComplexity();
 
-    std::string ToAnalyzeString(GameState &state, const int color, bool is_sayuri);
+    enum class AnalysisTag : int {
+        kNullTag        = 0,
+        kSayuri         = 1,
+        kKata           = 1 << 1,
+        kOwnership      = 1 << 2,
+        kMovesOwnership = 1 << 3
+    };
+    ENABLE_FRIEND_BITWISE_OPERATORS_ON(Node::AnalysisTag);
+
+    std::string ToAnalyzeString(GameState &state, const int color, Node::AnalysisTag tag);
+    std::string OwnershipToString(GameState &state, const int color, std::string name, Node *node);
     std::string ToVerboseString(GameState &state, const int color);
     std::string GetPvString(GameState &state);
 

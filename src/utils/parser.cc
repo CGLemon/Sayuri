@@ -150,6 +150,22 @@ std::shared_ptr<CommandParser::Reuslt> CommandParser::RemoveSlice(size_t b, size
     return out;
 }
 
+std::string CommandParser::Reuslt::Upper() const {
+    auto upper = str_;
+    for (auto & c: upper) {
+        c = std::toupper(c);
+    }
+    return upper;
+}
+
+std::string CommandParser::Reuslt::Lower() const {
+    auto upper = str_;
+    for (auto & c: upper) {
+        c = std::tolower(c);
+    }
+    return upper;
+}
+
 template<>
 std::string CommandParser::Reuslt::Get<std::string>() const {
     return str_;

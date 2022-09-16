@@ -127,12 +127,19 @@ public:
 
     enum OptionTag : int {
         kNullTag  = 0,
-        kSayuri   = 1 << 1,
-        kThinking = 1 << 2, // use time control
-        kPonder   = 1 << 3, // thinking on opponent's time
-        kAnalyze  = 1 << 4, // open analyzing mode
-        kForced   = 1 << 5, // remove all pass move before search
-        kUnreused = 1 << 6  // don't reuse the tree
+
+        // analysis tag
+        kSayuri         = 1,
+        kKata           = 1 << 1,
+        kOwnership      = 1 << 2,
+        kMovesOwnership = 1 << 3,
+
+        // mode tag
+        kThinking = 1 << 4, // use time control
+        kPonder   = 1 << 5, // thinking on opponent's time
+        kAnalyze  = 1 << 6, // open analyzing mode
+        kForced   = 1 << 7, // remove all pass move before search
+        kUnreused = 1 << 8  // don't reuse the tree
     };
 
     // Enable OptionTag operations.
@@ -155,7 +162,7 @@ public:
     int GetSelfPlayMove();
 
     // Will dump analyzing information.
-    int Analyze(int interval, bool ponder, bool is_sayuri);
+    int Analyze(int interval, bool ponder, OptionTag tag);
 
     // Try to do the pondor.
     void TryPonder();
@@ -183,6 +190,8 @@ private:
     bool AdvanceToNewRootState();
 
     bool InputPending(Search::OptionTag tag) const;
+
+    Node::AnalysisTag ToAnalysisTag(Search::OptionTag tag) const;
 
     void GatherComputationResult(ComputationResult &result) const;
 

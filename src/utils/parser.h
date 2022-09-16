@@ -18,6 +18,9 @@ public:
         Reuslt(const std::string &&s, const int i) :
             str_(std::forward<decltype(s)>(s)), idx_(i) {};
 
+        std::string Upper() const;
+        std::string Lower() const;
+
         template<typename T> T Get() const;
         int Index() const;
 

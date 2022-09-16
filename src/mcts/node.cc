@@ -675,15 +675,35 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     return out.str();
 }
 
-std::string Node::ToAnalyzeString(GameState &state, const int color, bool is_sayuri) {
+std::string Node::OwnershipToString(GameState &state, const int color, std::string name, Node *node) {
+    auto out = std::ostringstream{};
+    const auto board_size = state.GetBoardSize();
+
+    auto ownership = node->GetOwnership(color);
+
+    out << name << ' ';
+    for (int y = board_size-1; y >= 0; --y) {
+        for (int x = 0; x < board_size; ++x) {
+            out << Format("%.6f ", ownership[state.GetIndex(x,y)]);
+        }
+    }
+
+    return out.str();
+}
+
+std::string Node::ToAnalyzeString(GameState &state, const int color, Node::AnalysisTag tag) {
     // Gather analyzing string, you can see the detail here
     // https://github.com/SabakiHQ/Sabaki/blob/master/docs/guides/engine-analysis-integration.md
 
     auto out = std::ostringstream{};
     const auto lcblist = GetLcbList(color);
 
-    int i = 0;
+    bool is_sayuri = (bool)(tag & AnalysisTag::kSayuri);
+    bool is_kata = (bool)(tag & AnalysisTag::kKata);
+    bool use_ownership = (bool)(tag & AnalysisTag::kOwnership);
+    bool use_moves_ownership = (bool)(tag & AnalysisTag::kMovesOwnership);
 
+    int i = 0;
     for (auto &lcb_pair : lcblist) {
         const auto lcb = lcb_pair.first > 0.0f ? lcb_pair.first : 0.0f;
         const auto vertex = lcb_pair.second;
@@ -710,6 +730,17 @@ std::string Node::ToAnalyzeString(GameState &state, const int color, bool is_say
                              i++,
                              pv_string.c_str()
                          );
+        } else if (is_kata) {
+            out << Format("info move %s visits %d winrate %.6f scoreLead %.6f prior %.6f lcb %.6f order %d pv %s",
+                             state.VertexToText(vertex).c_str(),
+                             visits,
+                             winrate,
+                             final_score,
+                             prior,
+                             lcb,
+                             i++,
+                             pv_string.c_str()
+                         );
         } else {
             out << Format("info move %s visits %d winrate %d scoreLead %.6f prior %d lcb %d order %d pv %s",
                              state.VertexToText(vertex).c_str(),
@@ -722,6 +753,13 @@ std::string Node::ToAnalyzeString(GameState &state, const int color, bool is_say
                              pv_string.c_str()
                          );
         }
+        if (use_moves_ownership) {
+            out << OwnershipToString(state, color, "movesOwnership", this->Get());
+        }
+    }
+
+    if (use_ownership) {
+        out << OwnershipToString(state, color, "ownership", this->Get());
     }
 
     out << std::endl;

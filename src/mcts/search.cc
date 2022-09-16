@@ -208,6 +208,25 @@ bool Search::InputPending(Search::OptionTag tag) const {
 #endif
 }
 
+Node::AnalysisTag Search::ToAnalysisTag(Search::OptionTag tag) const {
+    Node::AnalysisTag atag = Node::AnalysisTag::kNullTag;
+
+    if (tag & kSayuri) {
+        atag = atag | Node::AnalysisTag::kSayuri;
+    }
+    if (tag & kKata) {
+        atag = atag | Node::AnalysisTag::kKata;
+    }
+    if (tag & kOwnership) {
+        atag = atag | Node::AnalysisTag::kOwnership;
+    }
+    if (tag & kMovesOwnership) {
+        atag = atag | Node::AnalysisTag::kMovesOwnership;
+    }
+
+    return atag;
+}
+
 ComputationResult Search::Computation(int playouts, int interval, Search::OptionTag tag) {
     auto computation_result = ComputationResult{};
     playouts = std::min(playouts, kMaxPlayouts);
@@ -312,7 +331,7 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
         if ((tag & kAnalyze) && analyze_timer.GetDurationMilliseconds() > interval * 10) {
             // Output analyze verbose for GTP interface, like sabaki...
             analyze_timer.Clock();
-            DUMPING << root_node_->ToAnalyzeString(root_state_, color, tag & kSayuri);
+            DUMPING << root_node_->ToAnalyzeString(root_state_, color, ToAnalysisTag(tag));
         }
 
         const auto elapsed = (tag & kThinking) ?
@@ -340,7 +359,7 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
         time_control_.TookTime(color);
     }
     if (tag & kAnalyze) {
-        DUMPING << root_node_->ToAnalyzeString(root_state_, color, tag & kSayuri);
+        DUMPING << root_node_->ToAnalyzeString(root_state_, color, ToAnalysisTag(tag));
     }
     if (GetOption<bool>("analysis_verbose")) {
         LOGGING << root_node_->ToVerboseString(root_state_, color);
@@ -612,13 +631,12 @@ void Search::TryPonder() {
     }
 }
 
-int Search::Analyze(int interval, bool ponder, bool is_sayuri) {
+int Search::Analyze(int interval, bool ponder, OptionTag other_tag) {
     // Ponder mode always reuse the tree.
     auto reuse_tag = (param_->reuse_tree || ponder) ? kNullTag : kUnreused;
-    auto sayuri_tag = is_sayuri ? kSayuri : kNullTag;
 
     auto ponder_tag = ponder ? (kAnalyze | kPonder) : (kAnalyze | kThinking);
-    auto tag = reuse_tag | ponder_tag | sayuri_tag;
+    auto tag = reuse_tag | ponder_tag | other_tag;
 
     int playouts = ponder == true ? GetPonderPlayouts()
                                       : max_playouts_;
