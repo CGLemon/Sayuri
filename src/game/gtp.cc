@@ -379,7 +379,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
 
         // Remove unused options.
         while (const auto opt = parser.Find({"movesOwnership", "ownership"})) {
-            parser.RemoveCommand(res->Index());
+            parser.RemoveCommand(opt->Index());
         }
 
         auto color = agent_->GetState().GetToMove();
@@ -399,9 +399,9 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             DUMPING << "=\n";
         }
 
-        if (res->Get<std::string>() == "sayuri-genmove_analyze") {
+        if (res->Get<std::string>() == "sayuri-analyze") {
             tag = tag | Search::kSayuri;
-        } else if (res->Get<std::string>() == "kata-genmove_analyze") {
+        } else if (res->Get<std::string>() == "kata-analyze") {
             tag = tag | Search::kKata;
         }
 
@@ -429,7 +429,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
 
         // Remove unused options.
         while (const auto opt = parser.Find({"movesOwnership", "ownership"})) {
-            parser.RemoveCommand(res->Index());
+            parser.RemoveCommand(opt->Index());
         }
 
         auto color = agent_->GetState().GetToMove();
