@@ -754,7 +754,7 @@ std::string Node::ToAnalyzeString(GameState &state, const int color, Node::Analy
                          );
         }
         if (use_moves_ownership) {
-            out << OwnershipToString(state, color, "movesOwnership", this->Get());
+            out << OwnershipToString(state, color, "movesOwnership", child);
         }
     }
 
