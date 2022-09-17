@@ -23,8 +23,6 @@ public:
     };
     using MmGammas = std::vector<MmGamma>;
 
-    static MinorizationMaximization& Get();
-
     MmGamma &GetMmGamma(int feature, int index);
     void Initialize(std::vector<int> features);
     void AppendParticipant(Participant &p);

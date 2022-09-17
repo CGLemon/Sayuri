@@ -4,11 +4,6 @@
 #include <cmath>
 #include <iostream>
 
-MinorizationMaximization& MinorizationMaximization::Get() {
-    static MinorizationMaximization mm;
-    return mm;
-}
-
 void MinorizationMaximization::Initialize(std::vector<int> features) {
     features_ = features;
     num_features_ = (int)features.size();

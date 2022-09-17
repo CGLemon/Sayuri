@@ -146,7 +146,10 @@ public:
 
     // for patterns...
     bool MatchPattern3(const int vtx, const int color) const;
+    std::string GetPatternSpat(const int vtx, const int color, const int dist) const;
     std::uint64_t GetPatternHash(const int vtx, const int color, const int dist) const;
+    std::uint64_t GetSymmetryPatternHash(const int vtx, const int color,
+                                             const int dist, const int symmetry) const;
     std::uint64_t GetSurroundPatternHash(std::uint64_t hash,
                                              const int vtx,
                                              const int color,
