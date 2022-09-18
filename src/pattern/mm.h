@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <string>
 
 struct Participant {
     struct GammaLoc {
@@ -16,6 +17,7 @@ struct Participant {
 class MinorizationMaximization {
 public:
     struct MmGamma {
+        bool used;
         int wins;
         double c;
         double sigma;
@@ -27,14 +29,21 @@ public:
     void Initialize(std::vector<int> features);
     void AppendParticipant(Participant &p);
     void StartTraining();
+    void SaveMmFIle(std::string filename);
 
 private:
-    void MmUpdate();
+    void MmUpdate(int feature);
+
     void ComputeVictories();
     double ComputeLogLikelihood() const;
+    int GetLineIndex(int feature, int index) const;
 
     int num_features_;
+    int num_nonzero_features_;
+    int num_gammas_;
     std::vector<int> features_;
+    std::vector<int> features_acc_;
+
     std::vector<MmGammas> mm_gammas_each_feature_;
     std::vector<Participant> participants_;
 };

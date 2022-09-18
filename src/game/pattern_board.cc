@@ -154,6 +154,8 @@ std::string SimpleBoard::GetPatternSpat(const int vtx, const int color, const in
     const int cx = GetX(vtx);
     const int cy = GetY(vtx);
 
+    out << '.'; // center
+
     for (int i = kPointIndex[2]; i < kPointIndex[dist + 1]; ++i) {
         const int px = cx + kPointCoords[i].x;
         const int py = cy + kPointCoords[i].y;
@@ -164,11 +166,13 @@ std::string SimpleBoard::GetPatternSpat(const int vtx, const int color, const in
             out << '#'; // invalid
         } else {
             const int state = state_[GetVertex(px,py)];
-            if (color == kEmpty) {
+            if (state == kEmpty) {
                 out << '.';
             } else if (color == state) {
+                // my color
                 out << 'X';
             } else if (color != state) {
+                // opp color
                 out << 'O';
             }
         }
@@ -227,7 +231,7 @@ std::uint64_t SimpleBoard::GetSymmetryPatternHash(const int vtx, const int color
         const int pvtx = GetVertex(px,py);
         const int c = color_map[color][state_[pvtx]];
 
-        hash ^= PatternHash[0][c][i];
+        hash ^= PatternHash[symmetry][c][i];
     }
     return hash;
 }
