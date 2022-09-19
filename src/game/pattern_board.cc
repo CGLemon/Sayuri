@@ -267,7 +267,12 @@ std::uint64_t SimpleBoard::GetSurroundPatternHash(std::uint64_t hash,
     return hash;
 }
 
-bool SimpleBoard::GetBorderLevel(const int vtx, int &dist) const {
+bool SimpleBoard::GetDummyLevel(const int vtx, std::uint64_t &hash) const {
+    // Todo function...
+    return false;
+}
+
+bool SimpleBoard::GetBorderLevel(const int vtx, std::uint64_t &hash) const {
     if (vtx == kPass) {
         return false;
     }
@@ -284,30 +289,46 @@ bool SimpleBoard::GetBorderLevel(const int vtx, int &dist) const {
         y_dist = board_size_ + 1 - y_dist;
     }
 
-    dist = std::min(x_dist, y_dist) - 1;
-    if (dist >= 5) {
+    const int dist = std::min(x_dist, y_dist);
+    if (dist >= 6) {
         return false;
     }
+
+    hash = 1ULL << 32 | (std::uint64_t)dist;
+
     return true;
 }
 
-bool SimpleBoard::GetDistLevel(const int vtx, int &dist) const {
+bool SimpleBoard::GetDistLevel(const int vtx, std::uint64_t &hash) const {
+    int dist;
+
     if (last_move_ == kNullVertex) {
         dist = 0;
-        return true;
-    }
-
-    if (last_move_ == kPass) {
+    } else if (last_move_ == kPass) {
         dist = 1;
-        return true;
+    } else {
+        const int dx = std::abs(GetX(last_move_) - GetX(vtx));
+        const int dy = std::abs(GetY(last_move_) - GetY(vtx));
+
+        dist = dx + dy + std::max(dx, dy);
+        if (dist >= 17) {
+            dist = 17;
+        }
     }
 
-    const int dx = std::abs(GetX(last_move_) - GetX(vtx));
-    const int dy = std::abs(GetY(last_move_) - GetY(vtx));
+    hash = 2ULL << 32 | (std::uint64_t)dist;
 
-    dist = dx + dy + std::max(dx, dy);
-    if (dist >= 17) {
-        dist = 17;
-    }
     return true;
+}
+
+bool SimpleBoard::GetFeatureWrapper(const int f, const int vtx, std::uint64_t &hash) const {
+    if (f == 0) return GetDummyLevel(vtx, hash);
+    if (f == 1) return GetBorderLevel(vtx, hash);
+    if (f == 2) return GetDistLevel(vtx, hash);
+
+    return false;
+}
+
+int SimpleBoard::GetMaxFeatures() {
+    return 3;
 }

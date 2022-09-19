@@ -2,6 +2,8 @@
 
 #include <vector>
 
+// This file is not used. Will be removed in the feature.
+
 // Gamma value from the pachi
 
 float kNoSpatial = 0.029559;

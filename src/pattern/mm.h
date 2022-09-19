@@ -5,6 +5,9 @@
 
 struct ParticipantGroup {
     struct GammaLoc {
+        GammaLoc() = default;
+        GammaLoc(int f, int i) : feature(f), index(i) {}
+
         int feature;
         int index;
     };

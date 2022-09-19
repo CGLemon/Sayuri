@@ -6,7 +6,6 @@
 #include "utils/komi.h"
 #include "pattern/pattern.h"
 #include "pattern/gammas_dict.h"
-#include "pattern/featurn_gammas.h"
 
 #include <random>
 
@@ -547,12 +546,6 @@ void GameState::PlayRandomMove(bool heavy) {
                 candidate_moves.emplace_back(vtx);
                 continue;
             }
-
-            // auto hash = board_.GetPatternHash(vtx, color, 3);
-            // if (GammasDict::Get().Hit3x3(hash, nullptr, true)) {
-            //     candidate_moves.emplace_back(vtx);
-            //     continue;
-            // }
         }
     }
 
@@ -573,29 +566,27 @@ float GameState::GetGammaValue(const int vtx, const int color) const {
     }
 
     float val = 1.f;
-    bool hit = false;
+
     std::uint64_t hash = 0ULL;
+    float gamma = 0.f;
 
     for (int d = 2; d < kMaxPatternDist+1; ++d) {
-        float gamma = 0.f;
         hash = board_.GetSurroundPatternHash(hash, vtx, color, d);
 
-        if (GammasDict::Get().Probe(hash, gamma)) {
+        if (GammasDict::Get().ProbePattern(hash, gamma)) {
             val *= gamma;
-            hit = true;
         }
     }
 
-    if (!hit) {
-        val = kNoSpatial;
+    if (board_.GetBorderLevel(vtx, hash)) {
+        if (GammasDict::Get().ProbeFeature(hash, gamma)) {
+            val *= gamma;
+        }
     }
-
-    int dist;
-    if (board_.GetBorderLevel(vtx, dist)) {
-        val *= kDistToBorder[dist];
-    }
-    if (board_.GetDistLevel(vtx, dist)) {
-        val *= kDistToLastMove[dist];
+    if (board_.GetDistLevel(vtx, hash)) {
+        if (GammasDict::Get().ProbeFeature(hash, gamma)) {
+            val *= gamma;
+        }
     }
 
     return val;

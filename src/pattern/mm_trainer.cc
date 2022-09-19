@@ -6,6 +6,7 @@
 #include "utils/log.h"
 
 #include <algorithm>
+#include <functional>
 
 MmTrainer& MmTrainer::Get() {
     static MmTrainer mm_trainer;
@@ -16,10 +17,12 @@ void MmTrainer::Run(std::string sgf_name, std::string out_name) {
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
 
     num_patterns_ = 0;
-    feature_spat_dicts_.resize(kMaxPatternDist+1);
-    feature_orders_.resize(kMaxPatternDist+1);
-    feature_order_dicts_.resize(kMaxPatternDist+1);
-    feature_counters_.resize(kMaxPatternDist+1);
+    const int num_features = kMaxPatternDist + Board::GetMaxFeatures() + 1;
+
+    feature_spat_dicts_.resize(num_features);
+    feature_orders_.resize(num_features);
+    feature_order_dicts_.resize(num_features);
+    feature_counters_.resize(num_features);
 
     // gather mm patterns
     for (const auto &sgf_string : sgfs) {
@@ -68,11 +71,11 @@ void MmTrainer::FilterPatterns() {
 
     // computer features
     auto size = feature_counters_.size();
-    auto features_list = std::vector<int>{};
+    auto num_features_list = std::vector<int>{};
 
     for (int i = 0; i < (int)size; ++i) {
         FeatureConuter &counter = feature_counters_[i];
-        features_list.emplace_back(counter.size());
+        num_features_list.emplace_back(counter.size());
     }
 
     // compute min count
@@ -96,7 +99,7 @@ void MmTrainer::FilterPatterns() {
 
     // filter them
     for (int i = 0; i < (int)size; ++i) {
-        const auto fsize = features_list[i];
+        const auto fsize = num_features_list[i];
         auto &spat_dict  = feature_spat_dicts_[i];
         auto &order      = feature_orders_[i];
         // auto &order_dict = feature_order_dicts_[i];
@@ -209,7 +212,37 @@ void MmTrainer::FillPatterns(std::string sgfstring) {
             }
         }
 
-        // TODO: Training with features.
+        // gather board features
+        const auto ProcessWrapper = [this](SimpleBoard &board,
+                                               int bf, int mvtx, int feature_idx) {
+            std::uint64_t mhash;
+            if (board.GetFeatureWrapper(bf, mvtx, mhash)) {
+                FeatureSpatDict &spat_dict = feature_spat_dicts_[feature_idx];
+                FeatureOrder &order = feature_orders_[feature_idx];
+                FeatureOrderDict &order_dict = feature_order_dicts_[feature_idx];
+                FeatureConuter &counter = feature_counters_[feature_idx];
+
+                bool matched = spat_dict.find(mhash) != std::end(spat_dict);
+
+                if (matched) {
+                    const auto index = order_dict.find(mhash)->second;
+                    counter[index] += 1;
+                } else {
+                    const auto index = order.size();
+
+                    spat_dict.insert({mhash, std::to_string(mhash)});
+                    order.emplace_back(mhash);
+                    order_dict.insert({mhash, index});
+                    counter.emplace_back(1);
+                    num_patterns_ += 1;
+                }
+            }
+        };
+
+        const auto offset = kMaxPatternDist;
+        for (int i = 1; i <= Board::GetMaxFeatures(); ++i) {
+            ProcessWrapper(board, i, vtx, offset+i);
+        }
     } while (game_ite.Next());
 }
 
@@ -251,6 +284,7 @@ void MmTrainer::FillMmParticipant(std::string sgfstring) {
             if (board.IsLegalMove(vtx, color)) {
                 ParticipantGroup::GammasTeam team;
 
+                // gather patterns
                 for (int pattern_dist = 2; pattern_dist <= kMaxPatternDist; ++pattern_dist) {
                     std::uint64_t mhash;
                     bool matched = PatternMatch(board, pattern_dist,
@@ -260,11 +294,33 @@ void MmTrainer::FillMmParticipant(std::string sgfstring) {
                         auto &order_dict = feature_order_dicts_[pattern_dist];
                         int matched_index = order_dict.find(mhash)->second;
 
-                        ParticipantGroup::GammaLoc gloc;
-                        gloc.feature = pattern_dist;
-                        gloc.index = matched_index;
+                        ParticipantGroup::GammaLoc gloc(pattern_dist, matched_index);
                         team.emplace_back(gloc);
                     }
+                }
+
+                // gather board features
+                const auto ProcessWrapper = [this](SimpleBoard &board,
+                                                       int bf, int mvtx, int feature_idx,
+                                                       ParticipantGroup::GammasTeam &team) {
+                    std::uint64_t mhash;
+                    if (board.GetFeatureWrapper(bf, mvtx, mhash)) {
+                        auto &order_dict = feature_order_dicts_[feature_idx];
+                        auto it = order_dict.find(mhash);
+                        bool matched = it != std::end(order_dict);
+
+                        if (matched) {
+                            int matched_index = order_dict.find(mhash)->second;
+
+                            ParticipantGroup::GammaLoc gloc(feature_idx, matched_index);
+                            team.emplace_back(gloc);
+                        }
+                    }
+                };
+
+                const auto offset = kMaxPatternDist+1;
+                for (int i = 0; i < Board::GetMaxFeatures(); ++i) {
+                    ProcessWrapper(board, i, vtx, offset+i, team);
                 }
 
                 if (!team.empty()) {

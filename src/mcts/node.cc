@@ -248,7 +248,7 @@ void Node::ApplyNoDcnnPolicy(GameState &state, const int color, Network::Result 
         raw_netlist.ownership[idx] = 0.f;
     }
 
-    // Give a little value for pass policy avoid bug
+    // Give it a little value to pass policy in order to avoid bug
     // if there is no legal moves.
     raw_netlist.pass_probability = 0.1f/num_intersections;
     raw_netlist.final_score = 0.f;
