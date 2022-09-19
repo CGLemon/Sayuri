@@ -3,7 +3,7 @@
 #include <vector>
 #include <string>
 
-struct Participant {
+struct ParticipantGroup {
     struct GammaLoc {
         int feature;
         int index;
@@ -27,7 +27,7 @@ public:
 
     MmGamma &GetMmGamma(int feature, int index);
     void Initialize(std::vector<int> features);
-    void AppendParticipant(Participant &p);
+    void AppendParticipantGroup(ParticipantGroup &p);
     void StartTraining();
     void SaveMmFIle(std::string filename);
 
@@ -45,5 +45,5 @@ private:
     std::vector<int> features_acc_;
 
     std::vector<MmGammas> mm_gammas_each_feature_;
-    std::vector<Participant> participants_;
+    std::vector<ParticipantGroup> participants_;
 };

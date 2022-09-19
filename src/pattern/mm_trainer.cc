@@ -59,14 +59,14 @@ void MmTrainer::InitMm() {
 
 void MmTrainer::FilterPatterns() {
     constexpr int kMinCount = 3;
-    constexpr int kMaxSize = 30 * 10000;
+    constexpr int kMaxSize = 30 * 1000;
 
     std::vector<FeatureSpatDict>  filtered_feature_spat_dicts;
     std::vector<FeatureOrder>     filtered_feature_orders;
     std::vector<FeatureOrderDict> filtered_feature_order_dicts;
     std::vector<FeatureConuter>   filtered_feature_counters;
 
-    // computer featurns
+    // computer features
     auto size = feature_counters_.size();
     auto features_list = std::vector<int>{};
 
@@ -76,7 +76,7 @@ void MmTrainer::FilterPatterns() {
     }
 
     // compute min count
-    std::vector<int> all_counts;
+    auto all_counts = std::vector<int>{};
     for (int i = 0; i < (int)size; ++i) {
         auto &counter = feature_counters_[i];
         for (auto c : counter) {
@@ -208,6 +208,8 @@ void MmTrainer::FillPatterns(std::string sgfstring) {
                 num_patterns_ += 1;
             }
         }
+
+        // TODO: Training with features.
     } while (game_ite.Next());
 }
 
@@ -232,7 +234,7 @@ void MmTrainer::FillMmParticipant(std::string sgfstring) {
     game_ite.RemoveUnusedDoublePass();
 
     do {
-        Participant part;
+        ParticipantGroup part;
         part.winner_team_idx = -1;
 
         auto winner_vtx = game_ite.GetVertex();
@@ -247,7 +249,7 @@ void MmTrainer::FillMmParticipant(std::string sgfstring) {
         for (int i = 0; i < empty_cnt; ++i) {
             const auto vtx = board.GetEmpty(i);
             if (board.IsLegalMove(vtx, color)) {
-                Participant::GammasTeam team;
+                ParticipantGroup::GammasTeam team;
 
                 for (int pattern_dist = 2; pattern_dist <= kMaxPatternDist; ++pattern_dist) {
                     std::uint64_t mhash;
@@ -258,7 +260,7 @@ void MmTrainer::FillMmParticipant(std::string sgfstring) {
                         auto &order_dict = feature_order_dicts_[pattern_dist];
                         int matched_index = order_dict.find(mhash)->second;
 
-                        Participant::GammaLoc gloc;
+                        ParticipantGroup::GammaLoc gloc;
                         gloc.feature = pattern_dist;
                         gloc.index = matched_index;
                         team.emplace_back(gloc);
@@ -277,13 +279,12 @@ void MmTrainer::FillMmParticipant(std::string sgfstring) {
             }
         }
         if (part.winner_team_idx >= 0) {
-            mm_.AppendParticipant(part);
+            mm_.AppendParticipantGroup(part);
         }
     } while (game_ite.Next());
 }
 
 void MmTrainer::SaveResult(std::string filename) {
-    // std::ofstream file(filename, std::ofstream::app | std::ofstream::out);
     std::ofstream file(filename, std::ofstream::out);
     if (!file.is_open()) {
         return;

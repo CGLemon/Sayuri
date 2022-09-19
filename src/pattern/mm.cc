@@ -53,7 +53,7 @@ void MinorizationMaximization::Initialize(std::vector<int> features) {
     }
 }
 
-void MinorizationMaximization::AppendParticipant(Participant &p) {
+void MinorizationMaximization::AppendParticipantGroup(ParticipantGroup &p) {
     bool success = true;
     for (auto &team : p.all_teams) {
         std::set<int> buf;
@@ -68,25 +68,28 @@ void MinorizationMaximization::AppendParticipant(Participant &p) {
     if (success) {
         participants_.emplace_back(p);
     } else {
-        std::cerr << "Illegal participant, discard it." << std::endl;
+        std::cerr << "Illegal participant group, discard it." << std::endl;
     }
 }
 
 void MinorizationMaximization::StartTraining() {
-    std::cerr << "Participants number: " << participants_.size() << std::endl;
+    std::cerr << "Participant groups number: " << participants_.size() << std::endl;
 
     ComputeVictories();
 
     std::cerr << "start training..." << std::endl;
 
-    constexpr int MaxNumSteps = 300;
+    constexpr int kMaxNumSteps = 300;
+    constexpr double kEarlyStoppingDelta = 1e-5f;
     auto log_likelihood = ComputeLogLikelihood();
 
     std::cerr << "steps: " << 0
                   << ", lose: " << std::exp(-log_likelihood)
                   << "(" << log_likelihood << ")" << std::endl;
 
-    for (int s = 0; s < MaxNumSteps; ++s) {
+
+    // TODO: Accelerate the training pipe line by Multi-threads.
+    for (int s = 0; s < kMaxNumSteps; ++s) {
         for (int i = 0; i < num_features_; ++i) {
             if (features_[i] > 0) {
                 MmUpdate(i);
@@ -101,7 +104,7 @@ void MinorizationMaximization::StartTraining() {
                       << ", lose: " << std::exp(-log_likelihood)
                       << "(" << log_likelihood << ")" << std::endl;
 
-        if (delta < 1e-6f) {
+        if (delta < kEarlyStoppingDelta) {
             break;
         }
     }
@@ -143,7 +146,6 @@ void MinorizationMaximization::MmUpdate(int feature) {
     }
 
     // compute the new gammas
-
     constexpr double kPriorVictories = 1.f;
     constexpr double kPriorGames = 2.f;
     constexpr double kPriorOpponentGamma = 1.f;
@@ -181,10 +183,9 @@ double MinorizationMaximization::ComputeLogLikelihood() const {
 
             if (team_idx == p.winner_team_idx) {
                 winner_gammas += team_gamma;
-                all_gammas += team_gamma;
-            } else {
-                all_gammas += team_gamma;
             }
+            all_gammas += team_gamma;
+
             team_idx += 1;
         }
         res += std::log(winner_gammas);
@@ -203,7 +204,7 @@ void MinorizationMaximization::ComputeVictories() {
             all_wins += 1;
         }
     }
-    std::cerr << "wins: " << all_wins << std::endl;
+    (void) all_wins;
 }
 
 MinorizationMaximization::MmGamma &MinorizationMaximization::GetMmGamma(int feature, int index) {
@@ -215,7 +216,10 @@ int MinorizationMaximization::GetLineIndex(int feature, int index) const {
 }
 
 void MinorizationMaximization::SaveMmFIle(std::string filename) {
+    // https://www.remi-coulom.fr/Amsterdam2007/
+
     std::ofstream file(filename, std::ofstream::out);
+
     if (!file.is_open()) {
         return;
     }
