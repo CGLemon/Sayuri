@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import math
+import struct
+import sys
 
 from symmetry import torch_symmetry
 
@@ -22,6 +24,27 @@ def bn_to_text(channels):
 
 def tensor_to_text(t: torch.Tensor):
     return " ".join([str(w) for w in t.detach().numpy().ravel()]) + "\n"
+
+def float_to_bin(num, big_endian):
+    fmt = 'f'
+    if big_endian:
+        fmt = '!' + fmt
+    return struct.pack(fmt, num)
+
+def bin_to_float(bnum, big_endian):
+    fmt = 'f'
+    if big_endian:
+        fmt = '!' + fmt
+    return struct.unpack(fmt, bnum)[0]
+
+def str_to_bin(st):
+    return bytearray(st, 'utf-8')
+
+def ffffffff_nan():
+    return b'\xff\xff\xff\xff'
+
+def tensor_to_bin(t: torch.Tensor):
+    return b''.join([float_to_bin(w, False) for w in t.detach().numpy().ravel()]) + ffffffff_nan()
 
 class GlobalPool(nn.Module):
     def __init__(self, is_value_head=False):
@@ -218,6 +241,12 @@ class FullyConnect(nn.Module):
     def shape_to_text(self):
         return fullyconnect_to_text(self.in_size, self.out_size)
 
+    def tensors_to_bin(self):
+        out = bytes()
+        out += tensor_to_bin(self.linear.weight)
+        out += tensor_to_bin(self.linear.bias)
+        return out
+    
     def tensors_to_text(self):
         out = str()
         out += tensor_to_text(self.linear.weight)
@@ -266,6 +295,12 @@ class Convolve(nn.Module):
 
     def shape_to_text(self):
         return conv_to_text(self.in_channels, self.out_channels, self.kernel_size)
+
+    def tensors_to_bin(self):
+        out = bytes()
+        out += tensor_to_bin(self.conv.weight)
+        out += tensor_to_bin(self.conv.bias)
+        return out
 
     def tensors_to_text(self):
         out = str()
@@ -325,6 +360,39 @@ class ConvBlock(nn.Module):
         out = str()
         out += conv_to_text(self.in_channels, self.out_channels, self.kernel_size)
         out += bn_to_text(self.out_channels)
+        return out
+
+    def tensors_to_bin(self):
+        bn_mean = torch.zeros(self.out_channels)
+        bn_std = torch.zeros(self.out_channels)
+
+        out = bytes()
+        out += tensor_to_bin(self.conv.weight)
+        out += tensor_to_bin(torch.zeros(self.out_channels)) # fill zero
+
+        # Merge four tensors(mean, variance, gamma, beta) into two tensors (
+        # mean, variance).
+        bn_mean[:] = self.bn.running_mean[:]
+        bn_std[:] = torch.sqrt(self.bn.eps + self.bn.running_var)[:]
+
+        # Original format: gamma * ((x-mean) / std) + beta
+        # Target format: (x-mean) / std
+        #
+        # Solve the following equation:
+        #     gamma * ((x-mean) / std) + beta = (x-tgt_mean) / tgt_std
+        #
+        # We get:
+        #     tgt_std = std / gamma
+        #     tgt_mean = (mean - beta) * (std / gamma)
+
+        if self.bn.gamma is not None:
+            bn_std = bn_std / self.bn.gamma
+        if self.bn.beta is not None:
+            bn_mean = bn_mean - self.bn.beta * bn_std
+        bn_var = torch.square(bn_std) - self.bn.eps
+
+        out += tensor_to_bin(bn_mean)
+        out += tensor_to_bin(bn_var)
         return out
 
     def tensors_to_text(self):
@@ -705,20 +773,40 @@ class Network(nn.Module):
 
         return info
 
-    def dump_info(self):
-        print("NN Type: {type}".format(type=self.nntype))
-        print("NN size [x,y]: [{xsize}, {ysize}]".format(xsize=self.xsize, ysize=self.ysize))
-        print("Input channels: {channels}".format(channels=self.input_channels))
-        print("Residual channels: {channels}".format(channels=self.residual_channels))
-        print("Residual tower: size -> {s} [".format(s=len(self.stack)))
-        for s in self.stack:
-            print("  {}".format(s))
-        print("]")
-        print("Policy extract channels: {policyextract}".format(policyextract=self.policy_extract))
-        print("Value extract channels: {valueextract}".format(valueextract=self.value_extract))
-        print("Value misc size: {valuemisc}".format(valuemisc=self.value_misc))
+    def transfer_to_bin(self, filename):
+        def write_struct(f, layer_collector):
+            f.write(str_to_bin("get struct\n"))
+            for layer in layer_collector:
+                f.write(str_to_bin(layer.shape_to_text()))
+            f.write(str_to_bin("end struct\n"))
 
-    def transfer2text(self, filename):
+        def write_params(f, layer_collector):
+            f.write(str_to_bin("get parameters\n"))
+            for layer in layer_collector:
+                f.write(layer.tensors_to_bin())
+            f.write(str_to_bin("end parameters\n"))
+
+        with open(filename, 'wb') as f:
+            f.write(str_to_bin("get main\n"))
+
+            f.write(str_to_bin("get info\n"))
+            f.write(str_to_bin("NNType {}\n".format(self.nntype)))
+            f.write(str_to_bin("Version {}\n".format(1)))
+            f.write(str_to_bin("FloatType {}\n".format("float32bin")))
+            f.write(str_to_bin("InputChannels {}\n".format(self.input_channels)))
+            f.write(str_to_bin("ResidualChannels {}\n".format(self.residual_channels)))
+            f.write(str_to_bin("ResidualBlocks {}\n".format(len(self.stack))))
+            f.write(str_to_bin("PolicyExtract {}\n".format(self.policy_extract)))
+            f.write(str_to_bin("ValueExtract {}\n".format(self.value_extract)))
+            f.write(str_to_bin("ValueMisc {}\n".format(self.value_misc)))
+            f.write(str_to_bin("end info\n"))
+
+            write_struct(f, self.layer_collector)
+            write_params(f, self.layer_collector)
+
+            f.write(str_to_bin("end main"))
+
+    def transfer_to_text(self, filename):
         def write_struct(f, layer_collector):
             f.write("get struct\n")
             for layer in layer_collector:

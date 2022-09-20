@@ -3,6 +3,7 @@
 #include "utils/parser.h"
 #include "utils/log.h"
 #include "utils/format.h"
+#include "utils/parse_float.h"
 #include "config.h"
 
 #include <iostream>
@@ -17,7 +18,7 @@ DNNLoder& DNNLoder::Get() {
     return lodaer;
 }
 
-void DNNLoder::FromFile(std::shared_ptr<DNNWeights> weights, std::string filename) const {
+void DNNLoder::FromFile(std::shared_ptr<DNNWeights> weights, std::string filename) {
     auto file = std::ifstream{};
     auto buffer = std::stringstream{};
     auto line = std::string{};
@@ -27,22 +28,21 @@ void DNNLoder::FromFile(std::shared_ptr<DNNWeights> weights, std::string filenam
         return;
     }
 
-    file.open(filename.c_str());
+    file.open(filename, std::ifstream::binary | std::ifstream::in);
 
     if (!file.is_open()) {
         LOGGING << "Couldn't open file:" << ' ' << filename << '!' << std::endl;
         return;
     }
 
-    while(std::getline(file, line)) {
-        if (line.empty()) {
-            // Remove the unused space.
-            continue;
-        }
-        buffer << line << std::endl;
+    char c;
+    while (file.get(c)) {
+        // Copy the file data to buffer.
+        buffer << c;
     }
+
     file.close();
-    
+
     try {
         Parse(weights, buffer);
     } catch (const char *err) {
@@ -53,7 +53,7 @@ void DNNLoder::FromFile(std::shared_ptr<DNNWeights> weights, std::string filenam
     }
 }
 
-void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) const {
+void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) {
    /**
     * get main
     * get info
@@ -65,13 +65,12 @@ void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) 
     * end
     *
     * get parameters
-    *   (The network weights are here. The struct follow
-    *    the struct scroll)
+    *   (The network weights are here. It is must be in)
+    *    the last scope.)
     * end
     * end
     *
     */
-    auto counter = size_t{0};
     auto line = std::string{};
 
     if (std::getline(buffer, line)) {
@@ -79,8 +78,6 @@ void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) 
         if (p.GetCommand(0)->Get<std::string>() != "get" ||
                 p.GetCommand(1)->Get<std::string>() != "main") {
             throw "Weights file format is not acceptable";
-        } else {
-            counter++;
         }
     } else {
         throw "Weights file is empty";
@@ -96,16 +93,18 @@ void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) 
                 ParseInfo(netinfo, buffer);
             } else if (p.GetCommand(1)->Get<std::string>() == "struct") {
                 ParseStruct(netstruct, buffer);
-            } else {
-                counter++;
+            } else if (p.GetCommand(1)->Get<std::string>() == "parameters") {
+                break;
             }
         } else if (p.GetCommand(0)->Get<std::string>() == "end") {
-            counter--;
+            // do nothing...
         }
     }
 
     buffer.clear();
     buffer.seekg(0, std::ios::beg);
+
+    CkeckFloat(netinfo);
 
     // Now start to parse the weights.
     while (std::getline(buffer, line)) {
@@ -185,6 +184,28 @@ void DNNLoder::ParseStruct(NetStruct &netstruct, std::istream &buffer) const {
             throw "The layer shape is error";
         }
         cnt++;
+    }
+}
+
+void DNNLoder::CkeckFloat(NetInfo &netinfo) {
+    const auto NotFound = [](NetInfo &netinfo, std::string target) -> bool {
+        return std::end(netinfo) == netinfo.find(target);
+    };
+
+    use_binary_ = false;
+
+    if (NotFound(netinfo, "FloatType")) {
+        return;
+    }
+
+    if (netinfo["FloatType"] == "float32bin") {
+        use_binary_ = true;
+    }
+
+    //TODO: Support the big-endian machine.
+
+    if (use_binary_ && !IsLittleEndian()) {
+        throw "Your machine is not little-endian. Don't support the binary weights.";
     }
 }
 
@@ -472,50 +493,63 @@ void DNNLoder::ProcessWeights(std::shared_ptr<DNNWeights> weights, bool winograd
 
 void DNNLoder::GetWeightsFromBuffer(std::vector<float> &weights, std::istream &buffer) const {
     weights.clear();
-    auto line = std::string{};
 
-    if (std::getline(buffer, line)) {
-        // On MacOS, if the numeric is too small, stringstream
-        // can not parse the number to float, but double is ok.
-        double weight;
+    if (use_binary_) {
+        while (true) {
+            float w = ParseBinFloat32(buffer, false);
+
+            if (MatchFloat32(w, 0xffffffff)) {
+                // It means the end of line.
+                break;
+            }
+
+            weights.emplace_back(w);
+        }
+    } else {
+        auto line = std::string{};
+        if (std::getline(buffer, line)) {
+            // On MacOS, if the numeric is too small, stringstream
+            // can not parse the number to float, but double is ok.
+            double weight;
 
 #ifdef USE_FAST_PARSER
-        auto start_ptr = line.data();
-        auto end_ptr = line.data();
-        auto line_size = line.size();
-        auto finish_ptr = line.data() + line_size;
-        weights.reserve(line_size / 12);
-
-        while (*end_ptr == ' ') {
-            end_ptr++;
-            if (end_ptr == finish_ptr) break;
-        }
-        start_ptr = end_ptr;
-
-        while (start_ptr != finish_ptr) {
-            while (*end_ptr != ' ') {
-                end_ptr++;
-                if (end_ptr == finish_ptr) break;
-            }
-            const auto is_ok = fast_float::from_chars<double>(start_ptr, end_ptr, weight);
-            if (is_ok.ec != std::errc()) {
-                throw "There is non-numeric in parameters";
-            }
-
-            weights.emplace_back(weight);
+            auto start_ptr = line.data();
+            auto end_ptr = line.data();
+            auto line_size = line.size();
+            auto finish_ptr = line.data() + line_size;
+            weights.reserve(line_size / 12);
 
             while (*end_ptr == ' ') {
                 end_ptr++;
                 if (end_ptr == finish_ptr) break;
             }
             start_ptr = end_ptr;
-        }
+
+            while (start_ptr != finish_ptr) {
+                while (*end_ptr != ' ') {
+                    end_ptr++;
+                    if (end_ptr == finish_ptr) break;
+                }
+                const auto is_ok = fast_float::from_chars<double>(start_ptr, end_ptr, weight);
+                if (is_ok.ec != std::errc()) {
+                    throw "There is non-numeric in parameters";
+                }
+
+                weights.emplace_back(weight);
+
+                while (*end_ptr == ' ') {
+                    end_ptr++;
+                    if (end_ptr == finish_ptr) break;
+                }
+                start_ptr = end_ptr;
+            }
 #else 
-        std::stringstream line_buffer(line);
-        while(line_buffer >> weight) {
-            weights.emplace_back(weight);
-        }
+            std::stringstream line_buffer(line);
+            while(line_buffer >> weight) {
+                weights.emplace_back(weight);
+            }
 #endif
+        }
     }
 }
 

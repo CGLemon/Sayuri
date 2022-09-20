@@ -75,6 +75,7 @@ set(SELFPLAY_SOURCES
 
 set(UTILS_SOURCES
     ${UTILS_SOURCES_DIR}/log.cc
+    ${UTILS_SOURCES_DIR}/parse_float.cc
     ${UTILS_SOURCES_DIR}/parser.cc
     ${UTILS_SOURCES_DIR}/random.cc
     ${UTILS_SOURCES_DIR}/time.cc

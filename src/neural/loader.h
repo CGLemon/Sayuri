@@ -11,16 +11,17 @@ class DNNLoder {
 public:
     static DNNLoder& Get();
 
-    void FromFile(std::shared_ptr<DNNWeights> weights, std::string filename) const;
+    void FromFile(std::shared_ptr<DNNWeights> weights, std::string filename);
 
 private:
     using LayerShape = std::vector<int>;
     using NetStruct = std::vector<LayerShape>;
     using NetInfo = std::unordered_map<std::string, std::string>;
 
-    void Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) const;
+    void Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer);
     void ParseInfo(NetInfo &netinfo, std::istream &buffer) const;
     void ParseStruct(NetStruct &netstruct, std::istream &buffer) const;
+    void CkeckFloat(NetInfo &netinfo);
     void DumpInfo(std::shared_ptr<DNNWeights> weights) const;
 
     void FillWeights(NetInfo &netinfo,
@@ -46,4 +47,6 @@ private:
                               const int in_channels,
                               const int out_channels,
                               const int kernel_size) const;
+
+    bool use_binary_;
 };

@@ -12,6 +12,9 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--network", metavar="<string>",
                         help="The network name which we want to transfer.", type=str)
 
+    parser.add_argument("-b", "--binary", default=False,
+                        help="Save the weights as binary.", action="store_true")
+
     args = parser.parse_args()
 
     if args.json == None:
@@ -23,4 +26,8 @@ if __name__ == "__main__":
 
         net = Network(cfg)
         net.load_pt(args.network + ".pt")
-        net.transfer2text(args.network + ".txt")
+        if args.binary:
+            net.transfer_to_bin(args.network + ".bin.txt")
+        else:
+            net.transfer_to_text(args.network + ".txt")
+
