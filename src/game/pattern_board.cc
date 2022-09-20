@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <vector>
 #include <string>
+#include <sstream>
 
 #include "game/simple_board.h"
 #include "pattern/pattern.h"
@@ -147,6 +148,39 @@ bool SimpleBoard::MatchPattern3(const int vtx, const int color) const {
     return false;
 }
 
+std::string SimpleBoard::GetPatternSpat(const int vtx, const int color, const int dist) const {
+    auto out = std::ostringstream{};
+
+    const int cx = GetX(vtx);
+    const int cy = GetY(vtx);
+
+    out << '.'; // center
+
+    for (int i = kPointIndex[2]; i < kPointIndex[dist + 1]; ++i) {
+        const int px = cx + kPointCoords[i].x;
+        const int py = cy + kPointCoords[i].y;
+
+        if (px >= board_size_ ||
+                py >= board_size_ ||
+                px < 0 || py < 0) {
+            out << '#'; // invalid
+        } else {
+            const int state = state_[GetVertex(px,py)];
+            if (state == kEmpty) {
+                out << '.';
+            } else if (color == state) {
+                // my color
+                out << 'X';
+            } else if (color != state) {
+                // opp color
+                out << 'O';
+            }
+        }
+    }
+
+    return out.str();
+}
+
 std::uint64_t SimpleBoard::GetPatternHash(const int vtx, const int color, const int dist) const {
     std::uint64_t hash = PatternHash[0][kInvalid][0];
 
@@ -173,6 +207,35 @@ std::uint64_t SimpleBoard::GetPatternHash(const int vtx, const int color, const 
     }
     return hash;
 }
+
+std::uint64_t SimpleBoard::GetSymmetryPatternHash(const int vtx, const int color, 
+                                                      const int dist, const int symmetry) const {
+    std::uint64_t hash = PatternHash[0][kInvalid][0];
+
+    constexpr int color_map[2][4] = {
+        {kBlack, kWhite, kEmpty, kInvalid},
+        {kWhite, kBlack, kEmpty, kInvalid}
+    };
+
+    const int cx = GetX(vtx);
+    const int cy = GetY(vtx);
+
+    for (int i = kPointIndex[2]; i < kPointIndex[dist + 1]; ++i) {
+        const int px = cx + kPointCoords[i].x;
+        const int py = cy + kPointCoords[i].y;
+        if (px >= board_size_ ||
+                py >= board_size_ ||
+                px < 0 || py < 0) {
+            continue;
+        }
+        const int pvtx = GetVertex(px,py);
+        const int c = color_map[color][state_[pvtx]];
+
+        hash ^= PatternHash[symmetry][c][i];
+    }
+    return hash;
+}
+
 
 std::uint64_t SimpleBoard::GetSurroundPatternHash(std::uint64_t hash,
                                                       const int vtx,
@@ -204,7 +267,15 @@ std::uint64_t SimpleBoard::GetSurroundPatternHash(std::uint64_t hash,
     return hash;
 }
 
-bool SimpleBoard::GetBorderLevel(const int vtx, int &dist) const {
+bool SimpleBoard::GetDummyLevel(const int vtx, std::uint64_t &hash) const {
+    (void) vtx;
+    (void) hash;
+
+    // Todo function...
+    return false;
+}
+
+bool SimpleBoard::GetBorderLevel(const int vtx, std::uint64_t &hash) const {
     if (vtx == kPass) {
         return false;
     }
@@ -221,30 +292,51 @@ bool SimpleBoard::GetBorderLevel(const int vtx, int &dist) const {
         y_dist = board_size_ + 1 - y_dist;
     }
 
-    dist = std::min(x_dist, y_dist) - 1;
-    if (dist >= 5) {
+    const int dist = std::min(x_dist, y_dist);
+    if (dist >= 6) {
         return false;
     }
+
+    hash = 1ULL << 32 | (std::uint64_t)dist;
+
     return true;
 }
 
-bool SimpleBoard::GetDistLevel(const int vtx, int &dist) const {
+bool SimpleBoard::GetDistLevel(const int vtx, std::uint64_t &hash) const {
+    if (vtx == kPass) {
+        return false;
+    }
+
+    int dist;
+
     if (last_move_ == kNullVertex) {
         dist = 0;
-        return true;
-    }
-
-    if (last_move_ == kPass) {
+    } else if (last_move_ == kPass) {
         dist = 1;
-        return true;
+    } else {
+        const int dx = std::abs(GetX(last_move_) - GetX(vtx));
+        const int dy = std::abs(GetY(last_move_) - GetY(vtx));
+
+        dist = dx + dy + std::max(dx, dy);
+        if (dist >= 17) {
+            dist = 17;
+        }
     }
 
-    const int dx = std::abs(GetX(last_move_) - GetX(vtx));
-    const int dy = std::abs(GetY(last_move_) - GetY(vtx));
+    hash = 2ULL << 32 | (std::uint64_t)dist;
 
-    dist = dx + dy + std::max(dx, dy);
-    if (dist >= 17) {
-        dist = 17;
-    }
     return true;
+}
+
+bool SimpleBoard::GetFeatureWrapper(const int f, const int vtx, std::uint64_t &hash) const {
+    switch (f) {
+        case 0: return GetDummyLevel(vtx, hash);
+        case 1: return GetBorderLevel(vtx, hash);
+        case 2: return GetDistLevel(vtx, hash);
+    }
+    return false;
+}
+
+int SimpleBoard::GetMaxFeatures() {
+    return 3;
 }

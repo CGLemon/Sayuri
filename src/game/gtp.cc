@@ -4,6 +4,7 @@
 #include "utils/log.h"
 #include "utils/komi.h"
 #include "utils/gogui_helper.h"
+#include "pattern/mm_trainer.h"
 #include "neural/supervised.h"
 #include "neural/encoder.h"
 
@@ -708,6 +709,24 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         } else {
             out << GtpFail("file name is empty");
         }
+    } else if (const auto res = parser.Find("genpatterns", 0)) {
+        auto sgf_file = std::string{};
+        auto data_file = std::string{};
+
+        if (const auto sgf = parser.GetCommand(1)) {
+            sgf_file = sgf->Get<std::string>();
+        }
+        if (const auto data = parser.GetCommand(2)) {
+            data_file = data->Get<std::string>();
+        }
+
+        if (!sgf_file.empty() && !data_file.empty()) {
+            MmTrainer::Get().Run(sgf_file, data_file);
+            out << GtpSuccess("");
+        } else {
+            out << GtpFail("file name is empty");
+        }
+
     } else if (const auto res = parser.Find("gogui-analyze_commands", 0)) {
         auto gogui_cmds = std::ostringstream{};
 

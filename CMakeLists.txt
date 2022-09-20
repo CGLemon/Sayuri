@@ -57,6 +57,7 @@ set(BOOK_SOURCES
 
 set(PATTERN_SOURCES
     ${PATTERN_SOURCES_DIR}/mm.cc
+    ${PATTERN_SOURCES_DIR}/mm_trainer.cc
     ${PATTERN_SOURCES_DIR}/pattern.cc
     ${PATTERN_SOURCES_DIR}/gammas_dict.cc
     )
