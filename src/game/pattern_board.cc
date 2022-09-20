@@ -303,6 +303,10 @@ bool SimpleBoard::GetBorderLevel(const int vtx, std::uint64_t &hash) const {
 }
 
 bool SimpleBoard::GetDistLevel(const int vtx, std::uint64_t &hash) const {
+    if (vtx == kPass) {
+        return false;
+    }
+
     int dist;
 
     if (last_move_ == kNullVertex) {

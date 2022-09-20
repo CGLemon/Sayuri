@@ -5,6 +5,7 @@
 #include <unordered_map>
 
 #include "game/simple_board.h"
+#include "pattern/pattern.h"
 #include "pattern/mm.h"
 
 class MmTrainer {
@@ -38,4 +39,7 @@ private:
 
     MinorizationMaximization mm_;
     int num_patterns_;
+
+    static constexpr int kMmMaxPatternDist = kMaxPatternDist;
+    static constexpr int kMmMinPatternDist = 3;
 };

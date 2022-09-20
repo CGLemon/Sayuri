@@ -1,5 +1,4 @@
 #include "pattern/mm_trainer.h"
-#include "pattern/pattern.h"
 #include "game/sgf.h"
 #include "game/iterator.h"
 #include "utils/format.h"
@@ -7,6 +6,9 @@
 
 #include <algorithm>
 #include <functional>
+
+constexpr int MmTrainer::kMmMaxPatternDist;
+constexpr int MmTrainer::kMmMinPatternDist;
 
 MmTrainer& MmTrainer::Get() {
     static MmTrainer mm_trainer;
@@ -17,7 +19,7 @@ void MmTrainer::Run(std::string sgf_name, std::string out_name) {
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
 
     num_patterns_ = 0;
-    const int num_features = kMaxPatternDist + Board::GetMaxFeatures() + 1;
+    const int num_features = kMmMaxPatternDist + Board::GetMaxFeatures() + 1;
 
     feature_spat_dicts_.resize(num_features);
     feature_orders_.resize(num_features);
@@ -184,7 +186,8 @@ void MmTrainer::FillPatterns(std::string sgfstring) {
         }
         SimpleBoard& board = game_ite.GetState().board_;
 
-        for (int pattern_dist = 2; pattern_dist <= kMaxPatternDist; ++pattern_dist) {
+        for (int pattern_dist = kMmMinPatternDist;
+                 pattern_dist <= kMmMaxPatternDist; ++pattern_dist) {
 
             FeatureSpatDict &spat_dict = feature_spat_dicts_[pattern_dist];
             FeatureOrder &order = feature_orders_[pattern_dist];
@@ -239,8 +242,8 @@ void MmTrainer::FillPatterns(std::string sgfstring) {
             }
         };
 
-        const auto offset = kMaxPatternDist;
-        for (int i = 1; i <= Board::GetMaxFeatures(); ++i) {
+        const auto offset = kMmMaxPatternDist+1;
+        for (int i = 0; i < Board::GetMaxFeatures(); ++i) {
             ProcessWrapper(board, i, vtx, offset+i);
         }
     } while (game_ite.Next());
@@ -285,7 +288,8 @@ void MmTrainer::FillMmParticipant(std::string sgfstring) {
                 ParticipantGroup::GammasTeam team;
 
                 // gather patterns
-                for (int pattern_dist = 2; pattern_dist <= kMaxPatternDist; ++pattern_dist) {
+                for (int pattern_dist = kMmMinPatternDist;
+                         pattern_dist <= kMmMaxPatternDist; ++pattern_dist) {
                     std::uint64_t mhash;
                     bool matched = PatternMatch(board, pattern_dist,
                                                     pattern_dist, vtx, mhash);
@@ -318,7 +322,7 @@ void MmTrainer::FillMmParticipant(std::string sgfstring) {
                     }
                 };
 
-                const auto offset = kMaxPatternDist+1;
+                const auto offset = kMmMaxPatternDist+1;
                 for (int i = 0; i < Board::GetMaxFeatures(); ++i) {
                     ProcessWrapper(board, i, vtx, offset+i, team);
                 }
@@ -356,8 +360,11 @@ void MmTrainer::SaveResult(std::string filename) {
             std::string spat = spat_dict.find(hash)->second;
             int dist = feature;
 
-            if (dist <= kMaxPatternDist) {
+            if (dist <= kMmMaxPatternDist) {
                 file << gamma << ' ' << dist << ' ' << spat << '\n';
+            } else {
+                // not patterns
+                file << gamma << ' ' << 0 << ' ' << spat << '\n';
             }
         }
     }
