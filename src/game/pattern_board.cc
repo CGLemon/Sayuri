@@ -268,6 +268,9 @@ std::uint64_t SimpleBoard::GetSurroundPatternHash(std::uint64_t hash,
 }
 
 bool SimpleBoard::GetDummyLevel(const int vtx, std::uint64_t &hash) const {
+    (void) vtx;
+    (void) hash;
+
     // Todo function...
     return false;
 }
@@ -322,10 +325,11 @@ bool SimpleBoard::GetDistLevel(const int vtx, std::uint64_t &hash) const {
 }
 
 bool SimpleBoard::GetFeatureWrapper(const int f, const int vtx, std::uint64_t &hash) const {
-    if (f == 0) return GetDummyLevel(vtx, hash);
-    if (f == 1) return GetBorderLevel(vtx, hash);
-    if (f == 2) return GetDistLevel(vtx, hash);
-
+    switch (f) {
+        case 0: return GetDummyLevel(vtx, hash);
+        case 1: return GetBorderLevel(vtx, hash);
+        case 2: return GetDistLevel(vtx, hash);
+    }
     return false;
 }
 
