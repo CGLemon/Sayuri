@@ -90,8 +90,12 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
             // Go to the next node by best polcy.
             next = node->ProbSelectChild();
         } else {
-            // Go to the next node by PUCT algoritim.
-            next = node->PuctSelectChild(color, node == root_node);
+            // Go to the next node by PUCT/UCT algoritim.
+            if (param_->no_dcnn) {
+                next = node->UctSelectChild(color, node == root_node);
+            } else {
+                next = node->PuctSelectChild(color, node == root_node);
+            }
         }
         auto vtx = next->GetVertex();
 

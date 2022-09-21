@@ -48,6 +48,9 @@ public:
     // Select the best PUCT value node.
     Node *PuctSelectChild(const int color, const bool is_root);
 
+    // Select the best UCT value node. For no-dcnn mode.
+    Node *UctSelectChild(const int color, const bool is_root);
+
     void PolicyTargetPruning();
 
     // Randomly select one child by visits. 
@@ -122,7 +125,8 @@ public:
     std::string GetPvString(GameState &state);
 
 private:
-    void ApplyNoDcnnPolicy(GameState &state, const int color,
+    void ApplyNoDcnnPolicy(GameState &state,
+                               const int color,
                                Network::Result &raw_netlist) const;
     void ApplyDirichletNoise(const float alpha);
     void SetPolicy(float p);
@@ -131,7 +135,7 @@ private:
     void LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist);
     void LinkNetOutput(const Network::Result &raw_netlist, const int color);
 
-    float GetUctPolicy(Edge& child, bool noise);
+    float GetSearchPolicy(Edge& child, bool noise);
     float GetScoreUtility(const int color, float factor, float parent_score) const;
     float GetVariance(const float default_var, const int visits) const;
     float GetLcb(const int color) const;

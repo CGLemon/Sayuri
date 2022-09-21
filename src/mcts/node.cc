@@ -229,7 +229,7 @@ void Node::MixRolloutEvals(GameState &state, float factor) {
     auto mcowner = std::vector<float>(num_intersections, 0.f);
 
     float black_rollout_score;
-    float black_rollout_val = GetRolloutWinrate(state, 1, kBlack, mcowner, black_rollout_score);
+    float black_rollout_val = GetBlackRolloutResult(state, mcowner, black_rollout_score);
 
     black_wl_ = factor * black_rollout_val  + (1-factor) * black_wl_;
     black_fs_ = factor * black_rollout_score + (1-factor) * black_fs_;
@@ -479,10 +479,60 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
         }
 
         // PUCT algorithm
-        const float psa = GetUctPolicy(child, noise);
+        const float psa = GetSearchPolicy(child, noise);
         const float puct = cpuct * psa * (numerator / denom);
         const float value = q_value + puct + utility + bonus;
         assert(value > std::numeric_limits<float>::lowest());
+
+        if (value > best_value) {
+            best_value = value;
+            best_node = &child;
+        }
+    }
+
+    Inflate(*best_node);
+    return best_node->Get();
+}
+
+Node *Node::UctSelectChild(const int color, const bool is_root) {
+    assert(HaveChildren());
+    assert(color == color_);
+
+    Edge* best_node = nullptr;
+    float best_value = std::numeric_limits<float>::lowest();
+
+    const float numerator = std::log(float(GetVisits()));
+    const float cpuct = is_root ? GetParameters()->cpuct_root_init : GetParameters()->cpuct_init;
+    const float parent_qvalue = GetEval(color);
+
+    for (auto &child : children_) {
+        const auto node = child.Get();
+        const bool is_pointer = node == nullptr ? false : true;
+
+        // The node was pruned. Skip this time.
+        if (is_pointer && !node->IsActive()) {
+            continue;
+        }
+
+        float q_value = parent_qvalue;
+        int child_visits = 0;
+
+        if (is_pointer) {
+            if (node->IsExpanding()) {
+                q_value = -1.0f; // Give it a bad value.
+            } else if (node->GetVisits() > 0) {
+                q_value = node->GetEval(color);
+            }
+            child_visits = node->GetVisits();
+        }
+
+        // UCT algorithm
+        const float denom = 1.0f + child_visits;
+        const float psa = GetSearchPolicy(child, false);
+        const float euct = cpuct * std::sqrt(psa * numerator / denom);
+        float value = q_value + euct;
+        assert(value > std::numeric_limits<float>::lowest());
+
 
         if (value > best_value) {
             best_value = value;
@@ -1103,7 +1153,7 @@ void Node::ApplyDirichletNoise(const float alpha) {
     }
 }
 
-float Node::GetUctPolicy(Node::Edge& child, bool noise) {
+float Node::GetSearchPolicy(Node::Edge& child, bool noise) {
     auto policy = child.Data()->policy;
     if (noise) {
         const auto vertex = child.Data()->vertex;

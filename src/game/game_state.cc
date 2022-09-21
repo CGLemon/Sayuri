@@ -517,16 +517,31 @@ void GameState::FillRandomMove() {
     PlayMoveFast(select_move, color);
 }
 
+bool GameState::MatchCandidateMove(const int vtx, const int color) const {
+    if (Random<kXoroShiro128Plus>::Get().Roulette<10000>(0.95f)) {
+        return true; // ~5%
+    }
+
+    if (board_.IsCaptureMove(vtx, color) ||
+            board_.MatchPattern3(vtx, color)) {
+        return true;
+    }
+
+    return false;
+}
+
 void GameState::PlayRandomMove(bool heavy) {
     auto candidate_moves = std::vector<int>{};
-    auto legal_moves = std::vector<int>{ kPass };
 
     const auto rand = Random<kXoroShiro128Plus>::Get().Generate();
     const int color = GetToMove();
     const int empty_cnt = board_.GetEmptyCount();
+    int select_move = kPass;
 
     for (int i = 0; i < empty_cnt; ++i) {
-        const auto vtx = board_.GetEmpty(i);
+        const auto offset = (rand + i) % empty_cnt;
+        const auto vtx = board_.GetEmpty(offset);
+
         if (!IsLegalMove(vtx, color)) {
             continue;
         }
@@ -535,27 +550,15 @@ void GameState::PlayRandomMove(bool heavy) {
             continue;
         }
 
-        legal_moves.emplace_back(vtx);
-
-        if (board_.IsCaptureMove(vtx, color)) {
-            candidate_moves.emplace_back(vtx);
-            continue;
+        if (!heavy) {
+            select_move = vtx; // random move
+            break;
         }
 
-        if (heavy) {
-            if (board_.MatchPattern3(vtx, color)) {
-                candidate_moves.emplace_back(vtx);
-                continue;
-            }
+        if ( MatchCandidateMove(vtx, color) ) {
+            select_move = vtx;
+            break;
         }
-    }
-
-    int select_move = kPass;
-
-    if (candidate_moves.empty()) {
-        select_move = legal_moves[rand % legal_moves.size()];
-    } else {
-        select_move = candidate_moves[rand % candidate_moves.size()];
     }
 
     PlayMoveFast(select_move, color);
