@@ -80,7 +80,7 @@ void InitOptionsMap() {
     kOptionsMap["resign_threshold"] << Option::setoption(0.1f, 1.f, 0.f);
 
     kOptionsMap["ci_alpha"] << Option::setoption(1e-5f, 1.f, 0.f);
-    kOptionsMap["lcb_reduction"] << Option::setoption(0.02f, 1.f, 0.f);
+    kOptionsMap["lcb_reduction"] << Option::setoption(0.f, 1.f, 0.f);
     kOptionsMap["fpu_reduction"] << Option::setoption(0.25f);
     kOptionsMap["fpu_root_reduction"] << Option::setoption(0.25f);
     kOptionsMap["cpuct_init"] << Option::setoption(1.9f);
