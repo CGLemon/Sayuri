@@ -108,6 +108,8 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "genbook",
 
+    "genpatterns",
+
     "gogui-analyze_commands",
 
     "gogui-wdl_rating",
