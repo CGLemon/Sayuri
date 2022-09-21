@@ -32,7 +32,7 @@ Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network a
 
 ## Optional Compiling
 
-Accelerate the network by CPU. OpenBlas or Eigen are required. OpenBlas and Eigen are significantly faster than built-in blas. OpenBlas is recommended on MacOS.
+Accelerate the network fowardind pipe by CPU. OpenBlas or Eigen are required. OpenBlas and Eigen are significantly faster than built-in blas. OpenBlas is recommended on MacOS.
 
     $ cmake .. -DBLAS_BACKEND=OPENBLAS
 
@@ -40,11 +40,11 @@ or
 
     $ cmake .. -DBLAS_BACKEND=EIGEN
 
-Accelerate the network by GPUs. CUDA is required. It will be faster than cuDNN in only one batch size case.
+Accelerate the network fowardind pipe by GPUs. CUDA is required.
 
     $ cmake .. -DBLAS_BACKEND=CUDA
 
-Accelerate the network by GPUs. CUDA and cuDNN are required. It will be faster than CUDA-only in multi batch size case.
+Accelerate the network fowardind pipe by GPUs. CUDA and cuDNN are required. It will be faster than CUDA-only in the most cases.
 
     $ cmake .. -DBLAS_BACKEND=CUDNN
 
@@ -58,7 +58,7 @@ Accelerate to load the network file. Fast Float library is required.
 
 You may download the weights file and opening book from my [google drive](https://drive.google.com/drive/folders/1OiVcIwewcIh5nnmR8pBFKMSdkbBYNF2c?usp=sharing). The current weights size is 15 blocks and 192 filters. The opening book is human-like book, trained on profession games. Force Sayuri to play variable opening moves. It is just fun for playing.
 
-* The renorm prefix means that we apply batch renormalization, and the fixup means fixup initialization.
+* The renorm prefix means applying the batch renormalization, and the fixup means fixup initialization.
 
 ## Engine Arguments
 
@@ -125,7 +125,32 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 
 ![gogui-sample01](./img/gogui-sample01.png)
 
+## Analysis Commands
+
+The engine supports the following GTP analysis commands.
+
+  * `analyze, genmove_analyze [player (optional)] [interval (optional)] ...`
+      * The behavior is same as lz-analyze, lz-genmove_analyze 
+
+  * `lz-analyze, lz-genmove_analyze [player (optional)] [interval (optional)] ...`
+      * Extension GTP commands of lz-analyze and lz-genmove_analyze. Support the ```info```, ```move```, ```visits```, ```winrate```, ```prior```, ```lcb```, ```order```, ```pv```,```scoreLead``` labels. More detail to see [KataGo GTP Extensions](https://github.com/lightvector/KataGo/blob/master/docs/GTP_Extensions.md).
+
+
+  * `kata-analyze, kata-genmove_analyze [player (optional)] [interval (optional)] ...`
+      * Subset of kata-analyze and kata-genmove_analyze. Support the ```info```, ```move```, ```visits```, ```winrate```, ```prior```, ```lcb```, ```order```, ```pv```,```scoreLead``` labels. More detail to see [KataGo GTP Extensions](https://github.com/lightvector/KataGo/blob/master/docs/GTP_Extensions.md).
+
+
+  * Optional Keys
+      * All analysis commands support the following keys.
+      * ```interval <int>```: Output a line every this many centiseconds. 
+      * ```ownership True```: Output the predicted final ownership of every point on the board.
+      * ```movesOwnership True```: Output the predicted final ownership of every point on the board for every individual move.
+
 ## Misc
+
+### About this engine
+
+The project was began from the Aug 6, 2019. In the beginning, I just wanted to write a Go Bot that could beat lower level player in the 9x9 board. Although It was easy to train a strong enough bot with deep learning technique, it was hard for me to do that in that time. It is because that I do not major in computer science and I never learn the C++ then before. After few years learning, my C++ skill is much better. Even more, the current version can beat me in any board size.
 
 ### About the ancient technique
 
@@ -149,7 +174,7 @@ I am trying to implement this ancient technique currently. Merge the MM patterns
 * Predict the current side winrate and draw-rate.
 * Predict the current side score lead and death strings.
 * Reuse the sub-tree.
-* Tromp-Taylor rules with forbidding suicide move.
+* Chinese rule.
 
 ## Todo
 
@@ -158,8 +183,6 @@ I am trying to implement this ancient technique currently. Merge the MM patterns
 * Support NHWC format.
 * Support distributed computation.
 * Improve the non-DCNN mode strength.
-* Store the network weights as binary file. (should be finished before next version)
-* Implement the MM training algorithm. (should be finished before next version)
 
 ## Other Linkings
 

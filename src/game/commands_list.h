@@ -84,9 +84,9 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "lz-genmove_analyze",
 
-    "kata-analyze",         // part of kata-analyze
+    "kata-analyze",         // Subset of kata-analyze
 
-    "kata-genmove_analyze", // part of kata-genmove_analyze
+    "kata-genmove_analyze", // Subset of kata-genmove_analyze
 
     "sayuri-analyze",
 
