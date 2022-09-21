@@ -154,13 +154,14 @@ int GameState::TextToVertex(std::string text) const {
 }
 
 int GameState::TextToColor(std::string text) const {
-    if (text == "b" ||
-            text == "B" ||
-            text == "black") {
+    auto lower = text;
+    for (auto & c: lower) {
+        c = std::tolower(c);
+    }
+
+    if (lower == "b" || lower == "black") {
         return kBlack;
-    } else if (text == "w" ||
-                   text == "W" ||
-                   text == "white") {
+    } else if (lower == "w" || lower == "white") {
         return kWhite;
     }
     return kInvalid;

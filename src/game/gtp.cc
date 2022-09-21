@@ -25,16 +25,10 @@ void GtpLoop::Loop() {
             curr_id_ = -1;
 
             // check the command id here
-            if (const auto toke = parser.GetCommand(0)) {
-                auto toke_str = toke->Get<std::string>();
-                bool is_digit = true;
-
-                for (char c : toke_str) {
-                    is_digit &= isdigit(c);
-                }
-                if (is_digit) {
-                    curr_id_ = toke->Get<int>();
-                    parser.RemoveCommand(toke->Index());
+            if (const auto token = parser.GetCommand(0)) {
+                if (token->IsDigit()) {
+                    curr_id_ = token->Get<int>();
+                    parser.RemoveCommand(token->Index());
                 }
             }
 
@@ -363,37 +357,11 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
                                                  "lz-analyze",
                                                  "kata-analyze",
                                                  "sayuri-analyze"}, 0)) {
-        // Parse the option first.
-        Search::OptionTag tag = Search::kNullTag;
-        if (const auto opt = parser.FindNext("ownership")) {
-            if (opt->Lower() == "true") {
-                tag = tag | Search::kOwnership;
-            }
-            parser.RemoveSlice(opt->Index()-1, opt->Index()+1);
-        }
-        if (const auto opt = parser.FindNext("movesOwnership")) {
-            if (opt->Lower() == "true") {
-                tag = tag | Search::kMovesOwnership;
-            }
-            parser.RemoveSlice(opt->Index()-1, opt->Index()+1);
-        }
-
-        // Remove unused options.
-        while (const auto opt = parser.Find({"movesOwnership", "ownership"})) {
-            parser.RemoveCommand(opt->Index());
-        }
-
         auto color = agent_->GetState().GetToMove();
         auto interval = 100; // one second
-        if (const auto input = parser.GetCommand(1)) {
-            auto get_color = agent_->GetState().TextToColor(input->Get<std::string>());
-            if (get_color != kInvalid) {
-                color = get_color;
-            }
-        }
-        if (const auto input = parser.GetCommand(2)) {
-            interval = input->Get<int>();
-        }
+
+        Search::OptionTag tag = ParseAnalysisTag(parser, color, interval);
+
         if (curr_id_ >= 0) {
             DUMPING << "=" << curr_id_ << "\n";
         } else {
@@ -413,37 +381,11 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
                                                  "lz-genmove_analyze",
                                                  "kata-genmove_analyze",
                                                  "sayuri-genmove_analyze"}, 0)) {
-        // Parse the option first.
-        Search::OptionTag tag = Search::kNullTag;
-        if (const auto opt = parser.FindNext("ownership")) {
-            if (opt->Lower() == "true") {
-                tag = tag | Search::kOwnership;
-            }
-            parser.RemoveSlice(opt->Index()-1, opt->Index()+1);
-        }
-        if (const auto opt = parser.FindNext("movesOwnership")) {
-            if (opt->Lower() == "true") {
-                tag = tag | Search::kMovesOwnership;
-            }
-            parser.RemoveSlice(opt->Index()-1, opt->Index()+1);
-        }
-
-        // Remove unused options.
-        while (const auto opt = parser.Find({"movesOwnership", "ownership"})) {
-            parser.RemoveCommand(opt->Index());
-        }
-
         auto color = agent_->GetState().GetToMove();
         auto interval = 100; // one second
-        if (const auto input = parser.GetCommand(1)) {
-            auto get_color = agent_->GetState().TextToColor(input->Get<std::string>());
-            if (get_color != kInvalid) {
-                color = get_color;
-            }
-        }
-        if (const auto input = parser.GetCommand(2)) {
-            interval = input->Get<int>();
-        }
+
+        Search::OptionTag tag = ParseAnalysisTag(parser, color, interval);
+
         if (curr_id_ >= 0) {
             DUMPING << "=" << curr_id_ << "\n";
         } else {
@@ -541,7 +483,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         auto result = agent_->GetSearch().Computation(400, 0, Search::kForced);
         auto vtx_list = std::ostringstream{};
 
-        // TODO: support seki
+        // TODO: support seki option.
 
         if (const auto input = parser.Find("alive", 1)) {
             for (size_t i = 0; i < result.alive_strings.size(); i++) {
@@ -983,4 +925,39 @@ std::string GtpLoop::GtpFail(std::string response) {
     out << prefix << response << suffix;
 
     return out.str();
+}
+
+Search::OptionTag GtpLoop::ParseAnalysisTag(CommandParser &parser,
+                                               int &color, int &interval) {
+    Search::OptionTag tag = Search::kNullTag;
+    std::string maybe_color_str, maybe_interval_str;
+
+    if (const auto black_opt = parser.FindLower({"b", "black"})) {
+        color = kBlack;
+    } else if (const auto white_opt = parser.FindLower({"w", "white"})) {
+        color = kWhite;
+    }
+    if (const auto digit_opt = parser.FindDigit()) {
+        interval = digit_opt->Get<int>();
+    }
+
+    //TODO: Support all leela zero options.
+
+    if (const auto opt = parser.FindNext("interval")) {
+        if (opt->IsDigit()) {
+            interval = opt->Get<int>();
+        }
+    }
+    if (const auto opt = parser.FindNext("ownership")) {
+        if (opt->Lower() == "true") {
+            tag = tag | Search::kOwnership;
+        }
+    }
+    if (const auto opt = parser.FindNext("movesOwnership")) {
+        if (opt->Lower() == "true") {
+            tag = tag | Search::kMovesOwnership;
+        }
+    }
+
+    return tag;
 }

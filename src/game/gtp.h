@@ -87,6 +87,9 @@ private:
     std::string GtpSuccess(std::string);
     std::string GtpFail(std::string);
 
+    Search::OptionTag ParseAnalysisTag(CommandParser &parser,
+                                          int &color, int &interval);
+
     std::string Execute(CommandParser &parser, bool &try_ponder);
 
     std::unique_ptr<Agent> agent_{nullptr};

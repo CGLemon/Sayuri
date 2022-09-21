@@ -182,7 +182,7 @@ void MmTrainer::FillPatterns(std::string sgfstring) {
         // gather patterns
         const auto vtx = game_ite.GetVertex();
         if (vtx == kPass) {
-            break;
+            continue;
         }
         SimpleBoard& board = game_ite.GetState().board_;
 

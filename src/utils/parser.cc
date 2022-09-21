@@ -107,6 +107,40 @@ std::shared_ptr<CommandParser::Reuslt> CommandParser::Find(const std::initialize
     return nullptr;
 }
 
+std::shared_ptr<CommandParser::Reuslt> CommandParser::FindLower(const std::string input, int id) const {
+    if (!Valid()) {
+        return nullptr;
+    }
+
+    auto lower = input;
+    for (auto & c: lower) {
+        c = std::tolower(c);
+    }
+
+    if (id < 0) {
+        for (auto i = size_t{0}; i < GetCount(); ++i) {
+            const auto res = GetCommand((size_t)i);
+            if (res->str_ == lower) {
+                return res;
+            }
+        }
+    } else {
+        if (const auto res = GetCommand((size_t)id)) {
+            return res->str_ == lower ? res : nullptr;
+        }
+    }
+    return nullptr;
+}
+
+std::shared_ptr<CommandParser::Reuslt> CommandParser::FindLower(const std::initializer_list<std::string> inputs, int id) const {
+    for (const auto &in : inputs) {
+        if (const auto res = FindLower(in, id)) {
+            return res;
+        }
+    }
+    return nullptr;
+}
+
 std::shared_ptr<CommandParser::Reuslt> CommandParser::FindNext(const std::string input) const {
     const auto res = Find(input);
 
@@ -120,6 +154,26 @@ std::shared_ptr<CommandParser::Reuslt> CommandParser::FindNext(const std::initia
     for (const auto &in : inputs) {
         if (const auto res = FindNext(in)) {
             return res;
+        }
+    }
+    return nullptr;
+}
+
+std::shared_ptr<CommandParser::Reuslt> CommandParser::FindDigit(int id) const {
+    if (!Valid()) {
+        return nullptr;
+    }
+
+    if (id < 0) {
+        for (auto i = size_t{0}; i < GetCount(); ++i) {
+            const auto res = GetCommand((size_t)i);
+            if (res->IsDigit()) {
+                return res;
+            }
+        }
+    } else {
+        if (const auto res = GetCommand((size_t)id)) {
+            return res->IsDigit() ? res : nullptr;
         }
     }
     return nullptr;
@@ -159,11 +213,20 @@ std::string CommandParser::Reuslt::Upper() const {
 }
 
 std::string CommandParser::Reuslt::Lower() const {
-    auto upper = str_;
-    for (auto & c: upper) {
+    auto lower = str_;
+    for (auto & c: lower) {
         c = std::tolower(c);
     }
-    return upper;
+    return lower;
+}
+
+bool CommandParser::Reuslt::IsDigit() const {
+    bool is_digit = true;
+
+    for (char c : str_) {
+        is_digit &= std::isdigit(c);
+    }
+    return is_digit;
 }
 
 template<>
