@@ -44,7 +44,7 @@ Accelerate the network fowardind pipe by GPUs. CUDA is required.
 
     $ cmake .. -DBLAS_BACKEND=CUDA
 
-Accelerate the network fowardind pipe by GPUs. CUDA and cuDNN are required. It will be faster than CUDA-only in the most cases.
+Accelerate the network fowardind pipe by GPUs. CUDA and cuDNN are both required. It will be faster than CUDA-only in the most cases.
 
     $ cmake .. -DBLAS_BACKEND=CUDNN
 
@@ -133,11 +133,11 @@ The engine supports the following GTP analysis commands.
       * The behavior is same as lz-analyze, lz-genmove_analyze 
 
   * `lz-analyze, lz-genmove_analyze [player (optional)] [interval (optional)] ...`
-      * Extension GTP commands of lz-analyze and lz-genmove_analyze. Support the ```info```, ```move```, ```visits```, ```winrate```, ```prior```, ```lcb```, ```order```, ```pv```,```scoreLead``` labels. More detail to see [KataGo GTP Extensions](https://github.com/lightvector/KataGo/blob/master/docs/GTP_Extensions.md).
+      * Extension GTP commands of lz-analyze and lz-genmove_analyze. Support the ```info```, ```move```, ```visits```, ```winrate```, ```prior```, ```lcb```, ```order```, ```pv```, ```scoreLead``` labels. More detail to see [KataGo GTP Extensions](https://github.com/lightvector/KataGo/blob/master/docs/GTP_Extensions.md).
 
 
   * `kata-analyze, kata-genmove_analyze [player (optional)] [interval (optional)] ...`
-      * Subset of kata-analyze and kata-genmove_analyze. Support the ```info```, ```move```, ```visits```, ```winrate```, ```prior```, ```lcb```, ```order```, ```pv```,```scoreLead``` labels. More detail to see [KataGo GTP Extensions](https://github.com/lightvector/KataGo/blob/master/docs/GTP_Extensions.md).
+      * Subset of kata-analyze and kata-genmove_analyze. Support the ```info```, ```move```, ```visits```, ```winrate```, ```prior```, ```lcb```, ```order```, ```pv```, ```scoreLead``` labels. More detail to see [KataGo GTP Extensions](https://github.com/lightvector/KataGo/blob/master/docs/GTP_Extensions.md).
 
 
   * Optional Keys
@@ -150,11 +150,11 @@ The engine supports the following GTP analysis commands.
 
 ### About this engine
 
-The project was began from the Aug 6, 2019. In the beginning, I just wanted to write a Go Bot that could beat lower level player in the 9x9 board. Although It was easy to train a strong enough bot with deep learning technique, it was hard for me to do that in that time. It is because that I do not major in computer science and I never learn the C++ then before. After few years learning, my C++ skill is much better. Even more, the current version can beat me in any board size.
+The project was began from the Aug 6, 2019. In the beginning, I just wanted to write a Go Bot that could beat lower level player in 9x9. Although It was easy to train a strong enough bot with deep learning technique, it was hard for me to do that in that time. It is because that I do not major in computer science and I never learn the C++ then before. After few years learning, my C++ skill is much better. Even more, the current version can beat me in any board size.
 
 ### About the ancient technique
 
-Before the AlphaGo (2016s), the most state-of-the-art computer go combine the MCTS and MM (Minorization-Maximization). Crazy Stone and Zen use that. Or combining the MCTS and SB (Simulation Balancing). The Eric (predecessor of AlphaGo) and Leela use that. Ray, one of the strongest open source go engine before AlphaGo, writed by Yuki Kobayashi which based on the MM algorithm. I am surprised that it can play the game well wihout much human knowledge and Neural Network. What's more, it can beats high level go player on 9x9 if we provide it enough computation. But thanks for deep learning technique, the computer go engine is significantly stronger than before. Sayuri can beat the Ray on 19x19 with only policy network. This result show the advantage of deep Neural Network.
+Before the AlphaGo (2016s), the most state-of-the-art computer go combine the MCTS and MM (Minorization-Maximization). Crazy Stone and Zen use that. Or combining the MCTS and SB (Simulation Balancing). The Eric (predecessor of AlphaGo) and Leela use that. Ray, one of the strongest open source go engine before AlphaGo, writed by Yuki Kobayashi which based on the MM algorithm. I am surprised that it can play the game well wihout much human knowledge and Neural Network. What's more, it can beats high level go player in 9x9 if we provide it enough computation. But thanks for deep learning technique, the computer go engine is significantly stronger than before. Sayuri can beat the Ray in 19x19 with only policy network. This result show the advantage of deep Neural Network.
 
 Although the Neural Network base engines are more powerful, you may still try some engine with non Neural Network and feel the power of ancient technique. Here is the list.
 
@@ -174,7 +174,7 @@ I am trying to implement this ancient technique currently. Merge the MM patterns
 * Predict the current side winrate and draw-rate.
 * Predict the current side score lead and death strings.
 * Reuse the sub-tree.
-* Chinese rule.
+* Chinese rules with positional superko
 
 ## Todo
 
