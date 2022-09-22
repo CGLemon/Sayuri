@@ -495,13 +495,15 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
 }
 
 Node *Node::UctSelectChild(const int color, const bool is_root) {
+    WaitExpanded();
     assert(HaveChildren());
     assert(color == color_);
 
     Edge* best_node = nullptr;
     float best_value = std::numeric_limits<float>::lowest();
 
-    const float numerator = std::log(float(GetVisits()));
+    const int parentvisits = std::max(1, GetVisits());
+    const float numerator = std::log((float)parentvisits);
     const float cpuct = is_root ? GetParameters()->cpuct_root_init : GetParameters()->cpuct_init;
     const float parent_qvalue = GetEval(color);
 
@@ -515,6 +517,10 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
         }
 
         float q_value = parent_qvalue;
+        if (parentvisits <= 4) {
+            q_value = 0.5f; // draw value
+        }
+
         int child_visits = 0;
 
         if (is_pointer) {
@@ -529,10 +535,10 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
         // UCT algorithm
         const float denom = 1.0f + child_visits;
         const float psa = GetSearchPolicy(child, false);
-        const float euct = cpuct * std::sqrt(psa * numerator / denom);
-        float value = q_value + euct;
+        const float bouns = 0.35f * std::sqrt(1000.f / ((float)parentvisits + 1000.f)) * psa;
+        const float uct = cpuct * std::sqrt(psa * numerator / denom);
+        float value = q_value + uct + bouns;
         assert(value > std::numeric_limits<float>::lowest());
-
 
         if (value > best_value) {
             best_value = value;

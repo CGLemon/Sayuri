@@ -1,5 +1,6 @@
 #include "mcts/rollout.h"
 #include "game/types.h"
+#include "utils/random.h"
 
 #include <cmath>
 
@@ -8,13 +9,22 @@ float GetBlackRolloutResult(GameState &state,
                                 float &black_score) {
     auto fork_state = state;
     const int num_intersections = fork_state.GetNumIntersections();
+    const int board_size = fork_state.GetBoardSize();
+    int num_empties = fork_state.board_.GetEmptyCount();
     int num_curr_moves = 0;
 
-    while (fork_state.GetPasses() < 2 && num_curr_moves++ < 150) {
+    // Adjust number of heavy moves.
+    constexpr int kHeavyBase = 50;
+    int heavy_moves = Random<kXoroShiro128Plus>::Get().RandFix<kHeavyBase>();
+    heavy_moves = heavy_moves * (1.f - (float)num_empties/(num_intersections-board_size));
+
+    while (fork_state.GetPasses() < 2 && num_curr_moves < heavy_moves) {
         fork_state.PlayRandomMove(true);
+        num_curr_moves += 1;
     }
-    while (fork_state.GetPasses() < 2 && num_curr_moves++ < 999) {
+    while (fork_state.GetPasses() < 2 && num_curr_moves < 999) {
         fork_state.PlayRandomMove(false);
+        num_curr_moves += 1;
     }
 
     black_score = 0;
