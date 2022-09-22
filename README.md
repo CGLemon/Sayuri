@@ -79,7 +79,7 @@ Here are some useful arguments which you may need.
 |  --ponder               | None   | Thinking on opponent's time.                   |
 |  --friendly-pass        | None   | Do pass move if the engine wins the game.      |
 |  --reuse-tree           | None   | Will reuse the sub-tree.                       |
-|  --no-dcnn              | None   | Experimental, disable network, very weak.      |
+|  --no-dcnn              | None   | Disable network, very weak.                    |
 |  --help, -h             | None   | Show the more arguments.                       |
     
 
@@ -103,7 +103,7 @@ Example setting 4: use the GPU 0 and GPU 2
 
     $ ./Sayuri -w <weights file> --gpu 0 --gpu 2
 
-Experimental setting: disable network forwarding pipe, very weak
+Example setting 5: disable network forwarding pipe, very weak
 
     $ ./Sayuri -w <weights file> --no-dcnn
 
@@ -150,7 +150,7 @@ The engine supports the following GTP analysis commands.
 
 ### About this engine
 
-The project was began from the Aug 6, 2019. In the beginning, I just wanted to write a Go Bot that could beat lower level player in 9x9. Although It was easy to train a strong enough bot with deep learning technique, it was hard for me to do that in that time. It is because that I do not major in computer science and I never learn the C++ then before. After few years learning, my C++ skill is much better. Even more, the current version can beat me in any board size.
+The project was began from the Aug 6, 2019. In the beginning, I just wanted to write a Go Bot that could beat the low level player in 9x9. Although It was easy to train a strong enough bot with deep learning technique, it was hard for me to do that in that time. It is because that I do not major in computer science and I never learn the C++ before. After few years learning, my C++ skill is much better. Even more, the current version can beat me in any board size.
 
 ### About the ancient technique
 
