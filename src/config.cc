@@ -621,8 +621,8 @@ void ArgsParser::DumpHelper() const {
 
 void ArgsParser::DumpWarning() const {
     bool dump = false;
-    if (GetOption<bool>("rollout") || GetOption<bool>("no_dcnn")) {
-        LOGGING << "--WARNING! the rollout and no_dcnn options are experimental."
+    if (GetOption<bool>("rollout")) {
+        LOGGING << "--WARNING! the rollout option is experimental."
                 << " Propose to disable them.\n";
             ;
         dump = true;
