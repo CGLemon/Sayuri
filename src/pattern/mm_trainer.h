@@ -4,7 +4,7 @@
 #include <vector>
 #include <unordered_map>
 
-#include "game/simple_board.h"
+#include "game/board.h"
 #include "pattern/pattern.h"
 #include "pattern/mm.h"
 
@@ -21,7 +21,7 @@ private:
     using FeatureOrderDict = std::unordered_map<std::uint64_t, int>;
     using FeatureConuter = std::vector<int>;
 
-    bool PatternMatch(const SimpleBoard& board,
+    bool PatternMatch(const Board& board,
                           int feature, int dist,
                           int vertex, std::uint64_t &mhash) const;
 

@@ -3,7 +3,7 @@
 #include <string>
 #include <sstream>
 
-#include "game/simple_board.h"
+#include "game/board.h"
 #include "pattern/pattern.h"
 
 const
@@ -71,7 +71,7 @@ kPattern3Src =
 };
 
 //Hard-coded patterns, a bit nasty.
-bool SimpleBoard::MatchPattern3(const int vtx, const int color) const {
+bool Board::MatchPattern3(const int vtx, const int color) const {
     int size = letter_box_size_;
     int raw[3][3];
 
@@ -87,14 +87,14 @@ bool SimpleBoard::MatchPattern3(const int vtx, const int color) const {
     raw[2][1] = state_[vtx-size];
     raw[2][2] = state_[vtx-size+1];
 
-    constexpr int color_map[2][4] = {
+    constexpr int kColorMap[2][4] = {
         {kBlack, kWhite, kEmpty, kInvalid},
         {kWhite, kBlack, kEmpty, kInvalid}
     };
 
     for (int y=0; y<3; ++y) {
         for (int x=0; x<3; ++x) {
-            raw[y][x] = color_map[color][raw[y][x]];
+            raw[y][x] = kColorMap[color][raw[y][x]];
         }
     }
 
@@ -148,7 +148,7 @@ bool SimpleBoard::MatchPattern3(const int vtx, const int color) const {
     return false;
 }
 
-std::string SimpleBoard::GetPatternSpat(const int vtx, const int color, const int dist) const {
+std::string Board::GetPatternSpat(const int vtx, const int color, const int dist) const {
     auto out = std::ostringstream{};
 
     const int cx = GetX(vtx);
@@ -181,10 +181,10 @@ std::string SimpleBoard::GetPatternSpat(const int vtx, const int color, const in
     return out.str();
 }
 
-std::uint64_t SimpleBoard::GetPatternHash(const int vtx, const int color, const int dist) const {
+std::uint64_t Board::GetPatternHash(const int vtx, const int color, const int dist) const {
     std::uint64_t hash = PatternHash[0][kInvalid][0];
 
-    constexpr int color_map[2][4] = {
+    constexpr int kColorMap[2][4] = {
         {kBlack, kWhite, kEmpty, kInvalid},
         {kWhite, kBlack, kEmpty, kInvalid}
     };
@@ -201,18 +201,18 @@ std::uint64_t SimpleBoard::GetPatternHash(const int vtx, const int color, const 
             continue;
         }
         const int pvtx = GetVertex(px,py);
-        const int c = color_map[color][state_[pvtx]];
+        const int c = kColorMap[color][state_[pvtx]];
 
         hash ^= PatternHash[0][c][i];
     }
     return hash;
 }
 
-std::uint64_t SimpleBoard::GetSymmetryPatternHash(const int vtx, const int color, 
+std::uint64_t Board::GetSymmetryPatternHash(const int vtx, const int color, 
                                                       const int dist, const int symmetry) const {
     std::uint64_t hash = PatternHash[0][kInvalid][0];
 
-    constexpr int color_map[2][4] = {
+    constexpr int kColorMap[2][4] = {
         {kBlack, kWhite, kEmpty, kInvalid},
         {kWhite, kBlack, kEmpty, kInvalid}
     };
@@ -229,7 +229,7 @@ std::uint64_t SimpleBoard::GetSymmetryPatternHash(const int vtx, const int color
             continue;
         }
         const int pvtx = GetVertex(px,py);
-        const int c = color_map[color][state_[pvtx]];
+        const int c = kColorMap[color][state_[pvtx]];
 
         hash ^= PatternHash[symmetry][c][i];
     }
@@ -237,14 +237,14 @@ std::uint64_t SimpleBoard::GetSymmetryPatternHash(const int vtx, const int color
 }
 
 
-std::uint64_t SimpleBoard::GetSurroundPatternHash(std::uint64_t hash,
+std::uint64_t Board::GetSurroundPatternHash(std::uint64_t hash,
                                                       const int vtx,
                                                       const int color,
                                                       const int dist) const {
     if (dist == 2) {
         hash = PatternHash[0][kInvalid][0];
     }
-    constexpr int color_map[2][4] = {
+    constexpr int kColorMap[2][4] = {
         {kBlack, kWhite, kEmpty, kInvalid},
         {kWhite, kBlack, kEmpty, kInvalid}
     };
@@ -260,14 +260,14 @@ std::uint64_t SimpleBoard::GetSurroundPatternHash(std::uint64_t hash,
             continue;
         }
         const int pvtx = GetVertex(px,py);
-        const int c = color_map[color][state_[pvtx]];
+        const int c = kColorMap[color][state_[pvtx]];
 
         hash ^= PatternHash[0][c][i];
     }
     return hash;
 }
 
-bool SimpleBoard::GetDummyLevel(const int vtx, std::uint64_t &hash) const {
+bool Board::GetDummyLevel(const int vtx, std::uint64_t &hash) const {
     (void) vtx;
     (void) hash;
 
@@ -275,7 +275,7 @@ bool SimpleBoard::GetDummyLevel(const int vtx, std::uint64_t &hash) const {
     return false;
 }
 
-bool SimpleBoard::GetBorderLevel(const int vtx, std::uint64_t &hash) const {
+bool Board::GetBorderLevel(const int vtx, std::uint64_t &hash) const {
     if (vtx == kPass) {
         return false;
     }
@@ -302,7 +302,7 @@ bool SimpleBoard::GetBorderLevel(const int vtx, std::uint64_t &hash) const {
     return true;
 }
 
-bool SimpleBoard::GetDistLevel(const int vtx, std::uint64_t &hash) const {
+bool Board::GetDistLevel(const int vtx, std::uint64_t &hash) const {
     if (vtx == kPass) {
         return false;
     }
@@ -328,7 +328,7 @@ bool SimpleBoard::GetDistLevel(const int vtx, std::uint64_t &hash) const {
     return true;
 }
 
-bool SimpleBoard::GetFeatureWrapper(const int f, const int vtx, std::uint64_t &hash) const {
+bool Board::GetFeatureWrapper(const int f, const int vtx, std::uint64_t &hash) const {
     switch (f) {
         case 0: return GetDummyLevel(vtx, hash);
         case 1: return GetBorderLevel(vtx, hash);
@@ -337,6 +337,6 @@ bool SimpleBoard::GetFeatureWrapper(const int f, const int vtx, std::uint64_t &h
     return false;
 }
 
-int SimpleBoard::GetMaxFeatures() {
+int Board::GetMaxFeatures() {
     return 3;
 }

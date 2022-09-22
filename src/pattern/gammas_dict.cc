@@ -61,14 +61,14 @@ void GammasDict::Initialize(std::string filename) {
             for (int symm = 0; symm < 8; ++symm) {
                 for (int c = 0; c < 2; ++c) {
                     std::uint64_t hash = PatternHash[0][kInvalid][0];
-                    constexpr int color_map[2][4] = {
+                    constexpr int kColorMap[2][4] = {
                         {kBlack, kWhite, kEmpty, kInvalid},
                         {kWhite, kBlack, kEmpty, kInvalid}
                     };
 
                     for (int i = kPointIndex[2]; i < kPointIndex[dist + 1]; ++i) {
                         int color = CharToColor(spat[i]);
-                        color = color_map[c][color];
+                        color = kColorMap[c][color];
 
                         if (color != kInvalid) {
                              hash ^= PatternHash[symm][color][i];

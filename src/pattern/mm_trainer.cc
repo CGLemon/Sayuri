@@ -135,7 +135,7 @@ void MmTrainer::FilterPatterns() {
     std::swap(filtered_feature_counters, feature_counters_);
 }
 
-bool MmTrainer::PatternMatch(const SimpleBoard& board,
+bool MmTrainer::PatternMatch(const Board& board,
                                  int feature, int dist,
                                  int vertex, std::uint64_t &mhash) const {
     const FeatureSpatDict &spat_dict = feature_spat_dicts_[feature];
@@ -184,7 +184,7 @@ void MmTrainer::FillPatterns(std::string sgfstring) {
         if (vtx == kPass) {
             continue;
         }
-        SimpleBoard& board = game_ite.GetState().board_;
+        Board& board = game_ite.GetState().board_;
 
         for (int pattern_dist = kMmMinPatternDist;
                  pattern_dist <= kMmMaxPatternDist; ++pattern_dist) {
@@ -216,7 +216,7 @@ void MmTrainer::FillPatterns(std::string sgfstring) {
         }
 
         // gather board features
-        const auto ProcessWrapper = [this](SimpleBoard &board,
+        const auto ProcessWrapper = [this](Board &board,
                                                int bf, int mvtx, int feature_idx) {
             std::uint64_t mhash;
             if (board.GetFeatureWrapper(bf, mvtx, mhash)) {
@@ -279,7 +279,7 @@ void MmTrainer::FillMmParticipant(std::string sgfstring) {
         }
 
         auto color = game_ite.GetToMove();
-        SimpleBoard& board = game_ite.GetState().board_;
+        Board& board = game_ite.GetState().board_;
 
         const int empty_cnt = board.GetEmptyCount();
         for (int i = 0; i < empty_cnt; ++i) {
@@ -304,7 +304,7 @@ void MmTrainer::FillMmParticipant(std::string sgfstring) {
                 }
 
                 // gather board features
-                const auto ProcessWrapper = [this](SimpleBoard &board,
+                const auto ProcessWrapper = [this](Board &board,
                                                        int bf, int mvtx, int feature_idx,
                                                        ParticipantGroup::GammasTeam &team) {
                     std::uint64_t mhash;
