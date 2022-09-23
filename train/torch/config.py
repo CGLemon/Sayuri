@@ -40,6 +40,7 @@ def parse_training_config(json_data, config):
     config.train_dir = train.get("TrainDirectory", None)
     config.store_path = train.get("StorePath", None)
     config.batchsize = train.get("BatchSize", 512)
+    config.buffersize = train.get("BufferSize", 16 * 1000)
     config.macrofactor = train.get("MacroFactor", 1)
     config.macrobatchsize = config.batchsize // config.macrofactor
 
@@ -60,6 +61,8 @@ def parse_training_config(json_data, config):
 
 def parse_nn_config(json_data, config):
     network = json_data.get("NeuralNetwork", None)
+
+    config.boardsize = network.get("MaxBoardSize", 19)
 
     config.nntype = network.get("NNType", None)
     config.input_channels = network.get("InputChannels", None)
