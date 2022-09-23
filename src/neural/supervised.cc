@@ -80,7 +80,7 @@ void Supervised::FromSgfs(bool general,
                 file_closed = false;
             }
 
-            constexpr int kChopPerGames = 200;
+            constexpr int kGamesPerChunk = 50;
 
             // Parse the SGF string.
             bool success = false;
@@ -93,7 +93,7 @@ void Supervised::FromSgfs(bool general,
             if (success) {
                 games += 1;
                 tot_games_.fetch_add(1, std::memory_order_relaxed);
-                if (games % kChopPerGames == 0) {
+                if (games % kGamesPerChunk == 0) {
                     if (!file_closed) {
                         file.close();
                         file_closed = true;

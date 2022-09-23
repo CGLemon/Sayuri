@@ -62,6 +62,8 @@ void SelfPlayPipe::Loop() {
         CreateDirectory(data_directory_);
     }
 
+    constexpr int kGamesPerChunk = 50;
+
     for (int g = 0; g < engine_.GetParallelGames(); ++g) {
         workers_.emplace_back(
             [this, g]() -> void {
@@ -74,7 +76,7 @@ void SelfPlayPipe::Loop() {
                     auto data_filename = ConnectPath(data_directory_,
                                                          filename_hash_ +
                                                              "_" +
-                                                             std::to_string(curr_games/100) + // chop per 100 games
+                                                             std::to_string(curr_games/kGamesPerChunk)
                                                              ".dat");
                     engine_.SaveTrainingData(data_filename, g);
                     engine_.SaveSgf(sgf_filename_, g);
