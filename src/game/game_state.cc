@@ -518,7 +518,7 @@ void GameState::FillRandomMove() {
 }
 
 bool GameState::MatchCandidateMove(const int vtx, const int color) const {
-    if (Random<kXoroShiro128Plus>::Get().Roulette<10000>(0.95f)) {
+    if (Random<kXoroShiro128Plus>::Get().Roulette<10000>(0.9f)) {
         return true; // ~5%
     }
 
@@ -537,6 +537,7 @@ void GameState::PlayRandomMove(bool heavy) {
     const int color = GetToMove();
     const int empty_cnt = board_.GetEmptyCount();
     int select_move = kPass;
+    bool first = true;
 
     for (int i = 0; i < empty_cnt; ++i) {
         const auto offset = (rand + i) % empty_cnt;
@@ -550,12 +551,16 @@ void GameState::PlayRandomMove(bool heavy) {
             continue;
         }
 
-        if (!heavy) {
+        if (first) {
             select_move = vtx; // random move
+            first = false;
+        }
+
+        if (!heavy) {
             break;
         }
 
-        if ( MatchCandidateMove(vtx, color) ) {
+        if (MatchCandidateMove(vtx, color)) {
             select_move = vtx;
             break;
         }

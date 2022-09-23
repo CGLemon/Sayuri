@@ -14,7 +14,7 @@ float GetBlackRolloutResult(GameState &state,
     int num_curr_moves = 0;
 
     // Adjust number of heavy moves.
-    constexpr int kHeavyBase = 50;
+    constexpr int kHeavyBase = 80;
     int heavy_moves = Random<kXoroShiro128Plus>::Get().RandFix<kHeavyBase>();
     heavy_moves = heavy_moves * (1.f - (float)num_empties/(num_intersections-board_size));
 
@@ -22,7 +22,7 @@ float GetBlackRolloutResult(GameState &state,
         fork_state.PlayRandomMove(true);
         num_curr_moves += 1;
     }
-    while (fork_state.GetPasses() < 2 && num_curr_moves < 999) {
+    while (fork_state.GetPasses() < 2 && num_curr_moves < 9999) {
         fork_state.PlayRandomMove(false);
         num_curr_moves += 1;
     }

@@ -18,4 +18,3 @@ private:
     void DumpHelper() const;
     void DumpWarning() const;
 };
-

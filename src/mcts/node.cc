@@ -1,10 +1,12 @@
 #include "mcts/node.h"
 #include "mcts/lcb.h"
+#include "mcts/progressive_widening.h"
 #include "mcts/rollout.h"
 #include "utils/atomic.h"
 #include "utils/random.h"
 #include "utils/format.h"
 #include "game/symmetry.h"
+
 
 #include <cassert>
 #include <algorithm>
@@ -507,7 +509,14 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
     const float cpuct = is_root ? GetParameters()->cpuct_root_init : GetParameters()->cpuct_init;
     const float parent_qvalue = GetEval(color);
 
+    const int width = std::max(ComputeWidth(parentvisits), 1);
+    int i = 0;
+
     for (auto &child : children_) {
+        if (++i > width) {
+            break;
+        }
+
         const auto node = child.Get();
         const bool is_pointer = node == nullptr ? false : true;
 
@@ -535,8 +544,8 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
         // UCT algorithm
         const float denom = 1.0f + child_visits;
         const float psa = GetSearchPolicy(child, false);
-        const float bouns = 0.35f * std::sqrt(1000.f / ((float)parentvisits + 1000.f)) * psa;
-        const float uct = cpuct * std::sqrt(psa * numerator / denom);
+        const float bouns = 0.15f * std::sqrt(1000.f / ((float)parentvisits + 1000.f)) * psa;
+        const float uct = cpuct * std::sqrt(numerator / denom);
         float value = q_value + uct + bouns;
         assert(value > std::numeric_limits<float>::lowest());
 
