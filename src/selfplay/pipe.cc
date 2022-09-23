@@ -76,7 +76,7 @@ void SelfPlayPipe::Loop() {
                     auto data_filename = ConnectPath(data_directory_,
                                                          filename_hash_ +
                                                              "_" +
-                                                             std::to_string(curr_games/kGamesPerChunk)
+                                                             std::to_string(curr_games/kGamesPerChunk) + 
                                                              ".dat");
                     engine_.SaveTrainingData(data_filename, g);
                     engine_.SaveSgf(sgf_filename_, g);

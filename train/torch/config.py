@@ -4,7 +4,6 @@ import torch
 
 class Config:
     def __init__(self):
-        # Training options
         self.num_workers = None
         self.use_gpu = None
         self.batchsize = None
@@ -18,53 +17,40 @@ class Config:
         self.max_steps = None
         self.fixup_batch_norm = None
         self.store_path = None
-
-        # Adjustable values
+        self.down_sample_rate = None
         self.stack = []
         self.residual_channels = None
         self.policy_extract = None
         self.value_extract = None
         self.optimizer = None
-
-        # Fixed values but flexible
         self.nntype = None
         self.input_channels = None
         self.input_features = None
-
         self.boardsize = None
         self.value_misc = None
 
 def parse_training_config(json_data, config):
-    # We assume that every value is valid.
-    train = json_data["Train"]
+    train = json_data.get("Train", None)
 
-    config.optimizer = train["Optimizer"]
-    config.use_gpu = train["UseGPU"]
-    config.weight_decay = train["WeightDecay"]
-    config.lr_schedule = train["LearningRateSchedule"]
+    config.optimizer = train.get("Optimizer", "SGD")
+    config.use_gpu = train.get("UseGPU", None)
+    config.weight_decay = train.get("WeightDecay", 1e-4)
+    config.lr_schedule = train.get("LearningRateSchedule", [[0, 0.2]])
 
-    config.train_dir = train["TrainDirectory"]
-    config.batchsize = train["BatchSize"]
-    config.buffersize = train["BufferSize"]
-    config.macrofactor = train["MacroFactor"]
+    config.train_dir = train.get("TrainDirectory", None)
+    config.store_path = train.get("StorePath", None)
+    config.batchsize = train.get("BatchSize", 512)
+    config.macrofactor = train.get("MacroFactor", 1)
     config.macrobatchsize = config.batchsize // config.macrofactor
 
-    config.num_workers = train["Workers"]
-    config.steps_per_epoch = train["StepsPerEpoch"]
-    config.max_steps = train["MaxStepsPerRunning"]
-    config.fixup_batch_norm = train["FixUpBatchNorm"]
-    config.store_path = train["StorePath"]
+    config.num_workers = train.get("Workers", max(os.cpu_count()-2, 1))
+    config.steps_per_epoch = train.get("StepsPerEpoch", 1000)
+    config.max_steps = train.get("MaxStepsPerRunning", 16384000)
+    config.fixup_batch_norm = train.get("FixUpBatchNorm", False)
+    config.down_sample_rate = train.get("DownSampleRate", 16)
 
-    assert config.max_steps != None, ""
-
-    if config.steps_per_epoch == None:
-        config.steps_per_epoch = 500
-
-    if config.weight_decay == None:
-        config.weight_decay = 1e-4
-
-    if config.num_workers == None:
-        config.num_workers = os.cpu_count()
+    assert config.train_dir != None, ""
+    assert config.store_path != None, ""
 
     if config.use_gpu == None:
         if torch.cuda.is_available():
@@ -73,17 +59,14 @@ def parse_training_config(json_data, config):
     return config
 
 def parse_nn_config(json_data, config):
-    # We assume that every value is valid.
-    network = json_data["NeuralNetwork"]
+    network = json_data.get("NeuralNetwork", None)
 
-    config.boardsize = network["MaxBoardSize"]
-    
-    config.nntype = network["NNType"]
-    config.input_channels = network["InputChannels"]
-    config.residual_channels = network["ResidualChannels"]
-    config.policy_extract = network["PolicyExtract"]
-    config.value_extract = network["ValueExtract"]
-    config.value_misc = network["ValueMisc"]
+    config.nntype = network.get("NNType", None)
+    config.input_channels = network.get("InputChannels", None)
+    config.residual_channels = network.get("ResidualChannels", None)
+    config.policy_extract = network.get("PolicyExtract", None)
+    config.value_extract = network.get("ValueExtract", None)
+    config.value_misc = network.get("ValueMisc", None)
 
     assert config.input_channels != None, ""
     assert config.residual_channels != None, ""
@@ -91,7 +74,7 @@ def parse_nn_config(json_data, config):
     assert config.value_extract != None, ""
     assert config.value_misc != None, ""
 
-    stack = network["Stack"]
+    stack = network.get("Stack", None)
     for s in stack:
         config.stack.append(s)
     return config
@@ -104,7 +87,7 @@ def json_loader(filename):
 def gather_config(filename):
     cfg = Config()
     if filename != None:
-        d = json_loader(filename)
-        cfg = parse_training_config(d, cfg)
-        cfg = parse_nn_config(d, cfg)
+        data = json_loader(filename)
+        cfg = parse_training_config(data, cfg)
+        cfg = parse_nn_config(data, cfg)
     return cfg

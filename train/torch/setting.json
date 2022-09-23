@@ -22,6 +22,7 @@
         "Workers": 4,
         "BatchSize": 256,
         "BufferSize" : 16384,
+        "DownSampleRate": 4,
         "MacroFactor": 1,
 
         "LearningRateSchedule": [

@@ -38,10 +38,10 @@ class StreamLoader:
         return stream
 
 class StreamParser:
-    def __init__(self):
+    def __init__(self, down_sample_rate):
         # Use a random sample input data read. This helps improve the spread of
         # games in the shuffle buffer.
-        self.down_sample_rate = 16
+        self.down_sample_rate = down_sample_rate
 
     def func(self, stream):
         if stream is None:
@@ -194,11 +194,12 @@ class TrainingPipe():
         self.num_workers = cfg.num_workers
         self.train_dir = cfg.train_dir
 
-        # Store the last model per epoch. It also define the training data
-        # buffer size.
+        # Store the last model per epoch.
         self.steps_per_epoch =  cfg.steps_per_epoch
 
+        # Lazy loader options.
         self.buffer_size = self.cfg.buffersize
+        self.down_sample_rate = cfg.down_sample_rate
 
         # Max steps per training task.
         self.max_steps =  cfg.max_steps
@@ -328,7 +329,7 @@ class TrainingPipe():
 
     def __init_loader(self):
         self.__stream_loader = StreamLoader()
-        self.__stream_parser = StreamParser()
+        self.__stream_parser = StreamParser(self.down_sample_rate)
         self.__batch_gen = BatchGenerator(self.cfg.boardsize, self.cfg.input_channels)
 
         self.lazy_loader = LazyLoader(
