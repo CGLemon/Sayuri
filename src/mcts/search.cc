@@ -511,7 +511,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
 
     // remove multiple mentions of the same string
     // unique reorders and returns new iterator, erase actually deletes
-    std::sort(begin(alive), end(alive));
+    std::sort(std::begin(alive), std::end(alive));
     alive.erase(std::unique(std::begin(alive), std::end(alive)),
                 std::end(alive));
 

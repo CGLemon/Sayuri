@@ -25,7 +25,7 @@ public:
     void SetToMove(int color);
 
     // Set last move.
-    void SetLastMove(int vertex);
+    void SetLastMove(int first_vtx, int second_vtx);
 
     // Get the current board size.
     int GetBoardSize() const;
@@ -178,6 +178,8 @@ public:
 
     std::string GetMoveTypesString(int vtx, int color) const;
 
+    void GenerateCandidateMoves(std::vector<int> &moves_set, int color) const;
+
     // For patterns...
     bool MatchPattern3(const int vtx, const int color) const;
     std::string GetPatternSpat(const int vtx, const int color, const int dist) const;
@@ -255,6 +257,9 @@ private:
 
     // The last played move.
     int last_move_; 
+
+    // My last played move.
+    int last_move_2_; 
 
     // Can't play this move if the last move is ko move.
     int ko_move_;

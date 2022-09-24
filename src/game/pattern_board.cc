@@ -125,8 +125,8 @@ bool Board::MatchPattern3(const int vtx, const int color) const {
                     char m = pat3[y][x];
 
                     switch (m) {
-                        case 'X': if (s != kInvalid)              { match = false; } break;
-                        case 'O': if (s != kBlack)                { match = false; } break;
+                        case 'X': if (s != kBlack)                { match = false; } break;
+                        case 'O': if (s != kWhite)                { match = false; } break;
                         case 'x': if (s != kWhite && s != kEmpty) { match = false; } break;
                         case 'o': if (s != kBlack && s != kEmpty) { match = false; } break;
                         case '.': if (s != kEmpty)                { match = false; } break;

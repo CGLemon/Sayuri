@@ -36,10 +36,10 @@ public:
     }
 
     template<std::uint32_t Precision>
-    bool Roulette(float threshold) {
+    bool Roulette(float prob) {
         const int res = RandFix<Precision>();
-        const int thres = (float)Precision * threshold;
-        return thres < res;
+        const int iprob = (float)Precision * prob;
+        return iprob >= res;
     }
 
     // The interface for STL.

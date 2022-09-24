@@ -46,7 +46,7 @@ bool GameState::AppendMove(const int vtx, const int color) {
     if (IsLegalMove(vtx, color)) {
         board_.PlayMoveAssumeLegal(vtx, color);
         board_.SetToMove(kBlack);
-        board_.SetLastMove(kNullVertex);
+        board_.SetLastMove(kNullVertex, kNullVertex);
 
         move_number_ = 0;
         ko_hash_history_.clear();
@@ -517,53 +517,62 @@ void GameState::FillRandomMove() {
     PlayMoveFast(select_move, color);
 }
 
-bool GameState::MatchCandidateMove(const int vtx, const int color) const {
-    if (Random<kXoroShiro128Plus>::Get().Roulette<10000>(0.9f)) {
-        return true; // ~10%
-    }
-
-    if (board_.IsCaptureMove(vtx, color) ||
-            board_.MatchPattern3(vtx, color)) {
-        return true;
-    }
-
-    return false;
-}
-
-void GameState::PlayRandomMove(bool heavy) {
+void GameState::PlayRandomMove() {
     auto candidate_moves = std::vector<int>{};
-
-    const auto rand = Random<kXoroShiro128Plus>::Get().Generate();
     const int color = GetToMove();
-    const int empty_cnt = board_.GetEmptyCount();
-    int select_move = kPass;
-    bool first = true;
 
+    board_.GenerateCandidateMoves(candidate_moves, color);
+    std::shuffle(std::begin(candidate_moves),
+                     std::end(candidate_moves),
+                     Random<kXoroShiro128Plus>::Get());
+
+    //TODO: Use the switch-case to wrap it.
+
+    if (Random<kXoroShiro128Plus>::Get().Roulette<10000>(0.90f)) {
+        // ~90%: capture
+        for (const auto vtx : candidate_moves) {
+            if (board_.IsCaptureMove(vtx, color)) {
+                PlayMoveFast(vtx, color);
+                return;
+            }
+        }
+    }
+    if (Random<kXoroShiro128Plus>::Get().Roulette<10000>(0.95f)) {
+        // ~95%: pattern3
+        for (const auto vtx : candidate_moves) {
+            if (board_.MatchPattern3(vtx, color)) {
+                PlayMoveFast(vtx, color);
+                return;
+            }
+        }
+    }
+    // if (Random<kXoroShiro128Plus>::Get().Roulette<10000>(0.90f)) {
+    //     // ~90%: atari
+    //     for (const auto vtx : candidate_moves) {
+    //         if (board_.IsAtariMove(vtx, color) &&
+    //                 !board_.IsSelfAtariMove(vtx, color)) {
+    //             PlayMoveFast(vtx, color);
+    //             return;
+    //         }
+    //     }
+    // }
+
+    int select_move = kPass;
+    const auto rand = Random<kXoroShiro128Plus>::Get().Generate();
+    const int empty_cnt = board_.GetEmptyCount();
+
+    // random
     for (int i = 0; i < empty_cnt; ++i) {
         const auto offset = (rand + i) % empty_cnt;
         const auto vtx = board_.GetEmpty(offset);
 
-        if (!IsLegalMove(vtx, color)) {
+        if (!IsLegalMove(vtx, color) || 
+                board_.IsRealEye(vtx, color)) {
             continue;
         }
 
-        if (board_.IsRealEye(vtx, color)) {
-            continue;
-        }
-
-        if (first) {
-            select_move = vtx; // random move
-            first = false;
-        }
-
-        if (!heavy) {
-            break;
-        }
-
-        if (MatchCandidateMove(vtx, color)) {
-            select_move = vtx;
-            break;
-        }
+        select_move = vtx;
+        break;
     }
 
     PlayMoveFast(select_move, color);

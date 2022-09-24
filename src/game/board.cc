@@ -54,6 +54,7 @@ void Board::ResetBasicData() {
 
     ko_move_ = kNullVertex;
     last_move_ = kNullVertex;
+    last_move_2_ = kNullVertex;
     to_move_ = kBlack;
     passes_ = 0;
 
@@ -245,8 +246,9 @@ void Board::SetBoardSize(int boardsize) {
     num_intersections_ = board_size_ * board_size_;
 }
 
-void Board::SetLastMove(int vertex) {
-    last_move_ = vertex;
+void Board::SetLastMove(int first_vtx, int second_vtx) {
+    last_move_ = first_vtx;
+    last_move_2_ = second_vtx;
 }
 
 void Board::RemoveMarkedStrings(std::vector<int> &marked) {
@@ -1491,6 +1493,7 @@ void Board::PlayMoveAssumeLegal(const int vtx, const int color) {
     if (ko_move_ != old_ko_move) {
         UpdateZobristKo(ko_move_, old_ko_move);
     }
+    last_move_2_ = last_move_;
     last_move_ = vtx;
 
     ExchangeToMove();
@@ -2136,6 +2139,42 @@ std::vector<int> Board::GatherVertices(std::vector<bool> &buf) const {
     }
 
     return result;
+}
+
+void Board::GenerateCandidateMoves(std::vector<int> &moves_set, int color) const {
+    moves_set.clear();
+    auto buf = std::vector<int>{};
+
+    for (const auto vtx : {last_move_, last_move_2_}) {
+        if (vtx != kPass && vtx != kNullVertex) {
+            for (int k = 0; k < 8; ++k) {
+                const auto avtx = vtx + directions_[k];
+
+                if (state_[avtx] == kEmpty) {
+                    buf.emplace_back(avtx);
+                }
+            }
+            if (state_[vtx] == kBlack || state_[vtx] == kWhite) {
+                if (GetLiberties(vtx) <= 3) {
+                    FindStringLiberties(vtx, buf);
+                }
+            }
+        }
+    }
+
+    // Remove the repetition vertices.
+    std::sort(std::begin(buf), std::end(buf));
+    buf.erase(std::unique(std::begin(buf), std::end(buf)),
+                  std::end(buf));
+
+    for (const int vtx : buf) {
+        if (vtx != last_move_ && vtx != last_move_2_ &&
+                IsLegalMove(vtx, color) && !IsRealEye(vtx, color)) {
+            moves_set.emplace_back(vtx);
+        }
+    }
+
+    // TODO: Append others heuristic moves.
 }
 
 std::string Board::GetMoveTypesString(int vtx, int color) const {
