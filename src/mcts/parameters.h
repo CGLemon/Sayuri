@@ -52,6 +52,7 @@ public:
         no_dcnn = GetOption<bool>("no_dcnn");
         first_pass_bonus = GetOption<bool>("first_pass_bonus");
         symm_pruning = GetOption<bool>("symm_pruning");
+        use_stm_winrate = GetOption<bool>("use_stm_winrate");
     }
 
     int threads;
@@ -94,6 +95,7 @@ public:
     bool no_dcnn;
     bool first_pass_bonus;
     bool symm_pruning;
+    bool use_stm_winrate;
 
     std::array<float, kNumVertices + 10> dirichlet_buffer;
 };

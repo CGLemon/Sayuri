@@ -96,6 +96,7 @@ void InitOptionsMap() {
     kOptionsMap["lag_buffer"] << Option::setoption(0);
     kOptionsMap["early_symm_cache"] << Option::setoption(false);
     kOptionsMap["symm_pruning"] << Option::setoption(false);
+    kOptionsMap["use_stm_winrate"] << Option::setoption(false);
 
     // self-play options
     kOptionsMap["random_min_visits"] << Option::setoption(1);
@@ -267,6 +268,11 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 
     if (const auto res = parser.Find("--first-pass-bonus")) {
         SetOption("first_pass_bonus", true);
+        parser.RemoveCommand(res->Index());
+    }
+
+    if (const auto res = parser.Find("--use-stm-winrate")) {
+        SetOption("use_stm_winrate", true);
         parser.RemoveCommand(res->Index());
     }
 

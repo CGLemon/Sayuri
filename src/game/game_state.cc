@@ -519,7 +519,7 @@ void GameState::FillRandomMove() {
 
 bool GameState::MatchCandidateMove(const int vtx, const int color) const {
     if (Random<kXoroShiro128Plus>::Get().Roulette<10000>(0.9f)) {
-        return true; // ~5%
+        return true; // ~10%
     }
 
     if (board_.IsCaptureMove(vtx, color) ||

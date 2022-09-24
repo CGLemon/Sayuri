@@ -192,7 +192,14 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
 }
 
 void Node::LinkNetOutput(const Network::Result &raw_netlist, const int color){
-    auto wl = (raw_netlist.wdl[0] - raw_netlist.wdl[2] + 1) * 0.5f;
+    auto wl = 0.5f;
+
+    if (GetParameters()->use_stm_winrate) {
+        wl = raw_netlist.stm_winrate;
+    } else {
+        wl = (raw_netlist.wdl[0] - raw_netlist.wdl[2] + 1) / 2;
+    }
+
     auto draw = raw_netlist.wdl[1];
     auto final_score = raw_netlist.final_score;
 
