@@ -972,10 +972,10 @@ bool Board::IsSeki(const int vtx) const {
         const auto state = state_[avtx];
 
         if (state == kEmpty) {
-            return false;
+            // do nothing...
         }
 
-        if (state != kInvalid) {
+        if (state == kBlack || state == kWhite) {
             if (string_parent[state] == kNullVertex) {
                 string_parent[state] = ip;
             } else if (string_parent[state] != ip) {
@@ -999,11 +999,11 @@ bool Board::IsSeki(const int vtx) const {
     }
 
     auto lib_buf = std::vector<int>{};
-    auto black_idx_buf = std::vector<int>{};
-    auto white_idx_buf = std::vector<int>{};
+    auto black_sur_idx_buf = std::vector<int>{};
+    auto white_sur_idx_buf = std::vector<int>{};
 
-    FindStringSurround(string_parent[kBlack], kBlack, lib_buf, black_idx_buf);
-    FindStringSurround(string_parent[kWhite], kWhite, lib_buf, white_idx_buf);
+    FindStringSurround(string_parent[kBlack], kBlack, lib_buf, black_sur_idx_buf);
+    FindStringSurround(string_parent[kWhite], kWhite, lib_buf, white_sur_idx_buf);
  
     assert(lib_buf.size() == 2 || lib_buf.size() == 3);
 
@@ -1021,9 +1021,9 @@ bool Board::IsSeki(const int vtx) const {
     }
 
     auto inner_color = kInvalid;
-    if (black_idx_buf.size() == 1) {
+    if (black_sur_idx_buf.size() == 1) {
         inner_color = kBlack;
-    } else if (white_idx_buf.size() == 1) {
+    } else if (white_sur_idx_buf.size() == 1) {
         inner_color = kWhite;
     }
 
@@ -1035,7 +1035,6 @@ bool Board::IsSeki(const int vtx) const {
     // oooxx..
     // xxxx...
     // .......
-
 
     if (inner_color == kInvalid) {
         // It is the simple seki (no eyes) case.
