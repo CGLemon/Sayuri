@@ -56,7 +56,7 @@ Accelerate to load the network file. Fast Float library is required.
 
 ## Weights and Book
 
-You may download the weights file and opening book from my [google drive](https://drive.google.com/drive/folders/1OiVcIwewcIh5nnmR8pBFKMSdkbBYNF2c?usp=sharing). The current weights size is 15 blocks and 192 filters. The opening book is human-like book, trained on profession games. Force Sayuri to play variable opening moves. It is just fun for playing.
+You may download the weights file and opening book from my [google drive](https://drive.google.com/drive/folders/17pjwLIwj_q0fGdiDpRShcLjbfBlk-70L?usp=sharing). The current weights size is 15 blocks and 192 filters. The opening book is human-like book, trained on profession games. Force Sayuri to play variable opening moves. It is just fun for playing.
 
 * The renorm prefix means applying the batch renormalization, and the fixup means fixup initialization.
 
@@ -67,6 +67,7 @@ Here are some useful arguments which you may need.
 | Arguments               | Param  | Description                                    |
 | :---------------------- | :----- | :--------------------------------------------- |
 |  --weights, -w          | string | File with network weights.                     |
+|  --patterns             | string | File with patterns.                            |
 |  --book, -b             | string | File with opening book.                        |
 |  --playouts, -p         | int    | The number of maximum playouts.                |
 |  --const-time           | int    | Const time of search in seconds.               |
@@ -105,7 +106,7 @@ Example setting 4: use the GPU 0 and GPU 2
 
 Example setting 5: disable network forwarding pipe, very weak
 
-    $ ./Sayuri -w <weights file> --no-dcnn
+    $ ./Sayuri --patterns <patterns file> --lcb-reduction 1 --no-dcnn
 
 ## Generate Opening Book
 
@@ -130,14 +131,14 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 The engine supports the following GTP analysis commands.
 
   * `analyze, genmove_analyze [player (optional)] [interval (optional)] ...`
-      * The behavior is same as lz-analyze, lz-genmove_analyze 
+      * The behavior is same as ```lz-analyze```, ```lz-genmove_analyze```.
 
   * `lz-analyze, lz-genmove_analyze [player (optional)] [interval (optional)] ...`
-      * Extension GTP commands of lz-analyze and lz-genmove_analyze. Support the ```info```, ```move```, ```visits```, ```winrate```, ```prior```, ```lcb```, ```order```, ```pv```, ```scoreLead``` labels. More detail to see [KataGo GTP Extensions](https://github.com/lightvector/KataGo/blob/master/docs/GTP_Extensions.md).
+      * Extension GTP commands of ```lz-analyze``` and ```lz-genmove_analyze```. Support the ```info```, ```move```, ```visits```, ```winrate```, ```prior```, ```lcb```, ```order```, ```pv```, ```scoreLead``` labels. More detail to see [KataGo GTP Extensions](https://github.com/lightvector/KataGo/blob/master/docs/GTP_Extensions.md).
 
 
   * `kata-analyze, kata-genmove_analyze [player (optional)] [interval (optional)] ...`
-      * Subset of kata-analyze and kata-genmove_analyze. Support the ```info```, ```move```, ```visits```, ```winrate```, ```prior```, ```lcb```, ```order```, ```pv```, ```scoreLead``` labels. More detail to see [KataGo GTP Extensions](https://github.com/lightvector/KataGo/blob/master/docs/GTP_Extensions.md).
+      * Subset of ```kata-analyze``` and ```kata-genmove_analyze```. Support the ```info```, ```move```, ```visits```, ```winrate```, ```prior```, ```lcb```, ```order```, ```pv```, ```scoreLead``` labels. More detail to see [KataGo GTP Extensions](https://github.com/lightvector/KataGo/blob/master/docs/GTP_Extensions.md).
 
 
   * Optional Keys
