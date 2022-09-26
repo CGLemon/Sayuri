@@ -45,10 +45,10 @@ const std::vector<std::string> kSanketsuGirl = { // 酸欠少女
     "Nejiko"           // 11. ~
 };
 
-constexpr bool kDevVersion = true;
+constexpr bool kDevVersion = false;
 constexpr size_t kVersionMajor = 0;
-constexpr size_t kVersionMinor = 1;
-constexpr size_t kVersionPatch = 1;
+constexpr size_t kVersionMinor = 2;
+constexpr size_t kVersionPatch = 0;
 
 std::string GetProgramName() {
     return kProgram;
