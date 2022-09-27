@@ -2216,18 +2216,22 @@ std::string Board::GetMoveTypesString(int vtx, int color) const {
 
         if (IsLadder(avtx, vital_moves)) {
             auto libs = GetLiberties(avtx);
-            if (libs == 1) {
+            if (libs == 1 && state_[avtx] == color) {
                 if (i++ != 0) out << ", ";
-                out << "Ladder Escape";
-            } else if (libs == 2) {
+                out << "Ladder Dead";
+            } else if (libs == 1 && state_[avtx] != color) {
+                if (i++ != 0) out << ", ";
+                out << "Ladder Capture";
+            } else if (libs == 2 && state_[avtx] == color) {
                 if (i++ != 0) out << ", ";
                 out << "Ladder Atari";
-            } else {
+            } else if (libs == 2 && state_[avtx] != color) {
                 if (i++ != 0) out << ", ";
-                out << "Ladder Error";
+                out << "Ladder Escape";
             }
         }
     }
-    out << ')';
+
+    out << '}';
     return out.str();
 }

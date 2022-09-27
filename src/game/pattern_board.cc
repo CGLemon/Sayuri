@@ -10,7 +10,7 @@ const
 std::vector<
     std::vector<
         std::string
-   >
+    >
 >
 kPattern3Src =
 {  // 3x3 playout patterns;
@@ -109,11 +109,12 @@ bool Board::MatchPattern3(const int vtx, const int color) const {
 			    int rx = x;
 			    int ry = y;
 
-			    if (r & PTH_VMIRROR) ry = -ry;
-			    if (r & PTH_HMIRROR) rx = -rx;
 			    if (r & PTH_90ROT) {
-				    int rs = rx; rx = -ry; ry = rs;
+				    std::swap(rx, ry);
 			    }
+			    if (r & PTH_HMIRROR) rx = 2-rx;
+			    if (r & PTH_VMIRROR) ry = 2-ry;
+
                 symm_p[ry][rx] = raw[y][x];
             }
         }
