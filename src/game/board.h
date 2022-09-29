@@ -210,6 +210,7 @@ public:
     bool GetDummyLevel(const int vtx, std::uint64_t &hash) const;
     bool GetBorderLevel(const int vtx, std::uint64_t &hash) const;
     bool GetDistLevel(const int vtx, std::uint64_t &hash) const;
+    bool GetDistLevel2(const int vtx, std::uint64_t &hash) const;
     bool GetFeatureWrapper(const int f, const int vtx, std::uint64_t &hash) const;
     static int GetMaxFeatures();
 

@@ -271,8 +271,6 @@ std::uint64_t Board::GetSurroundPatternHash(std::uint64_t hash,
 bool Board::GetDummyLevel(const int vtx, std::uint64_t &hash) const {
     (void) vtx;
     (void) hash;
-
-    // Todo function...
     return false;
 }
 
@@ -298,7 +296,7 @@ bool Board::GetBorderLevel(const int vtx, std::uint64_t &hash) const {
         return false;
     }
 
-    hash = 1ULL << 32 | (std::uint64_t)dist;
+    hash = 0ULL << 32 | (std::uint64_t)dist;
 
     return true;
 }
@@ -324,6 +322,32 @@ bool Board::GetDistLevel(const int vtx, std::uint64_t &hash) const {
         }
     }
 
+    hash = 1ULL << 32 | (std::uint64_t)dist;
+
+    return true;
+}
+
+bool Board::GetDistLevel2(const int vtx, std::uint64_t &hash) const {
+    if (vtx == kPass) {
+        return false;
+    }
+
+    int dist;
+
+    if (last_move_2_ == kNullVertex) {
+        dist = 0;
+    } else if (last_move_2_ == kPass) {
+        dist = 1;
+    } else {
+        const int dx = std::abs(GetX(last_move_2_) - GetX(vtx));
+        const int dy = std::abs(GetY(last_move_2_) - GetY(vtx));
+
+        dist = dx + dy + std::max(dx, dy);
+        if (dist >= 17) {
+            dist = 17;
+        }
+    }
+
     hash = 2ULL << 32 | (std::uint64_t)dist;
 
     return true;
@@ -331,9 +355,9 @@ bool Board::GetDistLevel(const int vtx, std::uint64_t &hash) const {
 
 bool Board::GetFeatureWrapper(const int f, const int vtx, std::uint64_t &hash) const {
     switch (f) {
-        case 0: return GetDummyLevel(vtx, hash);
-        case 1: return GetBorderLevel(vtx, hash);
-        case 2: return GetDistLevel(vtx, hash);
+        case 0: return GetBorderLevel(vtx, hash);
+        case 1: return GetDistLevel(vtx, hash);
+        case 2: return GetDistLevel2(vtx, hash);
     }
     return false;
 }

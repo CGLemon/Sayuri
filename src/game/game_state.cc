@@ -604,14 +604,11 @@ float GameState::GetGammaValue(const int vtx, const int color) const {
         }
     }
 
-    if (board_.GetBorderLevel(vtx, hash)) {
-        if (GammasDict::Get().ProbeFeature(hash, gamma)) {
-            val *= gamma;
-        }
-    }
-    if (board_.GetDistLevel(vtx, hash)) {
-        if (GammasDict::Get().ProbeFeature(hash, gamma)) {
-            val *= gamma;
+    for (int i = 0; i < Board::GetMaxFeatures(); ++i) {
+        if (board_.GetFeatureWrapper(i, vtx, hash)) {
+            if (GammasDict::Get().ProbeFeature(hash, gamma)) {
+                val *= gamma;
+            }
         }
     }
 
