@@ -2167,8 +2167,7 @@ void Board::GenerateCandidateMoves(std::vector<int> &moves_set, int color) const
                   std::end(buf));
 
     for (const int vtx : buf) {
-        if (vtx != last_move_ && vtx != last_move_2_ &&
-                IsLegalMove(vtx, color) && !IsRealEye(vtx, color)) {
+        if (IsLegalMove(vtx, color) && !IsRealEye(vtx, color)) {
             moves_set.emplace_back(vtx);
         }
     }

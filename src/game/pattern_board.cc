@@ -102,14 +102,14 @@ bool Board::MatchPattern3(const int vtx, const int color) const {
 
 #define PTH_VMIRROR	1
 #define PTH_HMIRROR	2
-#define PTH_90ROT	4
+#define PTH_180ROT	4
 	for (int r = 0; r < 8; ++r) {
         for (int y=0; y<3; ++y) {
             for (int x=0; x<3; ++x) {
 			    int rx = x;
 			    int ry = y;
 
-			    if (r & PTH_90ROT) {
+			    if (r & PTH_180ROT) {
 				    std::swap(rx, ry);
 			    }
 			    if (r & PTH_HMIRROR) rx = 2-rx;
@@ -144,7 +144,7 @@ bool Board::MatchPattern3(const int vtx, const int color) const {
     }
 #undef PTH_VMIRROR
 #undef PTH_HMIRROR
-#undef PTH_90ROT
+#undef PTH_180ROT
 
     return false;
 }

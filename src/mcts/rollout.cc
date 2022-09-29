@@ -11,7 +11,7 @@ float GetBlackRolloutResult(GameState &state,
     const int num_intersections = fork_state.GetNumIntersections();
     int num_curr_moves = 0;
 
-    while (fork_state.GetPasses() < 2 && num_curr_moves < 9999) {
+    while (fork_state.GetPasses() < 2 && num_curr_moves < 2*num_intersections+1) {
         fork_state.PlayRandomMove();
         num_curr_moves += 1;
     }
