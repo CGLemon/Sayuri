@@ -122,5 +122,7 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "gogui-ownership_influence",
 
-    "gogui-gammas_heatmap"
+    "gogui-gammas_heatmap",
+
+    "gogui-ladder_map"
 };
