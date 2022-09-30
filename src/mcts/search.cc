@@ -118,12 +118,7 @@ void Search::PrepareRootNode() {
         ReleaseTree();
 
         // Do not reuse the tree, allocate new root node.
-        EdgeData edge_data;
-
-        edge_data.vertex = kPass;   // unused
-        edge_data.policy = 1.0f;    // unused
-
-        root_node_ = std::make_unique<Node>(edge_data);
+        root_node_ = std::make_unique<Node>(kPass, 1.0f);
         root_node_->SetParameters(param_.get());
     }
 

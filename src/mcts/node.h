@@ -13,11 +13,6 @@
 #include <string>
 #include <mutex>
 
-struct EdgeData {
-    float policy{0.0f};
-    int vertex{kNullVertex};
-};
-
 struct NodeEvals {
     float black_final_score{0.0f};
     float black_wl{0.0f};
@@ -27,9 +22,9 @@ struct NodeEvals {
 
 class Node {
 public:
-    using Edge = NodePointer<Node, EdgeData>;
+    using Edge = NodePointer<Node>;
 
-    explicit Node(EdgeData data);
+    explicit Node(std::int16_t vertex, float policy);
     ~Node();
 
     // Expand this node.
@@ -202,5 +197,7 @@ private:
     std::atomic<int> running_threads_{0};
 
     std::vector<Edge> children_;
-    EdgeData data_;
+
+    std::int16_t vertex_;
+    float policy_;
 };

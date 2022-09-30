@@ -17,8 +17,9 @@
 
 #define VIRTUAL_LOSS_COUNT (3)
 
-Node::Node(EdgeData data) {
-    data_ = data;
+Node::Node(std::int16_t vertex, float policy) {
+    vertex_ = vertex;
+    policy_ = policy;
 }
 
 Node::~Node() {
@@ -181,12 +182,9 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
     std::stable_sort(std::rbegin(nodelist), std::rend(nodelist));
 
     for (const auto &node : nodelist) {
-        auto data = EdgeData{};
-
-        data.vertex = node.second;
-        data.policy = node.first;
-
-        children_.emplace_back(data);
+        const auto vertex = (std::uint16_t)node.second;
+        const auto policy = node.first;
+        children_.emplace_back(vertex, policy);
     }
     assert(!children_.empty());
 }
@@ -374,7 +372,7 @@ Node *Node::ProbSelectChild() {
         const auto node = child.Get();
         const bool is_pointer = node == nullptr ? false : true;
 
-        auto prob = child.Data()->policy;
+        auto prob = child.GetPolicy();
 
         // The node was pruned. Skip this time.
         if (is_pointer && !node->IsActive()) {
@@ -862,7 +860,7 @@ Node *Node::Get() {
 
 Node *Node::GetChild(const int vertex) {
     for (auto & child : children_) {
-        if (vertex == child.Data()->vertex) {
+        if (vertex == child.GetVertex()) {
             Inflate(child);
             return child.Get();
         }
@@ -970,11 +968,11 @@ int Node::GetVirtualLoss() const {
 }
 
 int Node::GetVertex() const {
-    return data_.vertex;
+    return vertex_;
 }
 
 float Node::GetPolicy() const {
-    return data_.policy;
+    return policy_;
 }
 
 int Node::GetVisits() const {
@@ -1170,15 +1168,15 @@ void Node::ApplyDirichletNoise(const float alpha) {
 
     InflateAllChildren();
     for (auto i = size_t{0}; i < child_cnt; ++i) {
-        const auto vertex = children_[i].Data()->vertex;
+        const auto vertex = children_[i].GetVertex();
         dirichlet[vertex] = buffer[i];
     }
 }
 
 float Node::GetSearchPolicy(Node::Edge& child, bool noise) {
-    auto policy = child.Data()->policy;
+    auto policy = child.GetPolicy();
     if (noise) {
-        const auto vertex = child.Data()->vertex;
+        const auto vertex = child.GetVertex();
         const auto epsilon = GetParameters()->dirichlet_epsilon;
         const auto eta_a = GetParameters()->dirichlet_buffer[vertex];
         policy = policy * (1 - epsilon) + epsilon * eta_a;
@@ -1191,7 +1189,7 @@ void Node::SetVisits(int v) {
 }
 
 void Node::SetPolicy(float p) {
-    data_.policy = p;
+    policy_ = p;
 }
 
 void Node::ComputeNodeCount(size_t &nodes, size_t &edges) {
