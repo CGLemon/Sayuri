@@ -12,7 +12,7 @@ class MmTrainer {
 public:
     static MmTrainer& Get();
 
-    void Run(std::string sgf_name, std::string out_name);
+    void Run(std::string sgf_name, std::string out_name, int min_count);
     void Test();
 
 private:
@@ -28,7 +28,7 @@ private:
     void FillPatterns(std::string sgfstring);
     void FillMmParticipant(std::string sgfstring);
     void InitMm();
-    void FilterPatterns();
+    void FilterPatterns(int min_count);
 
     void SaveResult(std::string filename);
 

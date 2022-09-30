@@ -15,7 +15,7 @@ MmTrainer& MmTrainer::Get() {
     return mm_trainer;
 }
 
-void MmTrainer::Run(std::string sgf_name, std::string out_name) {
+void MmTrainer::Run(std::string sgf_name, std::string out_name, int min_count) {
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
 
     num_patterns_ = 0;
@@ -35,7 +35,7 @@ void MmTrainer::Run(std::string sgf_name, std::string out_name) {
         return;
     }
 
-    FilterPatterns();
+    FilterPatterns(min_count);
 
     InitMm();
 
@@ -62,9 +62,11 @@ void MmTrainer::InitMm() {
     mm_.Initialize(features);
 }
 
-void MmTrainer::FilterPatterns() {
+void MmTrainer::FilterPatterns(int select_min_count) {
     constexpr int kMinCount = 3;
     constexpr int kMaxSize = 30 * 1000;
+
+    select_min_count = std::max(kMinCount, select_min_count);
 
     std::vector<FeatureSpatDict>  filtered_feature_spat_dicts;
     std::vector<FeatureOrder>     filtered_feature_orders;
@@ -91,7 +93,7 @@ void MmTrainer::FilterPatterns() {
     std::sort(std::begin(all_counts), std::end(all_counts), std::greater<int>());
 
     const int max_size = std::min<int>(kMaxSize, all_counts.size());
-    const int min_count = std::max<int>(all_counts[max_size - 1], kMinCount);
+    const int min_count = std::max<int>(all_counts[max_size - 1], select_min_count);
 
     // resize filtered buffer
     filtered_feature_spat_dicts.resize(size);

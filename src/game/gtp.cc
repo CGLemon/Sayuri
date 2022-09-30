@@ -654,6 +654,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
     } else if (const auto res = parser.Find("genpatterns", 0)) {
         auto sgf_file = std::string{};
         auto data_file = std::string{};
+        int min_count = 0;
 
         if (const auto sgf = parser.GetCommand(1)) {
             sgf_file = sgf->Get<std::string>();
@@ -661,9 +662,12 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         if (const auto data = parser.GetCommand(2)) {
             data_file = data->Get<std::string>();
         }
+        if (const auto mcount = parser.GetCommand(3)) {
+            min_count = mcount->Get<int>();
+        }
 
         if (!sgf_file.empty() && !data_file.empty()) {
-            MmTrainer::Get().Run(sgf_file, data_file);
+            MmTrainer::Get().Run(sgf_file, data_file, min_count);
             out << GtpSuccess("");
         } else {
             out << GtpFail("file name is empty");
