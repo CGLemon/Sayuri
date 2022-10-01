@@ -821,7 +821,7 @@ bool Board::IsLadder(const int vtx, std::vector<int> &vital_moves) const {
 
 bool Board::IsSelfAtariMove(const int vtx, const int color) const {
     int my_libs = CountPliberties(vtx);
-    auto potential_libs_buf = std::vector<int>{};
+    auto potential_libs_buf = std::vector<int>({vtx});
     auto my_parent_strings = std::vector<int>{};
 
     for (int k = 0; k < 4; ++k) {
@@ -843,7 +843,7 @@ bool Board::IsSelfAtariMove(const int vtx, const int color) const {
         }
     }
 
-    int potential_libs = potential_libs_buf.size() - (int)(!my_parent_strings.empty());
+    int potential_libs = potential_libs_buf.size() - 1;
 
     return (potential_libs + my_libs) == 1;
 }
@@ -2151,11 +2151,11 @@ void Board::GenerateCandidateMoves(std::vector<int> &moves_set, int color) const
 
                 if (state_[avtx] == kEmpty) {
                     buf.emplace_back(avtx);
-                }
-            }
-            if (state_[vtx] == kBlack || state_[vtx] == kWhite) {
-                if (GetLiberties(vtx) <= 3) {
-                    FindStringLiberties(vtx, buf);
+                } else if (state_[avtx] == kBlack ||
+                               state_[avtx] == kWhite) {
+                    if (GetLiberties(avtx) <= 3) {
+                        FindStringLiberties(avtx, buf);
+                    }
                 }
             }
         }

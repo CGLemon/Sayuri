@@ -73,7 +73,7 @@ void MmTrainer::FilterPatterns(int select_min_count) {
     std::vector<FeatureOrderDict> filtered_feature_order_dicts;
     std::vector<FeatureConuter>   filtered_feature_counters;
 
-    // computer features
+    // compute features
     auto size = feature_counters_.size();
     auto num_features_list = std::vector<int>{};
 
