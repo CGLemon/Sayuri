@@ -124,5 +124,7 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "gogui-gammas_heatmap",
 
-    "gogui-ladder_map"
+    "gogui-ladder_map",
+
+    "gogui-rollout_candidate_moves"
 };

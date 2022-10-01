@@ -686,6 +686,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         gogui_cmds << "\ngfx/Book Rating/gogui-book_rating";
         gogui_cmds << "\ngfx/Gammas Heatmap/gogui-gammas_heatmap";
         gogui_cmds << "\ngfx/Ladder Map/gogui-ladder_map";
+        gogui_cmds << "\ngfx/Rollout Candidate Moves/gogui-rollout_candidate_moves";
 
         out << GtpSuccess(gogui_cmds.str());
     } else if (const auto res = parser.Find("gogui-wdl_rating", 0)) {
@@ -934,6 +935,35 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         }
 
         out << GtpSuccess(ladder_map.str());
+    } else if (const auto res = parser.Find("gogui-rollout_candidate_moves", 0)) {
+        auto candidate_moves = std::vector<int>{};
+        const auto color = agent_->GetState().GetToMove();
+        agent_->GetState().board_.GenerateCandidateMoves(candidate_moves, color);
+
+        const auto board_size = agent_->GetState().GetBoardSize();
+        const auto num_intersections = board_size * board_size;
+
+        auto candidate_map = std::ostringstream{};
+
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            if (idx != 0) {
+                candidate_map << '\n';
+            }
+
+            const auto x = idx % board_size;
+            const auto y = idx / board_size;
+            const auto vtx = agent_->GetState().GetVertex(x,y);
+
+            float map_color = 0.f;
+
+            if (std::end(candidate_moves) !=
+                    std::find(std::begin(candidate_moves), std::end(candidate_moves), vtx)) {
+                map_color = 1.0f;
+            }
+            candidate_map << GoguiColor(map_color, agent_->GetState().VertexToText(vtx));
+        }
+
+        out << GtpSuccess(candidate_map.str());
     } else {
         out << GtpFail("unknown command");
     }
