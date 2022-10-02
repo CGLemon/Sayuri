@@ -22,8 +22,8 @@ public:
 
     void AddPassBouns(GameState &state) {
         // A half-point is awarded to the first player to be able 
-        // to pass. According to kata Go slightly rewarding endgame
-        // efficiency,
+        // to pass. According to kata Go, It is slightly rewarding
+        // endgame efficiency.
         const auto first_pass_color = state.GetFirstPassColor();
         float black_final_score = nn_evals_->black_final_score;
 
@@ -158,7 +158,7 @@ public:
     // Get the best move.
     int ThinkBestMove();
 
-    // Get the self play move.
+    // Get the self-play move.
     int GetSelfPlayMove();
 
     // Will dump analyzing information.
@@ -203,23 +203,36 @@ private:
     void PrepareRootNode();
     int GetPonderPlayouts() const;
 
-    int threads_;
+    // Stop the search if current playouts greater this value.
     int max_playouts_; 
 
+    // Self-play training data.
     std::vector<Training> training_buffer_;
 
+    // True if it is searhing.
     std::atomic<bool> running_; 
+
+    // The current playouts.
     std::atomic<int> playouts_; 
 
+    // The tree search time control. 
     TimeControl time_control_;
 
+    // The current game state.
     GameState &root_state_;
+
+    // The game state of last root node.
     GameState last_state_;
 
+    // The forwarding network for this search.
     Network &network_;
 
+    // The root node of tree.
     std::unique_ptr<Node> root_node_; 
 
+    // The tree search parameters.
     std::unique_ptr<Parameters> param_;
+
+    // The tree search threads.
     std::unique_ptr<ThreadGroup<void>> group_;
 };

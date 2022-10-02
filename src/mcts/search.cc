@@ -28,7 +28,6 @@ void Search::Initialize() {
     param_ = std::make_unique<Parameters>();
     param_->Reset();
 
-    threads_ = param_->threads;
     last_state_ = root_state_;
     root_node_.reset(nullptr);
 
@@ -483,19 +482,21 @@ void Search::GatherComputationResult(ComputationResult &result) const {
 
         const auto vtx = root_state_.GetVertex(x,y);
 
-        // owner value, 1 is my value, -1 is opp's.
+        // owner value, 1 is mine, -1 is opp's.
         const auto owner = safe_area[idx] == true ?
                                2 * (float)(safe_ownership[idx] == color) - 1 : result.root_ownership[idx];
         const auto state = root_state_.GetState(vtx);
 
 
         if (owner > kOwnshipThreshold) {
+            // It is my territory.
             if (color == state) {
                 alive.emplace_back(root_state_.GetStringList(vtx));
             } else if ((!color) == state) {
                 dead.emplace_back(root_state_.GetStringList(vtx));
             }
         } else if (owner < -kOwnshipThreshold) {
+            // It is opp's territory.
             if ((!color) == state) {
                 alive.emplace_back(root_state_.GetStringList(vtx));
             } else if (color == state) {
@@ -576,10 +577,29 @@ bool ShouldPass(GameState &state, ComputationResult &result, bool friendly_pass)
 
     // Remove the dead strings predicted by NN.
     fork_state.RemoveDeadStrings(dead_list);
+    int num_dame = 0;
 
-    // Compute black final score.
+    const auto board_size = fork_state.GetBoardSize();
+    for (int y = 0; y < board_size; ++y) {
+        for (int x = 0; x < board_size; ++x) {
+            const auto vtx = fork_state.GetVertex(x, y);
+            if (fork_state.GetState(vtx) != kEmpty &&
+                    fork_state.GetLiberties(vtx) == 1) {
+                // At least one string in atari, the game
+                // is not over yet. 
+                return false;
+            } else if (fork_state.GetState(vtx) == kEmpty) {
+                // This empty point does not belong to any
+                // side. It is dame.
+                num_dame += 1;
+            }
+        }
+    }
+
+    (void) num_dame;
+
+    // Compute the final score.
     float score = fork_state.GetFinalScore();
-
 
     if (state.GetToMove() == kWhite) {
         score = 0 - score;
@@ -666,6 +686,9 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
     }
 
     auto fork_state = end_state;
+
+    // Now, compute the final status. remove the dead strings
+    // first.
     fork_state.RemoveDeadStrings(200);
 
     auto num_intersections = fork_state.GetNumIntersections();
@@ -673,6 +696,7 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
     auto black_final_score = 0.f;
     auto ownership = fork_state.GetOwnership();
 
+    // Compute the final score.
     for (const auto owner : ownership) {
         if (owner == kBlack) {
             black_final_score += 1;
@@ -680,8 +704,9 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
             black_final_score -= 1;
         }
     }
-
     black_final_score -= fork_state.GetKomi();
+
+    // Get the player who won the game.
     if (std::abs(black_final_score) < 1e-4f) {
         winner = kDraw;
     } else if (black_final_score > 0) {
@@ -690,6 +715,7 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
         winner = kWhiteWon;
     }
 
+    // Set the all buffer values except for auxiliary probablility.
     for (auto &buf : training_buffer_) {
         assert(winner != kUndecide);
         if (winner == kDraw) {
@@ -713,8 +739,10 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
         }
     }
 
-    // Force the last aux policy is pass move.
+    // Set the auxiliary probablility in the buffer.
     auto aux_prob = std::vector<float>(num_intersections+1, 0);
+
+    // Force the last aux policy is pass move.
     aux_prob[num_intersections] = 1.f;
 
     for (int i = training_buffer_.size()-1; i >= 0; --i) {
@@ -727,10 +755,12 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
         aux_prob = buf.probabilities;
     }
 
+    // Save the data.
     for (auto &buf : training_buffer_) {
         buf.StreamOut(file);
     }
 
+    // Release the buffer.
     training_buffer_.clear();
 }
 
