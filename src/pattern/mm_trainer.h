@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <memory>
 
 #include "game/board.h"
 #include "pattern/pattern.h"
@@ -37,7 +38,7 @@ private:
     std::vector<FeatureOrderDict> feature_order_dicts_; // hash  -> index
     std::vector<FeatureConuter> feature_counters_;      // index -> conut
 
-    MinorizationMaximization mm_;
+    std::unique_ptr<MinorizationMaximization> mm_;
     int num_patterns_;
 
     static constexpr int kMmMaxPatternDist = kMaxPatternDist;

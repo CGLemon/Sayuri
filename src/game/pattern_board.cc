@@ -353,15 +353,105 @@ bool Board::GetDistLevel2(const int vtx, std::uint64_t &hash) const {
     return true;
 }
 
+bool Board::GetCapureLevel(const int vtx, std::uint64_t &hash) const {
+    if (vtx == kPass) {
+        return false;
+    }
+    if (!IsCaptureMove(vtx, to_move_)) {
+        return false;
+    }
+
+    int opp_color = !to_move_;
+    int num_cap = 0;
+    int max_stones = 0;
+
+    for (int k = 0; k < 4; ++k) {
+        const auto avtx = vtx + directions_[k];
+
+        if (state_[avtx] == opp_color && GetLiberties(avtx) == 1) {
+            num_cap += 1;
+            max_stones = std::max(GetStones(avtx), max_stones);
+        }
+    }
+
+    int level = 0;
+    if (num_cap == 1) {
+        if (max_stones <= 1) {
+            level = 1;
+        } else if (max_stones <= 4) {
+            level = 2;
+        } else {
+            level = 3;
+        }
+    } else if (num_cap >= 2) {
+        if (max_stones <= 4) {
+            level = 4;
+        } else {
+            level = 5;
+        }
+    }
+
+    // TODO: ladder capture
+
+
+    hash = 3ULL << 32 | (std::uint64_t)level;
+    return true;
+}
+
+bool Board::GetAtariLevel(const int vtx, std::uint64_t &hash) const {
+    if (vtx == kPass) {
+        return false;
+    }
+    if (!IsAtariMove(vtx, to_move_)) {
+        return false;
+    }
+
+    int opp_color = !to_move_;
+    int num_atari = 0;
+    int max_stones = 0;
+
+    for (int k = 0; k < 4; ++k) {
+        const auto avtx = vtx + directions_[k];
+
+        if (state_[avtx] == opp_color && GetLiberties(avtx) == 2) {
+            num_atari += 1;
+            max_stones = std::max(GetStones(avtx), max_stones);
+        }
+    }
+
+    int level = 0;
+    if (num_atari == 1) {
+        if (max_stones <= 4) {
+            level = 1;
+        } else {
+            level = 2;
+        }
+    } else if (num_atari >= 2) {
+        if (max_stones <= 4) {
+            level = 3;
+        } else {
+            level = 4;
+        }
+    }
+  
+    // TODO: ladder atari
+
+    hash = 4ULL << 32 | (std::uint64_t)level;
+    return true;
+}
+
+
 bool Board::GetFeatureWrapper(const int f, const int vtx, std::uint64_t &hash) const {
     switch (f) {
         case 0: return GetBorderLevel(vtx, hash);
         case 1: return GetDistLevel(vtx, hash);
         case 2: return GetDistLevel2(vtx, hash);
+        case 3: return GetCapureLevel(vtx, hash);
+        case 4: return GetAtariLevel(vtx, hash);
     }
     return false;
 }
 
 int Board::GetMaxFeatures() {
-    return 3;
+    return 5;
 }

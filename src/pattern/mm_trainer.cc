@@ -26,7 +26,7 @@ void MmTrainer::Run(std::string sgf_name, std::string out_name, int min_count) {
     feature_order_dicts_.resize(num_features);
     feature_counters_.resize(num_features);
 
-    // gather mm patterns
+    // Gather the mm patterns.
     for (const auto &sgf_string : sgfs) {
         FillPatterns(sgf_string);
     }
@@ -39,16 +39,19 @@ void MmTrainer::Run(std::string sgf_name, std::string out_name, int min_count) {
 
     InitMm();
 
-    // fill mm participant
+    // Fill the mm participant.
     for (const auto &sgf_string : sgfs) {
        FillMmParticipant(sgf_string);
     }
 
-    // start training
-    mm_.StartTraining();
+    // Start training...
+    mm_->StartTraining();
 
-    // save the training file
+    // Save the training file.
     SaveResult(out_name);
+
+    // Release the training data.
+    mm_.reset(nullptr);
 }
 
 void MmTrainer::InitMm() {
@@ -59,7 +62,9 @@ void MmTrainer::InitMm() {
         FeatureConuter &counter = feature_counters_[i];
         features.emplace_back(counter.size());
     }
-    mm_.Initialize(features);
+
+    mm_ = std::make_unique<MinorizationMaximization>();
+    mm_->Initialize(features);
 }
 
 void MmTrainer::FilterPatterns(int select_min_count) {
@@ -341,7 +346,7 @@ void MmTrainer::FillMmParticipant(std::string sgfstring) {
             }
         }
         if (part.winner_team_idx >= 0) {
-            mm_.AppendParticipantGroup(part);
+            mm_->AppendParticipantGroup(part);
         }
     } while (game_ite.Next());
 }
@@ -357,7 +362,7 @@ void MmTrainer::SaveResult(std::string filename) {
         FeatureOrder &order = feature_orders_[feature];
 
         for (int index = 0; index < (int)order.size(); ++index) {
-            float gamma = mm_.GetMmGamma(feature, index).gamma;
+            float gamma = mm_->GetMmGamma(feature, index).gamma;
             std::uint64_t hash = order[index];
             std::string spat = spat_dict.find(hash)->second;
             int dist = feature;
