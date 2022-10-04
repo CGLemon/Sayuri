@@ -5,6 +5,7 @@
 #include "game/zobrist.h"
 #include "game/symmetry.h"
 #include "game/types.h"
+#include "pattern/pattern.h"
 #include "mcts/lcb.h"
 #include "config.h"
 
@@ -119,6 +120,8 @@ void InitOptionsMap() {
 }
 
 void InitBasicParameters() {
+    PtcoordsInit();
+    PatternHashInit();
     Zobrist::Initialize();
     Symmetry::Get().Initialize();
     LcbEntries::Get().Initialize(GetOption<float>("ci_alpha"));

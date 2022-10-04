@@ -29,7 +29,8 @@ public:
     using MmGammas = std::vector<MmGamma>;
 
     MmGamma &GetMmGamma(int feature, int index);
-    void Initialize(std::vector<int> features);
+    void Initialize(std::vector<int> features,
+                        std::vector<std::string> names = std::vector<std::string>{});
     void AppendParticipantGroup(ParticipantGroup &p);
     void StartTraining();
     void SaveMmFIle(std::string filename);

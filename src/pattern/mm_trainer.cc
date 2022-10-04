@@ -63,8 +63,28 @@ void MmTrainer::InitMm() {
         features.emplace_back(counter.size());
     }
 
+    auto names = std::vector<std::string>{};
+
+    names.emplace_back("NA");
+    names.emplace_back("NA");
+
+    names.emplace_back("s2");
+    names.emplace_back("s3");
+    names.emplace_back("s4");
+    names.emplace_back("s5");
+    names.emplace_back("s6");
+    names.emplace_back("s7");
+    names.emplace_back("s8");
+    names.emplace_back("s9");
+    names.emplace_back("s10");
+    names.emplace_back("border");
+    names.emplace_back("dist");
+    names.emplace_back("dist2");
+    names.emplace_back("capture");
+    names.emplace_back("atari");
+
     mm_ = std::make_unique<MinorizationMaximization>();
-    mm_->Initialize(features);
+    mm_->Initialize(features, names);
 }
 
 void MmTrainer::FilterPatterns(int select_min_count) {
@@ -144,21 +164,20 @@ void MmTrainer::FilterPatterns(int select_min_count) {
 
 bool MmTrainer::PatternMatch(const Board& board,
                                  int feature, int dist,
-                                 int vertex, std::uint64_t &mhash) const {
+                                 int vertex, int color,
+                                 std::uint64_t &mhash) const {
     const FeatureSpatDict &spat_dict = feature_spat_dicts_[feature];
     bool matched = false;
 
     for (int symm = 0; symm < 8; ++symm) {
-        for (int c = 0; c < 2; ++c) {
-            auto hash = board.GetSymmetryPatternHash(vertex, c, dist, symm);
-            auto it = spat_dict.find(hash);
+        auto hash = board.GetSymmetryPatternHash(vertex, color, dist, symm);
+        auto it = spat_dict.find(hash);
 
-            if (it != std::end(spat_dict)) {
-                // The pattern was already in the dictionary.
-                matched = true;
-                mhash = hash;
-                break;
-            }
+        if (it != std::end(spat_dict)) {
+            // The pattern was already in the dictionary.
+            matched = true;
+            mhash = hash;
+            break;
         }
         if (matched) break;
     }
@@ -191,6 +210,7 @@ void MmTrainer::FillPatterns(std::string sgfstring) {
         if (vtx == kPass) {
             continue;
         }
+        auto color = game_ite.GetToMove();
         Board& board = game_ite.GetState().board_;
 
         for (int pattern_dist = kMmMinPatternDist;
@@ -203,7 +223,7 @@ void MmTrainer::FillPatterns(std::string sgfstring) {
 
             std::uint64_t mhash;
             bool matched = PatternMatch(board, pattern_dist,
-                                            pattern_dist, vtx, mhash);
+                                            pattern_dist, vtx, color, mhash);
 
             if (matched) {
                 const auto hash = mhash;
@@ -299,7 +319,7 @@ void MmTrainer::FillMmParticipant(std::string sgfstring) {
                          pattern_dist <= kMmMaxPatternDist; ++pattern_dist) {
                     std::uint64_t mhash;
                     bool matched = PatternMatch(board, pattern_dist,
-                                                    pattern_dist, vtx, mhash);
+                                                    pattern_dist, vtx, color, mhash);
 
                     if (matched) {
                         auto &order_dict = feature_order_dicts_[pattern_dist];

@@ -5,7 +5,8 @@
 #include <iostream>
 #include <fstream>
 
-void MinorizationMaximization::Initialize(std::vector<int> features) {
+void MinorizationMaximization::Initialize(std::vector<int> features,
+                                              std::vector<std::string> names) {
     features_ = features;
     num_features_ = (int)features.size();
     features_acc_.resize(num_features_);
@@ -46,10 +47,18 @@ void MinorizationMaximization::Initialize(std::vector<int> features) {
 
     participants_.clear();
 
-    std::cerr << "Features Number: " << num_features_ << "\n";
-    for (int i = 0; i < num_features_; ++i) {
-        const auto num_gammas_each_features = features_[i];
-        std::cerr << "  Feature " << i << ": " << num_gammas_each_features << "\n";
+    if (names.size() != features.size()) {
+        std::cerr << "Features Number: " << num_features_ << "\n";
+        for (int i = 0; i < num_features_; ++i) {
+            const auto num_gammas_each_features = features_[i];
+            std::cerr << "  Feature " << i << ": " << num_gammas_each_features << "\n";
+        }
+    } else {
+        std::cerr << "Features Number: " << num_features_ << "\n";
+        for (int i = 0; i < num_features_; ++i) {
+            const auto num_gammas_each_features = features_[i];
+            std::cerr << "  " << names[i] << ": " << num_gammas_each_features << "\n";
+        }
     }
 }
 
@@ -85,7 +94,7 @@ void MinorizationMaximization::StartTraining() {
 
     std::cerr << "steps: " << 0
                   << ", lose: " << std::exp(-log_likelihood)
-                  << "(" << log_likelihood << ")" << std::endl;
+                  << " (" << log_likelihood << ")" << std::endl;
 
 
     // TODO: Accelerate the training pipe line by Multi-threads.

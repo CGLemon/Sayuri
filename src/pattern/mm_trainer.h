@@ -24,7 +24,7 @@ private:
 
     bool PatternMatch(const Board& board,
                           int feature, int dist,
-                          int vertex, std::uint64_t &mhash) const;
+                          int vertex, int color, std::uint64_t &mhash) const;
 
     void FillPatterns(std::string sgfstring);
     void FillMmParticipant(std::string sgfstring);

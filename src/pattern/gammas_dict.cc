@@ -13,9 +13,6 @@ GammasDict& GammasDict::Get() {
 }
 
 void GammasDict::Initialize(std::string filename) {
-    PtcoordsInit();
-    PatternHashInit();
-
     std::stringstream iss;
     std::string line;
 
@@ -59,23 +56,15 @@ void GammasDict::Initialize(std::string filename) {
             data >> spat;
 
             for (int symm = 0; symm < 8; ++symm) {
-                for (int c = 0; c < 2; ++c) {
-                    std::uint64_t hash = PatternHash[0][kInvalid][0];
-                    constexpr int kColorMap[2][4] = {
-                        {kBlack, kWhite, kEmpty, kInvalid},
-                        {kWhite, kBlack, kEmpty, kInvalid}
-                    };
+                std::uint64_t hash = PatternHash[0][kInvalid][0];
 
-                    for (int i = kPointIndex[2]; i < kPointIndex[dist + 1]; ++i) {
-                        int color = CharToColor(spat[i]);
-                        color = kColorMap[c][color];
-
-                        if (color != kInvalid) {
-                             hash ^= PatternHash[symm][color][i];
-                        }
+                for (int i = kPointIndex[2]; i < kPointIndex[dist + 1]; ++i) {
+                    int color = CharToColor(spat[i]);
+                    if (color != kInvalid) {
+                         hash ^= PatternHash[symm][color][i];
                     }
-                    InsertPattern(hash, gamma);
                 }
+                InsertPattern(hash, gamma);
             }
         }
     }
