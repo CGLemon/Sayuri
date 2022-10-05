@@ -576,7 +576,9 @@ void GameState::PlayRandomMove() {
         const auto vtx = board_.GetEmpty(i);
 
         if (IsLegalMove(vtx, color) &&
-                !board_.IsRealEye(vtx, color)) {
+                !(board_.IsSimpleEye(vtx, color) &&
+                     !board_.IsCaptureMove(vtx, color)&&
+                     !board_.IsEscapeMove(vtx, color))) {
             legal_moves.emplace_back(vtx);
         }
     }

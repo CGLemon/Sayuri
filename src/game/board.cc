@@ -2146,14 +2146,20 @@ void Board::GenerateCandidateMoves(std::vector<int> &moves_set, int color) const
 
     for (const auto vtx : {last_move_, last_move_2_}) {
         if (vtx != kPass && vtx != kNullVertex) {
+            const auto center_color = state_[vtx];
+
+            if (center_color != kEmpty &&
+                    GetLiberties(vtx) <= 2) {
+                FindStringLiberties(vtx, buf);
+            }
             for (int k = 0; k < 8; ++k) {
                 const auto avtx = vtx + directions_[k];
 
                 if (state_[avtx] == kEmpty) {
                     buf.emplace_back(avtx);
-                } else if (state_[avtx] == kBlack ||
-                               state_[avtx] == kWhite) {
-                    if (GetLiberties(avtx) <= 3) {
+                } else if (center_color != kEmpty &&
+                               state_[avtx] == !center_color) {
+                    if (GetLiberties(avtx) <= 2) {
                         FindStringLiberties(avtx, buf);
                     }
                 }
@@ -2166,8 +2172,11 @@ void Board::GenerateCandidateMoves(std::vector<int> &moves_set, int color) const
     buf.erase(std::unique(std::begin(buf), std::end(buf)),
                   std::end(buf));
 
-    for (const int vtx : buf) {
-        if (IsLegalMove(vtx, color) && !IsRealEye(vtx, color)) {
+    for (const auto vtx : buf) {
+        if (IsLegalMove(vtx, color) &&
+                !(IsSimpleEye(vtx, color) &&
+                     !IsCaptureMove(vtx, color)&&
+                     !IsEscapeMove(vtx, color))) {
             moves_set.emplace_back(vtx);
         }
     }
