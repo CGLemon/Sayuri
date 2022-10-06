@@ -63,13 +63,18 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
 
             if (param_->use_rollout || param_->no_dcnn) {
                 // Select the mix factor.
-                float factor = 0.5f;
+                float eval_factor = 0.0f;
+                float owner_factor = 0.0f;
+
                 if (param_->no_dcnn) {
-                    factor = 1.0f;
+                    eval_factor = 1.0f;
+                    owner_factor = 1.0f;
+                } else if (param_->use_rollout) {
+                    owner_factor = 1.0f;
                 }
 
                 // Update the mix rollout value
-                node->MixRolloutEvals(currstate, factor);
+                node->MixRolloutEvals(currstate, eval_factor, owner_factor);
             }
             if (!have_children && success) {
                 search_result.FromNetEvals(node->GetNodeEvals());

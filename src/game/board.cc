@@ -820,7 +820,7 @@ bool Board::IsLadder(const int vtx, std::vector<int> &vital_moves) const {
 }
 
 bool Board::IsSelfAtariMove(const int vtx, const int color) const {
-    int my_libs = CountPliberties(vtx);
+    int self_libs = CountPliberties(vtx);
     auto potential_libs_buf = std::vector<int>({vtx});
     auto my_parent_strings = std::vector<int>{};
 
@@ -836,7 +836,7 @@ bool Board::IsSelfAtariMove(const int vtx, const int color) const {
             my_parent_strings.emplace_back(aip);
         } else if (state == (!color) && libs <= 1) {
             // We can capture opponent's string.
-            my_libs += 1;
+            self_libs += 1;
 
             // TODO: Fully implement it here. Find gaining liberties by
             //       capturing.
@@ -845,7 +845,7 @@ bool Board::IsSelfAtariMove(const int vtx, const int color) const {
 
     int potential_libs = potential_libs_buf.size() - 1;
 
-    return (potential_libs + my_libs) == 1;
+    return (potential_libs + self_libs) == 1;
 }
 
 bool Board::IsAtariMove(const int vtx, const int color) const {

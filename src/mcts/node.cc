@@ -231,18 +231,20 @@ bool Node::SetTerminal() {
     return true;
 }
 
-void Node::MixRolloutEvals(GameState &state, float factor) {
+void Node::MixRolloutEvals(GameState &state,
+                               float eval_factor, float owner_factor) {
     const auto num_intersections = state.GetNumIntersections();
     auto mcowner = std::vector<float>(num_intersections, 0.f);
 
     float black_rollout_score;
     float black_rollout_val = GetBlackRolloutResult(state, mcowner, black_rollout_score);
 
-    black_wl_ = factor * black_rollout_val  + (1-factor) * black_wl_;
-    black_fs_ = factor * black_rollout_score + (1-factor) * black_fs_;
+    black_wl_ = eval_factor * black_rollout_val  + (1-eval_factor) * black_wl_;
+    black_fs_ = eval_factor * black_rollout_score + (1-eval_factor) * black_fs_;
 
     for (int idx = 0; idx < num_intersections; ++idx) {
-        black_ownership_[idx] = factor * mcowner[idx] + (1-factor) * black_ownership_[idx];
+        black_ownership_[idx] = owner_factor * mcowner[idx] +
+                                    (1-owner_factor) * black_ownership_[idx];
     }
 }
 

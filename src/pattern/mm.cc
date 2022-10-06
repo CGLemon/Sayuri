@@ -60,6 +60,7 @@ void MinorizationMaximization::Initialize(std::vector<int> features,
             std::cerr << "  " << names[i] << ": " << num_gammas_each_features << "\n";
         }
     }
+    std::cerr << "Gammas Number: " <<  num_gammas_ << "\n";
 }
 
 void MinorizationMaximization::AppendParticipantGroup(ParticipantGroup &p) {
@@ -89,7 +90,7 @@ void MinorizationMaximization::StartTraining() {
     std::cerr << "start training..." << std::endl;
 
     constexpr int kMaxNumSteps = 300;
-    constexpr double kEarlyStoppingDelta = 1e-5f;
+    constexpr double kEarlyStoppingDelta = 1e-4f;
     auto log_likelihood = ComputeLogLikelihood();
 
     std::cerr << "steps: " << 0

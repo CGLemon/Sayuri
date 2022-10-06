@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include <cassert>
 
 #include "game/board.h"
 #include "pattern/pattern.h"
@@ -268,13 +269,7 @@ std::uint64_t Board::GetSurroundPatternHash(std::uint64_t hash,
     return hash;
 }
 
-bool Board::GetDummyLevel(const int vtx, std::uint64_t &hash) const {
-    (void) vtx;
-    (void) hash;
-    return false;
-}
-
-bool Board::GetBorderLevel(const int vtx, std::uint64_t &hash) const {
+bool Board::GetBorderLevel(const int vtx, const int /* color */, std::uint64_t &hash) const {
     if (vtx == kPass) {
         return false;
     }
@@ -301,7 +296,7 @@ bool Board::GetBorderLevel(const int vtx, std::uint64_t &hash) const {
     return true;
 }
 
-bool Board::GetDistLevel(const int vtx, std::uint64_t &hash) const {
+bool Board::GetDistLevel(const int vtx, const int /* color */, std::uint64_t &hash) const {
     if (vtx == kPass) {
         return false;
     }
@@ -327,7 +322,7 @@ bool Board::GetDistLevel(const int vtx, std::uint64_t &hash) const {
     return true;
 }
 
-bool Board::GetDistLevel2(const int vtx, std::uint64_t &hash) const {
+bool Board::GetDistLevel2(const int vtx, const int /* color */, std::uint64_t &hash) const {
     if (vtx == kPass) {
         return false;
     }
@@ -353,105 +348,155 @@ bool Board::GetDistLevel2(const int vtx, std::uint64_t &hash) const {
     return true;
 }
 
-bool Board::GetCapureLevel(const int vtx, std::uint64_t &hash) const {
+bool Board::GetCapureLevel(const int vtx, const int color, std::uint64_t &hash) const {
     if (vtx == kPass) {
         return false;
     }
-    if (!IsCaptureMove(vtx, to_move_)) {
+    if (!IsCaptureMove(vtx, color)) {
         return false;
     }
 
-    int opp_color = !to_move_;
-    int num_cap = 0;
-    int max_stones = 0;
+    int opp_color = !color;
+    int num_cap_stones = 0;
+    auto pset = std::vector<int>{};
+    bool is_ladder = false;
 
     for (int k = 0; k < 4; ++k) {
         const auto avtx = vtx + directions_[k];
 
         if (state_[avtx] == opp_color && GetLiberties(avtx) == 1) {
-            num_cap += 1;
-            max_stones = std::max(GetStones(avtx), max_stones);
+            const auto parent = strings_.GetParent(avtx);
+
+            if (std::end(pset) ==
+                    std::find(std::begin(pset), std::end(pset), parent)) {
+                pset.emplace_back(parent);
+                num_cap_stones += GetStones(avtx);
+
+                auto vital_moves = std::vector<int>{};
+                if (IsLadder(avtx, vital_moves)) {
+                    if (std::end(vital_moves) !=
+                            std::find(std::begin(vital_moves),
+                                          std::end(vital_moves), vtx)) {
+                        // The vtx is in the vital_moves.
+                        is_ladder = true;
+                    }
+                }
+            }
         }
     }
 
     int level = 0;
-    if (num_cap == 1) {
-        if (max_stones <= 1) {
-            level = 1;
-        } else if (max_stones <= 4) {
-            level = 2;
-        } else {
+    assert(num_cap_stones >= 1);
+
+    if (IsAtariMove(vtx, color)) {
+        // string contiguous to new string in atari
+        level = 1;
+    } else if (is_ladder) {
+        // string in a ladder
+        level = 2;
+    } else {
+        // string not in a ladder
+        if (num_cap_stones <= 6) {
             level = 3;
-        }
-    } else if (num_cap >= 2) {
-        if (max_stones <= 4) {
-            level = 4;
         } else {
-            level = 5;
+            level = 4;
         }
     }
-
-    // TODO: ladder capture
-
 
     hash = 3ULL << 32 | (std::uint64_t)level;
     return true;
 }
 
-bool Board::GetAtariLevel(const int vtx, std::uint64_t &hash) const {
+bool Board::GetAtariLevel(const int vtx, const int color, std::uint64_t &hash) const {
     if (vtx == kPass) {
         return false;
     }
-    if (!IsAtariMove(vtx, to_move_)) {
+    if (!IsAtariMove(vtx, color)) {
         return false;
     }
 
-    int opp_color = !to_move_;
-    int num_atari = 0;
-    int max_stones = 0;
+    int opp_color = !color;
+    int num_atari_stones = 0;
+    bool is_ladder = false;
+
+    auto pset = std::vector<int>{};
 
     for (int k = 0; k < 4; ++k) {
         const auto avtx = vtx + directions_[k];
 
         if (state_[avtx] == opp_color && GetLiberties(avtx) == 2) {
-            num_atari += 1;
-            max_stones = std::max(GetStones(avtx), max_stones);
+            const auto parent = strings_.GetParent(avtx);
+
+            if (std::end(pset) ==
+                    std::find(std::begin(pset),
+                                  std::end(pset), parent)) {
+                pset.emplace_back(parent);
+                num_atari_stones += GetStones(avtx);
+
+                auto vital_moves = std::vector<int>{};
+                if (IsLadder(avtx, vital_moves)) {
+                    if (std::end(vital_moves) !=
+                            std::find(std::begin(vital_moves),
+                                          std::end(vital_moves), vtx)) {
+                        // The vtx is in the vital_moves.
+                        is_ladder = true;
+                    }
+                }
+            }
         }
+
     }
 
     int level = 0;
-    if (num_atari == 1) {
-        if (max_stones <= 4) {
-            level = 1;
-        } else {
-            level = 2;
-        }
-    } else if (num_atari >= 2) {
-        if (max_stones <= 4) {
+    assert(num_atari_stones >= 1);
+
+    if (ko_move_ != kNullVertex) {
+        // atari when there is a ko
+        level = 1;
+    } else if (is_ladder) {
+        // ladder atari
+        level = 2;
+    } else {
+        if (pset.size() == 1) {
+            // simple atari
             level = 3;
         } else {
+            // double atari
             level = 4;
         }
     }
-  
-    // TODO: ladder atari
 
     hash = 4ULL << 32 | (std::uint64_t)level;
     return true;
 }
 
+bool Board::GetSelfAtariLevel(const int vtx, const int color, std::uint64_t &hash) const {
+    if (vtx == kPass) {
+        return false;
+    }
+    if (!IsSelfAtariMove(vtx, color)) {
+        return false;
+    }
 
-bool Board::GetFeatureWrapper(const int f, const int vtx, std::uint64_t &hash) const {
+    int level = 1;
+    hash = 5ULL << 32 | (std::uint64_t)level;
+
+    return true;
+}
+
+bool Board::GetFeatureWrapper(const int f, const int vtx,
+                                  const int color, std::uint64_t &hash) const {
     switch (f) {
-        case 0: return GetBorderLevel(vtx, hash);
-        case 1: return GetDistLevel(vtx, hash);
-        case 2: return GetDistLevel2(vtx, hash);
-        case 3: return GetCapureLevel(vtx, hash);
-        case 4: return GetAtariLevel(vtx, hash);
+        case 0: return GetBorderLevel(vtx, color, hash);
+        case 1: return GetDistLevel(vtx, color, hash);
+        case 2: return GetDistLevel2(vtx, color, hash);
+        case 3: return GetCapureLevel(vtx, color, hash);
+        case 4: return GetAtariLevel(vtx, color, hash);
+        case 5: return GetSelfAtariLevel(vtx, color, hash);
     }
     return false;
 }
 
 int Board::GetMaxFeatures() {
-    return 5;
+    return 6;
 }

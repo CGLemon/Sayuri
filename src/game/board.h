@@ -207,13 +207,13 @@ public:
                                              const int dist) const;
 
     // For board features...
-    bool GetDummyLevel(const int vtx, std::uint64_t &hash) const;
-    bool GetBorderLevel(const int vtx, std::uint64_t &hash) const;
-    bool GetDistLevel(const int vtx, std::uint64_t &hash) const;
-    bool GetDistLevel2(const int vtx, std::uint64_t &hash) const;
-    bool GetCapureLevel(const int vtx, std::uint64_t &hash) const;
-    bool GetAtariLevel(const int vtx, std::uint64_t &hash) const;
-    bool GetFeatureWrapper(const int f, const int vtx, std::uint64_t &hash) const;
+    bool GetBorderLevel(const int vtx, const int color, std::uint64_t &hash) const;
+    bool GetDistLevel(const int vtx, const int color, std::uint64_t &hash) const;
+    bool GetDistLevel2(const int vtx, const int color, std::uint64_t &hash) const;
+    bool GetCapureLevel(const int vtx, const int color, std::uint64_t &hash) const;
+    bool GetAtariLevel(const int vtx, const int color, std::uint64_t &hash) const;
+    bool GetSelfAtariLevel(const int vtx, const int color, std::uint64_t &hash) const;
+    bool GetFeatureWrapper(const int f, const int vtx, const int color, std::uint64_t &hash) const;
     static int GetMaxFeatures();
 
 private:

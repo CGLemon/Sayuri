@@ -82,6 +82,7 @@ void MmTrainer::InitMm() {
     names.emplace_back("dist2");
     names.emplace_back("capture");
     names.emplace_back("atari");
+    names.emplace_back("self-atari");
 
     mm_ = std::make_unique<MinorizationMaximization>();
     mm_->Initialize(features, names);
@@ -244,9 +245,9 @@ void MmTrainer::FillPatterns(std::string sgfstring) {
 
         // gather board features
         const auto ProcessWrapper = [this](Board &board,
-                                               int bf, int mvtx, int feature_idx) {
+                                               int bf, int mvtx, int color, int feature_idx) {
             std::uint64_t mhash;
-            if (board.GetFeatureWrapper(bf, mvtx, mhash)) {
+            if (board.GetFeatureWrapper(bf, mvtx, color, mhash)) {
                 FeatureSpatDict &spat_dict = feature_spat_dicts_[feature_idx];
                 FeatureOrder &order = feature_orders_[feature_idx];
                 FeatureOrderDict &order_dict = feature_order_dicts_[feature_idx];
@@ -271,7 +272,7 @@ void MmTrainer::FillPatterns(std::string sgfstring) {
 
         const auto offset = kMmMaxPatternDist+1;
         for (int i = 0; i < Board::GetMaxFeatures(); ++i) {
-            ProcessWrapper(board, i, vtx, offset+i);
+            ProcessWrapper(board, i, vtx, color, offset+i);
         }
     } while (game_ite.Next());
 }
@@ -332,10 +333,10 @@ void MmTrainer::FillMmParticipant(std::string sgfstring) {
 
                 // gather board features
                 const auto ProcessWrapper = [this](Board &board,
-                                                       int bf, int mvtx, int feature_idx,
+                                                       int bf, int mvtx, int color, int feature_idx,
                                                        ParticipantGroup::GammasTeam &team) {
                     std::uint64_t mhash;
-                    if (board.GetFeatureWrapper(bf, mvtx, mhash)) {
+                    if (board.GetFeatureWrapper(bf, mvtx, color, mhash)) {
                         auto &order_dict = feature_order_dicts_[feature_idx];
                         auto it = order_dict.find(mhash);
                         bool matched = it != std::end(order_dict);
@@ -351,7 +352,7 @@ void MmTrainer::FillMmParticipant(std::string sgfstring) {
 
                 const auto offset = kMmMaxPatternDist+1;
                 for (int i = 0; i < Board::GetMaxFeatures(); ++i) {
-                    ProcessWrapper(board, i, vtx, offset+i, team);
+                    ProcessWrapper(board, i, vtx, color, offset+i, team);
                 }
 
                 if (!team.empty()) {
