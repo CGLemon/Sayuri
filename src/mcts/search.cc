@@ -136,17 +136,6 @@ void Search::PrepareRootNode() {
     if (!reused) {
         root_node_->Update(&evals);
     }
-
-    const auto color = root_state_.GetToMove();
-    const auto winloss = color == kBlack ? evals.black_wl : 1 - evals.black_wl;
-    const auto final_score = color == kBlack ? evals.black_final_score :
-                                                   -evals.black_final_score;
-    if (GetOption<bool>("analysis_verbose")) {
-        LOGGING << "Raw NN output:" << std::endl
-                    << Format("       eval: %.2f%\n", winloss * 100.f)
-                    << Format("       draw: %.2f%\n", evals.draw * 100.f)
-                    << Format("final score: %.2f\n", final_score);
-    }
 }
 
 void Search::ReleaseTree() {
@@ -304,13 +293,19 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
                                    time_control_.GetThinkingTime(color, board_size, move_num));
     PrepareRootNode();
 
-    if (GetOption<bool>("analysis_verbose")) {
-        LOGGING << "Max thinking time: " << thinking_time << "(sec)" << std::endl;
+    if (param_->analysis_verbose) {
+        if (param_->no_dcnn) {
+            LOGGING << "Disable DCNN forwarding pipe\n";
+        }
+        LOGGING << Format("Reuse %d nodes\n", root_node_->GetVisits()-1);
+        LOGGING << Format("Use %d threads for search\n", param_->threads);
+        LOGGING << Format("Max thinking time: %.0f(sec)\n", thinking_time);
+        LOGGING << Format("Max playouts number: %d\n", playouts);
     }
 
     if (thinking_time < timer.GetDuration() || playouts == 0) {
         // Prepare the root node will spent little time. So disable
-        // tree search if the time is up
+        // to do tree search if the time is up.
         running_.store(false, std::memory_order_relaxed);
     }
 
@@ -364,9 +359,9 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
     if (tag & kAnalyze) {
         DUMPING << root_node_->ToAnalyzeString(root_state_, color, ToAnalysisTag(tag));
     }
-    if (GetOption<bool>("analysis_verbose")) {
+    if (param_->analysis_verbose) {
         LOGGING << root_node_->ToVerboseString(root_state_, color);
-        LOGGING << "Time:\n";
+        LOGGING << " * Time Status:\n";
         LOGGING << "  " << time_control_.ToString();
         LOGGING << "  spent: " << timer.GetDuration() << "(sec)\n";
         LOGGING << "  speed: " << (float)playouts_.load(std::memory_order_relaxed) /

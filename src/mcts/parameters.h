@@ -53,6 +53,7 @@ public:
         first_pass_bonus = GetOption<bool>("first_pass_bonus");
         symm_pruning = GetOption<bool>("symm_pruning");
         use_stm_winrate = GetOption<bool>("use_stm_winrate");
+        analysis_verbose = GetOption<bool>("analysis_verbose");
     }
 
     int threads;
@@ -96,6 +97,7 @@ public:
     bool first_pass_bonus;
     bool symm_pruning;
     bool use_stm_winrate;
+    bool analysis_verbose;
 
     std::array<float, kNumVertices + 10> dirichlet_buffer;
 };

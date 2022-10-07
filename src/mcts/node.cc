@@ -684,7 +684,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     const auto parentvisits = static_cast<float>(GetVisits());
 
     const auto space1 = 7;
-    out << "Search List:" << std::endl;
+    out << " * Search List:" << std::endl;
     out << std::setw(6) << "move"
             << std::setw(10) << "visits"
             << std::setw(space1) << "WL(%)"
@@ -719,7 +719,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
                 << std::setw(space1) << draw * 100.f           // draw probability
                 << std::setw(space1) << pobability * 100.f     // move probability
                 << std::setw(space1) << visit_ratio * 100.f    // visits ratio
-                << std::setw(space1) << final_score            // score leading
+                << std::setw(space1) << final_score            // score lead
                 << std::setw(6) << "| PV:" << ' ' << pv_string // principal variation
                 << std::endl;
     }
@@ -735,14 +735,14 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     // we may not collect all node conut. 
     const auto mem_used = static_cast<double>(nodes * node_mem + edges * edge_mem) / (1024.f * 1024.f);
 
-    const auto space2 = 12;
-    out << "Tree Status:" << std::endl
+    const auto space2 = 10;
+    out << " * Tree Status:" << std::endl
             << std::fixed << std::setprecision(4)
-            << std::setw(space2) << "root KL:"    << ' ' << ComputeKlDivergence() << std::endl
-            << std::setw(space2) << "complexity:" << ' ' << ComputeTreeComplexity() << std::endl
-            << std::setw(space2) << "nodes:"      << ' ' << nodes    << std::endl
-            << std::setw(space2) << "edges:"      << ' ' << edges    << std::endl
-            << std::setw(space2) << "memory:"     << ' ' << mem_used << ' ' << "(MiB)" << std::endl;
+            << std::setw(space2) << "root KL:" << ' ' << ComputeKlDivergence() << std::endl
+            << std::setw(space2) << "root C:"  << ' ' << ComputeTreeComplexity() << std::endl
+            << std::setw(space2) << "nodes:"   << ' ' << nodes    << std::endl
+            << std::setw(space2) << "edges:"   << ' ' << edges    << std::endl
+            << std::setw(space2) << "memory:"  << ' ' << mem_used << ' ' << "(MiB)" << std::endl;
 
     return out.str();
 }
