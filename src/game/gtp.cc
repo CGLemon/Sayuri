@@ -49,6 +49,7 @@ void GtpLoop::Loop() {
             if (out.empty()) {
                 out = Execute(parser, try_ponder);
             }
+            prev_pondering_ = try_ponder; // save the last pondering status
 
             if (!out.empty()) {
                 DUMPING << out;
@@ -314,7 +315,6 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         auto move = agent_->GetSearch().GetSelfPlayMove();
         agent_->GetState().PlayMove(move);
         out << GtpSuccess(agent_->GetState().VertexToText(move));
-        // try_ponder = true;
     } else if (const auto res = parser.Find("selfplay", 0)) {
         while (!agent_->GetState().IsGameOver()) {
             agent_->GetState().PlayMove(agent_->GetSearch().GetSelfPlayMove());
@@ -437,7 +437,6 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         } else {
             out << GtpFail("invalid time settings");
         }
-
     } else if (const auto res = parser.Find("time_settings", 0)) {
         int main_time = -1, byo_yomi_time = -1, byo_yomi_stones = -1;
 
@@ -479,6 +478,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             agent_->GetSearch().TimeLeft(color, time, stones);
             out << GtpSuccess("");
         }
+        try_ponder = true;
     } else if (const auto res = parser.Find("final_status_list", 0)) {
         auto result = agent_->GetSearch().Computation(400, 0, Search::kForced);
         auto vtx_list = std::ostringstream{};
@@ -965,6 +965,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
 
         out << GtpSuccess(candidate_map.str());
     } else {
+        try_ponder = prev_pondering_;
         out << GtpFail("unknown command");
     }
     return out.str();

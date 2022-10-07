@@ -75,6 +75,7 @@ public:
                                      );
         }
         curr_id_ = -1;
+        prev_pondering_ = false;
 
         Loop();
     }
@@ -95,5 +96,6 @@ private:
     std::unique_ptr<Agent> agent_{nullptr};
 
     int curr_id_;
+    bool prev_pondering_;
     std::string version_verbose_;
 };
