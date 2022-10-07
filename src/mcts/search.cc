@@ -262,7 +262,7 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
         }
     }
 
-    // The SMP worker run on every threads except main thread.
+    // The SMP worker runs on every threads except the main thread.
     const auto Worker = [this]() -> void {
         while(running_.load(std::memory_order_relaxed)) {
             auto currstate = std::make_unique<GameState>(root_state_);
@@ -855,14 +855,15 @@ int Search::GetPonderPlayouts() const {
     // and reuse the tree. They can efficiently use the large tree.
     // Set the greatest number as we can.
 
+    const int max_ponder_playouts = std::min(param_->ponder_playouts, kMaxPlayouts);
 
-    // The factor means 'ponder_playouts = playouts x div_factor'.
+    // The factor means 'ponder_playouts = playouts * div_factor'.
     const int div_factor = 100;
 
     // TODO: We should consider tree memory limit. Avoid to use
     //       too many system memory.
     const int ponder_playouts_factor = std::min(param_->playouts,
-                                                    kMaxPlayouts/div_factor);
+                                                    max_ponder_playouts/div_factor);
     const int ponder_playouts = std::max(4 * 1024,
                                              ponder_playouts_factor * div_factor);
     return ponder_playouts;

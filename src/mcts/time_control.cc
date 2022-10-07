@@ -243,10 +243,11 @@ float TimeControl::GetThinkingTime(int color, int boardsize, int move_num) const
     int base_time = std::max(time_remaining - lag_buffer_, 0) / std::max(moves_remaining, 1);
     int inc_time = std::max(extra_time_per_move - lag_buffer_, 0);
 
-    // Output value may loss littel precision. It is OK that most case
-    // the losing of precision is smaller than one second. If the losing
-    // value greater than one second, output value is very large. We don't 
-    // care the losing in that case.
+
+    // Output value may loss littel precision. It is ok that because the
+    // the of precision is smaller than one second. If it is greater than
+    // one second, the output value is very large. We don't care the little
+    // error.
     return (float)(base_time + inc_time) / 100.f; // centisecond to second
 }
 
@@ -267,21 +268,24 @@ bool TimeControl::IsInfiniteTime(int /* color */) const {
 }
 
 int TimeControl::EstimateMovesExpected(int boardsize, int move_num, int delta) const {
+    // The Estimated number of moves is conservative. Avoid some extreme
+    // case that someone refuses to resign.
+
     delta = std::max(0, delta);
 
     const int num_intersections = boardsize * boardsize;
     const int side_move_num = move_num/2;
     const int base_remaining = num_intersections / (3 + delta);
-    const int bsize_bouns = boardsize + delta;
-    const int fast_moves = num_intersections / (9 + delta);
+    const int fast_moves = num_intersections / (boardsize + delta);
     const int moves_buffer = num_intersections / (2 * boardsize + delta);
 
     int estimated_moves = 0;
 
     if (side_move_num < fast_moves) {
-        estimated_moves = base_remaining + bsize_bouns + fast_moves - side_move_num;
+        // Play fast in the opening step.
+        estimated_moves = base_remaining + fast_moves - side_move_num;
     } else {
-        estimated_moves = base_remaining + bsize_bouns + - side_move_num;
+        estimated_moves = base_remaining - side_move_num;
     }
 
     return std::max(estimated_moves, moves_buffer);

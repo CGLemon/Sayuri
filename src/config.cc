@@ -65,6 +65,7 @@ void InitOptionsMap() {
 
     kOptionsMap["cache_memory_mib"] << Option::setoption(400);
     kOptionsMap["playouts"] << Option::setoption(0);
+    kOptionsMap["ponder_playouts"] << Option::setoption(0);
     kOptionsMap["const_time"] << Option::setoption(0);
     kOptionsMap["batch_size"] << Option::setoption(0);
     kOptionsMap["threads"] << Option::setoption(0);
@@ -81,7 +82,7 @@ void InitOptionsMap() {
     kOptionsMap["resign_threshold"] << Option::setoption(0.1f, 1.f, 0.f);
 
     kOptionsMap["ci_alpha"] << Option::setoption(1e-5f, 1.f, 0.f);
-    kOptionsMap["lcb_reduction"] << Option::setoption(0.f, 1.f, 0.f);
+    kOptionsMap["lcb_reduction"] << Option::setoption(0.02f, 1.f, 0.f);
     kOptionsMap["fpu_reduction"] << Option::setoption(0.25f);
     kOptionsMap["fpu_root_reduction"] << Option::setoption(0.25f);
     kOptionsMap["cpuct_init"] << Option::setoption(1.9f);
@@ -161,12 +162,16 @@ void InitBasicParameters() {
     // Try to select a reasonable number for const time and playouts.
     bool already_set_time = GetOption<int>("const_time") > 0;
     bool already_set_playouts = GetOption<int>("playouts") > 0;
+    bool already_set_ponder_playouts = GetOption<int>("ponder_playouts") > 0;
 
     if (!already_set_time && !already_set_playouts) {
         SetOption("const_time", 10); // 10 seconds
     }
     if (!already_set_playouts) {
         SetOption("playouts", std::numeric_limits<int>::max() / 2);
+    }
+    if (!already_set_ponder_playouts) {
+        SetOption("ponder_playouts", std::numeric_limits<int>::max() / 2);
     }
 }
 
@@ -350,6 +355,12 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext({"--playouts", "-p"})) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("playouts", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+    if (const auto res = parser.FindNext({"--ponder-playouts", "-p"})) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("ponder_playouts", res->Get<int>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
