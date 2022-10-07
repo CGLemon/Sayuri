@@ -266,21 +266,23 @@ bool TimeControl::IsInfiniteTime(int /* color */) const {
                byo_periods_ == 0;
 }
 
-int TimeControl::EstimateMovesExpected(int boardsize, int move_num, int div_delta) const {
+int TimeControl::EstimateMovesExpected(int boardsize, int move_num, int delta) const {
+    delta = std::max(0, delta);
+
     const int num_intersections = boardsize * boardsize;
-
     const int side_move_num = move_num/2;
-    const int base_remaining = num_intersections / (3 + div_delta);
-    const int fast_moves = num_intersections / (9 + div_delta);
-    const int moves_buffer = num_intersections / (2 * boardsize + div_delta);
+    const int base_remaining = num_intersections / (3 + delta);
+    const int bsize_bouns = boardsize + delta;
+    const int fast_moves = num_intersections / (9 + delta);
+    const int moves_buffer = num_intersections / (2 * boardsize + delta);
 
-    int estimate_moves = 0;
+    int estimated_moves = 0;
 
     if (side_move_num < fast_moves) {
-        estimate_moves = base_remaining + fast_moves - side_move_num;
+        estimated_moves = base_remaining + bsize_bouns + fast_moves - side_move_num;
     } else {
-        estimate_moves = base_remaining - side_move_num;
+        estimated_moves = base_remaining + bsize_bouns + - side_move_num;
     }
 
-    return std::max(estimate_moves, moves_buffer);
+    return std::max(estimated_moves, moves_buffer);
 }
