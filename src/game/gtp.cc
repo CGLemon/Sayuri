@@ -7,6 +7,7 @@
 #include "pattern/mm_trainer.h"
 #include "neural/supervised.h"
 #include "neural/encoder.h"
+#include "accuracy/predict.h"
 
 #include <iomanip>
 #include <iostream>
@@ -673,6 +674,21 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             out << GtpFail("file name is empty");
         }
 
+    } else if (const auto res = parser.Find("prediction_accuracy", 0)) {
+        auto sgf_file = std::string{};
+
+        if (const auto sgf = parser.GetCommand(1)) {
+            sgf_file = sgf->Get<std::string>();
+        }
+
+        if (sgf_file.empty()) {
+            out << GtpFail("file name is empty");
+        } else {
+            float acc = PredictSgfAccuracy(agent_->GetSearch(), agent_->GetState(), sgf_file);
+            auto predict_out = std::ostringstream{};
+            predict_out << Format("the accuracy %.2f%", acc * 100);
+            out << GtpSuccess(predict_out.str());
+        }
     } else if (const auto res = parser.Find("gogui-analyze_commands", 0)) {
         auto gogui_cmds = std::ostringstream{};
 

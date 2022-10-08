@@ -7,6 +7,7 @@ set(NEURAL_SOURCES_DIR ${SOURCE_DIR}/neural)
 set(BOOK_SOURCES_DIR ${SOURCE_DIR}/book)
 set(PATTERN_SOURCES_DIR ${SOURCE_DIR}/pattern)
 set(MCTS_SOURCES_DIR ${SOURCE_DIR}/mcts)
+set(ACCURACY_SOURCES_DIR ${SOURCE_DIR}/accuracy)
 set(SELFPLAY_SOURCES_DIR ${SOURCE_DIR}/selfplay)
 set(UTILS_SOURCES_DIR ${SOURCE_DIR}/utils)
 
@@ -66,6 +67,10 @@ set(MCTS_SOURCES
     ${MCTS_SOURCES_DIR}/node.cc
     ${MCTS_SOURCES_DIR}/search.cc
     ${MCTS_SOURCES_DIR}/rollout.cc
+    )
+
+set(ACCURACY_SOURCES
+    ${ACCURACY_SOURCES_DIR}/predict.cc
     )
 
 set(SELFPLAY_SOURCES
@@ -304,6 +309,7 @@ add_executable(Sayuri
     ${MCTS_SOURCES}
     ${NEURAL_SOURCES}
     ${UTILS_SOURCES}
+    ${ACCURACY_SOURCES}
     ${SELFPLAY_SOURCES}
     ${CUDA_SOURCES}
     )
