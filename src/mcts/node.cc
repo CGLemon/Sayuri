@@ -372,7 +372,7 @@ Node *Node::ProbSelectChild() {
 
     for (auto &child : children_) {
         const auto node = child.Get();
-        const bool is_pointer = node == nullptr ? false : true;
+        const bool is_pointer = node != nullptr;
 
         auto prob = child.GetPolicy();
 
@@ -438,7 +438,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
 
     for (auto &child : children_) {
         const auto node = child.Get();
-        const bool is_pointer = node == nullptr ? false : true;
+        const bool is_pointer = node != nullptr;
 
         // The node was pruned. Skip this time.
         if (is_pointer && !node->IsActive()) {
@@ -503,7 +503,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     return best_node->Get();
 }
 
-Node *Node::UctSelectChild(const int color, const bool is_root) {
+Node *Node::UctSelectChild(const int color, const bool is_root, const GameState &state) {
     WaitExpanded();
     assert(HaveChildren());
     assert(color == color_);
@@ -514,18 +514,61 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
     const int parentvisits = std::max(1, GetVisits());
     const float numerator = std::log((float)parentvisits);
     const float cpuct = is_root ? GetParameters()->cpuct_root_init : GetParameters()->cpuct_init;
-    const float parent_qvalue = GetEval(color);
+    const float parent_qvalue = GetEval(color, false);
+
+    std::vector<Edge*> edge_buf;
+
+    for (auto &child : children_) {
+        edge_buf.emplace_back(&child);
+    }
+
+    if (parentvisits >= 20) {
+        auto owenership = GetOwnership(color);
+        std::sort(std::begin(edge_buf), std::end(edge_buf),
+                     [&, owenership, state](Edge *a, Edge *b) {
+                         constexpr float kPolicyFactor = 0.75f;
+                         constexpr float kOwnerFactor = 1.0f;
+
+                         auto priority_a = 0.f;
+                         priority_a += kPolicyFactor * a->GetPolicy();
+
+                         int vtx_a = a->GetVertex();
+                         if (vtx_a != kPass) {
+                             const int x = state.GetX(vtx_a);
+                             const int y = state.GetY(vtx_a);
+                             priority_a += kOwnerFactor *
+                                               ComputeOwnerPriority(
+                                                   owenership[state.GetIndex(x,y)]);
+                         }
+
+                         auto priority_b = 0.f;
+                         priority_b += kPolicyFactor * b->GetPolicy();
+
+                         int vtx_b = b->GetVertex();
+                         if (vtx_b != kPass) {
+                             const int x = state.GetX(vtx_b);
+                             const int y = state.GetY(vtx_b);
+                             priority_b += kOwnerFactor *
+                                               ComputeOwnerPriority(
+                                                   owenership[state.GetIndex(x,y)]);
+                         }
+
+                         return priority_a > priority_b;
+                     }
+                 );
+    }
 
     const int width = std::max(ComputeWidth(parentvisits), 1);
     int i = 0;
 
-    for (auto &child : children_) {
+    for (auto edge_ptr : edge_buf) {
+        auto &child = *edge_ptr;
         if (++i > width) {
             break;
         }
 
         const auto node = child.Get();
-        const bool is_pointer = node == nullptr ? false : true;
+        const bool is_pointer = node != nullptr;
 
         // The node was pruned. Skip this time.
         if (is_pointer && !node->IsActive()) {
@@ -533,7 +576,7 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
         }
 
         float q_value = parent_qvalue;
-        if (parentvisits <= 4) {
+        if (parentvisits <= 10) {
             q_value = 0.5f; // draw value
         }
 
@@ -550,7 +593,7 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
 
         // UCT algorithm
         const float denom = 1.0f + child_visits;
-        const float psa = GetSearchPolicy(child, false);
+        const float psa = child.GetPolicy();
         const float bouns = 0.35f * std::sqrt(1000.f / ((float)parentvisits + 1000.f)) * psa;
         const float uct = cpuct * std::sqrt(numerator / denom);
         float value = q_value + uct + bouns;
@@ -558,7 +601,7 @@ Node *Node::UctSelectChild(const int color, const bool is_root) {
 
         if (value > best_value) {
             best_value = value;
-            best_node = &child;
+            best_node = edge_ptr;
         }
     }
 
@@ -769,6 +812,7 @@ std::string Node::ToAnalyzeString(GameState &state, const int color, Node::Analy
 
     auto out = std::ostringstream{};
     const auto lcblist = GetLcbList(color);
+    const auto root_visits = static_cast<float>(GetVisits() - 1);
 
     bool is_sayuri = (bool)(tag & AnalysisTag::kSayuri);
     bool is_kata = (bool)(tag & AnalysisTag::kKata);
@@ -786,6 +830,11 @@ std::string Node::ToAnalyzeString(GameState &state, const int color, Node::Analy
         const auto visits = child->GetVisits();
         const auto prior = child->GetPolicy();
         const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
+
+        if (GetParameters()->no_dcnn &&
+                visits/root_visits < 0.01f) { // cut off < 1% children...
+            continue;
+        }
 
         if (is_sayuri) {
             const auto kl = child->ComputeKlDivergence();
@@ -892,7 +941,7 @@ std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
 
     for (const auto & child : children_) {
         const auto node = child.Get();
-        const bool is_pointer = node == nullptr ? false : true;
+        const bool is_pointer = node != nullptr;
 
         if (!is_pointer || !node->IsActive()) {
             continue;
@@ -1212,7 +1261,7 @@ void Node::ComputeNodeCount(size_t &nodes, size_t &edges) {
         // all types of nodes. Including pruned and invalid node.
         for (const auto &child : children) {
             node = child.Get();
-            const bool is_pointer = node == nullptr ? false : true;
+            const bool is_pointer = node != nullptr;
 
             if (is_pointer) {
                 if (!(node->IsExpanding())) {

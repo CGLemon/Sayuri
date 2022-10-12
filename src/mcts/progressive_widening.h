@@ -36,8 +36,33 @@ static const std::vector<std::uint64_t> kProgressiveWidening = {
     1264365481
 };
 
+// constexpr int OWNER_MAX = 11;
+// constexpr double OWNER_FACTOR = 3.f;
+// constexpr double OWNER_BIAS = 1.8f;
+// 
+// void gen_uct_owner() {
+//     double uct_owner[OWNER_MAX];
+//     int center = OWNER_MAX/2;
+//     for (int i = 0; i < OWNER_MAX; i++) {
+//         uct_owner[i] = std::exp(-std::pow(float(i - center)/OWNER_FACTOR, 2) / OWNER_BIAS);
+//     }
+// }
+static const std::vector<float> kUctOwner = {
+    0,
+    0.158755,
+    0.360059,
+    0.567514,
+    0.726444,
+    0.786306,
+    0.726444,
+    0.567514,
+    0.360059,
+    0.158755,
+    0 
+};
+
 inline int ComputeWidth(int visits) {
-    int size = kProgressiveWidening.size();
+    const int size = kProgressiveWidening.size();
     int c;
     for (c = 0; c < size; ++c) {
         if (kProgressiveWidening[c] > std::uint64_t(visits)) {
@@ -45,4 +70,19 @@ inline int ComputeWidth(int visits) {
         }
     }
     return c;
+}
+
+// The val range is [-1 ~ 1] 
+inline int ComputeOwnerPriority(float val) {
+    const int size = kUctOwner.size();
+    val = (val+1) / 2;
+
+    int i = 0;
+    for (; i < size; ++i) {
+        if ((i+1) * (1.f / size)  >= val) break;
+    }
+    if (i >= size) {
+        i = size - 1;
+    }
+    return kUctOwner[i];
 }

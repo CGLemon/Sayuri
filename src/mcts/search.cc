@@ -96,7 +96,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
         } else {
             // Go to the next node by PUCT/UCT algoritim.
             if (param_->no_dcnn) {
-                next = node->UctSelectChild(color, node == root_node);
+                next = node->UctSelectChild(color, node == root_node, currstate);
             } else {
                 next = node->PuctSelectChild(color, node == root_node);
             }

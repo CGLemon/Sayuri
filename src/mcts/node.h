@@ -44,7 +44,7 @@ public:
     Node *PuctSelectChild(const int color, const bool is_root);
 
     // Select the best UCT value node. For no-dcnn mode.
-    Node *UctSelectChild(const int color, const bool is_root);
+    Node *UctSelectChild(const int color, const bool is_root, const GameState &state);
 
     void PolicyTargetPruning();
 
