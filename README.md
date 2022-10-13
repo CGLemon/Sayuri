@@ -7,7 +7,7 @@
 
 ## Let's ROCK!
 
-Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. She is strongly inspired by Leela Zero and Kata Go. The board data structure, search algorithm and network format are borrowed from Leela Zero in the beginning. Current version follow the Kata Go research, the engine supports variable komi and board size now. Some methods you may see my Hackmd article (chinese).
+Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. She is strongly inspired by Leela Zero and Kata Go. The board data structure, search algorithm and network format are borrowed from Leela Zero in the beginning. Current version follow the Kata Go research, the engine supports variable komi and board size now. Some methods you may see my HackMD article (in chinese).
 
 * [開發日誌](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/BJgfay0Yc)
 
@@ -32,7 +32,7 @@ Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network a
 
 ## Optional Compiling
 
-Accelerate the network fowardind pipe by CPU. OpenBlas or Eigen are required. OpenBlas and Eigen are significantly faster than built-in blas. OpenBlas is recommended on MacOS.
+Accelerate the network forwarding pipe by CPU. OpenBlas or Eigen are required. OpenBlas and Eigen are significantly faster than built-in blas. OpenBlas is recommended on MacOS.
 
     $ cmake .. -DBLAS_BACKEND=OPENBLAS
 
@@ -40,14 +40,13 @@ or
 
     $ cmake .. -DBLAS_BACKEND=EIGEN
 
-Accelerate the network fowardind pipe by GPUs. CUDA is required.
+Accelerate the network forwarding pipe by GPUs. CUDA is required.
 
     $ cmake .. -DBLAS_BACKEND=CUDA
 
-Accelerate the network fowardind pipe by GPUs. CUDA and cuDNN are both required. It will be faster than CUDA-only in the most cases.
+Accelerate the network forwarding pipe by GPUs. CUDA and cuDNN are both required. It will be faster than CUDA-only in the most cases.
 
     $ cmake .. -DBLAS_BACKEND=CUDNN
-
 
 Accelerate to load the network file. Fast Float library is required.
 
@@ -149,24 +148,29 @@ The engine supports the following GTP analysis commands.
 
 ## Misc
 
-### About this engine
+### What's the Deep Learning technology?
 
-The project was began from the Aug 6, 2019. In the beginning, I just wanted to write a Go Bot that could beat the low level player in 9x9. Although It was easy to train a strong enough bot with deep learning technique, it was hard for me to do that in that time. It is because that I do not major in computer science and I never learn the C++ before. After few years learning, my C++ skill is much better. Even more, the current version can beat me in any board size.
+The Deep Convolutional Neural Network (DCNN) is a special technique to provides the human-like thinking. It significantly improves the prediction accuracy of next moves and current winrate. Thanks for deep learning and MCTS, the modern computer Go can beat the top level players on the full size board. Sayuri is anthor Go engine to use this technology.
 
-### About the ancient technique
+### Why do we need a GPU card?
 
-Before the AlphaGo (2016s), the most state-of-the-art computer go combine the MCTS and MM (Minorization-Maximization). Crazy Stone and Zen use that. Or combining the MCTS and SB (Simulation Balancing). The Eric (predecessor of AlphaGo) and Leela use that. Ray, one of the strongest open source go engine before AlphaGo, writed by Yuki Kobayashi which based on the MM algorithm. I am surprised that it can play the game well wihout much human knowledge and Neural Network. What's more, it can beats high level go player in 9x9 if we provide it enough computation. But thanks for deep learning technique, the computer go engine is significantly stronger than before. Sayuri can beat the Ray in 19x19 with only policy network. This result show the advantage of deep Neural Network.
+There are many matrix operations in the Neural Network forwarding pipe. It is not efficiently to run it on the CPU. Normally, the GPU is 10~20 times faster than the CPU.
 
-Although the Neural Network base engines are more powerful, you may still try some engine with non Neural Network and feel the power of ancient technique. Here is the list.
+### About the ancient technology
+
+Before the AlphaGo (2016s), the most of state-of-the-art computer Go combine the MCTS and MM (Minorization-Maximization). Crazy Stone and Zen use that. Or combining the MCTS and SB (Simulation Balancing). The Eric (predecessor of AlphaGo) and Leela use that. Ray, one of the strongest open source Go engine before AlphaGo, writed by Yuki Kobayashi which based on the MM algorithm. I am surprised that it can play the game well without much human knowledge and Neural Network. What's more, it can beat high level Go player on 9x9 if we provide it enough computation. But thanks for deep learning technique, the computer Go engine is significantly stronger than before. Sayuri can beat the Ray (v10.0) on 19x19 with only policy network. This result shows the advantage of Neural Network technology.
+
+Although the Neural Network based engines are more powerful, I still recommend you to try some engine with non Neural Network and feel the power of ancient technology. Here is the list.
 
 * [Leela](https://www.sjeng.org/leela.html), need to add the option ```--nonets``` to disable DCNN.
 * [Pachi](https://github.com/pasky/pachi), need to add the option ```--nodcnn``` to disable DCNN.
-* [Ray](https://github.com/kobanium/Ray), may be strongest open source engine in the 2016s.
+* [Ray](https://github.com/kobanium/Ray), may be strongest open source engine before the 2016s.
 
-I am trying to implement this ancient technique currently. Merge the MM patterns base and the DCNN base technique to provide widely dynamic strength. It should be fun.
+I am trying to implement this ancient technique currently. Merge the MM patterns based and the DCNN based technique to provide widely dynamic strength. It should be fun.
 
 ## Features
 
+* Provide high level player strength on 19x19, depending on hardware.
 * Support Sabaki and GoGui analysis mode.
 * Support handicap game.
 * Support variable komi and board size (from 7x7 to 19x19).
@@ -175,7 +179,7 @@ I am trying to implement this ancient technique currently. Merge the MM patterns
 * Predict the current side winrate and draw-rate.
 * Predict the current side score lead and death strings.
 * Reuse the sub-tree.
-* Chinese rules with positional superko
+* Chinese rules with positional superko.
 
 ## Todo
 
