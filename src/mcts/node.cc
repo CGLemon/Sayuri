@@ -523,22 +523,24 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
     }
 
     if (parentvisits >= 20) {
-        auto owenership = GetOwnership(color);
+        // auto owenership = GetOwnership(color);
         std::sort(std::begin(edge_buf), std::end(edge_buf),
-                     [&, owenership, state](Edge *a, Edge *b) {
+                     [/* &owenership, */ &state, color](Edge *a, Edge *b) {
                          constexpr float kPolicyFactor = 0.75f;
-                         constexpr float kOwnerFactor = 1.0f;
+                         // constexpr float kOwnerFactor = 1.0f;
+                         constexpr float kCaptureBouns = 200.0f;
 
                          auto priority_a = 0.f;
                          priority_a += kPolicyFactor * a->GetPolicy();
 
                          int vtx_a = a->GetVertex();
                          if (vtx_a != kPass) {
-                             const int x = state.GetX(vtx_a);
-                             const int y = state.GetY(vtx_a);
-                             priority_a += kOwnerFactor *
-                                               ComputeOwnerPriority(
-                                                   owenership[state.GetIndex(x,y)]);
+                             // const int x = state.GetX(vtx_a);
+                             // const int y = state.GetY(vtx_a);
+                             // priority_a += kOwnerFactor *
+                             //                   ComputeOwnerPriority(
+                             //                       owenership[state.GetIndex(x,y)]);
+                             priority_a += int(state.board_.IsCaptureMove(vtx_a, color)) * kCaptureBouns;
                          }
 
                          auto priority_b = 0.f;
@@ -546,11 +548,12 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
 
                          int vtx_b = b->GetVertex();
                          if (vtx_b != kPass) {
-                             const int x = state.GetX(vtx_b);
-                             const int y = state.GetY(vtx_b);
-                             priority_b += kOwnerFactor *
-                                               ComputeOwnerPriority(
-                                                   owenership[state.GetIndex(x,y)]);
+                             // const int x = state.GetX(vtx_b);
+                             // const int y = state.GetY(vtx_b);
+                             // priority_b += kOwnerFactor *
+                             //                   ComputeOwnerPriority(
+                             //                       owenership[state.GetIndex(x,y)]);
+                             priority_b += int(state.board_.IsCaptureMove(vtx_b, color)) * kCaptureBouns;
                          }
 
                          return priority_a > priority_b;
@@ -558,11 +561,16 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
                  );
     }
 
-    const int width = std::max(ComputeWidth(parentvisits), 1);
+    int width = std::max(ComputeWidth(parentvisits), 1);
     int i = 0;
 
     for (auto edge_ptr : edge_buf) {
         auto &child = *edge_ptr;
+
+        if (state.board_.IsCaptureMove(edge_ptr->GetVertex(), color)) {
+            width += 1;
+        }
+
         if (++i > width) {
             break;
         }

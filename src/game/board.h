@@ -196,7 +196,12 @@ public:
     void GenerateCandidateMoves(std::vector<int> &moves_set, int color) const;
 
     // For patterns...
-    bool MatchPattern3(const int vtx, const int color) const;
+    static void InitPattern3();
+    std::uint16_t GetPattern3Hash(const int vtx) const;
+    std::uint16_t GetSymmetryPattern3Hash(const int vtx,
+                                              const int color,
+                                              const int symmetry) const;
+    bool MatchPattern3(const int vtx) const;
     std::string GetPatternSpat(const int vtx, const int color, const int dist) const;
     std::uint64_t GetPatternHash(const int vtx, const int color, const int dist) const;
     std::uint64_t GetSymmetryPatternHash(const int vtx, const int color,

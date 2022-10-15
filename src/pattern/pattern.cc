@@ -133,3 +133,8 @@ void PatternHashInit() {
 #undef PTH_HMIRROR
 #undef PTH_90ROT
 }
+
+void PatternHashAndCoordsInit() {
+    PtcoordsInit();
+    PatternHashInit();
+}

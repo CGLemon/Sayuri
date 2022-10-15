@@ -2,8 +2,7 @@
 
 #include <array>
 
-void PtcoordsInit();
-void PatternHashInit();
+void PatternHashAndCoordsInit();
 int CharToColor(char s);
 
 static constexpr int kMaxPatternDist = 10;

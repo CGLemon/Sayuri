@@ -540,7 +540,7 @@ void GameState::PlayRandomMove() {
     if (Random<kXoroShiro128Plus>::Get().Roulette<10000>(0.95f)) {
         // ~95%: pattern3
         for (const auto vtx : candidate_moves) {
-            if (board_.MatchPattern3(vtx, color) &&
+            if (board_.MatchPattern3(vtx) &&
                     !board_.IsSelfAtariMove(vtx, color)) {
                 PlayMoveFast(vtx, color);
                 return;

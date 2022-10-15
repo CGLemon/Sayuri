@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <vector>
+#include <queue>
 #include <string>
 #include <sstream>
 #include <cassert>
@@ -7,13 +8,14 @@
 #include "game/board.h"
 #include "pattern/pattern.h"
 
-const
-std::vector<
-    std::vector<
-        std::string
-    >
->
-kPattern3Src =
+#define PTH_VMIRROR	1
+#define PTH_HMIRROR	2
+#define PTH_180ROT	4
+
+using Pattern3Str = std::array<std::string, 3>;
+bool kPattern3Matched[65535];
+
+const std::vector<Pattern3Str> kPattern3Src =
 {  // 3x3 playout patterns;
    // X,O are colors, x,o are their inverses,
    // # is off boarder, . is empty, ? is any color
@@ -71,8 +73,128 @@ kPattern3Src =
      "###"},
 };
 
-//Hard-coded patterns, a bit nasty.
-bool Board::MatchPattern3(const int vtx, const int color) const {
+constexpr std::uint16_t ComputePattern3HashFromList(int *buf) {
+    const std::uint16_t hash = 
+        buf[0] << 0  | buf[1] << 2  | buf[2] << 4 |
+        buf[3] << 6  /* raw[4] */   | buf[5] << 8 |
+        buf[6] << 10 | buf[7] << 12 | buf[8] << 14
+    ;
+    return hash;
+}
+
+void Board::InitPattern3() {
+    std::fill(std::begin(kPattern3Matched), std::end(kPattern3Matched), false);
+
+    auto Pattern3Replacement = [](Pattern3Str pat3, int y, int x, std::vector<char> list) {
+        auto out = std::vector<Pattern3Str>{};
+        for (auto v : list) {
+            Pattern3Str rpat3 = pat3;
+            rpat3[y][x] = v;
+            out.emplace_back(rpat3);
+        }
+        return out;
+    };
+
+    auto replace_pat3_buf = std::vector<Pattern3Str>{};
+    for (auto &pat3 : kPattern3Src) {
+        auto pat3_raw_que = std::queue<Pattern3Str>{};
+        pat3_raw_que.emplace(pat3);
+
+        while (!pat3_raw_que.empty()) {
+            Pattern3Str pat3_raw = pat3_raw_que.front();
+            pat3_raw_que.pop();
+
+            bool success = true;
+            for (int y=0; y<3; ++y) {
+                for (int x=0; x<3; ++x) {
+                    char m = pat3_raw[y][x];
+                    auto extension = std::vector<Pattern3Str>{};
+
+                    switch (m) {
+                        case 'x': extension = Pattern3Replacement(pat3_raw, y, x, {'O', '.'});           break;
+                        case 'o': extension = Pattern3Replacement(pat3_raw, y, x, {'X', '.'});           break;
+                        case '?': extension = Pattern3Replacement(pat3_raw, y, x, {'X', 'O', '#', '.'}); break;
+                        default : ;
+                    }
+                    if (!extension.empty()) {
+                        for (auto ext_pat3 : extension) {
+                            pat3_raw_que.emplace(ext_pat3);
+                        }
+                        success = false;
+                        x = y = 999; // end the loop...
+                    }
+                }
+            }
+            if (success) {
+                replace_pat3_buf.emplace_back(pat3_raw);
+            }
+        }
+    }
+
+    auto invert_pat3_buf = std::vector<Pattern3Str>{};
+    for (auto &pat3 : replace_pat3_buf) {
+        Pattern3Str invert_pat3 = pat3;
+        bool is_invert = false;
+        for (int y=0; y<3; ++y) {
+            for (int x=0; x<3; ++x) {
+                if (invert_pat3[y][x] == 'X') {
+                    invert_pat3[y][x] = 'O';
+                    is_invert = true;
+                } else if (invert_pat3[y][x] == 'O') {
+                    invert_pat3[y][x] = 'X';
+                    is_invert = true;
+                }
+            }
+        }
+        invert_pat3_buf.emplace_back(pat3);
+        if (is_invert) {
+            invert_pat3_buf.emplace_back(invert_pat3);
+        }
+    }
+
+    auto symm_pat3_buf = std::vector<Pattern3Str>{};
+    for (auto &pat3 : invert_pat3_buf) {
+	    for (int r=0; r<8; ++r) {
+            Pattern3Str symm_pat3 = pat3;
+
+            for (int y=0; y<3; ++y) {
+                for (int x=0; x<3; ++x) {
+			        int rx = x;
+			        int ry = y;
+
+	                if (r & PTH_180ROT) std::swap(rx, ry);
+			        if (r & PTH_HMIRROR) rx = 2-rx;
+			        if (r & PTH_VMIRROR) ry = 2-ry;
+
+                    symm_pat3[ry][rx] = pat3[y][x];
+                }
+            }
+            symm_pat3_buf.emplace_back(symm_pat3);
+        }
+    }
+
+    for (auto &pat3 : symm_pat3_buf) {
+        auto list = std::vector<int>{};
+        for (int y=0; y<3; ++y) {
+            for (int x=0; x<3; ++x) {
+                char m = pat3[y][x];
+                switch (m) {
+                    case 'X': list.emplace_back(kBlack); break;
+                    case 'O': list.emplace_back(kWhite); break;
+                    case '.': list.emplace_back(kEmpty); break;
+                    case '#': list.emplace_back(kInvalid); break;
+                    default : throw "unknown Patterns...";
+                }
+            }
+        }
+
+        kPattern3Matched[ComputePattern3HashFromList(list.data())] = true;
+    }
+}
+
+bool Board::MatchPattern3(const int vtx) const {
+#ifdef USE_DIRTY_HARD_CODED
+    int color = to_move_; 
     int size = letter_box_size_;
     int raw[3][3];
 
@@ -100,10 +222,6 @@ bool Board::MatchPattern3(const int vtx, const int color) const {
     }
 
     int symm_p[3][3];
-
-#define PTH_VMIRROR	1
-#define PTH_HMIRROR	2
-#define PTH_180ROT	4
 	for (int r = 0; r < 8; ++r) {
         for (int y=0; y<3; ++y) {
             for (int x=0; x<3; ++x) {
@@ -143,11 +261,72 @@ bool Board::MatchPattern3(const int vtx, const int color) const {
             if (match) return true;
         }
     }
-#undef PTH_VMIRROR
-#undef PTH_HMIRROR
-#undef PTH_180ROT
 
     return false;
+
+#else
+    return kPattern3Matched[GetPattern3Hash(vtx)];
+#endif
+}
+
+std::uint16_t Board::GetPattern3Hash(const int vtx) const {
+    int size = letter_box_size_;
+    int buf[9];
+
+    buf[0] = state_[vtx+size-1];
+    buf[1] = state_[vtx+size];
+    buf[2] = state_[vtx+size+1];
+    buf[3] = state_[vtx-1];
+    buf[4] = state_[vtx];
+    buf[5] = state_[vtx+1];
+    buf[6] = state_[vtx-size-1];
+    buf[7] = state_[vtx-size];
+    buf[8] = state_[vtx-size+1];
+
+    return ComputePattern3HashFromList(buf);
+}
+
+std::uint16_t Board::GetSymmetryPattern3Hash(const int vtx,
+                                                 const int color,
+                                                 const int symmetry) const {
+    int size = letter_box_size_;
+    int buf[9];
+
+    buf[0] = state_[vtx+size-1];
+    buf[1] = state_[vtx+size];
+    buf[2] = state_[vtx+size+1];
+    buf[3] = state_[vtx-1];
+    buf[4] = state_[vtx];
+    buf[5] = state_[vtx+1];
+    buf[6] = state_[vtx-size-1];
+    buf[7] = state_[vtx-size];
+    buf[8] = state_[vtx-size+1];
+
+    constexpr int kColorMap[2][4] = {
+        {kBlack, kWhite, kEmpty, kInvalid},
+        {kWhite, kBlack, kEmpty, kInvalid}
+    };
+
+    for (int i=0; i<9; ++i) {
+        buf[i] = kColorMap[color][buf[i]];
+    }
+
+    int symm_buf[9];
+
+    for (int y=0; y<3; ++y) {
+        for (int x=0; x<3; ++x) {
+	        int rx = x;
+	        int ry = y;
+
+	        if (symmetry & PTH_180ROT) std::swap(rx, ry);
+	        if (symmetry & PTH_HMIRROR) rx = 2-rx;
+	        if (symmetry & PTH_VMIRROR) ry = 2-ry;
+
+            symm_buf[3 * ry + rx] = buf[3 * y + x];
+        }
+    }
+
+    return ComputePattern3HashFromList(symm_buf);
 }
 
 std::string Board::GetPatternSpat(const int vtx, const int color, const int dist) const {
@@ -500,3 +679,7 @@ bool Board::GetFeatureWrapper(const int f, const int vtx,
 int Board::GetMaxFeatures() {
     return 6;
 }
+
+#undef PTH_VMIRROR
+#undef PTH_HMIRROR
+#undef PTH_180ROT
