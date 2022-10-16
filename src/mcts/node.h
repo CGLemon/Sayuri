@@ -60,10 +60,6 @@ public:
     // Get best move(vertex) by LCB value.
     int GetBestMove();
 
-    // Do rollout and mix the rollout reuslt with the node evals.
-    void MixRolloutEvals(GameState &state,
-                             float eval_factor, float owner_factor);
-
     const std::vector<Edge> &GetChildren() const;
     bool HaveChildren() const;
     bool SetTerminal();
@@ -100,7 +96,7 @@ public:
 
     bool IsPruned() const;
     void SetActive(const bool active);
-    void InvaliNode();
+    void InvalidNode();
     bool IsActive() const;
     bool IsValid() const;
 
@@ -130,7 +126,7 @@ private:
     void SetVisits(int v);
 
     void LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist);
-    void LinkNetOutput(const Network::Result &raw_netlist, const int color);
+    void LinkNetOutput(GameState &state, const Network::Result &raw_netlist, const int color);
 
     float GetSearchPolicy(Edge& child, bool noise);
     float GetScoreUtility(const int color, float factor, float parent_score) const;

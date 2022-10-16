@@ -1,17 +1,15 @@
 #include "mcts/rollout.h"
 #include "game/types.h"
-#include "utils/random.h"
-
-#include <cmath>
 
 float GetBlackRolloutResult(GameState &state,
-                                std::vector<float> &mcowner,
+                                float *mcowner,
                                 float &black_score) {
     auto fork_state = state;
     const int num_intersections = fork_state.GetNumIntersections();
     int num_curr_moves = 0;
+    const int max_move_len = 2*num_intersections+1;
 
-    while (fork_state.GetPasses() < 2 && num_curr_moves < 2*num_intersections+1) {
+    while (fork_state.GetPasses() < 2 && num_curr_moves < max_move_len) {
         fork_state.PlayRandomMove();
         num_curr_moves += 1;
     }

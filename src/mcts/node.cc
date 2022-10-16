@@ -67,25 +67,28 @@ bool Node::ExpandChildren(Network &network,
         return false;
     }
 
-    // First, try to acquire the owner.
+    // Try to acquire the owner.
     if (!AcquireExpanding()) {
         return false;
     }
 
-    // Second, get network computation result.
+    // Get network computation result.
     const float temp = is_root ? GetParameters()->root_policy_temp : GetParameters()->policy_temp;
 
     auto raw_netlist = Network::Result{};
     color_ = state.GetToMove();
 
-    if (GetParameters()->no_dcnn) {
+    const bool no_dcnn = GetParameters()->no_dcnn;
+    if (no_dcnn) {
         ApplyNoDcnnPolicy(state, color_, raw_netlist);
     } else {
         raw_netlist = network.GetOutput(state, Network::kRandom, temp);
     }
 
-    LinkNetOutput(raw_netlist, color_);
+    // Store the network reuslt.
+    LinkNetOutput(state, raw_netlist, color_);
 
+    // For children...
     auto nodelist = std::vector<Network::PolicyVertexPair>{};
     auto allow_pass = true;
     auto legal_accumulate = 0.0f;
@@ -94,7 +97,7 @@ bool Node::ExpandChildren(Network &network,
     const auto num_intersections = state.GetNumIntersections();
     const auto safe_area = state.GetStrictSafeArea();
 
-    // For symmetriy pruning.
+    // For symmetry pruning.
     bool apply_symm_pruning = GetParameters()->symm_pruning &&
                                   board_size >= state.GetMoveNumber();
     auto moves_hash = std::vector<std::uint64_t>{};
@@ -105,19 +108,19 @@ bool Node::ExpandChildren(Network &network,
         symm_base_hash[symm] = state.ComputeSymmetryHash(symm);
     }
 
-    // Third, prune the illegal moves or some bad move.
+    // Prune the illegal moves or some bad move.
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto x = idx % board_size;
         const auto y = idx / board_size;
         const auto vtx = state.GetVertex(x, y);
         const auto policy = raw_netlist.probabilities[idx];
 
+        // Prune the illegal and unwise move.
         if (!state.IsLegalMove(vtx, color_) || safe_area[idx]) {
             continue;
         }
 
-        // Prune the symmetry moves. May reduce some perfomance and 
-        // change the policy value of the children. 
+        // Prune the symmetry moves. May reduce some perfomance.
         if (apply_symm_pruning) {
             bool hash_found = false;
             for (int symm = Symmetry::kIdentitySymmetry+1;
@@ -130,10 +133,12 @@ bool Node::ExpandChildren(Network &network,
             if (!hash_found) {
                 moves_hash.emplace_back(state.GetHash() ^ state.GetMoveHash(vtx, color_));
             } else {
+                legal_accumulate += policy; // The pruned node is a legal move.
                 continue;
             }
         }
 
+        // Prune the super ko move.
         if (is_root) {
             auto fork_state = state;
             fork_state.PlayMove(vtx);
@@ -147,31 +152,34 @@ bool Node::ExpandChildren(Network &network,
         legal_accumulate += policy;
     }
 
+    // There ara too many legal moves. Disable the pass move.
     if ((int)nodelist.size() > 3*num_intersections/4) {
         allow_pass = false;
     }
 
+    // The pass is always legal. If there is no legal move except for pass, forcing
+    // to open the pass node.
     if (allow_pass || nodelist.empty()) {
         nodelist.emplace_back(raw_netlist.pass_probability, kPass);
         legal_accumulate += raw_netlist.pass_probability;
     }
 
     if (legal_accumulate < 1e-6f) {
-        // It will be happened if the policy focuses on illegal moves.
+        // It will be happened if the policy focuses on the illegal moves.
         for (auto &node : nodelist) {
             node.first = 1.f/nodelist.size();
         }
     } else {
         for (auto &node : nodelist) {
-            // Resize the policy.
+            // Adjust the policy.
             node.first /= legal_accumulate;
         }
     }
 
-    // Fourth, append the nodes.
+    // Extend the nodes.
     LinkNodeList(nodelist);
 
-    // Fifth, release the owner.
+    // Release the owner.
     ExpandDone();
 
     return true;
@@ -189,7 +197,7 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
     assert(!children_.empty());
 }
 
-void Node::LinkNetOutput(const Network::Result &raw_netlist, const int color){
+void Node::LinkNetOutput(GameState &state, const Network::Result &raw_netlist, const int color) {
     auto wl = 0.5f;
 
     if (GetParameters()->use_stm_winrate) {
@@ -218,6 +226,36 @@ void Node::LinkNetOutput(const Network::Result &raw_netlist, const int color){
         black_ownership_[idx] = owner;
         accumulated_black_ownership_[idx] = 0.f;
     }
+
+    // Do rollout if we disable the DCNN or the DCNN does not
+    // support the ownership.
+    if (GetParameters()->use_rollout || GetParameters()->no_dcnn) {
+        float mc_black_rollout_score;
+        float mc_black_rollout_res = GetBlackRolloutResult(
+                                         state,
+                                         black_ownership_.data(),
+                                         mc_black_rollout_score);
+        if (GetParameters()->no_dcnn) {
+            black_wl_ = mc_black_rollout_res;
+            black_fs_ = mc_black_rollout_score;
+        }
+    }
+}
+
+void Node::ApplyNoDcnnPolicy(GameState &state, const int color, Network::Result &raw_netlist) const {
+    const auto num_intersections = state.GetNumIntersections();
+    auto policy = state.GetGammasPolicy(color);
+
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        raw_netlist.probabilities[idx] = policy[idx];
+        raw_netlist.ownership[idx] = 0.f; // set zero...
+    }
+
+    // Give it a little value to pass the policy in order to avoid the 
+    // bug if there is no legal moves.
+    raw_netlist.pass_probability = 0.1f/num_intersections;
+    raw_netlist.final_score = 0.f; // set sero...
+    raw_netlist.wdl = {0.5f, 0, 0.5f}; // set sero...
 }
 
 bool Node::SetTerminal() {
@@ -231,39 +269,6 @@ bool Node::SetTerminal() {
     return true;
 }
 
-void Node::MixRolloutEvals(GameState &state,
-                               float eval_factor, float owner_factor) {
-    const auto num_intersections = state.GetNumIntersections();
-    auto mcowner = std::vector<float>(num_intersections, 0.f);
-
-    float black_rollout_score;
-    float black_rollout_val = GetBlackRolloutResult(state, mcowner, black_rollout_score);
-
-    black_wl_ = eval_factor * black_rollout_val  + (1-eval_factor) * black_wl_;
-    black_fs_ = eval_factor * black_rollout_score + (1-eval_factor) * black_fs_;
-
-    for (int idx = 0; idx < num_intersections; ++idx) {
-        black_ownership_[idx] = owner_factor * mcowner[idx] +
-                                    (1-owner_factor) * black_ownership_[idx];
-    }
-}
-
-void Node::ApplyNoDcnnPolicy(GameState &state, const int color, Network::Result &raw_netlist) const {
-    const auto num_intersections = state.GetNumIntersections();
-    auto policy = state.GetGammasPolicy(color);
-
-    for (int idx = 0; idx < num_intersections; ++idx) {
-        raw_netlist.probabilities[idx] = policy[idx];
-        raw_netlist.ownership[idx] = 0.f;
-    }
-
-    // Give it a little value to pass policy in order to avoid bug
-    // if there is no legal moves.
-    raw_netlist.pass_probability = 0.1f/num_intersections;
-    raw_netlist.final_score = 0.f;
-    raw_netlist.wdl = {0.5f, 0, 0.5f};
-}
-
 float Node::ComputeKlDivergence() {
     const auto vtx = GetBestMove();
     int parentvisits = 0;
@@ -271,7 +276,7 @@ float Node::ComputeKlDivergence() {
 
     for (const auto &child : children_) {
         const auto node = child.Get();
-        if (node) {
+        if (node && node->IsActive()) {
             const auto visits = node->GetVisits();
 
             parentvisits += visits;
@@ -376,12 +381,12 @@ Node *Node::ProbSelectChild() {
 
         auto prob = child.GetPolicy();
 
-        // The node was pruned. Skip this time.
+        // The node is pruned or invalid. Skip it.
         if (is_pointer && !node->IsActive()) {
             continue;
         }
 
-        // The node was expanding. Give it very bad value.
+        // The node is expanding. Give it very bad value.
         if (is_pointer && node->IsExpanding()) {
             prob = -1.0f + prob;
         }
@@ -399,7 +404,7 @@ Node *Node::ProbSelectChild() {
 Node *Node::PuctSelectChild(const int color, const bool is_root) {
     WaitExpanded();
     assert(HaveChildren());
-    assert(color == color_);
+    // assert(color == color_);
 
     // Gather all parent's visits.
     int parentvisits = 0;
@@ -411,6 +416,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
             continue;
         }    
         if (node->IsValid()) {
+            // The node status is pruned or active.
             const auto visits = node->GetVisits();
             parentvisits += visits;
             if (visits > 0) {
@@ -440,7 +446,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
         const auto node = child.Get();
         const bool is_pointer = node != nullptr;
 
-        // The node was pruned. Skip this time.
+        // The node is pruned or invalid. Skip it.
         if (is_pointer && !node->IsActive()) {
             continue;
         }
@@ -452,8 +458,8 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
 
         if (is_pointer) {
             if (node->IsExpanding()) {
-                // Like virtual loss, give it a bad value because there is another
-                // thread in this node.
+                // Like virtual loss, give it a bad value because there are other
+                // threads in this node.
                 q_value = -1.0f - fpu_reduction;
             } else if (node->GetVisits() > 0) {
                 // Transfer Win-Draw-Loss to side-to-move value (Q value).
@@ -506,7 +512,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
 Node *Node::UctSelectChild(const int color, const bool is_root, const GameState &state) {
     WaitExpanded();
     assert(HaveChildren());
-    assert(color == color_);
+    // assert(color == color_);
 
     Edge* best_node = nullptr;
     float best_value = std::numeric_limits<float>::lowest();
@@ -578,7 +584,7 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
         const auto node = child.Get();
         const bool is_pointer = node != nullptr;
 
-        // The node was pruned. Skip this time.
+        // The node is pruned or invalid. Skip it.
         if (is_pointer && !node->IsActive()) {
             continue;
         }
@@ -716,7 +722,7 @@ float Node::GetLcb(const int color) const {
     // Lower confidence bound of winrate.
     const auto visits = GetVisits();
     if (visits < 2) {
-        // Return large negative value if not enough visits.
+        // Return the large negative value if not enough visits.
         return GetPolicy() - 1e6f;
     }
 
@@ -951,6 +957,7 @@ std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
         const auto node = child.Get();
         const bool is_pointer = node != nullptr;
 
+        // The node is uninflated, pruned or invalid. Skip it.
         if (!is_pointer || !node->IsActive()) {
             continue;
         }
@@ -1136,7 +1143,7 @@ void Node::SetActive(const bool active) {
     }
 }
 
-void Node::InvaliNode() {
+void Node::InvalidNode() {
     if (IsValid()) {
         status_.store(StatusType::kInvalid, std::memory_order_relaxed);
     }

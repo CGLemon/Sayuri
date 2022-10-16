@@ -41,7 +41,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
                             Node *const root_node, SearchResult &search_result) {
     node->IncrementThreads();
 
-    const bool end_by_passes = (currstate.GetPasses() >= 2);
+    const bool end_by_passes = currstate.GetPasses() >= 2;
     if (end_by_passes) {
         search_result.FromGameover(currstate);
     }
@@ -61,21 +61,6 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
             // is expanding this node. Skip the simulation this time.
             const bool success = node->ExpandChildren(network_, currstate, false);
 
-            if (param_->use_rollout || param_->no_dcnn) {
-                // Select the mix factor.
-                float eval_factor = 0.0f;
-                float owner_factor = 0.0f;
-
-                if (param_->no_dcnn) {
-                    eval_factor = 1.0f;
-                    owner_factor = 1.0f;
-                } else if (param_->use_rollout) {
-                    owner_factor = 1.0f;
-                }
-
-                // Update the mix rollout value
-                node->MixRolloutEvals(currstate, eval_factor, owner_factor);
-            }
             if (!have_children && success) {
                 search_result.FromNetEvals(node->GetNodeEvals());
             }
@@ -132,8 +117,8 @@ void Search::PrepareRootNode() {
     auto root_noise = std::vector<float>{}; // unused
     root_node_->PrepareRootNode(network_, root_state_, root_noise);
 
-    const auto evals = root_node_->GetNodeEvals();
     if (!reused) {
+        const auto evals = root_node_->GetNodeEvals();
         root_node_->Update(&evals);
     }
 }
