@@ -57,8 +57,6 @@ Accelerate to load the network file. Fast Float library is required.
 
 You may download the weights file and opening book from my [google drive](https://drive.google.com/drive/folders/17pjwLIwj_q0fGdiDpRShcLjbfBlk-70L?usp=sharing). The current weights size is 15 blocks and 192 filters. The opening book is human-like book, trained on profession games. Force Sayuri to play variable opening moves. It is just fun for playing.
 
-* The renorm prefix means applying the batch renormalization, and the fixup means fixup initialization.
-
 ## Engine Arguments
 
 Here are some useful arguments which you may need.
@@ -83,11 +81,11 @@ Here are some useful arguments which you may need.
 |  --help, -h             | None   | Show the more arguments.                       |
     
 
-Default setting: will select reasonable thread and batch size, 10 seconds per move, all GPU devices
+Default setting: will select reasonable threads and batch size, 10 seconds per move, all GPU devices
 
     $ ./Sayuri -w <weights file>
 
-Example setting 1: 4 thread, 2 batches and 12800 playouts
+Example setting 1: 4 threads, 2 batches and 12800 playouts
     
     $ ./Sayuri -w <weights file> -t 4 -b 2 -p 12800
 
@@ -103,7 +101,7 @@ Example setting 4: use the GPU 0 and GPU 2
 
     $ ./Sayuri -w <weights file> --gpu 0 --gpu 2
 
-Example setting 5: disable network forwarding pipe, very weak
+Example setting 5: disable network forwarding pipe, arond 10k on 9x9, 15k on 19x19
 
     $ ./Sayuri --patterns <patterns file> --lcb-reduction 1 --no-dcnn
 
@@ -150,11 +148,11 @@ The engine supports the following GTP analysis commands.
 
 ### What's the Deep Learning technology?
 
-The Deep Convolutional Neural Network (DCNN) is a special technique to provides the human-like thinking. It significantly improves the prediction accuracy of next moves and current winrate. Thanks for deep learning and MCTS, the modern computer Go can beat the top level players on the full size board. Sayuri is anthor Go engine to use this technology.
+The Deep Convolutional Neural Network (DCNN) is a special technique to provide the human-like thinking. It significantly improves the prediction accuracy of next moves and current winrate. Thanks for deep learning and MCTS, the modern computer Go can beat the top level players on the full size board. Sayuri is anthor Go engine with this technology.
 
 ### Why do we need a GPU card?
 
-There are many matrix operations in the Neural Network forwarding pipe. It is not efficiently to run it on the CPU. Normally, the GPU is 10~20 times faster than the CPU.
+There are too many matrix operations in the Neural Network forwarding pipe. It is not efficiently to run it on the CPU. Normally, the GPU is 10~20 times faster than the CPU.
 
 ### About the ancient technology
 
@@ -176,8 +174,8 @@ I am trying to implement this ancient technique currently. Merge the MM patterns
 * Support variable komi and board size (from 7x7 to 19x19).
 * Lock-free SMP MCTS.
 * Acceleration by multi-core processor and multi-Nvidia GPU.
-* Predict the current side winrate and draw-rate.
-* Predict the current side score lead and death strings.
+* Predict the current side-to-move winrate and draw-rate.
+* Predict the current side-to-move score lead and death strings.
 * Reuse the sub-tree.
 * Chinese rules with positional superko.
 
