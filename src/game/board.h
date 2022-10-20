@@ -114,22 +114,8 @@ public:
     // Reture true if the two vertex are Neighbor.
     bool IsNeighbor(const int vtx, const int avtx) const;
 
-    // Reture true if the string is ladder.
-    //
-    // TODO: There are some bug in this function. The program can not
-    //       find ladder in following game.
-    // 
-    // (;GM[1]FF[4]CA[UTF-8]AP[Sabaki:0.52.0]KM[7.5]SZ[19]DT[2022-09-24]PB[Sayuri-test]PW[leela-0.11]
-    // SBKV[44.48];
-    // B[qd];W[dd]SBKV[44.3];B[pq];W[dp]SBKV[45.19];B[nc];W[po]SBKV[44.63];B[qo];W[qn]SBKV[44.16];
-    // B[qp];W[pm]SBKV[44.9];B[on];W[pn]SBKV[45.42];B[np];W[qi]SBKV[45.73];B[cc];W[cd]SBKV[44.92];B[dc];W[ec]SBKV[45.8];
-    // B[eb];W[fc]SBKV[47.24];B[fb];W[gc]SBKV[48.25];B[cq];W[cp]SBKV[48.32];B[dq];W[eq]SBKV[49.01];B[er];W[fq]SBKV[51.16];
-    // B[fr];W[gq]SBKV[51.93];B[dj];W[cl]SBKV[52.56];B[gb];W[hc]SBKV[53.24];B[gr];W[hq]SBKV[53.94];B[dg];W[bd]SBKV[51.55];
-    // B[bc];W[fg]SBKV[52.63];B[fi];W[qf]SBKV[55.19];B[dl];W[dm]SBKV[56.23];B[em];W[dn]SBKV[59.82];B[ef];W[ff]SBKV[70.28];
-    // B[ee];W[ed]SBKV[72.56];B[fe];W[ge]SBKV[73.33];B[gf];W[hf]SBKV[79.56];B[gg];W[gh]SBKV[79.29];B[hg];W[ig]SBKV[87.79];
-    // B[hh];W[hi]SBKV[93.19];B[ih];W[jh]SBKV[93.45];B[ii];W[ij]SBKV[96.62];B[ji];W[ki]SBKV[97.36];B[jj];W[jk]SBKV[98.04];
-    // B[kj];W[lj]SBKV[98.52];B[kk];W[kl]SBKV[49.1];B[lk];W[mk]SBKV[19.13];B[ll];W[lm]SBKV[8.06];B[ml];W[nl]SBKV[6.03];
-    // B[mm];W[mn]SBKV[3.2];B[nm];W[om]SBKV[1.35];B[nn];W[no]SBKV[1.21];B[bl];W[oo]SBKV[0.14];B[ck];W[oq]SBKV[0.15];B[or])
+    // Reture true if the string is ladder. The vital_moves is 
+    // atari move.
     bool IsLadder(const int vtx, std::vector<int> &vital_moves) const;
 
     // Reture true if the point is real eye.

@@ -544,7 +544,7 @@ LadderType Board::PreySelections(const int prey_color,
 
     assert(libs == 1);
     assert(num_move == libs);
-    const int move = selections[0];
+    const int not_cap_move = selections[0];
 
     num_move += FindStringLibertiesGainingCaptures(ladder_vtx, selections);
 
@@ -558,13 +558,16 @@ LadderType Board::PreySelections(const int prey_color,
 
     num_move = selections.size();
 
-    // If there is no legal move, the ladder string die.
+    // If there is no legal move, the ladder string dies.
     if (num_move == 0) {
         return LadderType::kGoodForHunter; 
     }
 
-    if (selections[0] == move) {
-        auto bound = GetLadderLiberties(move, prey_color);
+    auto bgn = std::begin(selections);
+    auto end = std::end(selections);
+
+    if (std::find(bgn, end, not_cap_move) != end) {
+        auto bound = GetLadderLiberties(not_cap_move, prey_color);
         const auto lower_bound = bound.first;
         const auto upper_bound = bound.second;
         if (lower_bound >= 3) {
@@ -608,34 +611,38 @@ LadderType Board::HunterSelections(const int prey_color,
     //TODO: Avoid double-ko death.
 
     if (!IsNeighbor(move_1, move_2)) {
-        size_t size = 0;
         const int hunter_color = (!prey_color);
         const int libs_1 = CountPliberties(move_1); 
         const int libs_2 = CountPliberties(move_2); 
 
         if (libs_1 >= 3 && libs_2 >= 3) {
-            // A ladder string must be only two liberty.
+            // A ladder string must be only two liberties. The prey
+            // is not a ladder
             return LadderType::kGoodForPrey;
         } else if (libs_1 >= 3) {
+            // If the prey play the move 1, it is not a ladder. The
+            // move 1 is the only move for hunter.
             if (IsLegalMove(move_1, hunter_color)) {
                 selections.emplace_back(move_1);
-                size++;
             }
         } else if (libs_2 >= 3) {
+            // If the prey play the move 2, it is not a ladder. The
+            // move 2 is the only move for hunter.
             if (IsLegalMove(move_2, hunter_color)) {
                 selections.emplace_back(move_2);
-                size++;
             }
         } else {
             if (IsLegalMove(move_1, hunter_color)) {
                 selections.emplace_back(move_1);
-                size++;
             }
             if (IsLegalMove(move_2, hunter_color)) {
                 selections.emplace_back(move_2);
-                size++;
             }
         }
+    } else {
+        // At least one liberty, Is is always legal move.
+        selections.emplace_back(move_1);
+        selections.emplace_back(move_2);
     }
 
     if (selections.empty()) {
