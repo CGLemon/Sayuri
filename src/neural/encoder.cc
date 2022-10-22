@@ -192,16 +192,20 @@ void Encoder::FillLiberties(const Board* board,
         auto x = index % boardsize;
         auto y = index / boardsize;
         auto vtx = board->GetVertex(x, y);
-        auto liberties = board->GetLiberties(vtx);
+        auto state = board->GetState(vtx);
 
-        if (liberties == 1) {
-            liberties_it[index + 0 * num_intersections] = static_cast<float>(true);
-        } else if (liberties == 2) {
-            liberties_it[index + 1 * num_intersections] = static_cast<float>(true);
-        } else if (liberties == 3) {
-            liberties_it[index + 2 * num_intersections] = static_cast<float>(true);
-        } else if (liberties >= 4 && liberties <= 1024) {
-            liberties_it[index + 3 * num_intersections] = static_cast<float>(true);
+        if (state == kBlack || state == kWhite) {
+            auto liberties = board->GetLiberties(vtx);
+
+            if (liberties == 1) {
+                liberties_it[index + 0 * num_intersections] = static_cast<float>(true);
+            } else if (liberties == 2) {
+                liberties_it[index + 1 * num_intersections] = static_cast<float>(true);
+            } else if (liberties == 3) {
+                liberties_it[index + 2 * num_intersections] = static_cast<float>(true);
+            } else if (liberties >= 4 && liberties <= 1024) {
+                liberties_it[index + 3 * num_intersections] = static_cast<float>(true);
+            }
         }
     }
 }
@@ -240,10 +244,11 @@ void Encoder::FillMisc(const Board* board,
     std::fill(misc_it+ 0 * num_intersections,
                   misc_it+ 1 * num_intersections, komi/20.f);
 
+    // negative komi
     std::fill(misc_it+ 1 * num_intersections,
                   misc_it+ 2 * num_intersections, -komi/20.f);
 
-    // intersections
+    // number of intersections
     std::fill(misc_it+ 2 * num_intersections,
                   misc_it+ 3 * num_intersections, static_cast<float>(num_intersections)/361.f);
 
