@@ -1614,6 +1614,11 @@ std::vector<LadderType> Board::GetLadderMap() const {
             const auto idx = GetIndex(x, y);
             const auto vtx = GetVertex(x, y);
 
+            if (state_[vtx] == kEmpty) {
+                // It is not a string.
+                 continue;
+            }
+
             auto first_found = false;
             auto vital_moves = std::vector<int>{};
             int libs = 0;
@@ -1723,7 +1728,7 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
     // TODO: Do we need to think about sucide move?
     constexpr bool allow_sucide = false;
 
-   // TODO: Do we need to compute potential vital regions here?
+    // TODO: Do we need to compute potential vital regions here?
 
     // Compute the potential vital regions. That means that the region is
     // possible to becomes vital area for any adjacent strings.
