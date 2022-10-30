@@ -203,7 +203,7 @@ void Encoder::FillLiberties(const Board* board,
                 liberties_it[index + 1 * num_intersections] = static_cast<float>(true);
             } else if (liberties == 3) {
                 liberties_it[index + 2 * num_intersections] = static_cast<float>(true);
-            } else if (liberties >= 4 && liberties <= 1024) {
+            } else if (liberties == 4) {
                 liberties_it[index + 3 * num_intersections] = static_cast<float>(true);
             }
         }

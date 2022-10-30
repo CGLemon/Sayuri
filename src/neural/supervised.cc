@@ -80,7 +80,7 @@ void Supervised::FromSgfs(bool general,
                 file_closed = false;
             }
 
-            constexpr int kGamesPerChunk = 50;
+            constexpr int kGamesPerChunk = 25;
 
             // Parse the SGF string.
             bool success = false;

@@ -62,7 +62,7 @@ void SelfPlayPipe::Loop() {
         CreateDirectory(data_directory_);
     }
 
-    constexpr int kGamesPerChunk = 50;
+    constexpr int kGamesPerChunk = 25;
 
     for (int g = 0; g < engine_.GetParallelGames(); ++g) {
         workers_.emplace_back(
