@@ -15,6 +15,7 @@ public:
         playouts = GetOption<int>("playouts");
         ponder_playouts = GetOption<int>("ponder_playouts");
         const_time = GetOption<int>("const_time");
+        expand_threshold = GetOption<int>("expand_threshold");
 
         resign_threshold = GetOption<float>("resign_threshold");
         lcb_reduction = GetOption<float>("lcb_reduction");
@@ -51,6 +52,7 @@ public:
         policy_temp = GetOption<float>("policy_temp");
         use_rollout = GetOption<bool>("rollout");
         no_dcnn = GetOption<bool>("no_dcnn");
+        root_dcnn = GetOption<bool>("root_dcnn");
         first_pass_bonus = GetOption<bool>("first_pass_bonus");
         symm_pruning = GetOption<bool>("symm_pruning");
         use_stm_winrate = GetOption<bool>("use_stm_winrate");
@@ -90,12 +92,14 @@ public:
 
     int cap_playouts;
     int lag_buffer;
+    int expand_threshold;
 
     bool ponder;
     bool reuse_tree;
     bool friendly_pass;
     bool use_rollout;
     bool no_dcnn;
+    bool root_dcnn;
     bool first_pass_bonus;
     bool symm_pruning;
     bool use_stm_winrate;

@@ -14,6 +14,7 @@
 #include <sstream>
 #include <iomanip>
 #include <stack>
+#include <iostream>
 
 #define VIRTUAL_LOSS_COUNT (3)
 
@@ -35,11 +36,11 @@ void Node::PrepareRootNode(Network &network,
     assert(HaveChildren());
 
     InflateAllChildren();
-    if (GetParameters()->dirichlet_noise) {
+    if (param_->dirichlet_noise) {
         // Generate dirichlet noise and gather it.
         const auto legal_move = children_.size();
-        const auto factor = GetParameters()->dirichlet_factor;
-        const auto init = GetParameters()->dirichlet_init;
+        const auto factor = param_->dirichlet_factor;
+        const auto init = param_->dirichlet_init;
         const auto alpha = init * factor / static_cast<float>(legal_move);
 
         ApplyDirichletNoise(alpha);
@@ -52,9 +53,9 @@ void Node::PrepareRootNode(Network &network,
             const auto x = idx % board_size;
             const auto y = idx / board_size;
             const auto vtx = state.GetVertex(x, y);
-            dirichlet[idx] = GetParameters()->dirichlet_buffer[vtx];
+            dirichlet[idx] = param_->dirichlet_buffer[vtx];
         }
-        dirichlet[num_intersections] = GetParameters()->dirichlet_buffer[kPass];
+        dirichlet[num_intersections] = param_->dirichlet_buffer[kPass];
     }
 }
 
@@ -73,13 +74,13 @@ bool Node::ExpandChildren(Network &network,
     }
 
     // Get network computation result.
-    const float temp = is_root ? GetParameters()->root_policy_temp : GetParameters()->policy_temp;
+    const float temp = is_root ? param_->root_policy_temp : param_->policy_temp;
 
     auto raw_netlist = Network::Result{};
     color_ = state.GetToMove();
 
-    const bool no_dcnn = GetParameters()->no_dcnn;
-    if (no_dcnn) {
+    if (param_->no_dcnn &&
+            !(param_->root_dcnn && is_root)) {
         ApplyNoDcnnPolicy(state, color_, raw_netlist);
     } else {
         raw_netlist = network.GetOutput(state, Network::kRandom, temp);
@@ -98,7 +99,7 @@ bool Node::ExpandChildren(Network &network,
     const auto safe_area = state.GetStrictSafeArea();
 
     // For symmetry pruning.
-    bool apply_symm_pruning = GetParameters()->symm_pruning &&
+    bool apply_symm_pruning = param_->symm_pruning &&
                                   board_size >= state.GetMoveNumber();
     auto moves_hash = std::vector<std::uint64_t>{};
     auto symm_base_hash = std::vector<std::uint64_t>(Symmetry::kNumSymmetris, 0ULL);
@@ -164,7 +165,7 @@ bool Node::ExpandChildren(Network &network,
         legal_accumulate += raw_netlist.pass_probability;
     }
 
-    if (legal_accumulate < 1e-6f) {
+    if (legal_accumulate < 1e-8f) {
         // It will be happened if the policy focuses on the illegal moves.
         for (auto &node : nodelist) {
             node.first = 1.f/nodelist.size();
@@ -200,7 +201,7 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
 void Node::LinkNetOutput(GameState &state, const Network::Result &raw_netlist, const int color) {
     auto wl = 0.5f;
 
-    if (GetParameters()->use_stm_winrate) {
+    if (param_->use_stm_winrate) {
         wl = raw_netlist.stm_winrate;
     } else {
         wl = (raw_netlist.wdl[0] - raw_netlist.wdl[2] + 1) / 2;
@@ -229,20 +230,21 @@ void Node::LinkNetOutput(GameState &state, const Network::Result &raw_netlist, c
 
     // Do rollout if we disable the DCNN or the DCNN does not
     // support the ownership.
-    if (GetParameters()->use_rollout || GetParameters()->no_dcnn) {
+    if (param_->use_rollout || param_->no_dcnn) {
         float mc_black_rollout_score;
         float mc_black_rollout_res = GetBlackRolloutResult(
                                          state,
                                          black_ownership_.data(),
                                          mc_black_rollout_score);
-        if (GetParameters()->no_dcnn) {
+        if (param_->no_dcnn) {
             black_wl_ = mc_black_rollout_res;
             black_fs_ = mc_black_rollout_score;
         }
     }
 }
 
-void Node::ApplyNoDcnnPolicy(GameState &state, const int color, Network::Result &raw_netlist) const {
+void Node::ApplyNoDcnnPolicy(GameState &state, const int color,
+                                 Network::Result &raw_netlist) const {
     const auto num_intersections = state.GetNumIntersections();
     auto policy = state.GetGammasPolicy(color);
 
@@ -251,11 +253,16 @@ void Node::ApplyNoDcnnPolicy(GameState &state, const int color, Network::Result 
         raw_netlist.ownership[idx] = 0.f; // set zero...
     }
 
-    // Give it a little value to pass the policy in order to avoid the 
+    raw_netlist.board_size = state.GetBoardSize();
+    raw_netlist.komi = state.GetKomi();
+
+    // Give the pass move a little value in order to avoid the 
     // bug if there is no legal moves.
     raw_netlist.pass_probability = 0.1f/num_intersections;
-    raw_netlist.final_score = 0.f; // set sero...
-    raw_netlist.wdl = {0.5f, 0, 0.5f}; // set sero...
+    raw_netlist.final_score = 0.f; // set zeros...
+    raw_netlist.wdl = {0.5f, 0, 0.5f}; // set draw value...
+    raw_netlist.wdl_winrate = 0.5f; // set draw value...
+    raw_netlist.stm_winrate = 0.5f; // set draw value...
 }
 
 bool Node::SetTerminal() {
@@ -340,7 +347,7 @@ void Node::PolicyTargetPruning() {
 
     assert(!buffer.empty());
 
-    const auto forced_policy_factor = GetParameters()->forced_policy_factor;
+    const auto forced_policy_factor = param_->forced_policy_factor;
     for (const auto &x : buffer) {
         const auto visits = x.first;
         const auto vertex = x.second;
@@ -425,13 +432,13 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
         }
     }
 
-    const auto fpu_reduction_factor = is_root ? GetParameters()->fpu_root_reduction   : GetParameters()->fpu_reduction;
-    const auto cpuct_init           = is_root ? GetParameters()->cpuct_root_init      : GetParameters()->cpuct_init;
-    const auto cpuct_base           = is_root ? GetParameters()->cpuct_root_base      : GetParameters()->cpuct_base;
-    const auto draw_factor          = is_root ? GetParameters()->draw_root_factor     : GetParameters()->draw_factor;
-    const auto forced_policy_factor = is_root ? GetParameters()->forced_policy_factor : 0.0f;
-    const auto noise                = is_root ? GetParameters()->dirichlet_noise      : false;
-    const auto score_utility_factor = GetParameters()->score_utility_factor;
+    const auto fpu_reduction_factor = is_root ? param_->fpu_root_reduction   : param_->fpu_reduction;
+    const auto cpuct_init           = is_root ? param_->cpuct_root_init      : param_->cpuct_init;
+    const auto cpuct_base           = is_root ? param_->cpuct_root_base      : param_->cpuct_base;
+    const auto draw_factor          = is_root ? param_->draw_root_factor     : param_->draw_factor;
+    const auto forced_policy_factor = is_root ? param_->forced_policy_factor : 0.0f;
+    const auto noise                = is_root ? param_->dirichlet_noise      : false;
+    const auto score_utility_factor = param_->score_utility_factor;
 
     const float cpuct         = cpuct_init + std::log((float(parentvisits) + cpuct_base + 1) / cpuct_base);
     const float numerator     = std::sqrt(float(parentvisits));
@@ -519,52 +526,13 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
 
     const int parentvisits = std::max(1, GetVisits());
     const float numerator = std::log((float)parentvisits);
-    const float cpuct = is_root ? GetParameters()->cpuct_root_init : GetParameters()->cpuct_init;
+    const float cpuct = is_root ? param_->cpuct_root_init : param_->cpuct_init;
     const float parent_qvalue = GetEval(color, false);
 
     std::vector<Edge*> edge_buf;
 
     for (auto &child : children_) {
         edge_buf.emplace_back(&child);
-    }
-
-    if (parentvisits >= 20) {
-        // auto owenership = GetOwnership(color);
-        std::sort(std::begin(edge_buf), std::end(edge_buf),
-                     [/* &owenership, */ &state, color](Edge *a, Edge *b) {
-                         constexpr float kPolicyFactor = 0.75f;
-                         // constexpr float kOwnerFactor = 1.0f;
-                         constexpr float kCaptureBouns = 200.0f;
-
-                         auto priority_a = 0.f;
-                         priority_a += kPolicyFactor * a->GetPolicy();
-
-                         int vtx_a = a->GetVertex();
-                         if (vtx_a != kPass) {
-                             // const int x = state.GetX(vtx_a);
-                             // const int y = state.GetY(vtx_a);
-                             // priority_a += kOwnerFactor *
-                             //                   ComputeOwnerPriority(
-                             //                       owenership[state.GetIndex(x,y)]);
-                             priority_a += int(state.board_.IsCaptureMove(vtx_a, color)) * kCaptureBouns;
-                         }
-
-                         auto priority_b = 0.f;
-                         priority_b += kPolicyFactor * b->GetPolicy();
-
-                         int vtx_b = b->GetVertex();
-                         if (vtx_b != kPass) {
-                             // const int x = state.GetX(vtx_b);
-                             // const int y = state.GetY(vtx_b);
-                             // priority_b += kOwnerFactor *
-                             //                   ComputeOwnerPriority(
-                             //                       owenership[state.GetIndex(x,y)]);
-                             priority_b += int(state.board_.IsCaptureMove(vtx_b, color)) * kCaptureBouns;
-                         }
-
-                         return priority_a > priority_b;
-                     }
-                 );
     }
 
     int width = std::max(ComputeWidth(parentvisits), 1);
@@ -590,25 +558,22 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
         }
 
         float q_value = parent_qvalue;
-        if (parentvisits <= 10) {
-            q_value = 0.5f; // draw value
-        }
-
         int child_visits = 0;
 
         if (is_pointer) {
+            child_visits = node->GetVisits();
+
             if (node->IsExpanding()) {
                 q_value = -1.0f; // Give it a bad value.
-            } else if (node->GetVisits() > 0) {
+            } else if (child_visits > 0) {
                 q_value = node->GetEval(color);
             }
-            child_visits = node->GetVisits();
         }
 
         // UCT algorithm
         const float denom = 1.0f + child_visits;
         const float psa = child.GetPolicy();
-        const float bouns = 0.35f * std::sqrt(1000.f / ((float)parentvisits + 1000.f)) * psa;
+        const float bouns = 1.0f * std::sqrt(1000.f / ((float)parentvisits + 1000.f)) * psa;
         const float uct = cpuct * std::sqrt(numerator / denom);
         float value = q_value + uct + bouns;
         assert(value > std::numeric_limits<float>::lowest());
@@ -632,7 +597,7 @@ int Node::RandomizeFirstProportionally(float random_temp) {
         auto node = child.Get();
         const auto visits = node->GetVisits();
         const auto vertex = node->GetVertex();
-        if (visits > GetParameters()->random_min_visits) {
+        if (visits > param_->random_min_visits) {
             accum += std::pow((float)visits, (1.0 / random_temp));
             accum_vector.emplace_back(std::pair<float, int>(accum, vertex));
         }
@@ -845,7 +810,7 @@ std::string Node::ToAnalyzeString(GameState &state, const int color, Node::Analy
         const auto prior = child->GetPolicy();
         const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
 
-        if (GetParameters()->no_dcnn &&
+        if (param_->no_dcnn &&
                 visits/root_visits < 0.01f) { // cut off < 1% children...
             continue;
         }
@@ -949,7 +914,7 @@ std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
     WaitExpanded();
     assert(HaveChildren());
 
-    auto lcb_reduction = GetParameters()->lcb_reduction;
+    auto lcb_reduction = param_->lcb_reduction;
     auto parents_visits = (float)GetVisits();
     auto list = std::vector<std::pair<float, int>>{};
 
@@ -1218,7 +1183,7 @@ void Node::ApplyDirichletNoise(const float alpha) {
     auto sample_sum =
         std::accumulate(std::begin(buffer), std::end(buffer), 0.0f);
 
-    auto &dirichlet = GetParameters()->dirichlet_buffer;
+    auto &dirichlet = param_->dirichlet_buffer;
     dirichlet.fill(0.0f);
 
     // If the noise vector sums to 0 or a denormal, then don't try to
@@ -1243,8 +1208,8 @@ float Node::GetSearchPolicy(Node::Edge& child, bool noise) {
     auto policy = child.GetPolicy();
     if (noise) {
         const auto vertex = child.GetVertex();
-        const auto epsilon = GetParameters()->dirichlet_epsilon;
-        const auto eta_a = GetParameters()->dirichlet_buffer[vertex];
+        const auto epsilon = param_->dirichlet_epsilon;
+        const auto eta_a = param_->dirichlet_buffer[vertex];
         policy = policy * (1 - epsilon) + epsilon * eta_a;
     }
     return policy;

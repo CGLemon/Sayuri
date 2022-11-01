@@ -526,8 +526,6 @@ void GameState::PlayRandomMove() {
                      std::end(candidate_moves),
                      Random<kXoroShiro128Plus>::Get());
 
-    //TODO: Use the switch-case to wrap it.
-
     if (Random<kXoroShiro128Plus>::Get().Roulette<10000>(0.90f)) {
         // ~90%: capture
         for (const auto vtx : candidate_moves) {
@@ -568,7 +566,7 @@ void GameState::PlayRandomMove() {
         }
     }
 
-    // gather legal moves
+    // gather the legal moves
     const int empty_cnt = board_.GetEmptyCount();
     auto legal_moves = std::vector<int>{};
 
@@ -583,18 +581,14 @@ void GameState::PlayRandomMove() {
         }
     }
 
-    //there is no legal moves
+    // there is no legal moves
     if (legal_moves.empty()) {
         PlayMoveFast(kPass, color);
         return;
     }
 
-    std::shuffle(std::begin(legal_moves),
-                     std::end(legal_moves),
-                     Random<kXoroShiro128Plus>::Get());
-
-    // play first random move
-    PlayMoveFast(legal_moves[0], color);
+    int selected = Random<kXoroShiro128Plus>::Get().Generate() % legal_moves.size();
+    PlayMoveFast(legal_moves[selected], color);
 }
 
 float GameState::GetGammaValue(const int vtx, const int color) const {
@@ -644,7 +638,7 @@ std::vector<float> GameState::GetGammasPolicy(const int color) const {
     }
 
     for (int idx = 0; idx < num_intersections; ++idx) {
-       policy[idx] /= acc;
+        policy[idx] /= acc;
     } 
 
     return policy;

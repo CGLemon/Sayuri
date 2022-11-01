@@ -11,6 +11,7 @@
 #include "config.h"
 
 #include <limits>
+#include <sstream>
 
 std::unordered_map<std::string, Option> kOptionsMap;
 
@@ -51,6 +52,7 @@ OPTIONS_SET_EXPASSION(char)
 void InitOptionsMap() {
     kOptionsMap["help"] << Option::setoption(false);
     kOptionsMap["mode"] << Option::setoption(std::string{"gtp"});
+    
 
     // engine options
     kOptionsMap["ponder"] << Option::setoption(false);
@@ -60,7 +62,9 @@ void InitOptionsMap() {
     kOptionsMap["quiet"] << Option::setoption(false);
     kOptionsMap["rollout"] << Option::setoption(false);
     kOptionsMap["no_dcnn"] << Option::setoption(false);
+    kOptionsMap["root_dcnn"] << Option::setoption(false);
 
+    kOptionsMap["search_mode"] << Option::setoption(std::string{});
     kOptionsMap["defualt_boardsize"] << Option::setoption(kDefaultBoardSize);
     kOptionsMap["defualt_komi"] << Option::setoption(kDefaultKomi);
 
@@ -93,6 +97,7 @@ void InitOptionsMap() {
     kOptionsMap["draw_factor"] << Option::setoption(0.f);
     kOptionsMap["draw_root_factor"] << Option::setoption(0.f);
     kOptionsMap["score_utility_factor"] << Option::setoption(0.05f);
+    kOptionsMap["expand_threshold"] << Option::setoption(-1);
 
     kOptionsMap["root_policy_temp"] << Option::setoption(1.f, 1.f, 0.f);
     kOptionsMap["policy_temp"] << Option::setoption(1.f, 1.f, 0.f);
@@ -173,6 +178,28 @@ void InitBasicParameters() {
     }
     if (!already_set_ponder_playouts) {
         SetOption("ponder_playouts", std::numeric_limits<int>::max() / 2);
+    }
+
+    // Parse the search mode.
+    auto search_mode = GetOption<std::string>("search_mode");
+ 
+    for (char &c : search_mode) {
+        if (c == '+') c = ' ';
+    }
+
+    auto ss = std::istringstream(search_mode);
+    auto get_mode = std::string{};
+    while (ss >> get_mode) {
+        if (get_mode == "dcnn") {
+            SetOption("no_dcnn", false);
+        } else if (get_mode == "nodcnn" ||
+                       get_mode == "nonet") {
+            SetOption("no_dcnn", true);
+        } else if (get_mode == "rollout") {
+            SetOption("rollout", true);
+        } else if (get_mode == "rootdcnn") {
+            SetOption("root_dcnn", true);
+        }
     }
 }
 
@@ -265,14 +292,11 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         parser.RemoveCommand(res->Index());
     }
 
-    if (const auto res = parser.Find("--rollout")) {
-        SetOption("rollout", true);
-        parser.RemoveCommand(res->Index());
-    }
-
-    if (const auto res = parser.Find("--no-dcnn")) {
-        SetOption("no_dcnn", true);
-        parser.RemoveCommand(res->Index());
+    if (const auto res = parser.FindNext("--search-mode")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("search_mode", res->Get<std::string>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
     }
 
     if (const auto res = parser.Find("--first-pass-bonus")) {
@@ -285,9 +309,21 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         parser.RemoveCommand(res->Index());
     }
 
+    if (const auto res = parser.Find("--no-dcnn")) {
+        SetOption("no_dcnn", true);
+        parser.RemoveCommand(res->Index());
+    }
+
     if (const auto res = parser.FindNext({"--resign-threshold", "-r"})) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("resign_threshold", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--expand-threshold")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("expand_threshold", res->Get<int>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -640,13 +676,4 @@ void ArgsParser::DumpHelper() const {
     exit(-1);
 }
 
-void ArgsParser::DumpWarning() const {
-    bool dump = false;
-    if (GetOption<bool>("rollout")) {
-        LOGGING << "--WARNING! the rollout option is experimental."
-                << " Propose to disable them.\n";
-            ;
-        dump = true;
-    }
-    if (dump) LOGGING << '\n';
-}
+void ArgsParser::DumpWarning() const {}

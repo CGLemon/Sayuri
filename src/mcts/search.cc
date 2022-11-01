@@ -43,7 +43,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
 
     const bool end_by_passes = currstate.GetPasses() >= 2;
     if (end_by_passes) {
-        search_result.FromGameover(currstate);
+        search_result.FromGameOver(currstate);
     }
 
     // Terminated node, try to expand it. 
@@ -55,14 +55,21 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
                 node->ApplyEvals(search_result.GetEvals());
             }
         } else {
-            const bool have_children = node->HaveChildren();
+            const auto visits = node->GetVisits();
+            if (param_->no_dcnn &&
+                    visits < GetExpandThreshold(currstate)) {
+                // Do the rollout only if we do not expand this child.
+                search_result.FromRollout(currstate);
+            } else {
+                const bool have_children = node->HaveChildren();
 
-            // If we can not expand the node, it means that another thread
-            // is expanding this node. Skip the simulation this time.
-            const bool success = node->ExpandChildren(network_, currstate, false);
+                // If we can not expand the node, it means that another thread
+                // is expanding this node. Skip the simulation this time.
+                const bool success = node->ExpandChildren(network_, currstate, false);
 
-            if (!have_children && success) {
-                search_result.FromNetEvals(node->GetNodeEvals());
+                if (!have_children && success) {
+                    search_result.FromNetEvals(node->GetNodeEvals());
+                }
             }
         }
         if (search_result.IsValid() &&
@@ -71,7 +78,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
         }
     }
 
-    // Not terminate node, search the next node.
+    // Not the terminate node, search the next node.
     if (node->HaveChildren() && !search_result.IsValid()) {
         auto color = currstate.GetToMove();
         Node *next = nullptr;
@@ -776,9 +783,11 @@ bool Search::AdvanceToNewRootState() {
         return false;
     }
 
-    if (param_->dirichlet_noise) {
+    if (param_->dirichlet_noise || param_->root_dcnn) {
         // Need to re-build the trees if we apply noise. Reuse the
-        // tree will ignore the noise. 
+        // tree will ignore the noise. The root_dcnn option only
+        // apply the network at root. The tree shape of root is different
+        // from children.
         return false;
     }
 
@@ -852,4 +861,14 @@ int Search::GetPonderPlayouts() const {
     const int ponder_playouts = std::max(4 * 1024,
                                              ponder_playouts_factor * div_factor);
     return ponder_playouts;
+}
+
+int Search::GetExpandThreshold(GameState &state) const {
+    const auto board_size = state.GetBoardSize();
+
+    if (param_->expand_threshold >= 0) {
+        return param_->expand_threshold;
+    }
+
+    return std::min(20 + 2 * (board_size-9), 60);
 }
