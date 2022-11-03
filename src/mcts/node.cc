@@ -7,7 +7,6 @@
 #include "utils/format.h"
 #include "game/symmetry.h"
 
-
 #include <cassert>
 #include <algorithm>
 #include <cmath>
@@ -28,16 +27,17 @@ Node::~Node() {
     ReleaseAllChildren();
 }
 
-void Node::PrepareRootNode(Network &network,
+bool Node::PrepareRootNode(Network &network,
                            GameState &state,
+                           NodeEvals& node_evals,
                            std::vector<float> &dirichlet) {
     const auto is_root = true;
-    ExpandChildren(network, state, is_root);
+    const auto success = ExpandChildren(network, state, node_evals, is_root);
     assert(HaveChildren());
 
     InflateAllChildren();
     if (param_->dirichlet_noise) {
-        // Generate dirichlet noise and gather it.
+        // Generate the dirichlet noise and gather it.
         const auto legal_move = children_.size();
         const auto factor = param_->dirichlet_factor;
         const auto init = param_->dirichlet_init;
@@ -57,10 +57,13 @@ void Node::PrepareRootNode(Network &network,
         }
         dirichlet[num_intersections] = param_->dirichlet_buffer[kPass];
     }
+
+    return success;
 }
 
 bool Node::ExpandChildren(Network &network,
                           GameState &state,
+                          NodeEvals& node_evals,
                           const bool is_root) {
     // The node must be the first time to expand and is not the terminate node.
     assert(state.GetPasses() < 2);
@@ -87,7 +90,7 @@ bool Node::ExpandChildren(Network &network,
     }
 
     // Store the network reuslt.
-    LinkNetOutput(state, raw_netlist, color_);
+    ApplyNetOutput(state, raw_netlist, node_evals, color_);
 
     // For children...
     auto nodelist = std::vector<Network::PolicyVertexPair>{};
@@ -198,8 +201,15 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
     assert(!children_.empty());
 }
 
-void Node::LinkNetOutput(GameState &state, const Network::Result &raw_netlist, const int color) {
-    auto wl = 0.5f;
+void Node::ApplyNetOutput(GameState &state,
+                        const Network::Result &raw_netlist,
+                        NodeEvals& node_evals, const int color) {
+    auto black_ownership = std::array<float, kNumIntersections>{};
+    auto black_fs = float(0.f);
+    auto draw =raw_netlist.wdl[1];
+
+    // Compute the black side to move evals.
+    auto wl = float(0.5f);
 
     if (param_->use_stm_winrate) {
         wl = raw_netlist.stm_winrate;
@@ -207,7 +217,6 @@ void Node::LinkNetOutput(GameState &state, const Network::Result &raw_netlist, c
         wl = (raw_netlist.wdl[0] - raw_netlist.wdl[2] + 1) / 2;
     }
 
-    auto draw = raw_netlist.wdl[1];
     auto final_score = raw_netlist.final_score;
 
     if (color == kWhite) {
@@ -216,16 +225,15 @@ void Node::LinkNetOutput(GameState &state, const Network::Result &raw_netlist, c
     }
 
     black_wl_ = wl;
-    draw_ = draw;
-    black_fs_ = final_score;
+    black_fs = final_score;
 
     for (int idx = 0; idx < kNumIntersections; ++idx) {
         auto owner = raw_netlist.ownership[idx];
         if (color == kWhite) {
             owner = 0.f - owner;
         }
-        black_ownership_[idx] = owner;
-        accumulated_black_ownership_[idx] = 0.f;
+        black_ownership[idx] = owner;
+        avg_black_ownership_[idx] = 0.f;
     }
 
     // Do rollout if we disable the DCNN or the DCNN does not
@@ -234,12 +242,21 @@ void Node::LinkNetOutput(GameState &state, const Network::Result &raw_netlist, c
         float mc_black_rollout_score;
         float mc_black_rollout_res = GetBlackRolloutResult(
                                          state,
-                                         black_ownership_.data(),
+                                         black_ownership.data(),
                                          mc_black_rollout_score);
         if (param_->no_dcnn) {
             black_wl_ = mc_black_rollout_res;
-            black_fs_ = mc_black_rollout_score;
+            black_fs = mc_black_rollout_score;
         }
+    }
+
+    // Store the network evals.
+    node_evals.black_wl = black_wl_;
+    node_evals.draw = draw;
+    node_evals.black_final_score = black_fs;
+
+    for (int idx = 0; idx < kNumIntersections; ++idx) {
+        node_evals.black_ownership[idx] = black_ownership[idx];
     }
 }
 
@@ -309,7 +326,7 @@ float Node::ComputeTreeComplexity() {
         return 0;
     }
 
-    const auto variance = GetVariance(1.0f, visits);
+    const auto variance = GetLcbVariance(1.0f, visits);
     const auto stddev = std::sqrt(100 * variance);
 
     return stddev;
@@ -618,22 +635,28 @@ int Node::RandomizeFirstProportionally(float random_temp) {
 }
 
 void Node::Update(const NodeEvals *evals) {
+    auto WelfordDelta = [](double eval,
+                               double old_acc_eval,
+                               int old_visits) {
+        const double old_delta = old_visits > 0 ? eval - old_acc_eval / old_visits : 0.0f;
+        const double new_delta = eval - (old_acc_eval + eval) / (old_visits+1);
+        const double delta = old_delta * new_delta;
+        return delta;
+    };
+
     // type casting
     const double eval = evals->black_wl;
     const double draw = evals->draw;
     const double black_final_score = evals->black_final_score;
+    const double old_acc_eval = accumulated_black_wl_.load(std::memory_order_relaxed);
 
-    const double old_eval = accumulated_black_wl_.load(std::memory_order_relaxed);
-    const double old_visits = visits_.load(std::memory_order_relaxed);
-
-    const double old_delta = old_visits > 0 ? eval - old_eval / old_visits : 0.0f;
-    const double new_delta = eval - (old_eval + eval) / (old_visits + 1);
+    const int old_visits = visits_.load(std::memory_order_relaxed);
 
     // TODO: According to Kata Go, It is not necessary to use
     //       Welford's online algorithm. The accuracy of simplify
     //       algorithm is enough.
     // Welford's online algorithm for calculating variance.
-    const double delta = old_delta * new_delta;
+    const double delta = WelfordDelta(eval, old_acc_eval, old_visits);
 
     visits_.fetch_add(1, std::memory_order_relaxed);
     AtomicFetchAdd(squared_eval_diff_   , delta);
@@ -644,28 +667,31 @@ void Node::Update(const NodeEvals *evals) {
     {
         std::lock_guard<std::mutex> lock(os_mtx_);
         for (int idx = 0; idx < kNumIntersections; ++idx) {
-            accumulated_black_ownership_[idx] += (double)(evals->black_ownership[idx]);
+            const double eval_owner = evals->black_ownership[idx];
+            const double avg_owner  = avg_black_ownership_[idx];
+            const double diff_owner = (eval_owner - avg_owner) / (old_visits+1);
+
+            avg_black_ownership_[idx] += diff_owner;
         }
     }
 }
 
 void Node::ApplyEvals(const NodeEvals *evals) {
     black_wl_ = evals->black_wl;
-    draw_ = evals->draw;
-    black_fs_ = evals->black_final_score;
-
-    std::copy(std::begin(evals->black_ownership),
-                  std::end(evals->black_ownership),
-                  std::begin(black_ownership_));
+    // draw_ = evals->draw;
+    // black_fs_ = evals->black_final_score;
+    //
+    // std::copy(std::begin(evals->black_ownership),
+    //               std::end(evals->black_ownership),
+    //               std::begin(black_ownership_));
 }
 
 std::array<float, kNumIntersections> Node::GetOwnership(int color) {
     std::lock_guard<std::mutex> lock(os_mtx_);
 
-    const auto visits = GetVisits();
     auto out = std::array<float, kNumIntersections>{};
     for (int idx = 0; idx < kNumIntersections; ++idx) {
-        auto owner = accumulated_black_ownership_[idx] / visits;
+        auto owner = avg_black_ownership_[idx];
         if (color == kWhite) {
             owner = 0.f - owner;
         }
@@ -678,22 +704,25 @@ float Node::GetScoreUtility(const int color, float factor, float parent_score) c
     return std::tanh(factor * (GetFinalScore(color) - parent_score));
 }
 
-float Node::GetVariance(const float default_var, const int visits) const {
-    return visits > 1 ? squared_eval_diff_.load(std::memory_order_relaxed) / (visits - 1) : default_var;
+float Node::GetLcbVariance(const float default_var, const int visits) const {
+    return visits > 1 ?
+               squared_eval_diff_.load(std::memory_order_relaxed) / (visits - 1) :
+               default_var;
 }
 
 float Node::GetLcb(const int color) const {
-    // LCB issues: https://github.com/leela-zero/leela-zero/pull/2290
-    // Lower confidence bound of winrate.
+    // The Lower confidence bound of winrate.
+    // See the LCB issues here: https://github.com/leela-zero/leela-zero/pull/2290
+
     const auto visits = GetVisits();
-    if (visits < 2) {
-        // Return the large negative value if not enough visits.
+    if (visits <= 1) {
+        // We can not get the variance in the first visit. Return
+        // the large negative value.
         return GetPolicy() - 1e6f;
     }
 
     const auto mean = GetEval(color, false);
-
-    const auto variance = GetVariance(1.0f, visits);
+    const auto variance = GetLcbVariance(1.0f, visits);
     const auto stddev = std::sqrt(variance / float(visits));
     const auto z = LcbEntries::Get().CachedTQuantile(visits - 1);
     
@@ -703,7 +732,12 @@ float Node::GetLcb(const int color) const {
 std::string Node::ToVerboseString(GameState &state, const int color) {
     auto out = std::ostringstream{};
     const auto lcblist = GetLcbList(color);
-    const auto parentvisits = static_cast<float>(GetVisits());
+    const auto parentvisits = GetVisits() - 1; // One is root visit.
+
+    if (parentvisits <= 0) {
+         out << " * Search List: N/A" << std::endl;
+        return out.str();
+    }
 
     const auto space1 = 7;
     out << " * Search List:" << std::endl;
@@ -732,7 +766,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
 
         const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
 
-        const auto visit_ratio = static_cast<float>(visits) / (parentvisits - 1); // One is root visit.
+        const auto visit_ratio = static_cast<float>(visits) / (parentvisits);
         out << std::fixed << std::setprecision(2)
                 << std::setw(6) << state.VertexToText(vertex)  // move
                 << std::setw(10) << visits                     // visits
@@ -786,7 +820,7 @@ std::string Node::OwnershipToString(GameState &state, const int color, std::stri
 }
 
 std::string Node::ToAnalyzeString(GameState &state, const int color, Node::AnalysisTag tag) {
-    // Gather analyzing string, you can see the detail here
+    // Gather the analysis string. You can see the detail here
     // https://github.com/SabakiHQ/Sabaki/blob/master/docs/guides/engine-analysis-integration.md
 
     auto out = std::ostringstream{};
@@ -914,8 +948,9 @@ std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
     WaitExpanded();
     assert(HaveChildren());
 
-    auto lcb_reduction = param_->lcb_reduction;
-    auto parents_visits = (float)GetVisits();
+    const auto lcb_reduction = std::min(
+                                   std::max(0.f, param_->lcb_reduction), 1.f);
+    const auto parentvisits = GetVisits() - 1;
     auto list = std::vector<std::pair<float, int>>{};
 
     for (const auto & child : children_) {
@@ -930,7 +965,7 @@ std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
         const auto visits = node->GetVisits();
         if (visits > 0) {
             const auto lcb = node->GetLcb(color) * (1.f - lcb_reduction) + 
-                                 lcb_reduction * ((float)visits/parents_visits);
+                                 lcb_reduction * ((float)visits/parentvisits);
             list.emplace_back(lcb, node->GetVertex());
         }
     }
@@ -964,26 +999,8 @@ int Node::GetBestMove() {
     return best_move;
 }
 
-NodeEvals Node::GetNodeEvals() const {
-    auto evals = NodeEvals{};
-
-    evals.black_wl = black_wl_;
-    evals.draw = draw_;
-    evals.black_final_score = black_fs_;
-
-    for (int idx = 0; idx < kNumIntersections; ++idx) {
-        evals.black_ownership[idx] = black_ownership_[idx];
-    }
-
-    return evals;
-}
-
 const std::vector<Node::Edge> &Node::GetChildren() const {
     return children_;
-}
-
-Parameters *Node::GetParameters() {
-    return param_;
 }
 
 void Node::SetParameters(Parameters * param) {
@@ -1010,13 +1027,6 @@ int Node::GetVisits() const {
     return visits_.load(std::memory_order_relaxed);
 }
 
-float Node::GetNetFinalScore(const int color) const {
-    if (color == kBlack) {
-        return black_fs_;
-    }
-    return 0.0f - black_fs_;
-}
-
 float Node::GetFinalScore(const int color) const {
     auto score = accumulated_black_fs_.load(std::memory_order_relaxed) / GetVisits();
 
@@ -1024,10 +1034,6 @@ float Node::GetFinalScore(const int color) const {
         return score;
     }
     return 0.0f - score;
-}
-
-float Node::GetNetDraw() const {
-    return draw_;
 }
 
 float Node::GetDraw() const {
@@ -1197,7 +1203,6 @@ void Node::ApplyDirichletNoise(const float alpha) {
         v /= sample_sum;
     }
 
-    InflateAllChildren();
     for (auto i = size_t{0}; i < child_cnt; ++i) {
         const auto vertex = children_[i].GetVertex();
         dirichlet[vertex] = buffer[i];

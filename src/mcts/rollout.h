@@ -1,6 +1,5 @@
 #pragma once
 
-#include <vector>
 #include "game/game_state.h"
 
 float GetBlackRolloutResult(GameState &state,

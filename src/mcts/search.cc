@@ -65,10 +65,11 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
 
                 // If we can not expand the node, it means that another thread
                 // is expanding this node. Skip the simulation this time.
-                const bool success = node->ExpandChildren(network_, currstate, false);
+                auto node_evals = NodeEvals{};
+                const bool success = node->ExpandChildren(network_, currstate, node_evals, false);
 
                 if (!have_children && success) {
-                    search_result.FromNetEvals(node->GetNodeEvals());
+                    search_result.FromNetEvals(node_evals);
                 }
             }
         }
@@ -121,12 +122,13 @@ void Search::PrepareRootNode() {
     playouts_.store(0, std::memory_order_relaxed);
     running_.store(true, std::memory_order_relaxed);
 
+    auto node_evals = NodeEvals{};
     auto root_noise = std::vector<float>{}; // unused
-    root_node_->PrepareRootNode(network_, root_state_, root_noise);
+    const bool success = root_node_->PrepareRootNode(
+                             network_, root_state_, node_evals, root_noise);
 
-    if (!reused) {
-        const auto evals = root_node_->GetNodeEvals();
-        root_node_->Update(&evals);
+    if (!reused && success) {
+        root_node_->Update(&node_evals);
     }
 }
 

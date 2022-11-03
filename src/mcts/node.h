@@ -30,11 +30,13 @@ public:
     // Expand this node.
     bool ExpandChildren(Network &network,
                         GameState &state,
+                        NodeEvals& node_evals,
                         const bool is_root);
 
     // Expand root node children before starting tree search.
-    void PrepareRootNode(Network &network,
+    bool PrepareRootNode(Network &network,
                          GameState &state,
+                         NodeEvals& node_evals,
                          std::vector<float> &dirichlet);
 
     // Select the best policy node.
@@ -75,16 +77,15 @@ public:
     float GetPolicy() const;
 
     // GetNetxxx will get raw NN eval from this node.
-    float GetNetFinalScore(const int color) const;
+    // float GetNetFinalScore(const int color) const;
     float GetNetEval(const int color) const;
-    float GetNetDraw() const;
+    // float GetNetDraw() const;
 
     float GetFinalScore(const int color) const;
     float GetEval(const int color, const bool use_virtual_loss=true) const;
     float GetDraw() const;
 
     std::array<float, kNumIntersections> GetOwnership(int color);
-    NodeEvals GetNodeEvals() const;
     void ApplyEvals(const NodeEvals *evals);
 
     void IncrementThreads();
@@ -122,15 +123,17 @@ private:
                                const int color,
                                Network::Result &raw_netlist) const;
     void ApplyDirichletNoise(const float alpha);
+    void ApplyNetOutput(GameState &state,
+                        const Network::Result &raw_netlist,
+                        NodeEvals& node_evals, const int color);
     void SetPolicy(float p);
     void SetVisits(int v);
 
     void LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist);
-    void LinkNetOutput(GameState &state, const Network::Result &raw_netlist, const int color);
 
     float GetSearchPolicy(Edge& child, bool noise);
     float GetScoreUtility(const int color, float factor, float parent_score) const;
-    float GetVariance(const float default_var, const int visits) const;
+    float GetLcbVariance(const float default_var, const int visits) const;
     float GetLcb(const int color) const;
 
     void Inflate(Edge& child);
@@ -172,30 +175,40 @@ private:
     // wait until we are on EXPANDED state
     void WaitExpanded() const;
 
+    // Color of the node. Set kInvalid if there are no children.
     int color_{kInvalid};
 
     Parameters *param_;
 
-    // network outputs
-    float black_fs_;
+    // The network win-loss value.
     float black_wl_;
-    float draw_;
-    std::array<float, kNumIntersections> black_ownership_;
 
-    std::mutex os_mtx_; // the ownership accumulated lock
-
-    // accumulated values
+    // The Accumulated values.
     std::atomic<double> squared_eval_diff_{1e-4f};
+
+    // The black accumulated values.
     std::atomic<double> accumulated_black_fs_{0.0f};
     std::atomic<double> accumulated_black_wl_{0.0f};
     std::atomic<double> accumulated_draw_{0.0f};
-    std::array<double, kNumIntersections> accumulated_black_ownership_;
 
+    // The black average ownership value.
+    std::array<float, kNumIntersections> avg_black_ownership_;
+
+    // The ownership lock.
+    std::mutex os_mtx_;
+
+    // The visits number of this node.
     std::atomic<int> visits_{0};
+
+    // The threads number below this sub-tree.
     std::atomic<int> running_threads_{0};
 
+    // The children of this node.
     std::vector<Edge> children_;
 
+    // The played move.
     std::int16_t vertex_;
+
+    // Policy value of the node.
     float policy_;
 };
