@@ -1,6 +1,5 @@
 #include "mcts/node.h"
 #include "mcts/lcb.h"
-#include "mcts/progressive_widening.h"
 #include "mcts/rollout.h"
 #include "utils/atomic.h"
 #include "utils/random.h"

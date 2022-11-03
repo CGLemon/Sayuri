@@ -9,11 +9,14 @@ float GetBlackRolloutResult(GameState &state,
     int num_curr_moves = 0;
     const int max_move_len = 2*num_intersections+1;
 
-    while (fork_state.GetPasses() < 2 && num_curr_moves < max_move_len) {
+    // Do the random move util the game is ending.
+    while (fork_state.GetPasses() < 2 &&
+               num_curr_moves < max_move_len) {
         fork_state.PlayRandomMove();
         num_curr_moves += 1;
     }
 
+    // Compute the final position reuslt.
     black_score = 0;
     std::vector<int> ownership = fork_state.GetOwnership();
     {
@@ -22,9 +25,9 @@ float GetBlackRolloutResult(GameState &state,
             float mcval = 0.f;
 
             if (owner == kBlack) {
-                mcval = 1.f;
+                mcval = 1.f; // black value
             } else if (owner == kWhite) {
-                mcval = -1.f;
+                mcval = -1.f; // white value
             }
             black_score += mcval;
             mcowner[idx] = mcval;
