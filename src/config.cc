@@ -168,16 +168,12 @@ void InitBasicParameters() {
     // Try to select a reasonable number for const time and playouts.
     bool already_set_time = GetOption<int>("const_time") > 0;
     bool already_set_playouts = GetOption<int>("playouts") > 0;
-    bool already_set_ponder_playouts = GetOption<int>("ponder_playouts") > 0;
 
     if (!already_set_time && !already_set_playouts) {
         SetOption("const_time", 10); // 10 seconds
     }
     if (!already_set_playouts) {
         SetOption("playouts", std::numeric_limits<int>::max() / 2);
-    }
-    if (!already_set_ponder_playouts) {
-        SetOption("ponder_playouts", std::numeric_limits<int>::max() / 2);
     }
 
     // Parse the search mode.
@@ -395,11 +391,12 @@ ArgsParser::ArgsParser(int argc, char** argv) {
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
+
     if (const auto res = parser.FindNext("--ponder-factor")) {
-        if (IsParameter(res->Get<std::string>())) {
-            SetOption("ponder_factor", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
+       if (IsParameter(res->Get<std::string>())) {
+           SetOption("ponder_factor", res->Get<int>());
+           parser.RemoveSlice(res->Index()-1, res->Index()+1);
+       }
     }
 
     if (const auto res = parser.FindNext("--const-time")) {
