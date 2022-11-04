@@ -70,7 +70,7 @@ void InitOptionsMap() {
 
     kOptionsMap["cache_memory_mib"] << Option::setoption(400);
     kOptionsMap["playouts"] << Option::setoption(0);
-    kOptionsMap["ponder_playouts"] << Option::setoption(0);
+    kOptionsMap["ponder_factor"] << Option::setoption(100);
     kOptionsMap["const_time"] << Option::setoption(0);
     kOptionsMap["batch_size"] << Option::setoption(0);
     kOptionsMap["threads"] << Option::setoption(0);
@@ -395,9 +395,9 @@ ArgsParser::ArgsParser(int argc, char** argv) {
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
-    if (const auto res = parser.FindNext({"--ponder-playouts", "-p"})) {
+    if (const auto res = parser.FindNext("--ponder-factor")) {
         if (IsParameter(res->Get<std::string>())) {
-            SetOption("ponder_playouts", res->Get<int>());
+            SetOption("ponder_factor", res->Get<int>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

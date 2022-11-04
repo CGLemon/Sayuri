@@ -79,7 +79,7 @@ void Engine::SetHandicapGame(int g) {
 
 void Engine::SetFairKomi(int g) {
     auto &state = game_pool_[g];
-    auto result = search_pool_[g]->Computation(400, 0, Search::kNullTag);
+    auto result = search_pool_[g]->Computation(400, Search::kNullTag);
     auto komi = state.GetKomi();
     auto final_score = result.root_final_score;
 

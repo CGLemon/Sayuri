@@ -10,7 +10,6 @@
 #include "utils/operators.h"
 #include "utils/time.h"
 
-
 #include <thread>
 #include <memory>
 #include <atomic>
@@ -140,19 +139,11 @@ public:
 
     enum OptionTag : int {
         kNullTag  = 0,
-
-        // analysis tag
-        kSayuri         = 1,
-        kKata           = 1 << 1,
-        kOwnership      = 1 << 2,
-        kMovesOwnership = 1 << 3,
-
-        // mode tag
-        kThinking = 1 << 4, // use time control
-        kPonder   = 1 << 5, // thinking on opponent's time
-        kAnalyze  = 1 << 6, // open analyzing mode
-        kForced   = 1 << 7, // remove all pass move before search
-        kUnreused = 1 << 8  // don't reuse the tree
+        kThinking = 1 << 1, // use time control
+        kPonder   = 1 << 2, // thinking on opponent's time
+        kAnalyze  = 1 << 3, // open analyzing mode
+        kForced   = 1 << 4, // remove all pass move before search
+        kUnreused = 1 << 5  // don't reuse the tree
     };
 
     // Enable OptionTag operations.
@@ -166,7 +157,7 @@ public:
     void Initialize();
 
     // Compute the result by monte carlo tree search.
-    ComputationResult Computation(int playouts, int interval, OptionTag tag);
+    ComputationResult Computation(int playouts, OptionTag tag);
 
     // Get the best move.
     int ThinkBestMove();
@@ -174,8 +165,8 @@ public:
     // Get the self-play move.
     int GetSelfPlayMove();
 
-    // Will dump analyzing information.
-    int Analyze(int interval, bool ponder, OptionTag tag);
+    // Will dump analysis information.
+    int Analyze(bool ponder, AnalysisConfig &analysis_config);
 
     // Try to do the pondor.
     void TryPonder();
@@ -204,8 +195,6 @@ private:
 
     bool InputPending(Search::OptionTag tag) const;
 
-    Node::AnalysisTag ToAnalysisTag(Search::OptionTag tag) const;
-
     void GatherComputationResult(ComputationResult &result) const;
 
     void GatherData(const GameState &state, ComputationResult &result);
@@ -217,6 +206,8 @@ private:
     int GetPonderPlayouts() const;
 
     int GetExpandThreshold(GameState &state) const;
+
+    AnalysisConfig analysis_config_;
 
     // Stop the search if current playouts greater this value.
     int max_playouts_; 

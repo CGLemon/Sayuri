@@ -4,6 +4,7 @@
 #include "game/types.h"
 #include "config.h"
 #include "mcts/search.h"
+#include "mcts/node.h"
 #include "utils/parser.h"
 #include "utils/threadpool.h"
 #include "utils/format.h"
@@ -88,8 +89,7 @@ private:
     std::string GtpSuccess(std::string);
     std::string GtpFail(std::string);
 
-    Search::OptionTag ParseAnalysisTag(CommandParser &parser,
-                                          int &color, int &interval);
+    AnalysisConfig ParseAnalysisConfig(CommandParser &parser, int &color);
 
     std::string Execute(CommandParser &parser, bool &try_ponder);
 

@@ -28,6 +28,7 @@ void Search::Initialize() {
     param_ = std::make_unique<Parameters>();
     param_->Reset();
 
+    analysis_config_.Clear();
     last_state_ = root_state_;
     root_node_.reset(nullptr);
 
@@ -66,7 +67,8 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
                 // If we can not expand the node, it means that another thread
                 // is expanding this node. Skip the simulation this time.
                 auto node_evals = NodeEvals{};
-                const bool success = node->ExpandChildren(network_, currstate, node_evals, false);
+                const bool success = node->ExpandChildren(network_, currstate,
+                                                              node_evals, analysis_config_, false);
 
                 if (!have_children && success) {
                     search_result.FromNetEvals(node_evals);
@@ -125,7 +127,7 @@ void Search::PrepareRootNode() {
     auto node_evals = NodeEvals{};
     auto root_noise = std::vector<float>{}; // unused
     const bool success = root_node_->PrepareRootNode(
-                             network_, root_state_, node_evals, root_noise);
+                             network_, root_state_, node_evals, analysis_config_, root_noise);
 
     if (!reused && success) {
         root_node_->Update(&node_evals);
@@ -194,26 +196,7 @@ bool Search::InputPending(Search::OptionTag tag) const {
 #endif
 }
 
-Node::AnalysisTag Search::ToAnalysisTag(Search::OptionTag tag) const {
-    Node::AnalysisTag atag = Node::AnalysisTag::kNullTag;
-
-    if (tag & kSayuri) {
-        atag = atag | Node::AnalysisTag::kSayuri;
-    }
-    if (tag & kKata) {
-        atag = atag | Node::AnalysisTag::kKata;
-    }
-    if (tag & kOwnership) {
-        atag = atag | Node::AnalysisTag::kOwnership;
-    }
-    if (tag & kMovesOwnership) {
-        atag = atag | Node::AnalysisTag::kMovesOwnership;
-    }
-
-    return atag;
-}
-
-ComputationResult Search::Computation(int playouts, int interval, Search::OptionTag tag) {
+ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     auto computation_result = ComputationResult{};
     playouts = std::min(playouts, kMaxPlayouts);
 
@@ -320,10 +303,11 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
             playouts_.fetch_add(1, std::memory_order_relaxed);
         }
 
-        if ((tag & kAnalyze) && analyze_timer.GetDurationMilliseconds() > interval * 10) {
-            // Output analyze verbose for GTP interface, like sabaki...
+        if ((tag & kAnalyze) &&
+                analyze_timer.GetDurationMilliseconds() > analysis_config_.interval * 10) {
+            // Output analysis verbose for GTP interface, like sabaki...
             analyze_timer.Clock();
-            DUMPING << root_node_->ToAnalyzeString(root_state_, color, ToAnalysisTag(tag));
+            DUMPING << root_node_->ToAnalysisString(root_state_, color, analysis_config_);
         }
 
         const auto elapsed = (tag & kThinking) ?
@@ -351,7 +335,7 @@ ComputationResult Search::Computation(int playouts, int interval, Search::Option
         time_control_.TookTime(color);
     }
     if (tag & kAnalyze) {
-        DUMPING << root_node_->ToAnalyzeString(root_state_, color, ToAnalysisTag(tag));
+        DUMPING << root_node_->ToAnalysisString(root_state_, color, analysis_config_);
     }
     if (param_->analysis_verbose) {
         LOGGING << root_node_->ToVerboseString(root_state_, color);
@@ -389,7 +373,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     // Fill best moves, root eval and score.
     result.best_move = root_node_->GetBestMove();
     result.random_move = root_node_->RandomizeFirstProportionally(1);
-    result.root_eval = root_node_->GetEval(color, false);
+    result.root_eval = root_node_->GetWL(color, false);
     result.root_final_score = root_node_->GetFinalScore(color);
 
     // Resize the childern status buffer.
@@ -610,7 +594,7 @@ bool ShouldPass(GameState &state, ComputationResult &result, bool friendly_pass)
 
 int Search::ThinkBestMove() {
     auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
-    auto result = Computation(max_playouts_, 0, tag);
+    auto result = Computation(max_playouts_, tag);
 
     if (ShouldResign(root_state_, result, param_->resign_threshold)) {
         return kResign;
@@ -625,7 +609,7 @@ int Search::ThinkBestMove() {
 
 int Search::GetSelfPlayMove() {
     auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
-    auto result = Computation(max_playouts_, 0, tag);
+    auto result = Computation(max_playouts_, tag);
 
     int move = result.best_move;
     if (param_->random_moves_cnt > result.movenum) {
@@ -640,25 +624,35 @@ int Search::GetSelfPlayMove() {
 
 void Search::TryPonder() {
     if (param_->ponder) {
-        Computation(GetPonderPlayouts(), 0, kPonder);
+        Computation(GetPonderPlayouts(), kPonder);
     }
 }
 
-int Search::Analyze(int interval, bool ponder, OptionTag other_tag) {
+int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
     // Ponder mode always reuse the tree.
     auto reuse_tag = (param_->reuse_tree || ponder) ? kNullTag : kUnreused;
-
     auto ponder_tag = ponder ? (kAnalyze | kPonder) : (kAnalyze | kThinking);
-    auto tag = reuse_tag | ponder_tag | other_tag;
+
+    auto tag = reuse_tag | ponder_tag;
+
+    // Set the current analysis config.
+    analysis_config_ = analysis_config;
 
     int playouts = ponder == true ? GetPonderPlayouts()
                                       : max_playouts_;
+    auto result = Computation(playouts, tag);
 
-    auto result = Computation(playouts, interval, tag);
+    // Clear confing after finishing the search.
+    analysis_config_.Clear();
+
+    // Disable the reuse the tree.
+    if (analysis_config_.MoveRestrictions()) {
+        ReleaseTree();
+    }
+
     if (ShouldResign(root_state_, result, param_->resign_threshold)) {
         return kResign;
     }
-
     if (ShouldPass(root_state_, result, param_->friendly_pass)) {
         return kPass;
     }
@@ -851,17 +845,15 @@ int Search::GetPonderPlayouts() const {
     // and reuse the tree. They can efficiently use the large tree.
     // Set the greatest number as we can.
 
-    const int max_ponder_playouts = std::min(param_->ponder_playouts, kMaxPlayouts);
-
     // The factor means 'ponder_playouts = playouts * div_factor'.
-    const int div_factor = 100;
+    const int div_factor = std::max(1, param_->ponder_factor);
 
     // TODO: We should consider tree memory limit. Avoid to use
     //       too many system memory.
-    const int ponder_playouts_factor = std::min(param_->playouts,
-                                                    max_ponder_playouts/div_factor);
+    const int ponder_playouts_base = std::min(param_->playouts,
+                                                  kMaxPlayouts/div_factor);
     const int ponder_playouts = std::max(4 * 1024,
-                                             ponder_playouts_factor * div_factor);
+                                             ponder_playouts_base * div_factor);
     return ponder_playouts;
 }
 

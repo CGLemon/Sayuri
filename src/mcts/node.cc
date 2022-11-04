@@ -27,11 +27,12 @@ Node::~Node() {
 }
 
 bool Node::PrepareRootNode(Network &network,
-                           GameState &state,
-                           NodeEvals& node_evals,
-                           std::vector<float> &dirichlet) {
+                               GameState &state,
+                               NodeEvals &node_evals,
+                               AnalysisConfig &config,
+                               std::vector<float> &dirichlet) {
     const auto is_root = true;
-    const auto success = ExpandChildren(network, state, node_evals, is_root);
+    const auto success = ExpandChildren(network, state, node_evals, config, is_root);
     assert(HaveChildren());
 
     InflateAllChildren();
@@ -61,9 +62,10 @@ bool Node::PrepareRootNode(Network &network,
 }
 
 bool Node::ExpandChildren(Network &network,
-                          GameState &state,
-                          NodeEvals& node_evals,
-                          const bool is_root) {
+                              GameState &state,
+                              NodeEvals &node_evals,
+                              AnalysisConfig &config,
+                              const bool is_root) {
     // The node must be the first time to expand and is not the terminate node.
     assert(state.GetPasses() < 2);
     if (HaveChildren()) {
@@ -119,7 +121,12 @@ bool Node::ExpandChildren(Network &network,
         const auto policy = raw_netlist.probabilities[idx];
 
         // Prune the illegal and unwise move.
-        if (!state.IsLegalMove(vtx, color_) || safe_area[idx]) {
+        int movenum = state.GetMoveNumber();
+        if (!state.IsLegalMove(vtx, color_,
+                [movenum, &config](int vtx, int color){
+                    return !config.IsLegal(vtx, color, movenum);
+                }) 
+                    || safe_area[idx]) {
             continue;
         }
 
@@ -402,12 +409,12 @@ Node *Node::ProbSelectChild() {
         const auto node = child.Get();
         const bool is_pointer = node != nullptr;
 
-        auto prob = child.GetPolicy();
-
         // The node is pruned or invalid. Skip it.
         if (is_pointer && !node->IsActive()) {
             continue;
         }
+
+        auto prob = child.GetPolicy();
 
         // The node is expanding. Give it very bad value.
         if (is_pointer && node->IsExpanding()) {
@@ -459,7 +466,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     const float cpuct         = cpuct_init + std::log((float(parentvisits) + cpuct_base + 1) / cpuct_base);
     const float numerator     = std::sqrt(float(parentvisits));
     const float fpu_reduction = fpu_reduction_factor * std::sqrt(total_visited_policy);
-    const float fpu_value     = GetNetEval(color) - fpu_reduction;
+    const float fpu_value     = GetNetWL(color) - fpu_reduction;
     const float score         = GetFinalScore(color);
 
     Edge* best_node = nullptr;
@@ -485,8 +492,8 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
                 // threads in this node.
                 q_value = -1.0f - fpu_reduction;
             } else if (node->GetVisits() > 0) {
-                // Transfer Win-Draw-Loss to side-to-move value (Q value).
-                const float eval = node->GetEval(color);
+                // Transfer win-draw-loss to side-to-move value (Q value).
+                const float eval = node->GetWL(color);
                 const float draw_value = node->GetDraw() * draw_factor;
                 q_value = eval + draw_value;
             }
@@ -543,7 +550,7 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
     const int parentvisits = std::max(1, GetVisits());
     const float numerator = std::log((float)parentvisits);
     const float cpuct = is_root ? param_->cpuct_root_init : param_->cpuct_init;
-    const float parent_qvalue = GetEval(color, false);
+    const float parent_qvalue = GetWL(color, false);
 
     std::vector<Edge*> edge_buf;
 
@@ -582,7 +589,7 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
             if (node->IsExpanding()) {
                 q_value = -1.0f; // Give it a bad value.
             } else if (child_visits > 0) {
-                q_value = node->GetEval(color);
+                q_value = node->GetWL(color);
             }
         }
 
@@ -677,12 +684,6 @@ void Node::Update(const NodeEvals *evals) {
 
 void Node::ApplyEvals(const NodeEvals *evals) {
     black_wl_ = evals->black_wl;
-    // draw_ = evals->draw;
-    // black_fs_ = evals->black_final_score;
-    //
-    // std::copy(std::begin(evals->black_ownership),
-    //               std::end(evals->black_ownership),
-    //               std::begin(black_ownership_));
 }
 
 std::array<float, kNumIntersections> Node::GetOwnership(int color) {
@@ -720,7 +721,7 @@ float Node::GetLcb(const int color) const {
         return GetPolicy() - 1e6f;
     }
 
-    const auto mean = GetEval(color, false);
+    const auto mean = GetWL(color, false);
     const auto variance = GetLcbVariance(1.0f, visits);
     const auto stddev = std::sqrt(variance / float(visits));
     const auto z = LcbEntries::Get().CachedTQuantile(visits - 1);
@@ -760,7 +761,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
         assert(visits != 0);
 
         const auto final_score = child->GetFinalScore(color);
-        const auto eval = child->GetEval(color, false);
+        const auto eval = child->GetWL(color, false);
         const auto draw = child->GetDraw();
 
         const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
@@ -818,7 +819,9 @@ std::string Node::OwnershipToString(GameState &state, const int color, std::stri
     return out.str();
 }
 
-std::string Node::ToAnalyzeString(GameState &state, const int color, Node::AnalysisTag tag) {
+std::string Node::ToAnalysisString(GameState &state,
+                                       const int color,
+                                       AnalysisConfig &config) {
     // Gather the analysis string. You can see the detail here
     // https://github.com/SabakiHQ/Sabaki/blob/master/docs/guides/engine-analysis-integration.md
 
@@ -826,19 +829,23 @@ std::string Node::ToAnalyzeString(GameState &state, const int color, Node::Analy
     const auto lcblist = GetLcbList(color);
     const auto root_visits = static_cast<float>(GetVisits() - 1);
 
-    bool is_sayuri = (bool)(tag & AnalysisTag::kSayuri);
-    bool is_kata = (bool)(tag & AnalysisTag::kKata);
-    bool use_ownership = (bool)(tag & AnalysisTag::kOwnership);
-    bool use_moves_ownership = (bool)(tag & AnalysisTag::kMovesOwnership);
+    bool is_sayuri = config.is_sayuri;
+    bool is_kata = config.is_kata;
+    bool use_ownership = config.ownership;
+    bool use_moves_ownership = config.moves_ownership;
 
-    int i = 0;
+    int order = 0;
     for (auto &lcb_pair : lcblist) {
+        if (order+1 > config.max_moves) {
+            break;
+        }
+
         const auto lcb = lcb_pair.first > 0.0f ? lcb_pair.first : 0.0f;
         const auto vertex = lcb_pair.second;
 
         auto child = GetChild(vertex);
         const auto final_score = child->GetFinalScore(color);
-        const auto winrate = child->GetEval(color, false);
+        const auto winrate = child->GetWL(color, false);
         const auto visits = child->GetVisits();
         const auto prior = child->GetPolicy();
         const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
@@ -851,7 +858,7 @@ std::string Node::ToAnalyzeString(GameState &state, const int color, Node::Analy
         if (is_sayuri) {
             const auto kl = child->ComputeKlDivergence();
             const auto complexity = child->ComputeTreeComplexity();
-            out << Format("info move %s visits %d winrate %.6f scoreLead %.6f prior %.6f lcb %.6f kl %.6f complexity %.6f order %d pv %s",
+            out << Format("info move %s visits %d winrate %.6f scorelead %.6f prior %.6f lcb %.6f kl %.6f complexity %.6f order %d pv %s",
                              state.VertexToText(vertex).c_str(),
                              visits,
                              winrate,
@@ -860,7 +867,7 @@ std::string Node::ToAnalyzeString(GameState &state, const int color, Node::Analy
                              lcb,
                              kl,
                              complexity,
-                             i++,
+                             order,
                              pv_string.c_str()
                          );
         } else if (is_kata) {
@@ -871,7 +878,7 @@ std::string Node::ToAnalyzeString(GameState &state, const int color, Node::Analy
                              final_score,
                              prior,
                              lcb,
-                             i++,
+                             order,
                              pv_string.c_str()
                          );
         } else {
@@ -882,13 +889,18 @@ std::string Node::ToAnalyzeString(GameState &state, const int color, Node::Analy
                              final_score,
                              std::min(10000, (int)(10000 * prior)),
                              std::min(10000, (int)(10000 * lcb)),
-                             i++,
+                             order,
                              pv_string.c_str()
                          );
         }
         if (use_moves_ownership) {
-            out << OwnershipToString(state, color, "movesOwnership", child);
+            if (is_sayuri) {
+                out << OwnershipToString(state, color, "movesownership", child);
+            } else {
+                out << OwnershipToString(state, color, "movesOwnership", child);
+            }
         }
+        order += 1;
     }
 
     if (use_ownership) {
@@ -1039,14 +1051,14 @@ float Node::GetDraw() const {
     return accumulated_draw_.load(std::memory_order_relaxed) / GetVisits();
 }
 
-float Node::GetNetEval(const int color) const {
+float Node::GetNetWL(const int color) const {
     if (color == kBlack) {
         return black_wl_;
     }
     return 1.0f - black_wl_;
 }
 
-float Node::GetEval(const int color, const bool use_virtual_loss) const {
+float Node::GetWL(const int color, const bool use_virtual_loss) const {
     auto virtual_loss = 0;
 
     if (use_virtual_loss) {

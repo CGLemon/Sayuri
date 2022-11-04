@@ -13,7 +13,7 @@ public:
         threads = GetOption<int>("threads");
         batch_size = GetOption<int>("batch_size");
         playouts = GetOption<int>("playouts");
-        ponder_playouts = GetOption<int>("ponder_playouts");
+        ponder_factor = GetOption<int>("ponder_factor");
         const_time = GetOption<int>("const_time");
         expand_threshold = GetOption<int>("expand_threshold");
 
@@ -62,7 +62,7 @@ public:
     int threads;
     int batch_size;
     int playouts;
-    int ponder_playouts;
+    int ponder_factor;
     int const_time;
     int random_min_visits;
     int random_moves_cnt;

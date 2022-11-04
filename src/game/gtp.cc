@@ -270,7 +270,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         agent_->GetNetwork().ClearCache();
         out << GtpSuccess("");
     } else if (const auto res = parser.Find("final_score", 0)) {
-        auto result = agent_->GetSearch().Computation(400, 0, Search::kForced);
+        auto result = agent_->GetSearch().Computation(400, Search::kForced);
         auto color = agent_->GetState().GetToMove();
         auto final_score = result.root_final_score;
 
@@ -359,9 +359,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
                                                  "kata-analyze",
                                                  "sayuri-analyze"}, 0)) {
         auto color = agent_->GetState().GetToMove();
-        auto interval = 100; // one second
-
-        Search::OptionTag tag = ParseAnalysisTag(parser, color, interval);
+        auto config = ParseAnalysisConfig(parser, color);
 
         if (curr_id_ >= 0) {
             DUMPING << "=" << curr_id_ << "\n";
@@ -369,23 +367,15 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             DUMPING << "=\n";
         }
 
-        if (res->Get<std::string>() == "sayuri-analyze") {
-            tag = tag | Search::kSayuri;
-        } else if (res->Get<std::string>() == "kata-analyze") {
-            tag = tag | Search::kKata;
-        }
-
         agent_->GetState().SetToMove(color);
-        agent_->GetSearch().Analyze(interval, true, tag);
+        agent_->GetSearch().Analyze(true, config);
         DUMPING << "\n";
     } else if (const auto res = parser.Find({"genmove_analyze",
                                                  "lz-genmove_analyze",
                                                  "kata-genmove_analyze",
                                                  "sayuri-genmove_analyze"}, 0)) {
         auto color = agent_->GetState().GetToMove();
-        auto interval = 100; // one second
-
-        Search::OptionTag tag = ParseAnalysisTag(parser, color, interval);
+        auto config = ParseAnalysisConfig(parser, color);
 
         if (curr_id_ >= 0) {
             DUMPING << "=" << curr_id_ << "\n";
@@ -393,14 +383,8 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             DUMPING << "=\n";
         }
 
-        if (res->Get<std::string>() == "sayuri-genmove_analyze") {
-            tag = tag | Search::kSayuri;
-        } else if (res->Get<std::string>() == "kata-genmove_analyze") {
-            tag = tag | Search::kKata;
-        }
-
         agent_->GetState().SetToMove(color);
-        auto move = agent_->GetSearch().Analyze(interval, false, tag);
+        auto move = agent_->GetSearch().Analyze(false, config);
         agent_->GetState().PlayMove(move);
         DUMPING << "play " << agent_->GetState().VertexToText(move) << "\n\n";
         try_ponder = true;
@@ -481,7 +465,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         }
         try_ponder = true;
     } else if (const auto res = parser.Find("final_status_list", 0)) {
-        auto result = agent_->GetSearch().Computation(400, 0, Search::kForced);
+        auto result = agent_->GetSearch().Computation(400, Search::kForced);
         auto vtx_list = std::ostringstream{};
 
         // TODO: support seki option.
@@ -625,7 +609,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         agent_->GetSearch().ReleaseTree();
         agent_->GetNetwork().ClearCache();
 
-        auto result = agent_->GetSearch().Computation(playouts, 0, Search::kNullTag);
+        auto result = agent_->GetSearch().Computation(playouts, Search::kNullTag);
 
         auto benchmark_out = std::ostringstream{};
         benchmark_out <<  "Benchmark Result:\n"
@@ -811,7 +795,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         }
 
         agent_->GetSearch().ReleaseTree();
-        auto result = agent_->GetSearch().Computation(playouts, 0, Search::kForced);
+        auto result = agent_->GetSearch().Computation(playouts, Search::kForced);
 
         const auto board_size = agent_->GetState().GetBoardSize();
         const auto num_intersections = board_size * board_size;
@@ -843,7 +827,7 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         }
 
         agent_->GetSearch().ReleaseTree();
-        auto result = agent_->GetSearch().Computation(playouts, 0, Search::kForced);
+        auto result = agent_->GetSearch().Computation(playouts, Search::kForced);
 
         const auto board_size = agent_->GetState().GetBoardSize();
         const auto num_intersections = board_size * board_size;
@@ -1013,37 +997,146 @@ std::string GtpLoop::GtpFail(std::string response) {
     return out.str();
 }
 
-Search::OptionTag GtpLoop::ParseAnalysisTag(CommandParser &parser,
-                                               int &color, int &interval) {
-    Search::OptionTag tag = Search::kNullTag;
+AnalysisConfig GtpLoop::ParseAnalysisConfig(CommandParser &parser, int &color) {
+    AnalysisConfig config;
     std::string maybe_color_str, maybe_interval_str;
 
-    if (const auto black_opt = parser.FindLower({"b", "black"})) {
-        color = kBlack;
-    } else if (const auto white_opt = parser.FindLower({"w", "white"})) {
-        color = kWhite;
-    }
-    if (const auto digit_opt = parser.FindDigit()) {
-        interval = digit_opt->Get<int>();
+    config.interval = 100;
+    auto main = parser.GetCommand(0)->Get<std::string>();
+
+    if (main.find("sayuri") == 0) {
+        config.is_sayuri = true;
+    } else if (main.find("kata") == 0) {
+        config.is_kata = true;
+    } else {
+        config.is_leelaz = true;
     }
 
-    //TODO: Support all leela zero options.
+    int curr_idx = 1;
+    while (true) {
+        auto token = parser.GetCommand(curr_idx++);
+        if (!token) {
+            break;
+        }
 
-    if (const auto opt = parser.FindNext("interval")) {
-        if (opt->IsDigit()) {
-            interval = opt->Get<int>();
+        if (token->IsDigit()) {
+            config.interval = token->Get<int>();
+            continue;
         }
-    }
-    if (const auto opt = parser.FindNext("ownership")) {
-        if (opt->Lower() == "true") {
-            tag = tag | Search::kOwnership;
+
+        if (token->Lower() == "b" || token->Lower() == "black") {
+            color = kBlack;
+            continue;
         }
-    }
-    if (const auto opt = parser.FindNext("movesOwnership")) {
-        if (opt->Lower() == "true") {
-            tag = tag | Search::kMovesOwnership;
+
+        if (token->Lower() == "w" || token->Lower() == "white") {
+            color = kWhite;
+            continue;
+        }
+
+        if (token->Lower() == "interval") {
+            if (auto interval_token = parser.GetCommand(curr_idx)) {
+                if (interval_token->IsDigit()) {
+                    config.interval = interval_token->Get<int>();
+                    curr_idx += 1;
+                }
+            }
+            continue;
+        }
+
+        if (token->Lower() == "ownership") {
+            if (auto true_token = parser.GetCommand(curr_idx)) {
+                if (true_token->Lower() == "true") {
+                    config.ownership = true;
+                    curr_idx += 1;
+                }
+            }
+            continue;
+        }
+
+        if (token->Lower() == "movesownership") {
+            if (auto true_token = parser.GetCommand(curr_idx)) {
+                if (true_token->Lower() == "true") {
+                    config.moves_ownership = true;
+                    curr_idx += 1;
+                }
+            }
+            continue;
+        }
+
+        if (token->Lower() == "minmoves") {
+            // Current the analysis mode do not support this tag.
+            if (auto num_token = parser.GetCommand(curr_idx)) {
+                if (num_token->IsDigit()) {
+                    config.min_moves = num_token->Get<int>();
+                    curr_idx += 1;
+                }
+            }
+            continue;
+        }
+
+        if (token->Lower() == "maxmoves") {
+            if (auto num_token = parser.GetCommand(curr_idx)) {
+                if (num_token->IsDigit()) {
+                    config.max_moves = num_token->Get<int>();
+                    curr_idx += 1;
+                }
+            }
+            continue;
+        }
+
+        using MoveToAvoid = AnalysisConfig::MoveToAvoid;
+
+        if (token->Lower() == "avoid" || token->Lower() == "allow") {
+            int moves_color;
+            int moves_movenum;
+            auto moves = std::vector<int>{};
+
+            if (auto color_token = parser.GetCommand(curr_idx)) {
+                moves_color = agent_->GetState().TextToColor(color_token->Lower());
+                curr_idx += 1;
+            }
+            if (auto moves_token = parser.GetCommand(curr_idx)) {
+                std::istringstream movestream(moves_token->Get<std::string>());
+                while (!movestream.eof()) {
+                    std::string textmove;
+                    getline(movestream, textmove, ',');
+                    auto sepidx = textmove.find_first_of(':');
+                    if (sepidx != std::string::npos) {
+                        // Do not support this format.
+                    } else {
+                        auto move = agent_->GetState().TextToVertex(textmove);
+                        if (move != kNullVertex) {
+                            moves.push_back(move);
+                        }
+                    }
+                }
+                curr_idx += 1;
+            }
+            if (auto num_token = parser.GetCommand(curr_idx)) {
+                if (num_token->IsDigit()) {
+                    moves_movenum = num_token->Get<int>();
+                    curr_idx += 1;
+                }
+            }
+
+            for (const auto vtx : moves) {
+                MoveToAvoid avoid_move;
+                avoid_move.vertex     = vtx;
+                avoid_move.color      = moves_color;
+                avoid_move.until_move = moves_movenum + agent_->GetState().GetMoveNumber() - 1;
+                if (avoid_move.Valid()) {
+                    if (token->Lower() == "allow") {
+                        config.allow_moves.emplace_back(avoid_move);
+                    } else {
+                        config.avoid_moves.emplace_back(avoid_move);
+                    }
+                }
+            }
+
+            continue;
         }
     }
 
-    return tag;
+    return config;
 }

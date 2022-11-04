@@ -5,7 +5,6 @@
 #include "mcts/node_pointer.h"
 #include "mcts/parameters.h"
 #include "neural/network.h"
-#include "utils/operators.h"
 
 #include <array>
 #include <vector>
@@ -20,6 +19,71 @@ struct NodeEvals {
     std::array<float, kNumIntersections> black_ownership;
 };
 
+struct AnalysisConfig {
+    struct MoveToAvoid{
+        int vertex{kNullVertex}, color{kInvalid}, until_move{-1};
+        bool Valid() const {
+            return vertex != kNullVertex &&
+                       color != kInvalid &&
+                       until_move >= 1;
+        }
+    };
+
+    bool is_sayuri{false};
+    bool is_kata{false};
+    bool is_leelaz{false};
+    bool ownership{false};
+    bool moves_ownership{false};
+
+    int interval{100};
+    int min_moves{0};
+    int max_moves{kNumIntersections+1};
+
+    std::vector<MoveToAvoid> avoid_moves;
+    std::vector<MoveToAvoid> allow_moves;
+
+    bool MoveRestrictions() const {
+        return !avoid_moves.empty() ||
+                   !avoid_moves.empty();
+    }
+
+    void Clear() {
+        is_sayuri =
+            is_kata =
+            is_leelaz =
+            ownership =
+            moves_ownership = false;
+        min_moves = 0;
+        max_moves = kNumIntersections+1;
+        avoid_moves.clear();
+        allow_moves.clear();
+        interval = 100;
+    }
+
+    bool IsLegal(const int vertex, const int color, const int movenum) const {
+        for (const auto& move : avoid_moves) {
+            if (color == move.color && vertex == move.vertex
+                && movenum <= move.until_move) {
+                return false;
+            }
+        }
+
+        auto active_allow = false;
+        for (const auto& move : allow_moves) {
+            if (color == move.color && movenum <= move.until_move) {
+                active_allow = true;
+                if (vertex == move.vertex) {
+                    return true;
+                }
+            }
+        }
+        if (active_allow) {
+            return false;
+        }
+        return true;
+    }
+};
+
 class Node {
 public:
     using Edge = NodePointer<Node>;
@@ -29,15 +93,17 @@ public:
 
     // Expand this node.
     bool ExpandChildren(Network &network,
-                        GameState &state,
-                        NodeEvals& node_evals,
-                        const bool is_root);
+                            GameState &state,
+                            NodeEvals& node_evals,
+                            AnalysisConfig &config,
+                            const bool is_root);
 
     // Expand root node children before starting tree search.
     bool PrepareRootNode(Network &network,
-                         GameState &state,
-                         NodeEvals& node_evals,
-                         std::vector<float> &dirichlet);
+                             GameState &state,
+                             NodeEvals& node_evals,
+                             AnalysisConfig &config,
+                             std::vector<float> &dirichlet);
 
     // Select the best policy node.
     Node *ProbSelectChild();
@@ -63,29 +129,48 @@ public:
     int GetBestMove();
 
     const std::vector<Edge> &GetChildren() const;
+
     bool HaveChildren() const;
     bool SetTerminal();
 
     void SetParameters(Parameters * param);
 
+    // Get the pointer of this node.
     Node *Get();
+
+    // Get the child pointer according to vertex. Return NULL if
+    // there is no correspond child.
     Node *GetChild(const int vertex);
+
+    // Get the child pointer and remove it according to vertex. Return
+    // NULL if there is no correspond child.
     Node *PopChild(const int vertex);
 
+    // Get the visit number of this node.
     int GetVisits() const;
+
+    // Get the vertex move of this node.
     int GetVertex() const;
+
+    // Get the move probability value of this node.
     float GetPolicy() const;
 
-    // GetNetxxx will get raw NN eval from this node.
-    // float GetNetFinalScore(const int color) const;
-    float GetNetEval(const int color) const;
-    // float GetNetDraw() const;
+    // Get the Network win-loss value. 
+    float GetNetWL(const int color) const;
 
+    // Get the average final score value.
     float GetFinalScore(const int color) const;
-    float GetEval(const int color, const bool use_virtual_loss=true) const;
+
+    // Get the average win-loss value.
+    float GetWL(const int color, const bool use_virtual_loss=true) const;
+
+    // Get the average draw value.
     float GetDraw() const;
 
+    // Get the average ownership value.
     std::array<float, kNumIntersections> GetOwnership(int color);
+
+    // Set the network win-loss value from outside.
     void ApplyEvals(const NodeEvals *evals);
 
     void IncrementThreads();
@@ -104,16 +189,7 @@ public:
     float ComputeKlDivergence();
     float ComputeTreeComplexity();
 
-    enum class AnalysisTag : int {
-        kNullTag        = 0,
-        kSayuri         = 1,
-        kKata           = 1 << 1,
-        kOwnership      = 1 << 2,
-        kMovesOwnership = 1 << 3
-    };
-    ENABLE_FRIEND_BITWISE_OPERATORS_ON(Node::AnalysisTag);
-
-    std::string ToAnalyzeString(GameState &state, const int color, Node::AnalysisTag tag);
+    std::string ToAnalysisString(GameState &state, const int color, AnalysisConfig &config);
     std::string OwnershipToString(GameState &state, const int color, std::string name, Node *node);
     std::string ToVerboseString(GameState &state, const int color);
     std::string GetPvString(GameState &state);
@@ -183,7 +259,7 @@ private:
     // The network win-loss value.
     float black_wl_;
 
-    // The Accumulated values.
+    // The accumulated squared difference value.
     std::atomic<double> squared_eval_diff_{1e-4f};
 
     // The black accumulated values.
@@ -209,6 +285,6 @@ private:
     // The played move.
     std::int16_t vertex_;
 
-    // Policy value of the node.
+    // The move probability value of this node.
     float policy_;
 };
