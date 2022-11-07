@@ -7,7 +7,7 @@
 
 ## Let's ROCK!
 
-Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. She is strongly inspired by Leela Zero and Kata Go. The board data structure, search algorithm and network format are borrowed from Leela Zero in the beginning. Current version follow the Kata Go research, the engine supports variable komi and board size now. Some methods you may see my HackMD article (in chinese).
+Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. She is strongly inspired by Leela Zero and Kata Go. The board data structure, search algorithm and network format are borrowed from Leela Zero in the beginning. Current version follows the Kata Go research, the engine supports variable komi and board size now. Some methods you may see my HackMD article (in chinese).
 
 * [開發日誌](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/BJgfay0Yc)
 
@@ -50,12 +50,20 @@ Accelerate the network forwarding pipe by GPUs. CUDA and cuDNN are both required
 
 Accelerate to load the network file. Fast Float library is required.
 
-    $ cmake .. -USE_FAST_PARSER=1
+    $ cmake .. -DUSE_FAST_PARSER=1
 
 
-## Weights and Book
+## Weights
 
-You may download the weights file and opening book from my [google drive](https://drive.google.com/drive/folders/17pjwLIwj_q0fGdiDpRShcLjbfBlk-70L?usp=sharing). The current weights size is 15 blocks and 192 filters. The opening book is human-like book, trained on profession games. Force Sayuri to play variable opening moves. It is just fun for playing.
+You may download the weights file, opening book and patterns from my [google drive](https://drive.google.com/drive/folders/1cXAoOghgkUfNVZWRzEyvfB4uY_TTbaVH?usp=share_link). Here is the list. Because I may update the network format or encoder, be sure that you download the correspond weights for the last engine. I do not promise the any file is backward compatible.
+
+| File                    | Description                                    |
+| :---------------------- | :--------------------------------------------- |
+| Network Weights         | The main weights file, trained on KataGo self-play games. The ```.bin``` postfix is binary version. |
+| Opening Book            | It is human-like book, gather from profession games. Force Sayuri to play variable opening moves. It is just fun for playing. |
+| MM Patterns             | It is for no-dcnn mode, trained on hight level player games from KGS. |
+
+<br/>
 
 ## Engine Arguments
 
@@ -80,6 +88,7 @@ Here are some useful arguments which you may need.
 |  --no-dcnn              | None   | Disable network, very weak.                    |
 |  --help, -h             | None   | Show the more arguments.                       |
     
+<br/>
 
 Default setting: will select reasonable threads and batch size, 10 seconds per move, all GPU devices
 
@@ -93,7 +102,7 @@ Example setting 2: quickly and friendly pass game
     
     $ ./Sayuri -w <weights file> -t 1 -b 1 --const-time 1 --friendly-pass --reuse-tree
 
-Example setting 3: directly policy output 
+Example setting 3: set 1 playouts, directly policy output 
 
     $ ./Sayuri -w <weights file> -t 1 -b 1 -p 1
 
@@ -101,15 +110,9 @@ Example setting 4: use the GPU 0 and GPU 2
 
     $ ./Sayuri -w <weights file> --gpu 0 --gpu 2
 
-Example setting 5: disable network forwarding pipe, arond 10k on 9x9, 15k on 19x19
+Example setting 5: disable the network forwarding pipe, arond 5k on 9x9, 10k on 19x19. The '''--lcb-reduction''' should be set ```1```
 
     $ ./Sayuri --patterns <patterns file> --lcb-reduction 1 --no-dcnn
-
-## Generate Opening Book
-
-You need to collect enough SGF games (at least over 10000 games). Then, go to the GTP mode and enter follow command. Wait some time to generate a new opening book.
-
-    genbook <SGF file> <output name>
 
 ## Graphical Interface
 
@@ -125,7 +128,7 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 
 ## Analysis Commands
 
-The engine supports the following GTP analysis commands.
+The analysis Commands are useful on the modern GTP interface tool. It displays the current winrate, best move and other informations. the The engine supports the following GTP analysis commands.
 
   * `analyze, genmove_analyze [player (optional)] [interval (optional)] ...`
       * The behavior is same as ```lz-analyze```, ```lz-genmove_analyze```.
@@ -140,7 +143,11 @@ The engine supports the following GTP analysis commands.
 
   * Optional Keys
       * All analysis commands support the following keys.
-      * ```interval <int>```: Output a line every this many centiseconds. 
+      * ```interval <int>```: Output a line every this many centiseconds.
+      * ```minmoves <int>```: There is no effect.
+      * ```maxmoves <int>```: Output stats for at most N different legal moves (NOTE: Leela Zero does NOT currently support this field);
+      * ```avoid PLAYER VERTEX,VERTEX,... UNTILDEPTH```: Prohibit the search from exploring the specified moves for the specified player, until ```UNTILDEPTH``` ply deep in the search.
+      * ```allow PLAYER VERTEX,VERTEX,... UNTILDEPTH```: Equivalent to ```avoid``` on all vertices EXCEPT for the specified vertices. Can only be specified once, and cannot be specified at the same time as ```avoid```.
       * ```ownership True```: Output the predicted final ownership of every point on the board.
       * ```movesOwnership True```: Output the predicted final ownership of every point on the board for every individual move.
 
@@ -156,7 +163,7 @@ There are too many matrix operations in the Neural Network forwarding pipe. It i
 
 ### About the ancient technology
 
-Before the AlphaGo (2016s), the most of state-of-the-art computer Go combine the MCTS and MM (Minorization-Maximization). Crazy Stone and Zen use that. Or combining the MCTS and SB (Simulation Balancing). The Eric (predecessor of AlphaGo) and Leela use that. Ray, one of the strongest open source Go engine before AlphaGo, writed by Yuki Kobayashi which based on the MM algorithm. I am surprised that it can play the game well without much human knowledge and Neural Network. What's more, it can beat high level Go player on 9x9 if we provide it enough computation. But thanks for deep learning technique, the computer Go engine is significantly stronger than before. Sayuri can beat the Ray (v10.0) on 19x19 with only policy network. This result shows the advantage of Neural Network technology.
+Before the AlphaGo (2016s), the most of state-of-the-art computer Go combine the MCTS and MM (Minorization-Maximization). Crazy Stone and Zen use that. Or combining the MCTS and SB (Simulation Balancing). The Eric (predecessor of AlphaGo) and Leela use that. Ray, one of the strongest open source Go engine before AlphaGo, writed by Yuki Kobayashi which is based on the MM algorithm. I am surprised that it can play the game well without much human knowledge and Neural Network. What's more, it can beat high level Go player on 9x9 if we provide it enough computation. But thanks for deep learning technique, the computer Go engine is significantly stronger than before. Sayuri can beat the Ray (v10.0) on 19x19 with only policy network. This result shows the advantage of Neural Network technology.
 
 Although the Neural Network based engines are more powerful, I still recommend you to try some engine with non Neural Network and feel the power of ancient technology. Here is the list.
 
@@ -185,7 +192,6 @@ I am trying to implement this ancient technique currently. Merge the MM patterns
 * Support half-float.
 * Support NHWC format.
 * Support distributed computation.
-* Improve the non-DCNN mode strength.
 
 ## Other Linkings
 
