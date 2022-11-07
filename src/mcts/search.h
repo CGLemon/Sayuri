@@ -116,6 +116,7 @@ struct ComputationResult {
     float komi;
     float root_eval;
     float root_final_score;
+    float best_eval;
 
     std::vector<float> root_ownership;
     std::vector<float> root_probabilities;

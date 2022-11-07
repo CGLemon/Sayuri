@@ -18,6 +18,7 @@ public:
         expand_threshold = GetOption<int>("expand_threshold");
 
         resign_threshold = GetOption<float>("resign_threshold");
+        lcb_utility_factor = GetOption<float>("lcb_utility_factor");
         lcb_reduction = GetOption<float>("lcb_reduction");
         fpu_root_reduction = GetOption<float>("fpu_root_reduction");
         fpu_reduction = GetOption<float>("fpu_reduction");
@@ -41,6 +42,7 @@ public:
 
         forced_policy_factor = GetOption<float>("forced_policy_factor");
         score_utility_factor = GetOption<float>("score_utility_factor");
+        score_utility_div = GetOption<float>("score_utility_div");
         cap_playouts = GetOption<float>("cap_playouts");
 
         lag_buffer = GetOption<int>("lag_buffer");
@@ -69,6 +71,7 @@ public:
 
     float resign_threshold;
 
+    float lcb_utility_factor;
     float lcb_reduction;
     float fpu_root_reduction;
     float fpu_reduction;
@@ -86,6 +89,7 @@ public:
 
     float forced_policy_factor;
     float score_utility_factor;
+    float score_utility_div;
 
     float root_policy_temp;
     float policy_temp;

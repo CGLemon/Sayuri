@@ -123,7 +123,7 @@ public:
     void Update(const NodeEvals *evals);
 
     // Get children's LCB values. 
-    std::vector<std::pair<float, int>> GetLcbList(const int color);
+    std::vector<std::pair<float, int>> GetLcbUtilityList(const int color);
 
     // Get best move(vertex) by LCB value.
     int GetBestMove();
@@ -208,7 +208,7 @@ private:
     void LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist);
 
     float GetSearchPolicy(Edge& child, bool noise);
-    float GetScoreUtility(const int color, float factor, float parent_score) const;
+    float GetScoreUtility(const int color, float div, float parent_score) const;
     float GetLcbVariance(const float default_var, const int visits) const;
     float GetLcb(const int color) const;
 

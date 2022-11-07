@@ -313,7 +313,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         const auto elapsed = (tag & kThinking) ?
                                  timer.GetDuration() : std::numeric_limits<float>::lowest();
 
-        // TODO: Stop running when there are no alternate move.
+        // TODO: Stop running when there is no alternate move.
         if (tag & kUnreused) {
             // We simply limit the root visits instead of unreuse the tree. It is
             // because that limiting the root node visits is equal to unreuse tree.
@@ -331,6 +331,9 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     // Wait for all threads to join the main thread.
     group_->WaitToJoin();
 
+    const auto played_playouts =
+                   playouts_.load(std::memory_order_relaxed);
+
     if (tag & kThinking) {
         time_control_.TookTime(color);
     }
@@ -342,13 +345,14 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         LOGGING << " * Time Status:\n";
         LOGGING << "  " << time_control_.ToString();
         LOGGING << "  spent: " << timer.GetDuration() << "(sec)\n";
-        LOGGING << "  speed: " << (float)playouts_.load(std::memory_order_relaxed) /
+        LOGGING << "  speed: " << (float)played_playouts /
                                       timer.GetDuration() << "(p/sec)\n";
+        LOGGING << "  playouts: " << played_playouts << "\n";
     }
 
     // Record perfomance infomation.
     computation_result.seconds = timer.GetDuration();
-    computation_result.playouts = playouts_.load(std::memory_order_relaxed);
+    computation_result.playouts = played_playouts;
 
     // Gather computation infomation and training data.
     GatherComputationResult(computation_result);
@@ -375,6 +379,9 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     result.random_move = root_node_->RandomizeFirstProportionally(1);
     result.root_eval = root_node_->GetWL(color, false);
     result.root_final_score = root_node_->GetFinalScore(color);
+    result.best_eval = root_node_->
+                           GetChild(result.best_move)->
+                           GetWL(color, false);
 
     // Resize the childern status buffer.
     result.root_ownership.resize(num_intersections);
@@ -512,21 +519,23 @@ bool ShouldResign(GameState &state, ComputationResult &result, float resign_thre
         return false;
     }
 
+    // TODO: Blend the dynamic komi resign threshold.
+
     if (handicap > 0 && state.GetToMove() == kWhite) {
         const auto handicap_resign_threshold =
-                       resign_threshold / (1 + handicap);
+                       resign_threshold / (1 + 2 * handicap);
 
         auto blend_ratio = std::min(1.0f, movenum / (0.6f * num_intersections));
         auto blended_resign_threshold = blend_ratio * resign_threshold +
-                                            (1 - blend_ratio) * handicap_resign_threshold;
-        if (result.root_eval > blended_resign_threshold) {
+                                            (1.0f - blend_ratio) * handicap_resign_threshold;
+        if (result.best_eval > blended_resign_threshold) {
             // Allow lower eval for white in handicap games
             // where opp may fumble.
             return false;
         }
     }
 
-    if (result.root_eval > resign_threshold) {
+    if (result.best_eval > resign_threshold) {
         return false;
     }
 
@@ -568,7 +577,7 @@ bool ShouldPass(GameState &state, ComputationResult &result, bool friendly_pass)
                 return false;
             } else if (fork_state.GetState(vtx) == kEmpty) {
                 // This empty point does not belong to any
-                // side. It is dame.
+                // side. It is the dame.
                 num_dame += 1;
             }
         }
@@ -584,11 +593,11 @@ bool ShouldPass(GameState &state, ComputationResult &result, bool friendly_pass)
     }
 
     if (score > 0.1f) {
-        // We already win the game. I will play the pass move.
+        // We already win the game. We will play the pass move.
         return true;
     }
 
-    // The game result is unknown. I will keep playing.
+    // The game result is unknown. We will keep playing.
     return false;
 }
 

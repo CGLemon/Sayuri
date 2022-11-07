@@ -462,6 +462,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     const auto forced_policy_factor = is_root ? param_->forced_policy_factor : 0.0f;
     const auto noise                = is_root ? param_->dirichlet_noise      : false;
     const auto score_utility_factor = param_->score_utility_factor;
+    const auto score_utility_div    = param_->score_utility_div;
 
     const float cpuct         = cpuct_init + std::log((float(parentvisits) + cpuct_base + 1) / cpuct_base);
     const float numerator     = std::sqrt(float(parentvisits));
@@ -500,7 +501,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
         }
 
         float denom = 1.0f;
-        float utility = 0.0f; // score utility value
+        float utility = 0.0f; // the utility value
         float bonus = 0.0f; // force playouts bonus
         if (is_pointer) {
             const auto visits = node->GetVisits();
@@ -508,7 +509,8 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
 
             if (visits > 0) {
                 // Heuristic value for score lead.
-                utility += node->GetScoreUtility(color, score_utility_factor, score);
+                utility += score_utility_factor *
+                               node->GetScoreUtility(color, score_utility_div, score);
             }
 
             // According to Kata Go, we want to improve exploration in
@@ -700,8 +702,8 @@ std::array<float, kNumIntersections> Node::GetOwnership(int color) {
     return out;
 }
 
-float Node::GetScoreUtility(const int color, float factor, float parent_score) const {
-    return std::tanh(factor * (GetFinalScore(color) - parent_score));
+float Node::GetScoreUtility(const int color, float div, float parent_score) const {
+    return std::tanh(((GetFinalScore(color) - parent_score))/div);
 }
 
 float Node::GetLcbVariance(const float default_var, const int visits) const {
@@ -725,13 +727,13 @@ float Node::GetLcb(const int color) const {
     const auto variance = GetLcbVariance(1.0f, visits);
     const auto stddev = std::sqrt(variance / float(visits));
     const auto z = LcbEntries::Get().CachedTQuantile(visits - 1);
-    
+
     return mean - z * stddev;
 }
 
 std::string Node::ToVerboseString(GameState &state, const int color) {
     auto out = std::ostringstream{};
-    const auto lcblist = GetLcbList(color);
+    const auto lcblist = GetLcbUtilityList(color);
     const auto parentvisits = GetVisits() - 1; // One is root visit.
 
     if (parentvisits <= 0) {
@@ -826,7 +828,7 @@ std::string Node::ToAnalysisString(GameState &state,
     // https://github.com/SabakiHQ/Sabaki/blob/master/docs/guides/engine-analysis-integration.md
 
     auto out = std::ostringstream{};
-    const auto lcblist = GetLcbList(color);
+    const auto lcblist = GetLcbUtilityList(color);
     const auto root_visits = static_cast<float>(GetVisits() - 1);
 
     bool is_sayuri = config.is_sayuri;
@@ -955,14 +957,27 @@ Node *Node::PopChild(const int vertex) {
     return node;
 }
 
-std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
+std::vector<std::pair<float, int>> Node::GetLcbUtilityList(const int color) {
     WaitExpanded();
     assert(HaveChildren());
 
+    const auto lcb_utility_factor = std::max(0.f, param_->lcb_utility_factor);
     const auto lcb_reduction = std::min(
                                    std::max(0.f, param_->lcb_reduction), 1.f);
-    const auto parentvisits = GetVisits() - 1;
+    int parentvisits = 0;
+    const auto score = GetFinalScore(color);
+    const auto score_utility_div = param_->score_utility_div;
+
     auto list = std::vector<std::pair<float, int>>{};
+
+    for (const auto & child : children_) {
+        const auto node = child.Get();
+        const bool is_pointer = node != nullptr;
+
+        if (is_pointer && node->IsActive()) {
+            parentvisits += node->GetVisits();
+        }
+    }
 
     for (const auto & child : children_) {
         const auto node = child.Get();
@@ -975,9 +990,12 @@ std::vector<std::pair<float, int>> Node::GetLcbList(const int color) {
 
         const auto visits = node->GetVisits();
         if (visits > 0) {
-            const auto lcb = node->GetLcb(color) * (1.f - lcb_reduction) + 
-                                 lcb_reduction * ((float)visits/parentvisits);
-            list.emplace_back(lcb, node->GetVertex());
+            auto lcb = node->GetLcb(color);
+            auto utility = lcb_utility_factor *
+                               node->GetScoreUtility(color, score_utility_div, score);
+            const auto ulcb = (lcb + utility) * (1.f - lcb_reduction) + 
+                                  lcb_reduction * ((float)visits/parentvisits);
+            list.emplace_back(ulcb, node->GetVertex());
         }
     }
 
@@ -989,7 +1007,7 @@ int Node::GetBestMove() {
     WaitExpanded();
     assert(HaveChildren());
 
-    auto lcblist = GetLcbList(color_);
+    auto lcblist = GetLcbUtilityList(color_);
     float best_value = std::numeric_limits<float>::lowest();
     int best_move = kNullVertex;
 
