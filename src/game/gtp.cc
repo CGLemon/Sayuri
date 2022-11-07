@@ -138,8 +138,11 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         if (const auto input = parser.GetCommand(1)) {
             handicaps = input->Get<int>();
         }
+        bool network_valid = agent_->GetNetwork().Valid();
+        int max_handicaps = network_valid ?
+                                agent_->GetState().GetNumIntersections() / 4 :
+                                9;
 
-        int max_handicaps = agent_->GetState().GetNumIntersections() / 4;
         if (handicaps >= 1 && handicaps <= max_handicaps) {
             agent_->GetState().ClearBoard();
             agent_->GetState().SetHandicap(handicaps);
@@ -148,10 +151,14 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         }
 
         auto stone_list = std::vector<int>{};
-        for (int i = 0; i < handicaps; ++i) {
-            const int vtx = agent_->GetNetwork().GetBestPolicyVertex(agent_->GetState(), false);
-            agent_->GetState().AppendMove(vtx, kBlack);
-            stone_list.emplace_back(vtx);
+        if (network_valid) {
+            for (int i = 0; i < handicaps; ++i) {
+                const int vtx = agent_->GetNetwork().GetBestPolicyVertex(agent_->GetState(), false);
+                agent_->GetState().AppendMove(vtx, kBlack);
+                stone_list.emplace_back(vtx);
+            }
+        } else {
+            stone_list = agent_->GetState().PlaceFreeHandicap(handicaps);
         }
 
         if (!stone_list.empty()) {

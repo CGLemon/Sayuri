@@ -22,6 +22,7 @@ public:
 
     void Initialize(const std::string &weights);
     void Destroy();
+    bool Valid() const;
 
     int GetBestPolicyVertex(const GameState &state, 
                             const bool allow_pass);

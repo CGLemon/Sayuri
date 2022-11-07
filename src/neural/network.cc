@@ -355,6 +355,13 @@ int Network::GetBestPolicyVertex(const GameState &state,
     return max_vtx;
 }
 
+bool Network::Valid() const {
+    if (pipe_) {
+        return pipe_->Valid();
+    }
+    return false;
+}
+
 void Network::Destroy() {
     if (pipe_) {
         pipe_->Destroy();
