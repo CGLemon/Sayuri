@@ -183,22 +183,29 @@ class TrainingPipe():
     def __init__(self, cfg):
         self.cfg = cfg
 
-        # mini-batch size, update the network per batch size
+        # The mini-batch size, update the network per batch size
         self.batchsize =  cfg.batchsize
 
-        # marco batch size and factor, (marco batch size) * factor = batch size
+        # The marco batch size and factor, (marco batch size) * factor = batch size
         self.macrobatchsize = cfg.macrobatchsize
         self.macrofactor = cfg.macrofactor
 
-        # how many cpu does the 'DataLoader' use?
+        # How many cpu does the 'DataLoader' use?
         self.num_workers = cfg.num_workers
         self.train_dir = cfg.train_dir
+        self.validation_dir = cfg.validation_dir
 
-        # Store the last model per epoch.
+        # The stpes of storing the last model and validating it per epoch.
         self.steps_per_epoch =  cfg.steps_per_epoch
 
+        # Report the information per this steps.
+        self.verbose_steps = max(100, cfg.verbose_steps)
+
+        self.validation_steps = cfg.validation_steps
+
         # Lazy loader options.
-        self.buffer_size = self.cfg.buffersize
+        self.train_buffer_size = self.cfg.buffersize
+        self.validation_buffer_size = self.cfg.buffersize // 10
         self.down_sample_rate = cfg.down_sample_rate
 
         # Max steps per training task.
@@ -211,15 +218,15 @@ class TrainingPipe():
         self.weight_decay = cfg.weight_decay
         self.lr_schedule = cfg.lr_schedule
 
+        # The training device.
         self.use_gpu = cfg.use_gpu
         self.device = torch.device('cpu')
         if self.use_gpu:
             self.device = torch.device('cuda')
-
         self.net = Network(cfg)
         self.net.trainable(True)
 
-        # store root dir
+        # The Store root dir
         self.store_path = cfg.store_path
 
         self.__setup()
@@ -267,7 +274,7 @@ class TrainingPipe():
             f.write(self.module.simple_info())
 
     def __get_lr_schedule(self, num_steps):
-        # Get current learning rate with schedule.
+        # Get the current learning rate with schedule.
         curr_lr = 0.2
         for s, lr in self.lr_schedule:
             if s <= num_steps:
@@ -319,6 +326,8 @@ class TrainingPipe():
         with open(steps_name, 'w') as f:
             f.write(str(steps))
 
+        self.validate_the_last_model(steps)
+
         model_path = os.path.join(self.store_path, "model")
         model_name = os.path.join(model_path, "s{}.pt".format(steps))
         torch.save(self.module.state_dict(), model_name)
@@ -332,76 +341,126 @@ class TrainingPipe():
         self.__stream_parser = StreamParser(self.down_sample_rate)
         self.__batch_gen = BatchGenerator(self.cfg.boardsize, self.cfg.input_channels)
 
-        self.lazy_loader = LazyLoader(
+        self.train_lazy_loader = LazyLoader(
             filenames = gather_filenames(self.train_dir),
             stream_loader = self.__stream_loader,
             stream_parser = self.__stream_parser,
             batch_generator = self.__batch_gen,
             down_sample_rate = 0,
             num_workers = self.num_workers,
-            buffer_size = self.buffer_size,
-            batch_size = self.batchsize
+            buffer_size = self.train_buffer_size,
+            batch_size = self.macrobatchsize
         )
 
-        batch = next(self.lazy_loader) # Try to get the first batch, be sure that
-                                       # the loader is ready.
+        self.validation_lazy_loader = LazyLoader(
+            filenames = gather_filenames(self.validation_dir),
+            stream_loader = self.__stream_loader,
+            stream_parser = self.__stream_parser,
+            batch_generator = self.__batch_gen,
+            down_sample_rate = 0,
+            num_workers = self.num_workers,
+            buffer_size = self.validation_buffer_size,
+            batch_size = self.macrobatchsize
+        )
 
-    def test_loader(self):
-        self.__init_loader()
+        # Try to get the first batch, be sure that the loader is ready.
+        batch = next(self.validation_lazy_loader)
+        batch = next(self.train_lazy_loader)
 
-        batch = next(self.lazy_loader)
-        bsizes, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
+    def get_new_running_loss_dict(self):
+        # Get the new dict.
+        running_loss_dict = dict()
+        running_loss_dict['loss'] = 0
+        running_loss_dict['prob_loss'] = 0
+        running_loss_dict['aux_prob_loss'] = 0
+        running_loss_dict['ownership_loss'] = 0
+        running_loss_dict['wdl_loss'] = 0
+        running_loss_dict['stm_loss'] = 0
+        running_loss_dict['final_score_loss'] = 0
+        return running_loss_dict
 
-        print(bsizes)
-        print(target_stm)
+    def gather_data_from_loader(self, use_training=True):
+        # Fetch the next batch data from disk.
+        if use_training:
+            batch = next(self.train_lazy_loader)
+        else:
+            batch = next(self.validation_lazy_loader)
+
+        _, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
+
+        # Move the data to the current device.
+        if self.use_gpu:
+            planes = planes.to(self.device)
+            target_prob = target_prob.to(self.device)
+            target_aux_prob = target_aux_prob.to(self.device)
+            target_ownership = target_ownership.to(self.device)
+            target_wdl = target_wdl.to(self.device)
+            target_stm = target_stm.to(self.device)
+            target_score = target_score.to(self.device)
+
+        # Gather batch data
+        target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score)
+        return planes, target
+
+    def validate_the_last_model(self, steps):
+        self.module.trainable(False)
+        running_loss_dict = self.get_new_running_loss_dict()
+        total_steps = self.validation_steps * self.macrofactor
+
+        clock_time = time.time()
+
+        for _ in range(total_steps):
+            planes, target = self.gather_data_from_loader(False)
+            _, all_loss = self.net(planes, target, use_symm=True)
+            prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, final_score_loss = all_loss
+            
+            loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + final_score_loss
+
+            # accumulate loss
+            running_loss_dict['loss'] += loss.mean().item()
+            running_loss_dict['prob_loss'] += prob_loss.mean().item()
+            running_loss_dict['aux_prob_loss'] += aux_prob_loss.mean().item()
+            running_loss_dict['ownership_loss'] += ownership_loss.mean().item()
+            running_loss_dict['wdl_loss'] += wdl_loss.mean().item()
+            running_loss_dict['stm_loss'] += stm_loss.mean().item()
+            running_loss_dict['final_score_loss'] += final_score_loss.mean().item()
+
+        log_outs = "steps: {} -> ".format(steps)
+        log_outs += "speed: {:.2f}, opt: {}, learning rate: {}, batch size: {}\n".format(
+                        self.validation_steps/(time.time() - clock_time),
+                        self.opt_name,
+                        self.opt.param_groups[0]["lr"],
+                        self.batchsize)
+        log_outs += "\tloss: {:.4f}\n".format(running_loss_dict['loss']/total_steps)
+        log_outs += "\tprob loss: {:.4f}\n".format(running_loss_dict['prob_loss']/total_steps)
+        log_outs += "\taux prob loss: {:.4f}\n".format(running_loss_dict['aux_prob_loss']/total_steps)
+        log_outs += "\townership loss: {:.4f}\n".format(running_loss_dict['ownership_loss']/total_steps)
+        log_outs += "\twdl loss: {:.4f}\n".format(running_loss_dict['wdl_loss']/total_steps)
+        log_outs += "\tstm loss: {:.4f}\n".format(running_loss_dict['stm_loss']/total_steps)
+        log_outs += "\tfinal score loss: {:.4f}".format(running_loss_dict['final_score_loss']/total_steps)
+
+        log_file = os.path.join(self.store_path, "validation.log")
+        with open(log_file, 'a') as f:
+            f.write(log_outs + '\n')
+        self.module.trainable(True)
 
     def fit_and_store(self):
         init_steps = self.__load_current_status()
 
         print("init loader...")
         self.__init_loader()
-
         print("start training...")
 
-        def get_running_loss_dict():
-            # get New dict 
-            running_loss_dict = dict()
-            running_loss_dict['loss'] = 0
-            running_loss_dict['prob_loss'] = 0
-            running_loss_dict['aux_prob_loss'] = 0
-            running_loss_dict['ownership_loss'] = 0
-            running_loss_dict['wdl_loss'] = 0
-            running_loss_dict['stm_loss'] = 0
-            running_loss_dict['final_score_loss'] = 0
-            return running_loss_dict
-
-        running_loss_dict = get_running_loss_dict()
+        running_loss_dict = self.get_new_running_loss_dict()
         num_steps = init_steps
         keep_running = True
         macro_steps = 0
 
-        verbose_steps = 1000
         clock_time = time.time()
 
         while keep_running:
             for _ in range(self.steps_per_epoch):
-
-                # Fetch the next batch data from disk.
-                batch = next(self.lazy_loader)
-                _, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
-
-                # Move to the current device.
-                if self.use_gpu:
-                    planes = planes.to(self.device)
-                    target_prob = target_prob.to(self.device)
-                    target_aux_prob = target_aux_prob.to(self.device)
-                    target_ownership = target_ownership.to(self.device)
-                    target_wdl = target_wdl.to(self.device)
-                    target_stm = target_stm.to(self.device)
-                    target_score = target_score.to(self.device)
-
-                # gather batch data
-                target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score)
+                planes, target = self.gather_data_from_loader(True)
 
                 # forward and backforwad
                 _, all_loss = self.net(planes, target, use_symm=True)
@@ -430,7 +489,7 @@ class TrainingPipe():
                 running_loss_dict['final_score_loss'] += final_score_loss.item()
 
                 if math.isnan(running_loss_dict['loss']):
-                    print("The gradient is explosion. Stop training...")
+                    print("The gradient is explosion. Stop the training...")
                     keep_running = False
                     break
 
@@ -449,40 +508,31 @@ class TrainingPipe():
                         param["lr"] = self.__get_lr_schedule(num_steps) 
 
                     # dump the verbose
-                    if num_steps % verbose_steps == 0:
+                    if num_steps % self.verbose_steps == 0:
                         elapsed = time.time() - clock_time
                         clock_time = time.time()
 
-                        # The dump_outs contains more infomations. The log_outs
-                        # only stores short infomations because squeezing it in
-                        # one line.
-                        dump_outs = "steps: {} -> ".format(num_steps)
-                        dump_outs += "speed: {:.2f}, opt: {}, learning rate: {}, batch size: {}\n".format(
-                                         verbose_steps/elapsed,
-                                         self.opt_name,
-                                         self.opt.param_groups[0]["lr"],
-                                         self.batchsize)
-                        dump_outs += "\tloss: {:.4f}\n".format(running_loss_dict['loss']/verbose_steps)
-                        dump_outs += "\tprob loss: {:.4f}\n".format(running_loss_dict['prob_loss']/verbose_steps)
-                        dump_outs += "\taux prob loss: {:.4f}\n".format(running_loss_dict['aux_prob_loss']/verbose_steps)
-                        dump_outs += "\townership loss: {:.4f}\n".format(running_loss_dict['ownership_loss']/verbose_steps)
-                        dump_outs += "\twdl loss: {:.4f}\n".format(running_loss_dict['wdl_loss']/verbose_steps)
-                        dump_outs += "\tstm loss: {:.4f}\n".format(running_loss_dict['stm_loss']/verbose_steps)
-                        dump_outs += "\tfinal score loss: {:.4f}".format(running_loss_dict['final_score_loss']/verbose_steps)
-                        print(dump_outs)
+                        log_outs = "steps: {} -> ".format(num_steps)
+                        log_outs += "speed: {:.2f}, opt: {}, learning rate: {}, batch size: {}\n".format(
+                                        self.verbose_steps/elapsed,
+                                        self.opt_name,
+                                        self.opt.param_groups[0]["lr"],
+                                        self.batchsize)
+                        log_outs += "\tloss: {:.4f}\n".format(running_loss_dict['loss']/self.verbose_steps)
+                        log_outs += "\tprob loss: {:.4f}\n".format(running_loss_dict['prob_loss']/self.verbose_steps)
+                        log_outs += "\taux prob loss: {:.4f}\n".format(running_loss_dict['aux_prob_loss']/self.verbose_steps)
+                        log_outs += "\townership loss: {:.4f}\n".format(running_loss_dict['ownership_loss']/self.verbose_steps)
+                        log_outs += "\twdl loss: {:.4f}\n".format(running_loss_dict['wdl_loss']/self.verbose_steps)
+                        log_outs += "\tstm loss: {:.4f}\n".format(running_loss_dict['stm_loss']/self.verbose_steps)
+                        log_outs += "\tfinal score loss: {:.4f}".format(running_loss_dict['final_score_loss']/self.verbose_steps)
+                        print(log_outs)
 
-                        log_outs = "steps: {} -> loss: {:.4f}, speed: {:.2f} | opt: {}, learning rate: {}, batch size: {}".format(
-                                       num_steps,
-                                       running_loss_dict['loss']/verbose_steps,
-                                       verbose_steps/elapsed,
-                                       self.opt_name,
-                                       self.opt.param_groups[0]["lr"],
-                                       self.batchsize)
-                        log_file = os.path.join(self.store_path, "log.txt")
+                        # Also save the current running loss.
+                        log_file = os.path.join(self.store_path, "training.log")
                         with open(log_file, 'a') as f:
                             f.write(log_outs + '\n')
 
-                        running_loss_dict = get_running_loss_dict()
+                        running_loss_dict = self.get_new_running_loss_dict()
 
                 # should we stop it?
                 if num_steps >= self.max_steps + init_steps:

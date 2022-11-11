@@ -58,6 +58,8 @@ class DataLoader:
 
             if data is None:
                 # The stream is end. Open the new stream next time.
+                if self.stream is not None:
+                    del self.stream
                 self.stream = None
                 continue
 

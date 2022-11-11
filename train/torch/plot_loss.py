@@ -1,19 +1,28 @@
 import argparse, re
 import matplotlib.pyplot as plt
 
-def matchline(line):
-    regex = re.compile(r'steps: (\d+) -> loss: (\d.\d+), speed: (\d.\d+) \| opt: (\D+), learning rate: ((\d.\d+)|(\de-\d+)), batch size: (\d+)')
-    m = regex.match(line)
-    steps = 0
-    loss = 0
-    lr = 0
+class FrameData:
+    def __init__(self):
+        self.steps = 0
+        self.loss = 0
+        self.lr = 0
 
+def matchframe(frame):
+    data = FrameData
+
+    regex0 = re.compile(r'steps: (\d+) -> speed: (\d.\d+), opt: (\D+), learning rate: ((\d.\d+)|(\de-\d+)), batch size: (\d+)')
+    regex1 = re.compile(r'loss: (\d.\d+)')
+
+    m = regex0.match(frame[0].strip())
     if m is not None:
-        steps = m.group(1)
-        loss = m.group(2)
-        lr = m.group(5)
+        data.steps = m.group(1)
+        data.lr = m.group(4)
 
-    return int(steps), float(loss), float(lr)
+    m = regex1.match(frame[1].strip())
+    if m is not None:
+        data.loss = m.group(1)
+
+    return int(data.steps), float(data.loss), float(data.lr)
 
 def plot_all(args):
     xxs = list()
@@ -40,7 +49,7 @@ def gather_data(file_name):
     verticals = list()
 
     for i in data_list:
-        x, y, lr = matchline(i)
+        x, y, lr = matchframe(i)
         if len(lr_schedule) == 0:
             lr_schedule.append(lr)
         elif lr_schedule[len(lr_schedule)-1] != lr:
@@ -119,10 +128,15 @@ def plot_tangent_line(xx, yy):
 
 def readfile(filename):
     data_list = list()
+    frame_size = 8
     with open(filename, 'r') as f:
         line = f.readline()
         while len(line) != 0:
-            data_list.append(line)
+            frame = list()
+            frame.append(line)
+            for _ in range(frame_size-1):
+                frame.append(f.readline())
+            data_list.append(frame)
             line = f.readline()
     return data_list
 

@@ -4,8 +4,8 @@
         "MaxBoardSize": 19,
         "InputChannels": 38,
         "ResidualChannels": 64,
-        "PolicyExtract": 24,
-        "ValueExtract": 24,
+        "PolicyExtract": 16,
+        "ValueExtract": 16,
         "ValueMisc": 5,
 
         "Stack" : [
@@ -18,12 +18,15 @@
         "UseGPU": null,
         "Optimizer": "SGD",
         "StepsPerEpoch" : 1000,
+        "ValidationSteps": 100,
+        "VerboseSteps" : 1000,
         "MaxStepsPerRunning": 2048000,
         "Workers": 4,
         "BatchSize": 256,
-        "BufferSize" : 16384,
-        "DownSampleRate": 4,
+        "BufferSize" : 524288,
+        "DownSampleRate": 16,
         "MacroFactor": 1,
+        "WeightDecay": 1e-4,
 
         "LearningRateSchedule": [
             [0,       1e-2],
@@ -35,8 +38,8 @@
             [1024000, 1e-5]
          ],
 
-        "WeightDecay": 1e-4,
         "FixUpBatchNorm": false,
+        "ValidationDirectory": "validate-dir",
         "TrainDirectory": "train-dir",
         "StorePath" : "workspace"
     }

@@ -13,7 +13,10 @@ class Config:
         self.lr_schelude = None
         self.weight_decay = None
         self.train_dir = None
+        self.validation_dir = None
+        self.verbose_steps = None
         self.steps_per_epoch = None
+        self.validation_steps = None
         self.max_steps = None
         self.fixup_batch_norm = None
         self.store_path = None
@@ -38,6 +41,7 @@ def parse_training_config(json_data, config):
     config.lr_schedule = train.get("LearningRateSchedule", [[0, 0.2]])
 
     config.train_dir = train.get("TrainDirectory", None)
+    config.validation_dir = train.get("ValidationDirectory", None)
     config.store_path = train.get("StorePath", None)
     config.batchsize = train.get("BatchSize", 512)
     config.buffersize = train.get("BufferSize", 16 * 1000)
@@ -46,12 +50,15 @@ def parse_training_config(json_data, config):
 
     config.num_workers = train.get("Workers", max(os.cpu_count()-2, 1))
     config.steps_per_epoch = train.get("StepsPerEpoch", 1000)
+    config.validation_steps = train.get("ValidationSteps", 100)
+    config.verbose_steps = train.get("VerboseSteps", 1000)
     config.max_steps = train.get("MaxStepsPerRunning", 16384000)
     config.fixup_batch_norm = train.get("FixUpBatchNorm", False)
     config.down_sample_rate = train.get("DownSampleRate", 16)
 
     assert config.train_dir != None, ""
     assert config.store_path != None, ""
+    assert config.validation_dir != None, ""
 
     if config.use_gpu == None:
         if torch.cuda.is_available():
