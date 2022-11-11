@@ -201,12 +201,6 @@ void DNNLoder::CkeckFloat(NetInfo &netinfo) {
     if (netinfo["FloatType"] == "float32bin") {
         use_binary_ = true;
     }
-
-    //TODO: Support the big-endian machine.
-
-    if (use_binary_ && !IsLittleEndian()) {
-        throw "Your machine is not little-endian. Don't support the binary weights.";
-    }
 }
 
 void DNNLoder::DumpInfo(std::shared_ptr<DNNWeights> weights) const {
@@ -496,7 +490,8 @@ void DNNLoder::GetWeightsFromBuffer(std::vector<float> &weights, std::istream &b
 
     if (use_binary_) {
         while (true) {
-            float w = ParseBinFloat32(buffer, false);
+            // Get the next float.
+            float w = ParseBinFloat32(buffer);
 
             if (MatchFloat32(w, 0xffffffff)) {
                 // It means the end of line.

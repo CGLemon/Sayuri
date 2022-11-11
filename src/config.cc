@@ -69,7 +69,7 @@ void InitOptionsMap() {
     kOptionsMap["defualt_komi"] << Option::setoption(kDefaultKomi);
 
     kOptionsMap["cache_memory_mib"] << Option::setoption(400);
-    kOptionsMap["playouts"] << Option::setoption(0);
+    kOptionsMap["playouts"] << Option::setoption(-1);
     kOptionsMap["ponder_factor"] << Option::setoption(100);
     kOptionsMap["const_time"] << Option::setoption(0);
     kOptionsMap["batch_size"] << Option::setoption(0);
@@ -169,7 +169,7 @@ void InitBasicParameters() {
 
     // Try to select a reasonable number for const time and playouts.
     bool already_set_time = GetOption<int>("const_time") > 0;
-    bool already_set_playouts = GetOption<int>("playouts") > 0;
+    bool already_set_playouts = GetOption<int>("playouts") > -1;
 
     if (!already_set_time && !already_set_playouts) {
         SetOption("const_time", 10); // 10 seconds
@@ -672,7 +672,7 @@ void ArgsParser::DumpHelper() const {
                 << "\t\tScore utility heuristic value.\n\n"
 
                 << "\t--lcb-reduction <float>\n"
-                << "\t\tReduce the LCB weights. Set 1 will select most visits node as best move in MCTS.\n\n"
+                << "\t\tReduce the LCB weights. Set 1 will select the most visits node as the best move in MCTS.\n\n"
 
                 << "\t--resign-threshold, -r <float>\n"
                 << "\t\tResign when winrate is less than x. Default is 0.1.\n\n"

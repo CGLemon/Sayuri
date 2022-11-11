@@ -3,10 +3,10 @@
 #include <cstdint>
 #include <cstring>
 
-// Assume the machine is little-endian.
 float ParseBinFloat32(std::istream &in, bool big_endian) {
-    static_assert(sizeof(char) * 4 == sizeof(float), "");
-
+    static_assert(sizeof(char) * 4 ==
+                      sizeof(float),
+                      "The float must be 4 bytes.");
     char c[4];
     for (int i = 0; i < 4; ++i) {
         in.get(c[i]);
@@ -17,25 +17,31 @@ float ParseBinFloat32(std::istream &in, bool big_endian) {
         for (int i = 0; i < 4; ++i) {
             buf[i] = c[3-i];
         }
-        memcpy(c, buf, sizeof(char) * 4);
+        std::memcpy(c, buf, sizeof(char) * 4);
     }
 
     float dest;
-    memcpy(&dest, c, sizeof(float));
+    std::memcpy(&dest, c, sizeof(float));
 
     return dest;
 }
 
 bool MatchFloat32(float f, std::uint32_t n) {
-    static_assert(sizeof(float) == sizeof(std::uint32_t), "");
+    static_assert(sizeof(float) ==
+                      sizeof(std::uint32_t),
+                      "The float must be 4 bytes.");
 
     std::uint32_t fval;
-    memcpy(&fval, &f, sizeof(float));
+    std::memcpy(&fval, &f, sizeof(float));
 
     return fval == n;
 }
 
 bool IsLittleEndian() {
+    static_assert(sizeof(unsigned int) ==
+                      sizeof(std::uint32_t),
+                      "The int must be 4 bytes.");
+
     unsigned int a = 0x12345678;
     unsigned char *c = (unsigned char*)(&a);
     if (*c == 0x78) {

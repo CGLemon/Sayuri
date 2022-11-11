@@ -305,9 +305,12 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
 
         if ((tag & kAnalyze) &&
                 analyze_timer.GetDurationMilliseconds() > analysis_config_.interval * 10) {
-            // Output analysis verbose for GTP interface, like sabaki...
+            // Output the analysis verbose for GTP interface, like sabaki...
             analyze_timer.Clock();
-            DUMPING << root_node_->ToAnalysisString(root_state_, color, analysis_config_);
+            if (root_node_->GetVisits() > 1) {
+                DUMPING << root_node_->ToAnalysisString(
+                                           root_state_, color, analysis_config_);
+            }
         }
 
         const auto elapsed = (tag & kThinking) ?
@@ -338,8 +341,13 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         time_control_.TookTime(color);
     }
     if (tag & kAnalyze) {
-        DUMPING << root_node_->ToAnalysisString(root_state_, color, analysis_config_);
+        // Output the last analysis verbose in order to avoid the lag.
+        if (root_node_->GetVisits() > 1) {
+            DUMPING << root_node_->ToAnalysisString(
+                           root_state_, color, analysis_config_);
+        }
     }
+
     if (param_->analysis_verbose) {
         LOGGING << root_node_->ToVerboseString(root_state_, color);
         LOGGING << " * Time Status:\n";

@@ -736,7 +736,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     const auto lcblist = GetLcbUtilityList(color);
     const auto parentvisits = GetVisits() - 1; // One is root visit.
 
-    if (parentvisits <= 0) {
+    if (lcblist.empty()) {
          out << " * Search List: N/A" << std::endl;
         return out.str();
     }
@@ -829,6 +829,11 @@ std::string Node::ToAnalysisString(GameState &state,
 
     auto out = std::ostringstream{};
     const auto lcblist = GetLcbUtilityList(color);
+
+    if (lcblist.empty()) {
+        return std::string{};
+    }
+
     const auto root_visits = static_cast<float>(GetVisits() - 1);
 
     bool is_sayuri = config.is_sayuri;
