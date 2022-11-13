@@ -251,16 +251,19 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         };
     };
 
-    Timer timer;
-    Timer analyze_timer; // for analyzing
+    Timer timer; // main timer
+    Timer analysis_timer; // for analysis
 
     // Set the time control.
     time_control_.SetLagBuffer(param_->lag_buffer);
     time_control_.Clock();
-    timer.Clock();
-    analyze_timer.Clock();
 
-    // Compute max thinking time.
+    // Clean the timer.
+    timer.Clock();
+    analysis_timer.Clock();
+
+    // Compute the max thinking time. The bound time is
+    // max const time if we already set it.
     const float bound_time = (param_->const_time > 0 &&
                                  time_control_.IsInfiniteTime(color)) ?
                                      param_->const_time : std::numeric_limits<float>::max();
@@ -282,7 +285,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
 
     if (thinking_time < timer.GetDuration() || playouts == 0) {
         // Prepare the root node will spent little time. So disable
-        // to do tree search if the time is up.
+        // the tree search if the time is up.
         running_.store(false, std::memory_order_relaxed);
     }
 
@@ -304,9 +307,9 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         }
 
         if ((tag & kAnalyze) &&
-                analyze_timer.GetDurationMilliseconds() > analysis_config_.interval * 10) {
+                analysis_timer.GetDurationMilliseconds() > analysis_config_.interval * 10) {
             // Output the analysis verbose for GTP interface, like sabaki...
-            analyze_timer.Clock();
+            analysis_timer.Clock();
             if (root_node_->GetVisits() > 1) {
                 DUMPING << root_node_->ToAnalysisString(
                                            root_state_, color, analysis_config_);
@@ -341,7 +344,9 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         time_control_.TookTime(color);
     }
     if (tag & kAnalyze) {
-        // Output the last analysis verbose in order to avoid the lag.
+        // Output the last analysis verbose because the MCTS may
+        // be finished in the short time. It can help the low playouts
+        // MCTS to show current analysis graph in GUI.
         if (root_node_->GetVisits() > 1) {
             DUMPING << root_node_->ToAnalysisString(
                            root_state_, color, analysis_config_);
@@ -385,11 +390,16 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     // Fill best moves, root eval and score.
     result.best_move = root_node_->GetBestMove();
     result.random_move = root_node_->RandomizeFirstProportionally(1);
-    result.root_eval = root_node_->GetWL(color, false);
     result.root_final_score = root_node_->GetFinalScore(color);
-    result.best_eval = root_node_->
-                           GetChild(result.best_move)->
-                           GetWL(color, false);
+    result.root_eval = root_node_->GetWL(color, false);
+    {
+        auto best_node = root_node_->GetChild(result.best_move);
+        if (best_node->GetVisits() >= 1) {
+           result.best_eval = best_node->GetWL(color, false);
+        } else {
+           result.best_eval = result.root_eval;
+        }
+    }
 
     // Resize the childern status buffer.
     result.root_ownership.resize(num_intersections);
@@ -783,7 +793,7 @@ void Search::GatherData(const GameState &state, ComputationResult &result) {
     data.komi = result.komi;
     data.side_to_move = result.to_move;
 
-    // map the root eval from [0 ~ 1] to [-1 ~ 1]
+    // Map the root eval from [0 ~ 1] to [-1 ~ 1]
     data.q_value = 2 * result.root_eval - 1.f;
     data.planes = Encoder::Get().GetPlanes(state);
     data.probabilities = result.target_probabilities;
@@ -881,5 +891,8 @@ int Search::GetExpandThreshold(GameState &state) const {
         return param_->expand_threshold;
     }
 
-    return std::min(20 + 2 * (board_size-9), 60);
+    // We tend to select the large 'Expand Threshold' in order
+    // to converge the average winrate. The other engine may
+    // select the little value becuase they apply RAVE method.
+    return std::max(20 + 2 * (board_size-9), 20);
 }
