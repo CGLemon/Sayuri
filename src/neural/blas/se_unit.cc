@@ -5,10 +5,10 @@
 #include <cassert>
 
 template<>
-void GlobalPool<false>::Forward(const size_t board_size,
-                                const size_t channels,
-                                const std::vector<float> &input,
-                                std::vector<float> &output) {
+void GlobalPooling<false>::Forward(const size_t board_size,
+                                   const size_t channels,
+                                   const std::vector<float> &input,
+                                   std::vector<float> &output) {
     const auto width = board_size;
     const auto height = board_size;
     const auto spatial_size = width * height;
@@ -35,10 +35,10 @@ void GlobalPool<false>::Forward(const size_t board_size,
 }
 
 template<>
-void GlobalPool<true>::Forward(const size_t board_size,
-                               const size_t channels,
-                               const std::vector<float> &input,
-                               std::vector<float> &output) {
+void GlobalPooling<true>::Forward(const size_t board_size,
+                                  const size_t channels,
+                                  const std::vector<float> &input,
+                                  std::vector<float> &output) {
     const auto width = board_size;
     const auto height = board_size;
     const auto spatial_size = width * height;
@@ -74,7 +74,7 @@ void SEUnit::Forward(const size_t board_size,
                      const std::vector<float> &weights_b1,
                      const std::vector<float> &weights_w2,
                      const std::vector<float> &weights_b2) {
-    using pooling = GlobalPool<false>;
+    using pooling = GlobalPooling<false>;
     auto pool = std::vector<float>(3 * channels);
     auto fc_out = std::vector<float>(se_size);
 

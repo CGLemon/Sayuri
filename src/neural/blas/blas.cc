@@ -56,7 +56,7 @@ void Blas::ConvolutionSgemm(const int M, const int N, const int K,
 }
 
 
-void Blas::WinogradSgemm(const int set_U, const int set_V, const int set_M,
+void Blas::WinogradSgemm(const int offset_u, const int offset_v, const int offset_m,
                          const int M, const int N, const int K,
                          const float alpha,
                          const float *A, const int lda,
@@ -67,20 +67,20 @@ void Blas::WinogradSgemm(const int set_U, const int set_V, const int set_M,
 #ifndef USE_BLAS
     Sgemm<true, false>::apply(M, N, K,
                               alpha,
-                              A + set_U, lda,
-                              B + set_V, ldb,
+                              A + offset_u, lda,
+                              B + offset_v, ldb,
                               beta,
-                              C + set_M, ldc);
+                              C + offset_m, ldc);
 
 #else
 #ifdef USE_OPENBLAS
     cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                 M, N, K,
                 alpha,
-                A + set_U, lda,
-                B + set_V, ldb,
+                A + offset_u, lda,
+                B + offset_v, ldb,
                 beta,
-                C + set_M, ldc);
+                C + offset_m, ldc);
 
 #endif
 #ifdef USE_EIGEN
@@ -89,10 +89,10 @@ void Blas::WinogradSgemm(const int set_U, const int set_V, const int set_M,
     (void) lda;
     (void) ldb;
     (void) ldc;
-    auto C_mat = EigenMatrixMap<float>(C + set_M, N, M);
+    auto C_mat = EigenMatrixMap<float>(C + offset_m, N, M);
     C_mat.noalias() =
-        ConstEigenMatrixMap<float>(B + set_V, N, K) *
-        ConstEigenMatrixMap<float>(A + set_U, M, K).transpose();
+        ConstEigenMatrixMap<float>(B + offset_v, N, K) *
+        ConstEigenMatrixMap<float>(A + offset_u, M, K).transpose();
 
 #endif
 #endif

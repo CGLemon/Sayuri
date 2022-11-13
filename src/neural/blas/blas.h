@@ -29,7 +29,7 @@ public:
 
     // This is interface for Winograd. It is not the real general
     // matrix multiply. Some parameters will invalid.
-    static void WinogradSgemm(const int set_U, const int set_V, const int set_M,
+    static void WinogradSgemm(const int offset_u, const int offset_v, const int offset_m,
                               const int M, const int N, const int K,
                               const float alpha,
                               const float *A, const int lda,

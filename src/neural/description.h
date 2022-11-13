@@ -94,6 +94,7 @@ class DNNWeights {
 public:
     bool loaded{false};
     bool winograd{false};
+    bool winograd_initialized{false};
 
     int input_channels{0};
 

@@ -3,9 +3,9 @@
 #include <vector>
 
 template<bool kIsValueHead>
-class GlobalPool {
+class GlobalPooling {
 public:
-    GlobalPool() = delete;
+    GlobalPooling() = delete;
     static void Forward(const size_t board_size,
                         const size_t channels,
                         const std::vector<float> &input,

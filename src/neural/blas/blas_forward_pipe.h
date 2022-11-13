@@ -22,6 +22,7 @@ public:
     virtual void Destroy();
 
 private:
-    std::shared_ptr<DNNWeights> weights_{nullptr};
+    void InitWinograd();
 
+    std::shared_ptr<DNNWeights> weights_{nullptr};
 };

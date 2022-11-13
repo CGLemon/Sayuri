@@ -227,9 +227,9 @@ void DNNLoder::DumpInfo(std::shared_ptr<DNNWeights> weights) const {
 }
 
 void DNNLoder::FillWeights(NetInfo &netinfo,
-                           NetStruct &netstruct,
-                           std::shared_ptr<DNNWeights> weights,
-                           std::istream &buffer) const {
+                               NetStruct &netstruct,
+                               std::shared_ptr<DNNWeights> weights,
+                               std::istream &buffer) const {
 
     weights->input_channels = std::stoi(netinfo["InputChannels"]);
 
@@ -444,10 +444,11 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
     }
     weights->loaded = true;
     DumpInfo(weights);
-    ProcessWeights(weights, false);
+    ProcessWeights(weights);
+    weights->winograd = GetOption<bool>("winograd");
 }
 
-void DNNLoder::ProcessWeights(std::shared_ptr<DNNWeights> weights, bool winograd) const {
+void DNNLoder::ProcessWeights(std::shared_ptr<DNNWeights> weights) const {
     // input layer
     for (auto idx = size_t{0}; idx < weights->input_conv.GetBiases().size(); ++idx) {
         weights->input_bn.GetMeans()[idx] -= weights->input_conv.GetBiases()[idx] *
@@ -479,10 +480,6 @@ void DNNLoder::ProcessWeights(std::shared_ptr<DNNWeights> weights, bool winograd
                                              weights->v_ex_bn.GetStddevs()[idx];
         weights->v_ex_conv.GetBiases()[idx] = 0.0f;
     }
-
-    // TODO: Implement winograd convolution.
-
-    (void) winograd;
 }
 
 void DNNLoder::GetWeightsFromBuffer(std::vector<float> &weights, std::istream &buffer) const {
@@ -549,9 +546,9 @@ void DNNLoder::GetWeightsFromBuffer(std::vector<float> &weights, std::istream &b
 }
 
 void DNNLoder::FillFullyconnectLayer(LinearLayer &layer,
-                                     std::istream &buffer,
-                                     const int in_size,
-                                     const int out_size) const {
+                                         std::istream &buffer,
+                                         const int in_size,
+                                         const int out_size) const {
     auto weights = std::vector<float>{};
     layer.Set(in_size, out_size);    
 
@@ -563,8 +560,8 @@ void DNNLoder::FillFullyconnectLayer(LinearLayer &layer,
 }
 
 void DNNLoder::FillBatchnormLayer(BatchNormLayer &layer,
-                                  std::istream &buffer,
-                                  const int channels) const {
+                                      std::istream &buffer,
+                                      const int channels) const {
     auto weights = std::vector<float>{};
     layer.Set(channels);
 
@@ -576,10 +573,10 @@ void DNNLoder::FillBatchnormLayer(BatchNormLayer &layer,
 }
 
 void DNNLoder::FillConvolutionLayer(ConvLayer &layer,
-                                    std::istream &buffer,
-                                    const int in_channels,
-                                    const int out_channels,
-                                    const int kernel_size) const {
+                                        std::istream &buffer,
+                                        const int in_channels,
+                                        const int out_channels,
+                                        const int kernel_size) const {
     auto weights = std::vector<float>{};    
     layer.Set(in_channels, out_channels, kernel_size);
 
