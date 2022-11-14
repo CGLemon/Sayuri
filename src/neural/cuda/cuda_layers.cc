@@ -146,6 +146,8 @@ void Convolution::Forward(const int batch, float *input, float *output,
     (void) scratch_size;
 
     auto op_scratch = reinterpret_cast<float*>(scratch);
+
+#ifdef USE_SINGLE_BATCH_CONV
     const size_t input_shift = in_channels_ * spatial_size_;
     const size_t output_shift = out_channels_ * spatial_size_;
     for (int b = 0; b < batch; ++b) {
@@ -162,7 +164,32 @@ void Convolution::Forward(const int batch, float *input, float *output,
                  0.0f, output_ptr, spatial_size_, handles_->cublas_handle, handles_->stream);
         }
     }
-
+#else
+    if (filters_ != 1) {
+        im2col_batched(filters_, batch, in_channels_, height_, width_, input, op_scratch, handles_->stream);
+        gemm_strided_batched(
+            false, false,
+            out_channels_, spatial_size_, filter_dim_,
+            1.0f,
+            cuda_weights_, filter_dim_, 0,
+            op_scratch, spatial_size_, filter_dim_ * spatial_size_,
+            0.f,
+            output, spatial_size_, out_channels_ * spatial_size_,
+            batch,
+            handles_->cublas_handle, handles_->stream);
+    } else {
+        gemm_strided_batched(
+            false, false,
+            out_channels_, spatial_size_, filter_dim_,
+            1.0f,
+            cuda_weights_, filter_dim_, 0,
+            input, spatial_size_, in_channels_ * spatial_size_,
+            0.f,
+            output, spatial_size_, out_channels_ * spatial_size_,
+            batch,
+            handles_->cublas_handle, handles_->stream);
+    }
+#endif
     if (cuda_biases_) {
         const auto op_size = out_channels_ * spatial_size_;
         add_spatial(output, cuda_biases_, output,
@@ -248,7 +275,8 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
     scratch_size = max_scratch_size;
 
 #else
-    apply_scratch_size = weights_size * filters_ * filters_;
+    // apply_scratch_size = maxbatch_ * weights_size * filters_ * filters_;
+    apply_scratch_size = maxbatch_ * filter_dim_ * 16 * spatial_size_;
     const size_t max_scratch_size = std::max(apply_scratch_size, scratch_size);
     scratch_size = max_scratch_size;
 #endif

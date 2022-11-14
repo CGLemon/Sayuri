@@ -21,8 +21,13 @@ void batchnorm(T *data, const float *means, const float *stddevs,
 
 
 template <typename T>
-void im2col(int filter_size, int channels, int H, int W,
+void im2col(int filter_size, int C, int H, int W,
             T *data_im, T *data_col, cudaStream_t stream);
+
+template <typename T>
+void im2col_batched(int filter_size, int N, int C, int H, int W,
+                    T *data_im, T *data_col, cudaStream_t stream);
+
 
 template<typename T>
 void global_pool(T *input, T *output, T b_coeff, int batch,
@@ -41,11 +46,9 @@ void gemm(bool TA, bool TB, int M, int N, int K, float ALPHA,
           const float *A_gpu, int lda, const float *B_gpu, int ldb,
           float BETA, float *C_gpu, int ldc, cublasHandle_t handle, cudaStream_t stream);
 
-template<typename T>
-void swap(T *a, T *b, int size, cudaStream_t stream);
-
-template<typename T>
-void copy(T *a, T *b, int size, cudaStream_t stream);
+void gemm_strided_batched(bool TA, bool TB, int M, int N, int K, float ALPHA,
+                              const float *A_gpu, int lda, int strideA, const float *B_gpu, int ldb, int strideB,
+                              float BETA, float *C_gpu, int ldc, int strideC, int batchsize, cublasHandle_t handle, cudaStream_t stream);
 
 } // namespace CUDA
 

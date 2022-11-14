@@ -1,4 +1,5 @@
 #include "neural/cuda/cuda_kernels.h"
+#include "neural/winograd_helper.h"
 
 #ifdef USE_CUDA
 
@@ -60,17 +61,17 @@ void add_spatial(T *a, T *b, T *c,
 }
 
 template <typename T>
-__global__ void batchNorm_eltwise_kernel(T *data, const float *means, const float *stddevs,
+__global__ void batchnorm_eltwise_kernel(T *data, const float *means, const float *stddevs,
                                          int N, int C, int spatial, const T *eltwise, bool relu) {
 
     int index = threadIdx.x + blockDim.x * blockIdx.x;
     int size = N * C * spatial;
     if (index < size) {
-        int wIndex = (index / (spatial)) % C;
+        int w_index = (index / (spatial)) % C;
 
         float el = data[index];
-        float mean = means[wIndex];
-        float scale_stddev = stddevs[wIndex];
+        float mean = means[w_index];
+        float scale_stddev = stddevs[w_index];
 
         el -= mean;
         el *= scale_stddev;
@@ -85,16 +86,16 @@ __global__ void batchNorm_eltwise_kernel(T *data, const float *means, const floa
 
 
 template <typename T>
-__global__ void batchNorm_kernel(T *data, const float *means, const float *stddevs,
+__global__ void batchnorm_kernel(T *data, const float *means, const float *stddevs,
                                  int N, int C, int spatial, bool relu) {
     int index = threadIdx.x + blockDim.x * blockIdx.x;
     int size = N * C * spatial;
     if (index < size) {
-        int wIndex = (index / (spatial)) % C;
+        int w_index = (index / (spatial)) % C;
 
         float el = data[index];
-        float mean = means[wIndex];
-        float scale_stddev = stddevs[wIndex];
+        float mean = means[w_index];
+        float scale_stddev = stddevs[w_index];
 
         el -= mean;
         el *= scale_stddev;
@@ -114,10 +115,10 @@ void batchnorm(T *data, const float *means, const float *stddevs,
     const int kBlockSize = KBLOCKSIZE;
     const int blocks = DivUp(total_elements, kBlockSize);
     if (eltwise) {
-        batchNorm_eltwise_kernel<<<blocks, kBlockSize, 0 ,stream>>>(data, means, stddevs, batch,
+        batchnorm_eltwise_kernel<<<blocks, kBlockSize, 0 ,stream>>>(data, means, stddevs, batch,
                                                                     channels, spatial_size, eltwise, relu);
     } else {
-        batchNorm_kernel<<<blocks, kBlockSize, 0, stream>>>(data, means, stddevs, batch,
+        batchnorm_kernel<<<blocks, kBlockSize, 0, stream>>>(data, means, stddevs, batch,
                                                             channels, spatial_size, relu);
     }
 
@@ -132,9 +133,9 @@ __global__ void im2col_kernel(int filter_size, int pad, int C, int H, int W,
     int index = threadIdx.x + blockDim.x * blockIdx.x;
     if (index < total_elements) {
         int CWH_size = C * W * H;
-        int Windex = index % CWH_size;
-        int w_out = Windex % output_w;
-        int h_index = Windex / output_w;
+        int w_index = index % CWH_size;
+        int w_out = w_index % output_w;
+        int h_index = w_index / output_w;
         int h_out = h_index % output_h;
 
         int channel_in = h_index / output_h;
@@ -176,6 +177,63 @@ void im2col(int filter_size, int channels, int H, int W,
                                                      output_h, output_w, input, output);
     ReportCUDAErrors(cudaGetLastError());
 }
+
+
+template <typename T>
+__global__ void im2col_batched_kernel(int filter_size, int pad, int N, int C, int H, int W,
+                                      int output_h, int output_w, T *data_im,
+                                      T *data_col) {
+    int total_elements = N * C * H * W;
+    int index = threadIdx.x + blockDim.x * blockIdx.x;
+    if (index < total_elements) {
+        int CWH_size = C * W * H;
+        int n_index = index / CWH_size;
+        int w_index = index % CWH_size;
+        int w_out = w_index % output_w;
+        int h_index = w_index / output_w;
+        int h_out = h_index % output_h;
+
+        int channel_in = h_index / output_h;
+        int channel_out = channel_in * filter_size * filter_size;
+
+        int h_in = h_out - pad;
+        int w_in = w_out - pad;
+
+        float *data_col_ptr = data_col;
+        data_col_ptr += n_index * (C * filter_size * filter_size * output_h * output_w) +
+                            (channel_out * output_h + h_out) * output_w + w_out;
+        const float *data_im_ptr = data_im;
+        data_im_ptr += n_index * CWH_size +
+                          (channel_in * H + h_in) * W + w_in;
+
+        for (int kernel_row = 0; kernel_row < filter_size; ++kernel_row) {
+            for (int kernel_col = 0; kernel_col < filter_size; ++kernel_col) {
+                int h = h_in + kernel_row;
+                int w = w_in + kernel_col;
+                *data_col_ptr = (h >= 0 && w >= 0 && h < H && w < W)
+                                    ? data_im_ptr[kernel_row * W + kernel_col] : 0;
+                data_col_ptr += output_w * output_h;
+            }
+        }
+    }
+}
+
+template <typename T>
+void im2col_batched(int filter_size, int batch, int channels, int H, int W,
+                        T *input, T *output, cudaStream_t stream) {
+    const int total_elements = batch * channels * H * W;
+    const int kBlockSize = KBLOCKSIZE;
+    const int blocks = DivUp(total_elements, kBlockSize);
+
+    const int pad = (filter_size / 2);
+    const int output_h = H + 2 * pad - filter_size + 1;
+    const int output_w = W + 2 * pad - filter_size + 1;
+
+    im2col_batched_kernel<<<blocks, kBlockSize, 0, stream>>>(filter_size, pad, batch, channels, H, W,
+                                                             output_h, output_w, input, output);
+    ReportCUDAErrors(cudaGetLastError());
+}
+
 
 template <typename T>
 __global__ void global_pool_kernel(T *input, T *output, T b_coeff, int N, int C, int spatial) {
@@ -224,9 +282,9 @@ __global__ void head_global_pool_kernel(T *input, T *output, T b_coeff0, T b_coe
         float *input_ptr = input + index * spatial;
         float sum = 0;
 
+        #pragma unroll
         for (int i = 0; i < spatial; ++i) {
-            float val = input_ptr[i];
-            sum += val;
+            sum += input_ptr[i];
         }
 
         float mean = sum / spatial;
@@ -285,51 +343,334 @@ void se_scale(const T *input, const T* se_bias, T* data,
     const int blocks = DivUp(total_elements, kBlockSize);
 
     se_scale_kernel<<<blocks, kBlockSize, 0, stream>>>(input, se_bias, data,
-                                            batch, channels, spatial_size);
+                                                       batch, channels, spatial_size);
     ReportCUDAErrors(cudaGetLastError());
 }
 
 void gemm(bool TA, bool TB, int M, int N, int K, float ALPHA,
                const float *A_gpu, int lda, const float *B_gpu, int ldb,
                float BETA, float *C_gpu, int ldc, cublasHandle_t handle, cudaStream_t stream) {
-    ReportCUBLASErrors(cublasSetStream(handle,stream));
-    ReportCUBLASErrors(cublasSgemm(handle, (TB ? CUBLAS_OP_T : CUBLAS_OP_N),
-                                   (TA ? CUBLAS_OP_T : CUBLAS_OP_N), N, M, K,
-                                   &ALPHA, B_gpu, ldb, A_gpu, lda, &BETA, C_gpu, ldc));
+    ReportCUBLASErrors(cublasSetStream(handle, stream));
+    ReportCUBLASErrors(cublasSgemm(
+                           handle,
+                           (TB ? CUBLAS_OP_T : CUBLAS_OP_N),
+                           (TA ? CUBLAS_OP_T : CUBLAS_OP_N),
+                           N, M, K,
+                           &ALPHA,
+                           B_gpu, ldb,
+                           A_gpu, lda,
+                           &BETA,
+                           C_gpu, ldc));
+}
+
+void gemm_strided_batched(bool TA, bool TB, int M, int N, int K, float ALPHA,
+                              const float *A_gpu, int lda, int strideA, const float *B_gpu, int ldb, int strideB,
+                              float BETA, float *C_gpu, int ldc, int strideC, int batchsize, cublasHandle_t handle, cudaStream_t stream) {
+    ReportCUBLASErrors(cublasSetStream(handle, stream));
+    ReportCUBLASErrors(cublasSgemmStridedBatched(
+                           handle,
+                           (TB ? CUBLAS_OP_T : CUBLAS_OP_N),
+                           (TA ? CUBLAS_OP_T : CUBLAS_OP_N),
+                           N, M, K,
+                           &ALPHA,
+                           B_gpu, ldb, strideB,
+                           A_gpu, lda, strideA,
+                           &BETA,
+                           C_gpu, ldc, strideC,
+                           batchsize));
 }
 
 template <typename T>
-__global__ void swap_kernel(T *a, T *b, int size) {
-    int index = threadIdx.x + blockDim.x * blockIdx.x;
-    if (index < size) {
-        T temp_a = a[index];
-        T temp_b = b[index];
-        a[index] = temp_b;
-        b[index] = temp_a;
-    }
-} 
+__device__ void multiply_bt(
+    T * o0, T * o1, T * o2, T * o3, T * o4, T * o5,
+    T i0,   T i1,   T i2,   T i3,   T i4,   T i5
+) {
+    const float SQ2 = kSqrt2;
 
-template <typename T>
-void swap(T *a, T *b, int size, cudaStream_t stream) {
-    const int kBlockSize = KBLOCKSIZE;
-    const int blocks = DivUp(size, kBlockSize);
-    swap_kernel<<<blocks, kBlockSize, 0, stream>>>(a, b, size);
+    T i3m1 = i1 * -SQ2 + i3 * (SQ2 / 2.0f);
+    T i4m2 = i2 * -2.0f + i4 * 1.0f;
+
+    *o0 = i0 + i2 * (-5.0f/2.0f) + i4;
+    *o1 = i3m1 + i4m2;
+    *o2 = -i3m1 + i4m2;
+
+    T i3m1_2 = i3 * (SQ2) + i1 * (-SQ2/2.0f);
+    T i4m2_2 = i2 * (-1.0f/2.0f) + i4;
+
+    *o3 = i3m1_2 + i4m2_2;
+    *o4 = -i3m1_2 + i4m2_2;
+
+    *o5 = i1 + i3 * (-5.0f/2.0f) + i5;
 }
 
 template <typename T>
-__global__ void copy_kernel(T *a, T *b, int size) {
-    int index = threadIdx.x + blockDim.x * blockIdx.x;
-    if (index < size) {
-        T tmep = b[index];
-        a[index] = tmep;
-    }
-} 
+__device__ void multiply_atv(
+    T * o,
+    T i0, T i1, T i2, T i3, T i4, T i5
+) {
+    const float SQ2 = kSqrt2;
 
-template<typename T>
-void copy(T *a, T *b, int size, cudaStream_t stream) {
-    const int kBlockSize = KBLOCKSIZE;
-    const int blocks = DivUp(size, kBlockSize);
-    copy_kernel<<<blocks, kBlockSize, 0, stream>>>(a, b, size);
+    T t1p2 = (i1 + i2) * (1.0f / 2.0f);
+    T t1m2 = (i1 - i2) * (SQ2/4.0f);
+    T t3p4 = i3 + i4;
+    T t3m4 = (i3 - i4) * (SQ2);
+
+    o[0] = i0 + t1p2 + t1p2 + t3p4;
+    o[1] = t1m2 + t1m2 + t3m4;
+    o[2] = t1p2 + t3p4 + t3p4;
+    o[3] = t1m2 + t3m4 + t3m4 + i5;
+}
+
+template <typename T>
+__device__ void multiply_at(
+    T * o0, T * o1, T * o2, T * o3,
+    T i0,   T i1,   T i2,   T i3, T i4, T i5
+) {
+    T o[4];
+    multiply_atv(o, i0, i1, i2, i3, i4, i5);
+
+    *o0 = o[0];
+    *o1 = o[1];
+    *o2 = o[2];
+    *o3 = o[3];
+}
+
+template <typename T>
+__global__ void transform_in_kernel(const T *in, T *V,
+                                    const int C,
+                                    const int Cpad, const int Ppad,
+                                    const int board_size, const int batch_size) {
+    const int W = board_size;
+    const int H = board_size;
+    const int WTILES = board_size / kWinogradM + (board_size % kWinogradM != 0);
+    const int P = WTILES * WTILES;
+    const int CPpad = Ppad * Cpad;
+
+    const int spatial = W * H;
+
+    const int block = blockIdx.x;
+    const int ch = threadIdx.x;
+
+    const int batch = block / P;
+    const int block_x = (block - P * batch) % WTILES;
+    const int block_y = (block - P * batch) / WTILES;
+
+    // 6x6 tiles overlap by 2
+    const int yin = kWinogradM * block_y - 1;
+    const int xin = kWinogradM * block_x - 1;
+
+    if (block < batch_size * P && ch < C) {
+        // Cache input tile and handle zero padding
+        T x[kWinogradAlpha][kWinogradAlpha];
+        for (int i = 0; i < kWinogradAlpha; i++) {
+            for (int j = 0; j < kWinogradAlpha; j++) {
+                int a = xin + j;
+                int b = yin + i;
+                // x is transposed here for better layout later
+                if (b >= 0 && a >= 0 && b < H && a < W) {
+                    x[j][i] = in[batch * C * spatial + 
+                                     ch * spatial + b * W + a];
+                } else {
+                    x[j][i] = 0;
+                }
+            }
+        }
+
+        // V dimensions are [36, input_channels, batch_size * tiles].
+        // Padded with zeros as necessary for SGEMM
+        // = [36, Cpad, Ppad]
+
+        const int offset = ch * Ppad + block;
+        // __transform_in_eq(x, V, offset, CPpad, board_size);
+
+        T T1[kWinogradAlpha][kWinogradAlpha];
+        T T2[kWinogradAlpha][kWinogradAlpha];
+
+        for (int j = 0; j < kWinogradAlpha; j++) {
+            multiply_bt(
+                &(T1[0][j]), &(T1[1][j]), &(T1[2][j]), &(T1[3][j]), &(T1[4][j]), &(T1[5][j]),
+                x[j][0], x[j][1], x[j][2], x[j][3], x[j][4], x[j][5]
+            );
+        }
+
+        for (int i = 0; i < kWinogradAlpha; i++){
+            multiply_bt(
+                &(T2[i][0]),  &(T2[i][1]),  &(T2[i][2]),  &(T2[i][3]),  &(T2[i][4]),  &(T2[i][5]),
+                T1[i][0], T1[i][1], T1[i][2], T1[i][3], T1[i][4], T1[i][5]
+            );
+        }
+
+        // Scatter each sub element in tile to separate matrices
+        for (int i = 0; i < kWinogradAlpha; i++) {
+            for (int j = 0; j < kWinogradAlpha; j++) {
+                // vstore_net_t(T2[i][j], (i*kWinogradAlpha + j)*CPpad + offset, V);
+                V[(i*kWinogradAlpha + j) * CPpad + offset] = T2[i][j];
+            }
+        }
+    }
+}
+
+#ifndef OUT_KWG
+#define OUT_KWG 32
+#endif
+
+#ifndef OUT_BWG
+#define OUT_BWG 2
+#endif
+
+template <typename T>
+__global__ void transform_out_fused_bn_kernel(const T * M,
+                                              T * Y,
+                                              const int K,
+                                              const int Kpad, const int Ppad,
+                                              const int board_size, 
+                                              const int batch_size,
+                                              const T * residual,
+                                              const T * means,
+                                              const T * stddivs) {
+
+    const int W = board_size;
+    const int H = board_size;
+    const int WTILES = board_size / kWinogradM + (board_size % kWinogradM != 0);
+    const int P = WTILES * WTILES;
+
+    const int k = threadIdx.x;
+    const int block = threadIdx.y;
+
+    // Adding some padding decreases bank conflicts
+    T out_buf[OUT_KWG][OUT_BWG][kWinogradM][kWinogradM + 1];
+
+    int kid = blockIdx.x;
+    int bid = blockIdx.y;
+
+    if (k < K && block < batch_size * P) {
+        const T mean = means[k];
+        const T scale_stddiv = stddivs[k];
+
+        T temp[kWinogradM][kWinogradAlpha];
+
+        // M dimensions are [36, outputs, batch_size * tiles].
+        // Plus zero padding from SGEMM.
+        const int offset = block * Kpad + k;
+
+        // Calculates transpose(A).temp_m
+        for (int xn = 0; xn < kWinogradAlpha; xn++) {
+            T temp_m0 = M[(0 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
+            T temp_m1 = M[(1 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
+            T temp_m2 = M[(2 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
+            T temp_m3 = M[(3 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
+            T temp_m4 = M[(4 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
+            T temp_m5 = M[(5 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
+            multiply_at(
+                &(temp[0][xn]), &(temp[1][xn]), &(temp[2][xn]), &(temp[3][xn]),
+                temp_m0, temp_m1, temp_m2, temp_m3, temp_m4, temp_m5
+            );
+        }
+
+        // Calculates temp.A
+        for (int i = 0; i < kWinogradM; i++){
+            T r[4];
+            multiply_atv(
+                r,
+                temp[i][0], temp[i][1], temp[i][2], temp[i][3], temp[i][4], temp[i][5]
+            );
+
+            r[0] = (r[0] - mean) * scale_stddiv;
+            r[1] = (r[1] - mean) * scale_stddiv;
+            r[2] = (r[2] - mean) * scale_stddiv;
+            r[3] = (r[3] - mean) * scale_stddiv;
+
+            out_buf[kid][bid][i][0] = r[0];
+            out_buf[kid][bid][i][1] = r[1];
+            out_buf[kid][bid][i][2] = r[2];
+            out_buf[kid][bid][i][3] = r[3];
+        }
+    }
+
+    __syncthreads();
+
+    // barrier(CLK_LOCAL_MEM_FENCE);
+
+    const int spatial = W * H;
+    int idx_start = threadIdx.x + blockDim.x * threadIdx.y;
+    int idx_offset = blockDim.x * threadIdx.y;
+
+    // for (int idx = get_local_id(0) + get_local_size(0) * get_local_id(1); idx < OUT_BWG * OUT_KWG * kWinogradM * kWinogradM; idx += get_local_size(0) * get_local_size(1)) {
+
+    for (int idx = idx_start; idx < OUT_BWG * OUT_KWG * kWinogradM * kWinogradM; idx += idx_offset) {
+        // Calculate indexing for coalesced memory access.
+        // This should be simplified somehow.
+        const int k_local = idx / (OUT_BWG * kWinogradM * kWinogradM);
+
+        const int idx_block = (idx - k_local * OUT_BWG * kWinogradM * kWinogradM);
+
+        const int row = idx_block / (kWinogradM * OUT_BWG);
+        const int col = (idx_block - row * kWinogradM * OUT_BWG);
+        const int block_local = col / kWinogradM;
+
+        const int j = col % kWinogradM;
+        const int i = row % kWinogradM;
+
+        // const int blockt = get_group_id(1) * get_local_size(1) + block_local;
+        // const int kt = get_group_id(0) * get_local_size(0) + k_local;
+        const int blockt = gridDim.y * blockDim.y + block_local;
+        const int kt = gridDim.x * blockDim.x + k_local;
+
+        const int batch = blockt / P;
+        const int blockt_x = (blockt - P * batch) % WTILES;
+        const int blockt_y = (blockt - P * batch) / WTILES;
+
+        const int x = kWinogradM * blockt_x;
+        const int y = kWinogradM * blockt_y;
+        const int out_idx = batch * K * spatial + kt * spatial + (y + i) * W + (x + j);
+
+        if (kt < K && blockt < batch_size * P && y + i < H && x + j < W) {
+            T acc = out_buf[k_local][block_local][i][j];
+
+            if (residual) {
+                const T rval = residual[out_idx];
+                acc += rval;
+            }
+
+            acc = acc > 0 ? acc : 0;
+
+            // vstore_net_t(acc, out_idx, Y);
+            Y[out_idx] = acc;
+        }
+    }
+
+}
+
+void winograd_transform_in(const float *in, float *V, float *M,
+                           int batch, int channels, int board_size, cudaStream_t stream) {
+    const int tiles = GetWinogradP(board_size);
+    const int blocks = batch * tiles;
+    const int blocks_size = channels;
+
+    const int k_ceil = channels;
+    const int n_ceil = batch * tiles;
+
+    transform_in_kernel<<<blocks, blocks_size, 0, stream>>>(
+        in, V, channels, k_ceil, n_ceil, board_size, batch);
+}
+
+void winograd_transform_out(const float *M, float *out,
+                            const float *res, const float *mean, const float *stdv,
+                            int batch, int channels, int board_size, cudaStream_t stream) {
+    const int tiles = GetWinogradP(board_size);
+    dim3 blocks_size;
+    blocks_size.x = 32;
+    blocks_size.y = 2;
+
+    dim3 blocks;
+    blocks.x = DivUp(channels,32);
+    blocks.y = DivUp(batch * tiles, 2);
+
+    auto m_ceil = channels;
+    auto n_ceil = batch * tiles;
+
+    transform_out_fused_bn_kernel<<<blocks, blocks_size, 0, stream>>>(
+        M, out, channels, m_ceil, n_ceil, board_size, batch, res, mean, stdv);
 }
 
 template void batchnorm<float>(float *data, const float *means,
@@ -345,6 +686,10 @@ template void add_spatial<float>(float *a, float *b, float *c,
 template void im2col<float>(int filter_size, int C, int H, int W,
                             float *data_im, float *data_col, cudaStream_t stream);
 
+template void im2col_batched<float>(int filter_size, int N, int C, int H, int W,
+                                    float *data_im, float *data_col, cudaStream_t stream);
+
+
 template void global_pool<float>(float *input, float *output, float b_coeff,
                                  int batch, int channels, int spatial_size, cudaStream_t stream);
 
@@ -353,11 +698,6 @@ template void head_global_pool<float>(float *input, float *output, float b_coeff
 
 template void se_scale<float>(const float *input, const float *se_bias, float *data,
                               int batch, int channels, int spatial_size, cudaStream_t stream);
-
-
-template void swap<float>(float *a, float *b, int size, cudaStream_t stream);
-
-template void copy<float>(float *a, float *b, int size, cudaStream_t stream);
 
 } // namespace CUDA
 #endif

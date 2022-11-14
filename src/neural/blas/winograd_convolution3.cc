@@ -2,6 +2,12 @@
 #include "neural/blas/blas.h"
 #include "neural/winograd_helper.h"
 
+void ClearVector2D(std::vector<std::vector<float>> &vec2d) {
+    for (auto &v: vec2d) {
+        std::fill(std::begin(v), std::end(v), 0.f);
+    }
+}
+
 void WinogradConvolution3::TransformIn(const int board_size,
                                            const std::vector<float>& in,
                                            std::vector<float>& V, const int C) {
@@ -54,6 +60,8 @@ void WinogradConvolution3::TransformIn(const int board_size,
     };
 
     for (int ch = 0; ch < C; ch++) {
+        ClearVector2D(in_pad);
+
         for (int yin = 0; yin < H; yin++) {
             for (int xin = 0; xin < W; xin++) {
                 in_pad[yin + 1][xin + 1] = in[ch * (W * H) + yin * W + xin];
