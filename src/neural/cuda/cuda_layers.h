@@ -17,8 +17,8 @@ protected:
     int maxbatch_{0};
     int width_{0};
     int height_{0};
+    int board_size_{0};
     int spatial_size_{0};
-    int channels_{0};
 };
 
 class Batchnorm : public LayerBasic {
@@ -36,6 +36,7 @@ public:
 private:
     float *cuda_means_;
     float *cuda_stddevs_;
+    int channels_;
 };
 
 class Convolution : public LayerBasic {
@@ -47,20 +48,23 @@ public:
     ~Convolution();
 
     void Forward(const int batch, float *input, float *output,
-                 void *scratch, size_t scratch_size);
+                 void *scratch, void *scratch_other, size_t scratch_size);
 
     void LoadingWeight(const std::vector<float> &weights,
-                       size_t &scratch_size);
+                       size_t &scratch_size,
+                       bool winograd);
 
     void LoadingWeight(const std::vector<float> &weights,
                        const std::vector<float> &biases,
-                       size_t &scratch_size);
+                       size_t &scratch_size,
+                       bool winograd);
 
 private:
     int filter_dim_;
     int filters_;
     int in_channels_;
     int out_channels_;
+    bool winograd_;
 
 #ifdef USE_CUDNN
     cudnnFilterDescriptor_t filter_desc_;
@@ -100,10 +104,10 @@ private:
     float *cuda_biases_;
 };
 
-class GlobalPool : public LayerBasic {
+class GlobalPooling : public LayerBasic {
 public:
-    GlobalPool() = default; 
-    GlobalPool(CudaHandles *handles,
+    GlobalPooling() = default; 
+    GlobalPooling(CudaHandles *handles,
                bool is_value_head,
                const int batch,
                const size_t board_size,
@@ -112,7 +116,9 @@ public:
     void Forward(const int batch, float *input, float *output);
 
 private:
+    int channels_;
     bool is_value_head_;
+
     static constexpr size_t kMaxBSize = 19;
     static constexpr size_t kMinBSize = 9;
     static constexpr float kAvgBSize = (float)(kMaxBSize + kMinBSize) / 2.f;
@@ -136,6 +142,7 @@ public:
  
 private:
     int se_size_;
+    int channels_;
 
     std::array<float *, 3> cuda_op_;
 

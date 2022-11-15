@@ -46,7 +46,7 @@ private:
             // policy head 
             CUDA::Convolution p_ex_conv;
             CUDA::Batchnorm p_ex_bnorm;
-            CUDA::GlobalPool p_pool;
+            CUDA::GlobalPooling p_pool;
             CUDA::FullyConnect p_inter;
 
             CUDA::Convolution p_prob;
@@ -55,7 +55,7 @@ private:
             // value head
             CUDA::Convolution v_ex_conv;
             CUDA::Batchnorm v_ex_bnorm;
-            CUDA::GlobalPool v_pool;
+            CUDA::GlobalPooling v_pool;
             CUDA::FullyConnect v_inter;
 
             CUDA::Convolution v_ownership;
@@ -82,7 +82,8 @@ private:
 
         std::unique_ptr<Graph> graph_{nullptr};
 
-        float *cuda_scratch_;
+        std::array<float*, 2> cuda_scratch_op_;
+
         float *cuda_input_planes_;
         float *cuda_output_prob_;
         float *cuda_output_prob_pass_;

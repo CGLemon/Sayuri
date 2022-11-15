@@ -5,6 +5,7 @@
 class WinogradConvolution3 {
 public:
     static void Forward(const size_t board_size,
+                            const size_t input_channels,
                             const size_t output_channels,
                             const std::vector<float>& input,
                             const std::vector<float>& U,

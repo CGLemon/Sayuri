@@ -381,7 +381,7 @@ void gemm_strided_batched(bool TA, bool TB, int M, int N, int K, float ALPHA,
 }
 
 template <typename T>
-__device__ void multiply_bt(
+__device__ __forceinline__ void multiply_bt(
     T * o0, T * o1, T * o2, T * o3, T * o4, T * o5,
     T i0,   T i1,   T i2,   T i3,   T i4,   T i5
 ) {
@@ -404,7 +404,7 @@ __device__ void multiply_bt(
 }
 
 template <typename T>
-__device__ void multiply_atv(
+__device__ __forceinline__ void multiply_atv(
     T * o,
     T i0, T i1, T i2, T i3, T i4, T i5
 ) {
@@ -422,7 +422,7 @@ __device__ void multiply_atv(
 }
 
 template <typename T>
-__device__ void multiply_at(
+__device__ __forceinline__ void multiply_at(
     T * o0, T * o1, T * o2, T * o3,
     T i0,   T i1,   T i2,   T i3, T i4, T i5
 ) {
@@ -448,8 +448,10 @@ __global__ void transform_in_kernel(const T *in, T *V,
 
     const int spatial = W * H;
 
-    const int block = blockIdx.x;
-    const int ch = threadIdx.x;
+    // const int block = get_global_id(0);
+    // const int ch = get_global_id(1);
+    const int block = threadIdx.x;
+    const int ch = blockIdx.x;
 
     const int batch = block / P;
     const int block_x = (block - P * batch) % WTILES;
@@ -480,9 +482,6 @@ __global__ void transform_in_kernel(const T *in, T *V,
         // Padded with zeros as necessary for SGEMM
         // = [36, Cpad, Ppad]
 
-        const int offset = ch * Ppad + block;
-        // __transform_in_eq(x, V, offset, CPpad, board_size);
-
         T T1[kWinogradAlpha][kWinogradAlpha];
         T T2[kWinogradAlpha][kWinogradAlpha];
 
@@ -500,6 +499,8 @@ __global__ void transform_in_kernel(const T *in, T *V,
             );
         }
 
+        const int offset = ch * Ppad + block;
+
         // Scatter each sub element in tile to separate matrices
         for (int i = 0; i < kWinogradAlpha; i++) {
             for (int j = 0; j < kWinogradAlpha; j++) {
@@ -510,48 +511,29 @@ __global__ void transform_in_kernel(const T *in, T *V,
     }
 }
 
-#ifndef OUT_KWG
-#define OUT_KWG 32
-#endif
-
-#ifndef OUT_BWG
-#define OUT_BWG 2
-#endif
-
 template <typename T>
-__global__ void transform_out_fused_bn_kernel(const T * M,
-                                              T * Y,
-                                              const int K,
-                                              const int Kpad, const int Ppad,
-                                              const int board_size, 
-                                              const int batch_size,
-                                              const T * residual,
-                                              const T * means,
-                                              const T * stddivs) {
-
+__global__ void transform_out_kernel(const T * M,
+                                     T * Y,
+                                     const int K,
+                                     const int Kpad, const int Ppad,
+                                     const int board_size, 
+                                     const int batch_size) {
     const int W = board_size;
     const int H = board_size;
     const int WTILES = board_size / kWinogradM + (board_size % kWinogradM != 0);
     const int P = WTILES * WTILES;
 
-    const int k = threadIdx.x;
-    const int block = threadIdx.y;
-
-    // Adding some padding decreases bank conflicts
-    T out_buf[OUT_KWG][OUT_BWG][kWinogradM][kWinogradM + 1];
-
-    int kid = blockIdx.x;
-    int bid = blockIdx.y;
+    const int block = threadIdx.x;
+    const int k = blockIdx.x;
 
     if (k < K && block < batch_size * P) {
-        const T mean = means[k];
-        const T scale_stddiv = stddivs[k];
-
         T temp[kWinogradM][kWinogradAlpha];
+        T o[kWinogradM][kWinogradM];
 
         // M dimensions are [36, outputs, batch_size * tiles].
         // Plus zero padding from SGEMM.
-        const int offset = block * Kpad + k;
+        // const int offset = block * Kpad + k;
+        const int offset = k * Ppad + block;
 
         // Calculates transpose(A).temp_m
         for (int xn = 0; xn < kWinogradAlpha; xn++) {
@@ -575,102 +557,60 @@ __global__ void transform_out_fused_bn_kernel(const T * M,
                 temp[i][0], temp[i][1], temp[i][2], temp[i][3], temp[i][4], temp[i][5]
             );
 
-            r[0] = (r[0] - mean) * scale_stddiv;
-            r[1] = (r[1] - mean) * scale_stddiv;
-            r[2] = (r[2] - mean) * scale_stddiv;
-            r[3] = (r[3] - mean) * scale_stddiv;
-
-            out_buf[kid][bid][i][0] = r[0];
-            out_buf[kid][bid][i][1] = r[1];
-            out_buf[kid][bid][i][2] = r[2];
-            out_buf[kid][bid][i][3] = r[3];
+            o[i][0] = r[0];
+            o[i][1] = r[1];
+            o[i][2] = r[2];
+            o[i][3] = r[3];
         }
-    }
 
-    __syncthreads();
+        const int batch = block / P;
+        const int block_x = (block - P * batch) % WTILES;
+        const int block_y = (block - P * batch) / WTILES;
+        const int x = kWinogradM * block_x;
+        const int y = kWinogradM * block_y;
+        const int spatial = W * H;
 
-    // barrier(CLK_LOCAL_MEM_FENCE);
-
-    const int spatial = W * H;
-    int idx_start = threadIdx.x + blockDim.x * threadIdx.y;
-    int idx_offset = blockDim.x * threadIdx.y;
-
-    // for (int idx = get_local_id(0) + get_local_size(0) * get_local_id(1); idx < OUT_BWG * OUT_KWG * kWinogradM * kWinogradM; idx += get_local_size(0) * get_local_size(1)) {
-
-    for (int idx = idx_start; idx < OUT_BWG * OUT_KWG * kWinogradM * kWinogradM; idx += idx_offset) {
-        // Calculate indexing for coalesced memory access.
-        // This should be simplified somehow.
-        const int k_local = idx / (OUT_BWG * kWinogradM * kWinogradM);
-
-        const int idx_block = (idx - k_local * OUT_BWG * kWinogradM * kWinogradM);
-
-        const int row = idx_block / (kWinogradM * OUT_BWG);
-        const int col = (idx_block - row * kWinogradM * OUT_BWG);
-        const int block_local = col / kWinogradM;
-
-        const int j = col % kWinogradM;
-        const int i = row % kWinogradM;
-
-        // const int blockt = get_group_id(1) * get_local_size(1) + block_local;
-        // const int kt = get_group_id(0) * get_local_size(0) + k_local;
-        const int blockt = gridDim.y * blockDim.y + block_local;
-        const int kt = gridDim.x * blockDim.x + k_local;
-
-        const int batch = blockt / P;
-        const int blockt_x = (blockt - P * batch) % WTILES;
-        const int blockt_y = (blockt - P * batch) / WTILES;
-
-        const int x = kWinogradM * blockt_x;
-        const int y = kWinogradM * blockt_y;
-        const int out_idx = batch * K * spatial + kt * spatial + (y + i) * W + (x + j);
-
-        if (kt < K && blockt < batch_size * P && y + i < H && x + j < W) {
-            T acc = out_buf[k_local][block_local][i][j];
-
-            if (residual) {
-                const T rval = residual[out_idx];
-                acc += rval;
+        for (int i = 0; i < kWinogradM; i++) {
+            for (int j = 0; j < kWinogradM; j++) {
+                const int out_idx =
+                    batch * K * spatial +
+                    k * spatial +
+                    (y + i) * W + (x + j);
+                if (y + i < H && x + j < W) {
+                    const T oval = o[i][j];
+                    Y[out_idx] = oval;
+                }
             }
-
-            acc = acc > 0 ? acc : 0;
-
-            // vstore_net_t(acc, out_idx, Y);
-            Y[out_idx] = acc;
         }
     }
-
 }
 
-void winograd_transform_in(const float *in, float *V, float *M,
-                           int batch, int channels, int board_size, cudaStream_t stream) {
-    const int tiles = GetWinogradP(board_size);
-    const int blocks = batch * tiles;
-    const int blocks_size = channels;
+template<typename T>
+void winograd3_transform_in(const T *in, T *V,
+                            int batch, int channels, int board_size, cudaStream_t stream) {
+    const int ptiles = GetWinogradP(board_size);
+    const int blocks_size = batch * ptiles;
+    const int blocks = channels;
 
     const int k_ceil = channels;
-    const int n_ceil = batch * tiles;
+    const int n_ceil = batch * ptiles;
 
     transform_in_kernel<<<blocks, blocks_size, 0, stream>>>(
         in, V, channels, k_ceil, n_ceil, board_size, batch);
 }
 
-void winograd_transform_out(const float *M, float *out,
-                            const float *res, const float *mean, const float *stdv,
-                            int batch, int channels, int board_size, cudaStream_t stream) {
-    const int tiles = GetWinogradP(board_size);
-    dim3 blocks_size;
-    blocks_size.x = 32;
-    blocks_size.y = 2;
+template<typename T>
+void winograd3_transform_out(const T *M, T *out,
+                             int batch, int channels, int board_size, cudaStream_t stream) {
+    const int ptiles = GetWinogradP(board_size);
+    const int blocks_size = batch * ptiles;
+    const int blocks = channels;
 
-    dim3 blocks;
-    blocks.x = DivUp(channels,32);
-    blocks.y = DivUp(batch * tiles, 2);
+    const int m_ceil = channels;
+    const int n_ceil = batch * ptiles;
 
-    auto m_ceil = channels;
-    auto n_ceil = batch * tiles;
-
-    transform_out_fused_bn_kernel<<<blocks, blocks_size, 0, stream>>>(
-        M, out, channels, m_ceil, n_ceil, board_size, batch, res, mean, stdv);
+    transform_out_kernel<<<blocks, blocks_size, 0, stream>>>(
+        M, out, channels, m_ceil, n_ceil, board_size, batch);
 }
 
 template void batchnorm<float>(float *data, const float *means,
@@ -698,6 +638,12 @@ template void head_global_pool<float>(float *input, float *output, float b_coeff
 
 template void se_scale<float>(const float *input, const float *se_bias, float *data,
                               int batch, int channels, int spatial_size, cudaStream_t stream);
+
+template void winograd3_transform_in(const float *in, float *V,
+                                    int batch, int channels, int board_size, cudaStream_t stream);
+
+template void winograd3_transform_out(const float *M, float *out,
+                                     int batch, int channels, int board_size, cudaStream_t stream);
 
 } // namespace CUDA
 #endif

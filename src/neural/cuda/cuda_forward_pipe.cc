@@ -227,7 +227,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
         board_size_,             // board size
         policy_extract_channels  // channels
     );
-    graph_->p_pool = CUDA::GlobalPool(
+    graph_->p_pool = CUDA::GlobalPooling(
         &handles_,
         false,
         max_batch_,               // max batch size
@@ -273,7 +273,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
         board_size_,              // board size
         value_extract_channels    // channels
     );
-    graph_->v_pool = CUDA::GlobalPool(
+    graph_->v_pool = CUDA::GlobalPooling(
         &handles_,
         true,
         max_batch_,               // max batch size
@@ -304,9 +304,11 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
     );
     // Now fill the parameters.
 
+    const bool winograd = weights_->winograd;
+
     // input layer
     graph_->input_conv.LoadingWeight(
-        weights_->input_conv.GetWeights(), scratch_size_);
+        weights_->input_conv.GetWeights(), scratch_size_, winograd);
 
     graph_->input_bnorm.LoadingWeight(
         weights_->input_bn.GetMeans(), weights_->input_bn.GetStddevs());
@@ -317,13 +319,13 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
         const auto tower_ptr = weights_->tower.data() + i;
 
         graph_->tower_conv[t_offset+0].LoadingWeight(
-            tower_ptr->conv1.GetWeights(), scratch_size_);
+            tower_ptr->conv1.GetWeights(), scratch_size_, winograd);
 
         graph_->tower_bnorm[t_offset+0].LoadingWeight(
             tower_ptr->bn1.GetMeans(), tower_ptr->bn1.GetStddevs());
 
         graph_->tower_conv[t_offset+1].LoadingWeight(
-            tower_ptr->conv2.GetWeights(), scratch_size_);
+            tower_ptr->conv2.GetWeights(), scratch_size_, winograd);
 
         graph_->tower_bnorm[t_offset+1].LoadingWeight(
             tower_ptr->bn2.GetMeans(), tower_ptr->bn2.GetStddevs());
@@ -339,7 +341,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
 
     // policy head
     graph_->p_ex_conv.LoadingWeight(
-        weights->p_ex_conv.GetWeights(), scratch_size_);
+        weights->p_ex_conv.GetWeights(), scratch_size_, winograd);
 
     graph_->p_ex_bnorm.LoadingWeight(
         weights->p_ex_bn.GetMeans(), weights_->p_ex_bn.GetStddevs());
@@ -350,14 +352,14 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
     graph_->p_prob.LoadingWeight(
         weights->prob_conv.GetWeights(),
         weights_->prob_conv.GetBiases(),
-        scratch_size_);
+        scratch_size_, winograd);
 
     graph_->p_prob_pass.LoadingWeight(
         weights_->pass_fc.GetWeights(), weights_->pass_fc.GetBiases());
 
     // value head
     graph_->v_ex_conv.LoadingWeight(
-        weights->v_ex_conv.GetWeights(), scratch_size_);
+        weights->v_ex_conv.GetWeights(), scratch_size_, winograd);
 
     graph_->v_ex_bnorm.LoadingWeight(
         weights->v_ex_bn.GetMeans(), weights_->v_ex_bn.GetStddevs());
@@ -368,7 +370,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
     graph_->v_ownership.LoadingWeight(
         weights->v_ownership.GetWeights(),
         weights_->v_ownership.GetBiases(),
-        scratch_size_);
+        scratch_size_, winograd);
 
     graph_->v_misc.LoadingWeight(
         weights_->v_misc.GetWeights(), weights_->v_misc.GetBiases());
@@ -391,7 +393,8 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
     const size_t val_op2_size = factor * value_extract_channels * 3;
     const size_t val_op3_size = factor * value_extract_channels * 3;
 
-    CUDA::ReportCUDAErrors(cudaMalloc(&cuda_scratch_, scratch_size_));
+    CUDA::ReportCUDAErrors(cudaMalloc(&cuda_scratch_op_[0], scratch_size_));
+    CUDA::ReportCUDAErrors(cudaMalloc(&cuda_scratch_op_[1], scratch_size_));
     CUDA::ReportCUDAErrors(cudaMalloc(&cuda_input_planes_, planes_size));
 
     CUDA::ReportCUDAErrors(cudaMalloc(&cuda_conv_op_[0], conv_op_size));
@@ -439,7 +442,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
     graph_->input_conv.Forward(batch_size,
                                cuda_input_planes_, cuda_conv_op_[0],
-                               cuda_scratch_, scratch_size_);
+                               cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
     graph_->input_bnorm.Forward(batch_size,
                                 cuda_conv_op_[0]);
 
@@ -451,13 +454,13 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
         graph_->tower_conv[t_offset+0].Forward(batch_size,
                                                cuda_conv_op_[0], cuda_conv_op_[1],
-                                               cuda_scratch_, scratch_size_);
+                                               cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
         graph_->tower_bnorm[t_offset+0].Forward(batch_size,
                                                 cuda_conv_op_[1]);
 
         graph_->tower_conv[t_offset+1].Forward(batch_size,
                                                cuda_conv_op_[1], cuda_conv_op_[2],
-                                               cuda_scratch_, scratch_size_);
+                                               cuda_scratch_op_[0],  cuda_scratch_op_[1], scratch_size_);
         if (tower_ptr->apply_se) {
             graph_->tower_bnorm[t_offset+1].Forward(batch_size,
                                                     cuda_conv_op_[2]);
@@ -477,7 +480,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
     graph_->p_ex_conv.Forward(batch_size,
                               cuda_conv_op_[0], cuda_pol_op_[0],
-                              cuda_scratch_, scratch_size_);
+                              cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
     graph_->p_ex_bnorm.Forward(batch_size, cuda_pol_op_[0]);
 
     graph_->p_pool.Forward(batch_size,
@@ -491,14 +494,14 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
     graph_->p_prob.Forward(batch_size,
                            cuda_pol_op_[0], cuda_output_prob_,
-                           cuda_scratch_, scratch_size_); 
+                           cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_); 
     graph_->p_prob_pass.Forward(batch_size,
                                 cuda_pol_op_[2], cuda_output_prob_pass_);
 
     // value head
     graph_->v_ex_conv.Forward(batch_size,
                               cuda_conv_op_[0], cuda_val_op_[0],
-                              cuda_scratch_, scratch_size_);
+                              cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
     graph_->v_ex_bnorm.Forward(batch_size, cuda_val_op_[0]);
 
     graph_->v_pool.Forward(batch_size,
@@ -508,7 +511,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
     graph_->v_ownership.Forward(batch_size,
                                 cuda_val_op_[0], cuda_output_ownership_,
-                                cuda_scratch_, scratch_size_);
+                                cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
     graph_->v_misc.Forward(batch_size,
                            cuda_val_op_[2], cuda_output_val_);
 
@@ -518,6 +521,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     auto batch_value_misc = std::vector<float>(batch_size * kOuputValueMisc);
 
     CUDA::WaitToFinish(handles_.stream);
+
     io_mutex_.lock();
 
     // copy the results to memory
@@ -565,7 +569,8 @@ void CudaForwardPipe::NNGraph::DestroyGraph() {
         return;
     }
 
-    CUDA::ReportCUDAErrors(cudaFree(cuda_scratch_));
+    CUDA::ReportCUDAErrors(cudaFree(cuda_scratch_op_[0]));
+    CUDA::ReportCUDAErrors(cudaFree(cuda_scratch_op_[1]));
 
     CUDA::ReportCUDAErrors(cudaFree(cuda_input_planes_));
     CUDA::ReportCUDAErrors(cudaFree(cuda_output_prob_));

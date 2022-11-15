@@ -102,7 +102,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
 
     // The input Layers.
     if (use_winograd) {
-        WinogradConvolution3::Forward(board_size, output_channels,
+        WinogradConvolution3::Forward(board_size, kInputChannels, output_channels,
                                       planes,
                                       weights_->input_conv.GetWeights(),
                                       workspace0, workspace1, conv_out);
@@ -127,7 +127,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
 
         // The first conv3.
         if (use_winograd) {
-            WinogradConvolution3::Forward(board_size, tower_channels,
+            WinogradConvolution3::Forward(board_size, tower_channels, tower_channels,
                                           conv_in,
                                           tower_ptr->conv1.GetWeights(),
                                           workspace0, workspace1, conv_out);
@@ -147,7 +147,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
 
         // The second conv3.
         if (use_winograd) {
-            WinogradConvolution3::Forward(board_size, tower_channels,
+            WinogradConvolution3::Forward(board_size, tower_channels, tower_channels,
                                           conv_in,
                                           tower_ptr->conv2.GetWeights(),
                                           workspace0, workspace1, conv_out);

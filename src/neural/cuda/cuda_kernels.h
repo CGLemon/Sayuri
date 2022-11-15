@@ -50,6 +50,15 @@ void gemm_strided_batched(bool TA, bool TB, int M, int N, int K, float ALPHA,
                               const float *A_gpu, int lda, int strideA, const float *B_gpu, int ldb, int strideB,
                               float BETA, float *C_gpu, int ldc, int strideC, int batchsize, cublasHandle_t handle, cudaStream_t stream);
 
+template<typename T>
+void winograd3_transform_in(const T *in, T *V,
+                            int batch, int channels, int board_size, cudaStream_t stream);
+
+template<typename T>
+void winograd3_transform_out(const T *M, T *out,
+                             int batch, int channels, int board_size, cudaStream_t stream);
+
+
 } // namespace CUDA
 
 #endif
