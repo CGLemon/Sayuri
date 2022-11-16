@@ -40,11 +40,11 @@ or
 
     $ cmake .. -DBLAS_BACKEND=EIGEN
 
-Accelerate the network forwarding pipe by GPUs. CUDA is required.
+Accelerate the network forwarding pipe by GPUs. CUDA is required. It is recommand backend.
 
     $ cmake .. -DBLAS_BACKEND=CUDA
 
-Accelerate the network forwarding pipe by GPUs. CUDA and cuDNN are both required. It will be faster than CUDA-only in the most cases.
+Accelerate the network forwarding pipe by GPUs. CUDA and cuDNN are both required. This backend is much steady.
 
     $ cmake .. -DBLAS_BACKEND=CUDNN
 
@@ -188,7 +188,7 @@ I am trying to implement this ancient technique currently. Merge the MM patterns
 
 ## Todo
 
-* Sopport Windows platform.
+* Support Windows platform.
 * Support half-float.
 * Support NHWC format.
 * Support distributed computation.

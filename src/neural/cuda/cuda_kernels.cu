@@ -8,7 +8,6 @@ namespace CUDA {
 template <typename T>
 __global__ void add_vectors_kernel(T *a, T *b, T *c,
                                    int asize, int bsize, int size, bool relu) {
-
     int i = threadIdx.x + blockDim.x * blockIdx.x;
     if (i < size) {
         float aVal = (float)(a[i % asize]);
@@ -25,10 +24,12 @@ __global__ void add_vectors_kernel(T *a, T *b, T *c,
 template <typename T>
 void add_vectors(T *a, T *b, T *c, int asize, int bsize,
                  int size, bool relu, cudaStream_t stream) {
-    const int kBlockSize = KBLOCKSIZE;
-    const int blocks = DivUp(size, kBlockSize);
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(size, block_size);
 
-    add_vectors_kernel<<<blocks, kBlockSize, 0, stream>>>(a, b, c, asize, bsize, size, relu);
+    add_vectors_kernel<<<blocks, block_size, 0, stream>>>(
+        a, b, c, asize, bsize, size, relu);
+
     ReportCUDAErrors(cudaGetLastError());
 }
 
@@ -53,10 +54,12 @@ template <typename T>
 void add_spatial(T *a, T *b, T *c,
                  int asize, int bsize, int size,
                  int spatial, bool relu, cudaStream_t stream) {
-    const int kBlockSize = KBLOCKSIZE;
-    const int blocks = DivUp(size, kBlockSize);
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(size, block_size);
 
-    add_spatial_kernel<<<blocks, kBlockSize, 0, stream>>>(a, b, c, asize, bsize, size, spatial, relu);
+    add_spatial_kernel<<<blocks, block_size, 0, stream>>>(
+        a, b, c, asize, bsize, size, spatial, relu);
+
     ReportCUDAErrors(cudaGetLastError());
 }
 
@@ -112,14 +115,14 @@ void batchnorm(T *data, const float *means, const float *stddevs,
                int batch, int channels, int spatial_size,
                const T *eltwise, bool relu, cudaStream_t stream) {
     const int total_elements = batch * channels * spatial_size;
-    const int kBlockSize = KBLOCKSIZE;
-    const int blocks = DivUp(total_elements, kBlockSize);
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(total_elements, block_size);
     if (eltwise) {
-        batchnorm_eltwise_kernel<<<blocks, kBlockSize, 0 ,stream>>>(data, means, stddevs, batch,
-                                                                    channels, spatial_size, eltwise, relu);
+        batchnorm_eltwise_kernel<<<blocks, block_size, 0 ,stream>>>(
+            data, means, stddevs, batch, channels, spatial_size, eltwise, relu);
     } else {
-        batchnorm_kernel<<<blocks, kBlockSize, 0, stream>>>(data, means, stddevs, batch,
-                                                            channels, spatial_size, relu);
+        batchnorm_kernel<<<blocks, block_size, 0, stream>>>(
+            data, means, stddevs, batch, channels, spatial_size, relu);
     }
 
     ReportCUDAErrors(cudaGetLastError());
@@ -166,15 +169,16 @@ template <typename T>
 void im2col(int filter_size, int channels, int H, int W,
             T *input, T *output, cudaStream_t stream) {
     const int total_elements = channels * H * W;
-    const int kBlockSize = KBLOCKSIZE;
-    const int blocks = DivUp(total_elements, kBlockSize);
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(total_elements, block_size);
 
     const int pad = (filter_size / 2);
     const int output_h = H + 2 * pad - filter_size + 1;
     const int output_w = W + 2 * pad - filter_size + 1;
 
-    im2col_kernel<<<blocks, kBlockSize, 0, stream>>>(filter_size, pad, channels, H, W,
-                                                     output_h, output_w, input, output);
+    im2col_kernel<<<blocks, block_size, 0, stream>>>(
+        filter_size, pad, channels, H, W, output_h, output_w, input, output);
+
     ReportCUDAErrors(cudaGetLastError());
 }
 
@@ -222,15 +226,16 @@ template <typename T>
 void im2col_batched(int filter_size, int batch, int channels, int H, int W,
                         T *input, T *output, cudaStream_t stream) {
     const int total_elements = batch * channels * H * W;
-    const int kBlockSize = KBLOCKSIZE;
-    const int blocks = DivUp(total_elements, kBlockSize);
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(total_elements, block_size);
 
     const int pad = (filter_size / 2);
     const int output_h = H + 2 * pad - filter_size + 1;
     const int output_w = W + 2 * pad - filter_size + 1;
 
-    im2col_batched_kernel<<<blocks, kBlockSize, 0, stream>>>(filter_size, pad, batch, channels, H, W,
-                                                             output_h, output_w, input, output);
+    im2col_batched_kernel<<<blocks, block_size, 0, stream>>>(
+        filter_size, pad, batch, channels, H, W, output_h, output_w, input, output);
+
     ReportCUDAErrors(cudaGetLastError());
 }
 
@@ -238,7 +243,7 @@ void im2col_batched(int filter_size, int batch, int channels, int H, int W,
 template <typename T>
 __global__ void global_pool_kernel(T *input, T *output, T b_coeff, int N, int C, int spatial) {
     int total_elements = N * C;
-    int index = threadIdx.x + blockDim.x * blockIdx.x; // index = 0 ~ batch * channels
+    int index = threadIdx.x + blockDim.x * blockIdx.x; // index = [0 ~ batch * channels]
     if (index < total_elements) {
         float *input_ptr = input + index * spatial;
         float sum = 0;
@@ -266,18 +271,20 @@ __global__ void global_pool_kernel(T *input, T *output, T b_coeff, int N, int C,
 
 template <typename T>
 void global_pool(T *input, T *output, T b_coeff, int batch, int channels, int spatial_size, cudaStream_t stream) {
-    const int size = batch * channels;
-    const int gpool_kBlockSize = 64;
-    const int blocks = DivUp(size, gpool_kBlockSize);
-    global_pool_kernel<<<blocks, gpool_kBlockSize, 0, stream>>>(input, output, b_coeff,
-                                                                batch, channels, spatial_size);
+    const int total_elements = batch * channels;
+    const int block_size = 64;
+    const int blocks = DivUp(total_elements, block_size);
+
+    global_pool_kernel<<<blocks, block_size, 0, stream>>>(
+        input, output, b_coeff, batch, channels, spatial_size);
+
     ReportCUDAErrors(cudaGetLastError());
 }
 
 template <typename T>
 __global__ void head_global_pool_kernel(T *input, T *output, T b_coeff0, T b_coeff1, int N, int C, int spatial) {
     int total_elements = N * C;
-    int index = threadIdx.x + blockDim.x * blockIdx.x; // index = 0 ~ batch * channels
+    int index = threadIdx.x + blockDim.x * blockIdx.x; // index = [0 ~ batch * channels]
     if (index < total_elements) {
         float *input_ptr = input + index * spatial;
         float sum = 0;
@@ -302,11 +309,13 @@ __global__ void head_global_pool_kernel(T *input, T *output, T b_coeff0, T b_coe
 template <typename T>
 void head_global_pool(T *input, T *output, T b_coeff0, T b_coeff1,
                       int batch, int channels, int spatial_size, cudaStream_t stream) {
-    const int size = batch * channels;
-    const int gpool_kBlockSize = 64;
-    const int blocks = DivUp(size, gpool_kBlockSize);
-    head_global_pool_kernel<<<blocks, gpool_kBlockSize, 0, stream>>>(input, output, b_coeff0, b_coeff1,
-                                                                     batch, channels, spatial_size);
+    const int total_elements = batch * channels;
+    const int block_size = 64;
+    const int blocks = DivUp(total_elements, block_size);
+
+    head_global_pool_kernel<<<blocks, block_size, 0, stream>>>(
+        input, output, b_coeff0, b_coeff1, batch, channels, spatial_size);
+
     ReportCUDAErrors(cudaGetLastError());
 }
 
@@ -339,11 +348,12 @@ template<typename T>
 void se_scale(const T *input, const T* se_bias, T* data,
                    int batch, int channels, int spatial_size, cudaStream_t stream) {
     const int total_elements = channels * spatial_size * batch;
-    const int kBlockSize = KBLOCKSIZE;
-    const int blocks = DivUp(total_elements, kBlockSize);
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(total_elements, block_size);
 
-    se_scale_kernel<<<blocks, kBlockSize, 0, stream>>>(input, se_bias, data,
-                                                       batch, channels, spatial_size);
+    se_scale_kernel<<<blocks, block_size, 0, stream>>>(
+        input, se_bias, data, batch, channels, spatial_size);
+
     ReportCUDAErrors(cudaGetLastError());
 }
 
@@ -448,10 +458,9 @@ __global__ void transform_in_kernel(const T *in, T *V,
 
     const int spatial = W * H;
 
-    // const int block = get_global_id(0);
-    // const int ch = get_global_id(1);
-    const int block = threadIdx.x;
-    const int ch = blockIdx.x;
+    const int index = threadIdx.x + blockDim.x * blockIdx.x;
+    const int block = index % (batch_size * P);
+    const int ch = index / (batch_size * P);
 
     const int batch = block / P;
     const int block_x = (block - P * batch) % WTILES;
@@ -485,6 +494,7 @@ __global__ void transform_in_kernel(const T *in, T *V,
         T T1[kWinogradAlpha][kWinogradAlpha];
         T T2[kWinogradAlpha][kWinogradAlpha];
 
+        #pragma unroll
         for (int j = 0; j < kWinogradAlpha; j++) {
             multiply_bt(
                 &(T1[0][j]), &(T1[1][j]), &(T1[2][j]), &(T1[3][j]), &(T1[4][j]), &(T1[5][j]),
@@ -492,6 +502,7 @@ __global__ void transform_in_kernel(const T *in, T *V,
             );
         }
 
+        #pragma unroll
         for (int i = 0; i < kWinogradAlpha; i++){
             multiply_bt(
                 &(T2[i][0]),  &(T2[i][1]),  &(T2[i][2]),  &(T2[i][3]),  &(T2[i][4]),  &(T2[i][5]),
@@ -523,8 +534,9 @@ __global__ void transform_out_kernel(const T * M,
     const int WTILES = board_size / kWinogradM + (board_size % kWinogradM != 0);
     const int P = WTILES * WTILES;
 
-    const int block = threadIdx.x;
-    const int k = blockIdx.x;
+    const int index = threadIdx.x + blockDim.x * blockIdx.x;
+    const int block = index % (batch_size * P);
+    const int k = index / (batch_size * P);
 
     if (k < K && block < batch_size * P) {
         T temp[kWinogradM][kWinogradAlpha];
@@ -536,6 +548,7 @@ __global__ void transform_out_kernel(const T * M,
         const int offset = k * Ppad + block;
 
         // Calculates transpose(A).temp_m
+        #pragma unroll
         for (int xn = 0; xn < kWinogradAlpha; xn++) {
             T temp_m0 = M[(0 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
             T temp_m1 = M[(1 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
@@ -550,6 +563,7 @@ __global__ void transform_out_kernel(const T * M,
         }
 
         // Calculates temp.A
+        #pragma unroll
         for (int i = 0; i < kWinogradM; i++){
             T r[4];
             multiply_atv(
@@ -589,28 +603,32 @@ template<typename T>
 void winograd3_transform_in(const T *in, T *V,
                             int batch, int channels, int board_size, cudaStream_t stream) {
     const int ptiles = GetWinogradP(board_size);
-    const int blocks_size = batch * ptiles;
-    const int blocks = channels;
+    const int total_elements = channels * batch * ptiles;
 
-    const int k_ceil = channels;
-    const int n_ceil = batch * ptiles;
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(total_elements, block_size);
 
-    transform_in_kernel<<<blocks, blocks_size, 0, stream>>>(
-        in, V, channels, k_ceil, n_ceil, board_size, batch);
+    const int c_pad = channels;
+    const int p_pad = batch * ptiles;
+
+    transform_in_kernel<<<blocks, block_size, 0, stream>>>(
+        in, V, channels, c_pad, p_pad, board_size, batch);
 }
 
 template<typename T>
 void winograd3_transform_out(const T *M, T *out,
                              int batch, int channels, int board_size, cudaStream_t stream) {
     const int ptiles = GetWinogradP(board_size);
-    const int blocks_size = batch * ptiles;
-    const int blocks = channels;
+    const int total_elements = channels * batch * ptiles;
 
-    const int m_ceil = channels;
-    const int n_ceil = batch * ptiles;
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(total_elements, block_size);
 
-    transform_out_kernel<<<blocks, blocks_size, 0, stream>>>(
-        M, out, channels, m_ceil, n_ceil, board_size, batch);
+    const int k_pad = channels;
+    const int p_pad = batch * ptiles;
+
+    transform_out_kernel<<<blocks, block_size, 0, stream>>>(
+        M, out, channels, k_pad, p_pad, board_size, batch);
 }
 
 template void batchnorm<float>(float *data, const float *means,

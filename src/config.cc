@@ -63,7 +63,7 @@ void InitOptionsMap() {
     kOptionsMap["rollout"] << Option::setoption(false);
     kOptionsMap["no_dcnn"] << Option::setoption(false);
     kOptionsMap["root_dcnn"] << Option::setoption(false);
-    kOptionsMap["winograd"] << Option::setoption(false);
+    kOptionsMap["winograd"] << Option::setoption(true);
 
     kOptionsMap["search_mode"] << Option::setoption(std::string{});
     kOptionsMap["defualt_boardsize"] << Option::setoption(kDefaultBoardSize);
@@ -313,8 +313,8 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         parser.RemoveCommand(res->Index());
     }
 
-    if (const auto res = parser.Find("--winograd")) {
-        SetOption("winograd", true);
+    if (const auto res = parser.Find("--no-winograd")) {
+        SetOption("winograd", false);
         parser.RemoveCommand(res->Index());
     }
 

@@ -3,12 +3,12 @@
 #include <utility>
 #include <algorithm>
 
-#include "book/book.h"
 #include "utils/log.h"
 #include "utils/random.h"
 #include "utils/format.h"
 #include "game/sgf.h"
 #include "game/types.h"
+#include "game/book.h"
 #include "game/symmetry.h"
 #include "game/iterator.h"
 
@@ -167,11 +167,11 @@ void Book::LoadBook(std::string book_name) {
     file.close();
 }
 
-int Book::Probe(const GameState &state) const {
+bool Book::Probe(const GameState &state, int &book_move) const {
     if (data_.empty() ||
             state.GetBoardSize() != kBookBoardSize ||
             state.GetMoveNumber() > kMaxBookMoves) {
-        return kPass;
+        return false;
     }
 
     auto acc_score = 0;
@@ -193,7 +193,7 @@ int Book::Probe(const GameState &state) const {
         }
     }
 
-    if (candidate_moves.empty()) return kPass;
+    if (candidate_moves.empty()) return false;
 
     std::stable_sort(std::rbegin(candidate_moves), std::rend(candidate_moves));
 
@@ -209,7 +209,8 @@ int Book::Probe(const GameState &state) const {
         }
     }
 
-    return candidate_moves[choice].second;
+    book_move = candidate_moves[choice].second;
+    return true;
 }
 
 std::vector<std::pair<float, int>> Book::GetCandidateMoves(const GameState &state) const {

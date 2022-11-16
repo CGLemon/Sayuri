@@ -9,7 +9,7 @@
 #include "neural/encoder.h"
 #include "utils/log.h"
 #include "utils/format.h"
-#include "book/book.h"
+#include "game/book.h"
 
 #ifdef WIN32
 #include <windows.h>
@@ -231,8 +231,8 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     }
 
     if (tag & kThinking) {
-        auto book_move = Book::Get().Probe(root_state_);
-        if (book_move != kPass) {
+        auto book_move = kNullVertex;
+        if (Book::Get().Probe(root_state_, book_move)) {
             // Current game state is found in book.
             computation_result.best_move = book_move;
             return computation_result;

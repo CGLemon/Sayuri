@@ -4,7 +4,6 @@ cmake_minimum_required(VERSION 3.15)
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(GAME_SOURCES_DIR ${SOURCE_DIR}/game)
 set(NEURAL_SOURCES_DIR ${SOURCE_DIR}/neural)
-set(BOOK_SOURCES_DIR ${SOURCE_DIR}/book)
 set(PATTERN_SOURCES_DIR ${SOURCE_DIR}/pattern)
 set(MCTS_SOURCES_DIR ${SOURCE_DIR}/mcts)
 set(ACCURACY_SOURCES_DIR ${SOURCE_DIR}/accuracy)
@@ -24,6 +23,7 @@ set(BASIC_SOURCES
 set(GAME_SOURCES
     ${GAME_SOURCES_DIR}/board.cc
     ${GAME_SOURCES_DIR}/pattern_board.cc
+    ${GAME_SOURCES_DIR}/book.cc
     ${GAME_SOURCES_DIR}/game_state.cc
     ${GAME_SOURCES_DIR}/strings.cc
     ${GAME_SOURCES_DIR}/sgf.cc
@@ -50,10 +50,6 @@ set(NEURAL_SOURCES
     ${NEURAL_SOURCES_DIR}/blas/biases.cc
     ${NEURAL_SOURCES_DIR}/blas/se_unit.cc
     ${NEURAL_SOURCES_DIR}/blas/blas_forward_pipe.cc
-    )
-
-set(BOOK_SOURCES
-    ${BOOK_SOURCES_DIR}/book.cc
     )
 
 set(PATTERN_SOURCES
@@ -106,13 +102,13 @@ else()
 endif()
 
 if(USE_FAST_PARSER)
-    message(STATUS "Using fast parser library.")
+    message(STATUS "Use fast parser library.")
     add_definitions(-DUSE_FAST_PARSER)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/fast_float/include/fast_float)
 endif()
 
 if (USE_AVX)
-    message(STATUS "Using the AVX instructions")
+    message(STATUS "Use the AVX instructions")
     set(CMAKE_CXX_FLAGS "-mavx -mfma ${CMAKE_CXX_FLAGS}")
 endif()
 
@@ -152,11 +148,12 @@ endif()
 if(_USE_CUDA)
     if(_USE_CUDNN)
         message(STATUS "Backend is cuDNN.")
+        message(" The CUDA-only backend is another choice. Please add the flag -DBLAS_BACKEND=CUDA")
+        message(" to disable cuDNN.")
     else()
         message(STATUS "Backend is CUDA-only.")
-        message(" The cuDNN backend is faster than CUDA backend in multi-batch condition.")
-        message(" If you want to speed up with cuDNN, adding flag -DBLAS_BACKEND=CUDNN.")
-        message(" The cuDNN library and Nvida GPU are both required.\n")
+        message(" The cuDNN backend is another choice. Please add the flag -DBLAS_BACKEND=CUDNN")
+        message(" to enable it. The cuDNN library is required.")
     endif()
 
     add_definitions(-DUSE_CUDA)
@@ -249,16 +246,15 @@ else()
     elseif(_USE_BLAS)
         message(STATUS "Backend is OpenBlas")
     elseif(_USE_BUILD_IN)
-        message(STATUS "Using built-in matrix backend.")
+        message(STATUS "Backend is built-in matrix.")
         message(" Built-in matrix is very slow. Open Blas and Eigen are the better choice.")
-        message(" If you want to use Eigen, adding flag -DBLAS_BACKEND=EIGEN. And you need")
+        message(" If you want to use Eigen, please add flag -DBLAS_BACKEND=EIGEN. And you need")
         message(" to put the Eigen library to third_party directory. If you want to use OpenBlas,")
-        message(" adding flag -DBLAS_BACKEND=OPENBLAS. OpenBlas library is required.\n")
+        message(" please add flag -DBLAS_BACKEND=OPENBLAS. OpenBlas library is required.\n")
     endif()
-
-        message(" The GPU backend is much faster than CPU backend. If you want to speed with")
-        message(" GPUs, adding flag -DBLAS_BACKEND=CUDA or -DBLAS_BACKEND=CUDNN. CUDA library")
-        message(" and Nvida GPU are both required.\n")
+    message(" The GPU backend is much faster than CPU backend. If you want to speed up with")
+    message(" GPUs, please add flag -DBLAS_BACKEND=CUDA or -DBLAS_BACKEND=CUDNN. CUDA library")
+    message(" and Nvida GPU are both required.\n")
 endif()
 
 # Find all required packages.
@@ -305,7 +301,6 @@ endif()
 add_executable(Sayuri
     ${BASIC_SOURCES}
     ${GAME_SOURCES}
-    ${BOOK_SOURCES}
     ${PATTERN_SOURCES}
     ${MCTS_SOURCES}
     ${NEURAL_SOURCES}

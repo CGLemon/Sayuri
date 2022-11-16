@@ -2,13 +2,13 @@
 
 #include "game/game_state.h"
 #include "game/types.h"
+#include "game/book.h"
 #include "config.h"
 #include "mcts/search.h"
 #include "mcts/node.h"
 #include "utils/parser.h"
 #include "utils/threadpool.h"
 #include "utils/format.h"
-#include "book/book.h"
 #include "pattern/gammas_dict.h"
 #include "version.h"
 

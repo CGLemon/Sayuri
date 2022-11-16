@@ -302,7 +302,8 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
         kOuputValueMisc,          // output size
         false                     // relu
     );
-    // Now fill the parameters.
+
+    // Now push the weights.
 
     const bool winograd = weights_->winograd;
 
@@ -524,7 +525,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
     io_mutex_.lock();
 
-    // copy the results to memory
+    // copy the results to host memory
     CUDA::SetDevice(handles_.gpu_id);
     CUDA::ReportCUDAErrors(cudaMemcpy(batch_prob.data(), cuda_output_prob_,
                                       batch_prob.size() * sizeof(float),
@@ -648,7 +649,7 @@ void CudaForwardPipe::Worker(int gpu) {
                     waittime -= 2;
                 }
 
-                // Set next waiting time.
+                // Set the next waiting time.
                 waittime_.store(std::max(waittime, 0), std::memory_order_relaxed);
 
                 // Finish the loop.

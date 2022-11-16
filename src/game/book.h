@@ -19,7 +19,7 @@ public:
 
     // Try to find the opening moves. Return kPass if there is
     // no move in the book.
-    int Probe(const GameState &state) const;
+    bool Probe(const GameState &state, int &book_move) const;
 
     std::vector<std::pair<float, int>> GetCandidateMoves(const GameState &state) const;
 
