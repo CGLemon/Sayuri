@@ -17,10 +17,9 @@ void BlasForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
 
 
 void BlasForwardPipe::InitWinograd() {
-    if (!weights_->winograd) {
-        return;
-    }
-    if (weights_->winograd_initialized) {
+    if (weights_ == nullptr ||
+            !weights_->winograd ||
+            weights_->winograd_initialized) {
         return;
     }
 
