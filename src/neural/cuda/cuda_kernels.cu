@@ -657,11 +657,11 @@ template void head_global_pool<float>(float *input, float *output, float b_coeff
 template void se_scale<float>(const float *input, const float *se_bias, float *data,
                               int batch, int channels, int spatial_size, cudaStream_t stream);
 
-template void winograd3_transform_in(const float *in, float *V,
-                                    int batch, int channels, int board_size, cudaStream_t stream);
+template void winograd3_transform_in<float>(const float *in, float *V,
+                                            int batch, int channels, int board_size, cudaStream_t stream);
 
-template void winograd3_transform_out(const float *M, float *out,
-                                     int batch, int channels, int board_size, cudaStream_t stream);
+template void winograd3_transform_out<float>(const float *M, float *out,
+                                             int batch, int channels, int board_size, cudaStream_t stream);
 
 } // namespace CUDA
 #endif

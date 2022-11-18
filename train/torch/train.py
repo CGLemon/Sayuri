@@ -352,20 +352,24 @@ class TrainingPipe():
             batch_size = self.macrobatchsize
         )
 
-        self.validation_lazy_loader = LazyLoader(
-            filenames = gather_filenames(self.validation_dir),
-            stream_loader = self.__stream_loader,
-            stream_parser = self.__stream_parser,
-            batch_generator = self.__batch_gen,
-            down_sample_rate = 0,
-            num_workers = self.num_workers,
-            buffer_size = self.validation_buffer_size,
-            batch_size = self.macrobatchsize
-        )
-
         # Try to get the first batch, be sure that the loader is ready.
-        batch = next(self.validation_lazy_loader)
         batch = next(self.train_lazy_loader)
+
+        if self.validation_dir is not None:
+            self.validation_lazy_loader = LazyLoader(
+                filenames = gather_filenames(self.validation_dir),
+                stream_loader = self.__stream_loader,
+                stream_parser = self.__stream_parser,
+                batch_generator = self.__batch_gen,
+                down_sample_rate = 0,
+                num_workers = self.num_workers,
+                buffer_size = self.validation_buffer_size,
+                batch_size = self.macrobatchsize
+            )
+            batch = next(self.validation_lazy_loader)
+        else:
+            self.validation_lazy_loader = None
+
 
     def get_new_running_loss_dict(self):
         # Get the new dict.
@@ -403,6 +407,9 @@ class TrainingPipe():
         return planes, target
 
     def validate_the_last_model(self, steps):
+        if self.validation_lazy_loader is None:
+            return
+
         self.module.trainable(False)
         running_loss_dict = self.get_new_running_loss_dict()
         total_steps = self.validation_steps * self.macrofactor

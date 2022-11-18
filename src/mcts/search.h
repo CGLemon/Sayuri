@@ -181,8 +181,11 @@ public:
     // Set time left.
     void TimeLeft(const int color, const int time, const int stones);
 
-    // Save the training data.
+    // Save the self-play training data.
     void SaveTrainingBuffer(std::string filename, GameState &state);
+
+    // Output the self-play training data.
+    void GatherTrainingBuffer(std::vector<Training> &chunk, GameState &state);
 
     // Clear the training data in the buffer.
     void ClearTrainingBuffer();

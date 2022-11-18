@@ -7,6 +7,8 @@
 #include <mutex>
 #include <atomic>
 
+#include "neural/training.h"
+
 class Supervised {
 public:
     static Supervised &Get();
@@ -21,11 +23,14 @@ private:
     // parse any type SGF file. But forbidding the final score 
     // and the ownership informations. They are filled zeros.
     bool GeneralSgfProcess(std::string &sgfstring,
-                               std::ostream &out_file) const;
+                               std::vector<Training> &chunk) const;
     // Will save all types data. The SGF game must be finished 
     // if we use this function.
     bool SgfProcess(std::string &sgfstring,
-                        std::ostream &out_file) const;
+                        std::vector<Training> &chunk) const;
+
+    bool SaveChunk(std::string out_name_prefix,
+                       std::vector<Training> &chunk);
 
     std::queue<std::string> tasks_;
     std::mutex mtx_;

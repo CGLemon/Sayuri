@@ -22,9 +22,6 @@ def fullyconnect_to_text(in_size, out_size):
 def bn_to_text(channels):
     return "BatchNorm {C}\n".format(C=channels)
 
-def tensor_to_text(t: torch.Tensor):
-    return " ".join([str(w) for w in t.detach().numpy().ravel()]) + "\n"
-
 def float_to_bin(num, big_endian):
     fmt = 'f'
     if big_endian:
@@ -45,6 +42,11 @@ def ffffffff_nan():
 
 def tensor_to_bin(t: torch.Tensor):
     return b''.join([float_to_bin(w, False) for w in t.detach().numpy().ravel()]) + ffffffff_nan()
+
+def tensor_to_text(t: torch.Tensor, use_bin):
+    if use_bin:
+        return tensor_to_bin(t)
+    return " ".join([str(w) for w in t.detach().numpy().ravel()]) + "\n"
 
 class GlobalPool(nn.Module):
     def __init__(self, is_value_head=False):
@@ -241,16 +243,13 @@ class FullyConnect(nn.Module):
     def shape_to_text(self):
         return fullyconnect_to_text(self.in_size, self.out_size)
 
-    def tensors_to_bin(self):
-        out = bytes()
-        out += tensor_to_bin(self.linear.weight)
-        out += tensor_to_bin(self.linear.bias)
-        return out
-    
-    def tensors_to_text(self):
-        out = str()
-        out += tensor_to_text(self.linear.weight)
-        out += tensor_to_text(self.linear.bias)
+    def tensors_to_text(self, use_bin):
+        if use_bin:
+            out = bytes()
+        else:
+            out = str()
+        out += tensor_to_text(self.linear.weight, use_bin)
+        out += tensor_to_text(self.linear.bias, use_bin)
         return out
 
     def forward(self, x):
@@ -302,10 +301,13 @@ class Convolve(nn.Module):
         out += tensor_to_bin(self.conv.bias)
         return out
 
-    def tensors_to_text(self):
-        out = str()
-        out += tensor_to_text(self.conv.weight)
-        out += tensor_to_text(self.conv.bias)
+    def tensors_to_text(self, use_bin):
+        if use_bin:
+            out = bytes()
+        else:
+            out = str()
+        out += tensor_to_text(self.conv.weight, use_bin)
+        out += tensor_to_text(self.conv.bias, use_bin)
         return out
 
     def forward(self, x, mask):
@@ -362,13 +364,15 @@ class ConvBlock(nn.Module):
         out += bn_to_text(self.out_channels)
         return out
 
-    def tensors_to_bin(self):
+    def tensors_to_text(self, use_bin):
         bn_mean = torch.zeros(self.out_channels)
         bn_std = torch.zeros(self.out_channels)
-
-        out = bytes()
-        out += tensor_to_bin(self.conv.weight)
-        out += tensor_to_bin(torch.zeros(self.out_channels)) # fill zero
+        if use_bin:
+            out = bytes()
+        else:
+            out = str()
+        out += tensor_to_text(self.conv.weight, use_bin)
+        out += tensor_to_text(torch.zeros(self.out_channels), use_bin) # fill zero
 
         # Merge four tensors(mean, variance, gamma, beta) into two tensors (
         # mean, variance).
@@ -391,41 +395,8 @@ class ConvBlock(nn.Module):
             bn_mean = bn_mean - self.bn.beta * bn_std
         bn_var = torch.square(bn_std) - self.bn.eps
 
-        out += tensor_to_bin(bn_mean)
-        out += tensor_to_bin(bn_var)
-        return out
-
-    def tensors_to_text(self):
-        bn_mean = torch.zeros(self.out_channels)
-        bn_std = torch.zeros(self.out_channels)
-
-        out = str()
-        out += tensor_to_text(self.conv.weight)
-        out += tensor_to_text(torch.zeros(self.out_channels)) # fill zero
-
-        # Merge four tensors(mean, variance, gamma, beta) into two tensors (
-        # mean, variance).
-        bn_mean[:] = self.bn.running_mean[:]
-        bn_std[:] = torch.sqrt(self.bn.eps + self.bn.running_var)[:]
-
-        # Original format: gamma * ((x-mean) / std) + beta
-        # Target format: (x-mean) / std
-        #
-        # Solve the following equation:
-        #     gamma * ((x-mean) / std) + beta = (x-tgt_mean) / tgt_std
-        #
-        # We get:
-        #     tgt_std = std / gamma
-        #     tgt_mean = (mean - beta) * (std / gamma)
-
-        if self.bn.gamma is not None:
-            bn_std = bn_std / self.bn.gamma
-        if self.bn.beta is not None:
-            bn_mean = bn_mean - self.bn.beta * bn_std
-        bn_var = torch.square(bn_std) - self.bn.eps
-
-        out += tensor_to_text(bn_mean)
-        out += tensor_to_text(bn_var)
+        out += tensor_to_text(bn_mean, use_bin)
+        out += tensor_to_text(bn_var, use_bin)
         return out
 
     def forward(self, x, mask):
@@ -783,7 +754,7 @@ class Network(nn.Module):
         def write_params(f, layer_collector):
             f.write(str_to_bin("get parameters\n"))
             for layer in layer_collector:
-                f.write(layer.tensors_to_bin())
+                f.write(layer.tensors_to_text(True))
             f.write(str_to_bin("end parameters\n"))
 
         with open(filename, 'wb') as f:
@@ -816,7 +787,7 @@ class Network(nn.Module):
         def write_params(f, layer_collector):
             f.write("get parameters\n")
             for layer in layer_collector:
-                f.write(layer.tensors_to_text())
+                f.write(layer.tensors_to_text(False))
             f.write("end parameters\n")
 
         with open(filename, 'w') as f:

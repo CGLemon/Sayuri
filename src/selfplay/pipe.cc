@@ -27,6 +27,7 @@ void SelfPlayPipe::Initialize() {
     max_games_ = GetOption<int>("num_games");
     accmulate_games_.store(0, std::memory_order_relaxed);
     played_games_.store(0, std::memory_order_relaxed);
+    running_threads_.store(0, std::memory_order_relaxed);
 
     auto ss = std::ostringstream();
     ss << std::hex << Random<kXoroShiro128Plus>::Get().Generate() << std::dec;
@@ -34,6 +35,26 @@ void SelfPlayPipe::Initialize() {
     filename_hash_ = ss.str();
     sgf_filename_ = ConnectPath(target_directory_, filename_hash_ + ".sgf");
     data_directory_ = ConnectPath(target_directory_, "data");
+}
+
+bool SelfPlayPipe::SaveChunk(std::string out_name,
+                                 std::vector<Training> &chunk) {
+    bool is_open = true;
+    auto file = std::ofstream{};
+    file.open(out_name, std::ios_base::app);
+
+    if (!file.is_open()) {
+        LOGGING << "Fail to create the file: " << out_name << '!' << std::endl; 
+        is_open = false;
+    } else {
+        for (auto &data : chunk) {
+            data.StreamOut(file);
+        }
+        file.close();
+    }
+    chunk.clear();
+
+    return is_open;
 }
 
 void SelfPlayPipe::Loop() {
@@ -67,19 +88,29 @@ void SelfPlayPipe::Loop() {
     for (int g = 0; g < engine_.GetParallelGames(); ++g) {
         workers_.emplace_back(
             [this, g]() -> void {
-                while (accmulate_games_.load(std::memory_order_relaxed) < max_games_) {
-                    int curr_games = accmulate_games_.fetch_add(1);
+                running_threads_.fetch_add(1, std::memory_order_relaxed);
 
+                while (accmulate_games_.load(std::memory_order_relaxed) < max_games_) {
                     engine_.PrepareGame(g);
                     engine_.Selfplay(g);
-
-                    auto data_filename = ConnectPath(data_directory_,
-                                                         filename_hash_ +
-                                                             "_" +
-                                                             std::to_string(curr_games/kGamesPerChunk) + 
-                                                             ".dat");
-                    engine_.SaveTrainingData(data_filename, g);
                     engine_.SaveSgf(sgf_filename_, g);
+
+                    {
+                        std::lock_guard<std::mutex> lock(data_mutex_);
+
+                        int curr_games = accmulate_games_.fetch_add(1) + 1;
+                        engine_.GatherTrainingData(chunk_, g);
+
+                        if (curr_games % kGamesPerChunk == 0) {
+                            auto data_filename = ConnectPath(data_directory_,
+                                                                 filename_hash_ +
+                                                                     "_" +
+                                                                     std::to_string((curr_games-1)/kGamesPerChunk) + 
+                                                                     ".dat");
+                            SaveChunk(data_filename, chunk_);
+                        }
+                    }
+
 
                     played_games_.fetch_add(1);
                     auto played_games = played_games_.load(std::memory_order_relaxed);
@@ -87,6 +118,22 @@ void SelfPlayPipe::Loop() {
                     if (played_games % 100 == 0) {
                         std::lock_guard<std::mutex> lock(log_mutex_);
                         LOGGING << '[' << CurrentDateTime() << ']' << "Played " << played_games << " games." << std::endl;
+                    }
+                }
+
+                {
+                    std::lock_guard<std::mutex> lock(data_mutex_);
+                    int curr_games = accmulate_games_.load(std::memory_order_relaxed)+1;
+                    running_threads_.fetch_sub(1, std::memory_order_relaxed);
+
+                    if (!chunk_.empty() &&
+                            running_threads_.load(std::memory_order_relaxed) == 0) {
+                        auto data_filename = ConnectPath(data_directory_,
+                                                             filename_hash_ +
+                                                                 "_" +
+                                                                 std::to_string((curr_games-1)/kGamesPerChunk) + 
+                                                                 ".dat");
+                        SaveChunk(data_filename, chunk_);
                     }
                 }
             }

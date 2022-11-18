@@ -700,6 +700,15 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
         return;
     }
 
+    auto chunk = std::vector<Training>{};
+    GatherTrainingBuffer(chunk, end_state);
+    for (auto &buf : chunk) {
+        buf.StreamOut(file);
+    }
+    file.close();
+}
+
+void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_state) {
     auto fork_state = end_state;
 
     // Now, compute the final status. remove the dead strings
@@ -770,9 +779,9 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
         aux_prob = buf.probabilities;
     }
 
-    // Save the data.
+    // output the the data.
     for (auto &buf : training_buffer_) {
-        buf.StreamOut(file);
+        chunk.emplace_back(buf);
     }
 
     // Release the buffer.

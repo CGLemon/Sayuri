@@ -14,7 +14,7 @@ public:
     void Initialize();
 
     void SaveSgf(std::string filename, int g);
-    void SaveTrainingData(std::string filename, int g);
+    void GatherTrainingData(std::vector<Training> &chunk, int g);
     void PrepareGame(int g);
     void Selfplay(int g);
 

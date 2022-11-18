@@ -15,10 +15,18 @@ private:
     void Initialize();
     void Loop();
 
+    bool SaveChunk(std::string out_name,
+                       std::vector<Training> &chunk);
+
+    std::mutex data_mutex_;
     std::mutex log_mutex_;
+
+    std::vector<Training> chunk_;
 
     std::atomic<int> accmulate_games_;
     std::atomic<int> played_games_;
+    std::atomic<int> running_threads_;
+
     int max_games_;
     Engine engine_;
 

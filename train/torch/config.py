@@ -58,7 +58,6 @@ def parse_training_config(json_data, config):
 
     assert config.train_dir != None, ""
     assert config.store_path != None, ""
-    assert config.validation_dir != None, ""
 
     if config.use_gpu == None:
         if torch.cuda.is_available():

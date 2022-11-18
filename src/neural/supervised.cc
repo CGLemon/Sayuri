@@ -3,7 +3,6 @@
 #include "game/types.h"
 #include "game/iterator.h"
 #include "neural/supervised.h"
-#include "neural/training.h"
 #include "neural/encoder.h"
 #include "utils/log.h"
 #include "utils/format.h"
@@ -36,14 +35,14 @@ void Supervised::FromSgfs(bool general,
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
 
     auto Worker = [this, general, out_name_prefix]() -> void {
-        auto file = std::ofstream{};
-        bool file_closed = true;
         int games = 0;
+        auto chunk = std::vector<Training>{};
 
         running_threads_.fetch_add(1, std::memory_order_relaxed);
         int worker_cnt = worker_cnt_.fetch_add(1, std::memory_order_relaxed);
 
-        LOGGING << Format("[%s] Thread %d is ready\n", CurrentDateTime().c_str(), worker_cnt+1);
+        LOGGING << Format("[%s] Thread %d is ready\n",
+                              CurrentDateTime().c_str(), worker_cnt+1);
 
         while (true) {
             if (!running_.load(std::memory_order_relaxed) && tasks_.empty()) {
@@ -67,37 +66,25 @@ void Supervised::FromSgfs(bool general,
                 continue;
             }
 
-            if (file_closed) {
-                // Create the new storage file.
-                auto out_name = Format("%s_%d.txt", out_name_prefix.c_str(), file_cnt_.fetch_add(1));
-                file.open(out_name, std::ios_base::app);
-
-                if (!file.is_open()) {
-                    LOGGING << "Fail to create the file: " << out_name << '!' << std::endl; 
-                    running_threads_.store(-1, std::memory_order_relaxed);
-                    break;
-                }
-                file_closed = false;
-            }
-
             constexpr int kGamesPerChunk = 25;
 
             // Parse the SGF string.
             bool success = false;
             if (general) {
-                success = GeneralSgfProcess(sgf, file);
+                success = GeneralSgfProcess(sgf, chunk);
             } else {
-                success = SgfProcess(sgf, file);
+                success = SgfProcess(sgf, chunk);
             }
 
             if (success) {
                 games += 1;
                 tot_games_.fetch_add(1, std::memory_order_relaxed);
                 if (games % kGamesPerChunk == 0) {
-                    if (!file_closed) {
-                        file.close();
-                        file_closed = true;
+
+                    if (!SaveChunk(out_name_prefix, chunk)) {
+                        break;
                     }
+
                     LOGGING << Format("[%s] Thread %d parsed %d games, totally parsed %d games.\n",
                                           CurrentDateTime().c_str(),
                                           worker_cnt+1, games, tot_games_.load(std::memory_order_relaxed)
@@ -106,9 +93,10 @@ void Supervised::FromSgfs(bool general,
             }
         }
 
-        if (!file_closed) {
-            file.close();
+        if (!chunk.empty()) {
+            SaveChunk(out_name_prefix, chunk);
         }
+
         running_threads_.fetch_sub(1, std::memory_order_relaxed);
         LOGGING << Format("[%s] Thread %d is terminate, totally parsed %d games.\n",
                                   CurrentDateTime().c_str(),
@@ -144,8 +132,31 @@ void Supervised::FromSgfs(bool general,
     group.WaitToJoin();
 }
 
+bool Supervised::SaveChunk(std::string out_name_prefix,
+                               std::vector<Training> &chunk) {
+    bool is_open = true;
+    auto file = std::ofstream{};
+    auto out_name = Format("%s_%d.txt", 
+                               out_name_prefix.c_str(),
+                               file_cnt_.fetch_add(1));
+    file.open(out_name, std::ios_base::app);
+    if (!file.is_open()) {
+        LOGGING << "Fail to create the file: " << out_name << '!' << std::endl; 
+        running_threads_.store(-1, std::memory_order_relaxed);
+        is_open = false;
+    } else {
+        for (auto &data : chunk) {
+            data.StreamOut(file);
+        }
+        file.close();
+    }
+    chunk.clear();
+
+    return is_open;
+}
+
 bool Supervised::GeneralSgfProcess(std::string &sgfstring,
-                                       std::ostream &out_file) const {
+                                       std::vector<Training> &chunk) const {
     GameState state;
 
     try {
@@ -170,7 +181,6 @@ bool Supervised::GeneralSgfProcess(std::string &sgfstring,
     const auto zero_final_score = 0.f;
 
     auto game_ite = GameStateIterator(state);
-    auto train_datas = std::vector<Training>{};
 
     const auto VertexToIndex = [](GameState &state, int vertex) -> int {
         if (vertex == kPass) {
@@ -229,18 +239,15 @@ bool Supervised::GeneralSgfProcess(std::string &sgfstring,
             buf.final_score = zero_final_score;
         }
 
-        train_datas.emplace_back(buf);
+        chunk.emplace_back(buf);
     } while (game_ite.Next());
 
-    for (const auto &buf : train_datas) {
-        buf.StreamOut(out_file);
-    }
 
     return true;
 }
 
 bool Supervised::SgfProcess(std::string &sgfstring,
-                                std::ostream &out_file) const {
+                                std::vector<Training> &chunk) const {
     GameState state;
 
     try {
@@ -291,7 +298,6 @@ bool Supervised::SgfProcess(std::string &sgfstring,
     const auto winner = game_winner;
 
     auto game_ite = GameStateIterator(state);
-    auto train_datas = std::vector<Training>{};
 
     const auto VertexToIndex = [](GameState &state, int vertex) -> int {
         if (vertex == kPass) {
@@ -354,12 +360,8 @@ bool Supervised::SgfProcess(std::string &sgfstring,
             buf.final_score = buf.side_to_move == kBlack ? black_final_score : -black_final_score;
         }
 
-        train_datas.emplace_back(buf);
+        chunk.emplace_back(buf);
     } while (game_ite.Next());
-
-    for (const auto &buf : train_datas) {
-        buf.StreamOut(out_file);
-    }
 
     return true;
 }

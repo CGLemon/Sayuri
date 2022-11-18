@@ -34,10 +34,10 @@ void Engine::SaveSgf(std::string filename, int g) {
     Sgf::Get().ToFile(filename, game_pool_[g]);
 }
 
-void Engine::SaveTrainingData(std::string filename, int g) {
+void Engine::GatherTrainingData(std::vector<Training> &chunk, int g) {
     Handel(g);
     std::lock_guard<std::mutex> lock(io_mtx_);
-    search_pool_[g]->SaveTrainingBuffer(filename, game_pool_[g]);
+    search_pool_[g]->GatherTrainingBuffer(chunk, game_pool_[g]);
 }
 
 void Engine::PrepareGame(int g) {
