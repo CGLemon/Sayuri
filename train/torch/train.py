@@ -354,9 +354,10 @@ class TrainingPipe():
         self.__batch_gen = BatchGenerator(self.cfg.boardsize, self.cfg.input_channels)
 
         sort_fn = os.path.getmtime
+        chunks = gather_filenames(self.train_dir, self.num_chunks, sort_fn)
 
         self.train_lazy_loader = LazyLoader(
-            filenames = gather_filenames(self.train_dir, self.num_chunks, sort_fn),
+            filenames = chunks,
             stream_loader = self.__stream_loader,
             stream_parser = self.__stream_parser,
             batch_generator = self.__batch_gen,
@@ -371,7 +372,7 @@ class TrainingPipe():
 
         if self.validation_dir is not None:
             self.validation_lazy_loader = LazyLoader(
-                filenames = gather_filenames(self.validation_dir, self.num_chunks//10, sort_fn),
+                filenames = gather_filenames(self.validation_dir, len(chunks)//10, sort_fn),
                 stream_loader = self.__stream_loader,
                 stream_parser = self.__stream_parser,
                 batch_generator = self.__batch_gen,

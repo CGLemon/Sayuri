@@ -17,7 +17,6 @@ protected:
     int maxbatch_{0};
     int width_{0};
     int height_{0};
-    int board_size_{0};
     int spatial_size_{0};
 };
 
@@ -29,7 +28,8 @@ public:
     ~Batchnorm();
 
     void Forward(const int batch, float *data,
-                 const float *const eltwise = nullptr);
+                 const float *const eltwise,
+                 const float *const mask);
 
     void LoadingWeight(const std::vector<float> &means,
                        const std::vector<float> &stddevs);
@@ -113,16 +113,12 @@ public:
                   const size_t board_size,
                   const size_t channels);
 
-    void Forward(const int batch, float *input, float *output);
+    void Forward(const int batch, float *input, float *output,
+                 float *mask, float *sqrt_mask);
 
 private:
     int channels_;
     bool is_value_head_;
-
-    static constexpr size_t kMaxBSize = 19;
-    static constexpr size_t kMinBSize = 9;
-    static constexpr float kAvgBSize = (float)(kMaxBSize + kMinBSize) / 2.f;
-    static constexpr float kBSizeVaraince = 0.1;
 };
 
 
@@ -138,7 +134,8 @@ public:
                        const std::vector<float> &weights_w2,
                        const std::vector<float> &weights_b2);
 
-    void Forward(const int batch, float *input, float *output);
+    void Forward(const int batch, float *input, float *output,
+                 float *mask, float *sqrt_mask);
  
 private:
     int se_size_;
@@ -150,11 +147,6 @@ private:
     float *cuda_weights_b1_;
     float *cuda_weights_w2_;
     float *cuda_weights_b2_;
-
-    static constexpr size_t kMaxBSize = 19;
-    static constexpr size_t kMinBSize = 9;
-    static constexpr float kAvgBSize = (float)(kMaxBSize + kMinBSize) / 2.f;
-    static constexpr float kBSizeVaraince = 0.1;
 };
 } // namespace CUDA
 

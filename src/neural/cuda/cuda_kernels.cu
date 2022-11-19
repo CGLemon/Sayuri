@@ -5,24 +5,22 @@
 
 namespace CUDA {
 
-template <typename T>
-__global__ void add_vectors_kernel(T *a, T *b, T *c,
+__global__ void add_vectors_kernel(float *a, float *b, float *c,
                                    int asize, int bsize, int size, bool relu) {
     int i = threadIdx.x + blockDim.x * blockIdx.x;
     if (i < size) {
-        float aVal = (float)(a[i % asize]);
-        float bVal = (float)(b[i % bsize]);
-        float cVal = aVal + bVal;
+        float aval = a[i % asize];
+        float bval = b[i % bsize];
+        float cval = aval + bval;
 
-        if (relu && (cVal < 0)) {
-            cVal = 0;
+        if (relu && (cval < 0)) {
+            cval = 0;
         }
-        c[i] = (T)cVal;
+        c[i] = cval;
     }
 }
 
-template <typename T>
-void add_vectors(T *a, T *b, T *c, int asize, int bsize,
+void add_vectors(float *a, float *b, float *c, int asize, int bsize,
                  int size, bool relu, cudaStream_t stream) {
     const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(size, block_size);
@@ -33,25 +31,24 @@ void add_vectors(T *a, T *b, T *c, int asize, int bsize,
     ReportCUDAErrors(cudaGetLastError());
 }
 
-template <typename T>
-__global__ void add_spatial_kernel(T *a, T *b, T *c,
+
+__global__ void add_spatial_kernel(float *a, float *b, float *c,
                                    int asize, int bsize, int size,
                                    int spatial, bool relu) {
     int i = threadIdx.x + blockDim.x * blockIdx.x;
     if (i < size) {
-        float aVal = (float)(a[i % asize]);
-        float bVal = (float)(b[(i / spatial) % bsize]);
+        float aval = a[i % asize];
+        float bval = b[(i / spatial) % bsize];
 
-        float cVal = aVal + bVal;
-        if (relu && (cVal < 0)) {
-            cVal = 0;
+        float cval = aval + bval;
+        if (relu && (cval < 0)) {
+            cval = 0;
         }
-        c[i] = (T)cVal;
+        c[i] = cval;
     }
 }
 
-template <typename T>
-void add_spatial(T *a, T *b, T *c,
+void add_spatial(float *a, float *b, float *c,
                  int asize, int bsize, int size,
                  int spatial, bool relu, cudaStream_t stream) {
     const int block_size = KBLOCKSIZE;
@@ -63,33 +60,8 @@ void add_spatial(T *a, T *b, T *c,
     ReportCUDAErrors(cudaGetLastError());
 }
 
-template <typename T>
-__global__ void batchnorm_eltwise_kernel(T *data, const float *means, const float *stddevs,
-                                         int N, int C, int spatial, const T *eltwise, bool relu) {
-
-    int index = threadIdx.x + blockDim.x * blockIdx.x;
-    int size = N * C * spatial;
-    if (index < size) {
-        int w_index = (index / (spatial)) % C;
-
-        float el = data[index];
-        float mean = means[w_index];
-        float scale_stddev = stddevs[w_index];
-
-        el -= mean;
-        el *= scale_stddev;
-        el += (float)eltwise[index];
-
-        if (relu && el < 0) {
-            el = 0;
-        }
-        data[index] = (T)el;
-    }
-}
-
-
-template <typename T>
-__global__ void batchnorm_kernel(T *data, const float *means, const float *stddevs,
+__global__ void batchnorm_kernel(float *data, const float *means, const float *stddevs,
+                                 const float *eltwise,
                                  int N, int C, int spatial, bool relu) {
     int index = threadIdx.x + blockDim.x * blockIdx.x;
     int size = N * C * spatial;
@@ -98,40 +70,73 @@ __global__ void batchnorm_kernel(T *data, const float *means, const float *stdde
 
         float el = data[index];
         float mean = means[w_index];
-        float scale_stddev = stddevs[w_index];
+        float scale_stddev =stddevs[w_index];
 
         el -= mean;
         el *= scale_stddev;
+        if (eltwise) {
+            el += (float)eltwise[index];
+        }
+        if (relu && el < 0) {
+            el = 0;
+        }
+        data[index] = el;
+    }
+}
+
+__global__ void batchnorm_and_mask_kernel(float *data, const float *means, const float *stddevs,
+                                          const float *eltwise, const float *mask,
+                                          int N, int C, int spatial, bool relu) {
+
+    int index = threadIdx.x + blockDim.x * blockIdx.x;
+    int size = N * C * spatial;
+    if (index < size) {
+        int w_index = (index / (spatial)) % C;
+        int batch = index / (C * spatial);
+        int s_index = index % spatial;
+
+        float el = data[index];
+        float mean = means[w_index];
+        float scale_stddev = stddevs[w_index];
+        float vmask = mask[batch * spatial + s_index];
+
+        el -= mean;
+        el *= scale_stddev;
+        if (eltwise) {
+            el += eltwise[index];
+        }
+        el *= vmask;
 
         if (relu && el < 0) {
             el = 0;
         }
-        data[index] = (T)el;
+        data[index] = el;
     }
 }
 
-template <typename T>
-void batchnorm(T *data, const float *means, const float *stddevs,
-               int batch, int channels, int spatial_size,
-               const T *eltwise, bool relu, cudaStream_t stream) {
-    const int total_elements = batch * channels * spatial_size;
+void batchnorm(float *data, const float *means, const float *stddevs,
+               const float *eltwise, const float *mask,
+               int batch, int channels, int spatial,
+               bool relu, cudaStream_t stream) {
+    const int total_elements = batch * channels * spatial;
     const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(total_elements, block_size);
-    if (eltwise) {
-        batchnorm_eltwise_kernel<<<blocks, block_size, 0 ,stream>>>(
-            data, means, stddevs, batch, channels, spatial_size, eltwise, relu);
+
+    if (mask) {
+        batchnorm_and_mask_kernel<<<blocks, block_size, 0 ,stream>>>(
+            data, means, stddevs, eltwise, mask, batch, channels, spatial, relu);
     } else {
-        batchnorm_kernel<<<blocks, block_size, 0, stream>>>(
-            data, means, stddevs, batch, channels, spatial_size, relu);
+        batchnorm_kernel<<<blocks, block_size, 0 ,stream>>>(
+            data, means, stddevs, eltwise, batch, channels, spatial, relu);
     }
 
     ReportCUDAErrors(cudaGetLastError());
 }
 
-template <typename T>
 __global__ void im2col_kernel(int filter_size, int pad, int C, int H, int W,
-                              int output_h, int output_w, T *data_im,
-                              T *data_col) {
+                              int output_h, int output_w,
+                              float *data_im,
+                              float *data_col) {
     int total_elements = C * H * W;
     int index = threadIdx.x + blockDim.x * blockIdx.x;
     if (index < total_elements) {
@@ -165,9 +170,8 @@ __global__ void im2col_kernel(int filter_size, int pad, int C, int H, int W,
     }
 }
 
-template <typename T>
 void im2col(int filter_size, int channels, int H, int W,
-            T *input, T *output, cudaStream_t stream) {
+            float *input, float *output, cudaStream_t stream) {
     const int total_elements = channels * H * W;
     const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(total_elements, block_size);
@@ -182,11 +186,10 @@ void im2col(int filter_size, int channels, int H, int W,
     ReportCUDAErrors(cudaGetLastError());
 }
 
-
-template <typename T>
 __global__ void im2col_batched_kernel(int filter_size, int pad, int N, int C, int H, int W,
-                                      int output_h, int output_w, T *data_im,
-                                      T *data_col) {
+                                      int output_h, int output_w,
+                                      float *data_im,
+                                      float *data_col) {
     int total_elements = N * C * H * W;
     int index = threadIdx.x + blockDim.x * blockIdx.x;
     if (index < total_elements) {
@@ -222,9 +225,8 @@ __global__ void im2col_batched_kernel(int filter_size, int pad, int N, int C, in
     }
 }
 
-template <typename T>
 void im2col_batched(int filter_size, int batch, int channels, int H, int W,
-                        T *input, T *output, cudaStream_t stream) {
+                    float *input, float *output, cudaStream_t stream) {
     const int total_elements = batch * channels * H * W;
     const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(total_elements, block_size);
@@ -239,88 +241,162 @@ void im2col_batched(int filter_size, int batch, int channels, int H, int W,
     ReportCUDAErrors(cudaGetLastError());
 }
 
-
-template <typename T>
-__global__ void global_pool_kernel(T *input, T *output, T b_coeff, int N, int C, int spatial) {
+__global__ void global_pooling_kernel(float *input, float *output, int N, int C, int spatial) {
     int total_elements = N * C;
     int index = threadIdx.x + blockDim.x * blockIdx.x; // index = [0 ~ batch * channels]
     if (index < total_elements) {
         float *input_ptr = input + index * spatial;
-        float sum = 0;
-        float max = -5000.0f; // crazy negative value
+        float vsum = 0;
+        float vmax = -5000.0f; // crazy negative value
+        float vsqrt = sqrt((float)spatial);
 
         for (int i = 0; i < spatial; ++i) {
             float val = input_ptr[i];
-            sum += val;
-            if (val > max) {
-                max = val;
+            vsum += val;
+            if (val > vmax) {
+                vmax = val;
             }
         }
 
-        float mean = sum / spatial;
+        float vmean = vsum / spatial;
 
         int n = index / C;
         int c = index % C;
         int offset = c + n * 3 * C;
 
-        output[offset + 0 * C] = (T)mean;
-        output[offset + 1 * C] = (T)mean * b_coeff;
-        output[offset + 2 * C] = (T)max;
+        output[offset + 0 * C] = vmean;
+        output[offset + 1 * C] = vmean * (vsqrt - 14.f) * 0.1f;
+        output[offset + 2 * C] = vmax;
     }
 }
 
-template <typename T>
-void global_pool(T *input, T *output, T b_coeff, int batch, int channels, int spatial_size, cudaStream_t stream) {
+__global__ void global_pooling_and_mask_kernel(float *input, float *output,
+                                               const float *mask,
+                                               const float *sqrt_mask,
+                                               int N, int C, int spatial) {
+    int total_elements = N * C;
+    int index = threadIdx.x + blockDim.x * blockIdx.x; // index = [0 ~ batch * channels]
+    if (index < total_elements) {
+        int n = index / C;
+        int c = index % C;
+
+        float *input_ptr = input + index * spatial;
+        float vsum = 0;
+        float vmax = -5000.0f; // crazy negative value
+        float vsqrt = sqrt_mask[n];
+
+        for (int i = 0; i < spatial; ++i) {
+            float val = (float)input_ptr[i];
+            float vmask = mask[ n * spatial + i];
+
+            vsum += val;
+            if ((1.0f-vmask) * (-5000.0f) + val > vmax) {
+                vmax = val;
+            }
+        }
+
+        float vmean = vsum / (vsqrt * vsqrt);
+
+        int offset = c + n * 3 * C;
+
+        output[offset + 0 * C] = vmean;
+        output[offset + 1 * C] = vmean * (vsqrt - 14.f) * 0.1f;
+        output[offset + 2 * C] = vmax;
+    }
+}
+
+void global_pooling(float *input, float *output,
+                    const float *mask, const float *sqrt_mask,
+                    int batch, int channels, int spatial, cudaStream_t stream) {
     const int total_elements = batch * channels;
     const int block_size = 64;
     const int blocks = DivUp(total_elements, block_size);
 
-    global_pool_kernel<<<blocks, block_size, 0, stream>>>(
-        input, output, b_coeff, batch, channels, spatial_size);
+    if (mask) {
+        global_pooling_and_mask_kernel<<<blocks, block_size, 0, stream>>>(
+            input, output, mask, sqrt_mask, batch, channels, spatial);
+    } else {
+        global_pooling_kernel<<<blocks, block_size, 0, stream>>>(
+            input, output, batch, channels, spatial);
+    }
 
     ReportCUDAErrors(cudaGetLastError());
 }
 
-template <typename T>
-__global__ void head_global_pool_kernel(T *input, T *output, T b_coeff0, T b_coeff1, int N, int C, int spatial) {
+__global__ void head_global_pooling_kernel(float *input, float *output, int N, int C, int spatial) {
     int total_elements = N * C;
     int index = threadIdx.x + blockDim.x * blockIdx.x; // index = [0 ~ batch * channels]
     if (index < total_elements) {
         float *input_ptr = input + index * spatial;
-        float sum = 0;
+        float vsum = 0;
+        float vsqrt = sqrt((float)spatial);
 
         #pragma unroll
         for (int i = 0; i < spatial; ++i) {
-            sum += input_ptr[i];
+            vsum += input_ptr[i];
         }
 
-        float mean = sum / spatial;
+        float vmean = vsum / spatial;
 
         int n = index / C;
         int c = index % C;
         int offset = c + n * 3 * C;
 
-        output[offset + 0 * C] = (T)mean;
-        output[offset + 1 * C] = (T)mean * b_coeff0;
-        output[offset + 2 * C] = (T)mean * b_coeff1;
+        output[offset + 0 * C] = vmean;
+        output[offset + 1 * C] = vmean * (vsqrt - 14.f) * 0.1f;
+        output[offset + 2 * C] = vmean * (vsqrt - 14.f) * (vsqrt - 14.f) * 0.01f - 0.1f;
     }
 }
 
-template <typename T>
-void head_global_pool(T *input, T *output, T b_coeff0, T b_coeff1,
-                      int batch, int channels, int spatial_size, cudaStream_t stream) {
+__global__ void head_global_pooling_and_mask_kernel(float *input, float *output,
+                                                    const float *sqrt_mask,
+                                                    int N, int C, int spatial) {
+    int total_elements = N * C;
+    int index = threadIdx.x + blockDim.x * blockIdx.x; // index = [0 ~ batch * channels]
+    if (index < total_elements) {
+        int n = index / C;
+        int c = index % C;
+
+        float *input_ptr = input + index * spatial;
+        float vsum = 0;
+        float vsqrt = sqrt_mask[n];
+
+        #pragma unroll
+        for (int i = 0; i < spatial; ++i) {
+            vsum += input_ptr[i];
+        }
+
+        float vmean = vsum / (vsqrt * vsqrt);
+
+        int offset = c + n * 3 * C;
+
+        output[offset + 0 * C] = vmean;
+        output[offset + 1 * C] = vmean * (vsqrt - 14.f) * 0.1f;
+        output[offset + 2 * C] = vmean * (vsqrt - 14.f) * (vsqrt - 14.f) * 0.01f - 0.1f;
+    }
+}
+
+
+void head_global_pooling(float *input, float *output,
+                         const float *sqrt_mask,
+                         int batch, int channels, int spatial, cudaStream_t stream) {
     const int total_elements = batch * channels;
     const int block_size = 64;
     const int blocks = DivUp(total_elements, block_size);
 
-    head_global_pool_kernel<<<blocks, block_size, 0, stream>>>(
-        input, output, b_coeff0, b_coeff1, batch, channels, spatial_size);
+    if (sqrt_mask) {
+        head_global_pooling_and_mask_kernel<<<blocks, block_size, 0, stream>>>(
+            input, output, sqrt_mask, batch, channels, spatial);
+    } else {
+        head_global_pooling_kernel<<<blocks, block_size, 0, stream>>>(
+            input, output, batch, channels, spatial);
+    }
 
     ReportCUDAErrors(cudaGetLastError());
 }
 
-template <typename T>
-__global__ void se_scale_kernel(const T *input, const T *se_bias, T *data,
+__global__ void se_scale_kernel(const float *input,
+                                const float *se_bias, float *data,
                                 int N, int C, int spatial) {
     int index = threadIdx.x + blockDim.x * blockIdx.x;
     int total_elements = N * C * spatial;
@@ -340,19 +416,289 @@ __global__ void se_scale_kernel(const T *input, const T *se_bias, T *data,
         float op = gamma * val + beta + res;
         if (op < 0)
             op = 0;
-        data[index] = (T)op;
+        data[index] = op;
     }
 }
 
-template<typename T>
-void se_scale(const T *input, const T* se_bias, T* data,
-                   int batch, int channels, int spatial_size, cudaStream_t stream) {
-    const int total_elements = channels * spatial_size * batch;
+void se_scale(const float *input, const float* se_bias, float* data,
+              int batch, int channels, int spatial, cudaStream_t stream) {
+    const int total_elements = channels * spatial * batch;
     const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(total_elements, block_size);
 
     se_scale_kernel<<<blocks, block_size, 0, stream>>>(
-        input, se_bias, data, batch, channels, spatial_size);
+        input, se_bias, data, batch, channels, spatial);
+
+    ReportCUDAErrors(cudaGetLastError());
+}
+
+__device__ __forceinline__ void multiply_bt(
+    float * o0, float * o1, float * o2, float * o3, float * o4, float * o5,
+    float i0,   float i1,   float i2,   float i3,   float i4,   float i5
+) {
+    const float SQ2 = kSqrt2;
+
+    float i3m1 = i1 * -SQ2 + i3 * (SQ2 / 2.0f);
+    float i4m2 = i2 * -2.0f + i4 * 1.0f;
+
+    *o0 = i0 + i2 * (-5.0f/2.0f) + i4;
+    *o1 = i3m1 + i4m2;
+    *o2 = -i3m1 + i4m2;
+
+    float i3m1_2 = i3 * (SQ2) + i1 * (-SQ2/2.0f);
+    float i4m2_2 = i2 * (-1.0f/2.0f) + i4;
+
+    *o3 = i3m1_2 + i4m2_2;
+    *o4 = -i3m1_2 + i4m2_2;
+
+    *o5 = i1 + i3 * (-5.0f/2.0f) + i5;
+}
+
+__device__ __forceinline__ void multiply_atv(
+    float * o,
+    float i0, float i1, float i2, float i3, float i4, float i5
+) {
+    const float SQ2 = kSqrt2;
+
+    float t1p2 = (i1 + i2) * (1.0f / 2.0f);
+    float t1m2 = (i1 - i2) * (SQ2/4.0f);
+    float t3p4 = i3 + i4;
+    float t3m4 = (i3 - i4) * (SQ2);
+
+    o[0] = i0 + t1p2 + t1p2 + t3p4;
+    o[1] = t1m2 + t1m2 + t3m4;
+    o[2] = t1p2 + t3p4 + t3p4;
+    o[3] = t1m2 + t3m4 + t3m4 + i5;
+}
+
+__device__ __forceinline__ void multiply_at(
+    float * o0, float * o1, float * o2, float * o3,
+    float i0,   float i1,   float i2,   float i3, float i4, float i5
+) {
+    float o[4];
+    multiply_atv(o, i0, i1, i2, i3, i4, i5);
+
+    *o0 = o[0];
+    *o1 = o[1];
+    *o2 = o[2];
+    *o3 = o[3];
+}
+
+__global__ void transform_in_kernel(const float *in, float *V,
+                                    const int C,
+                                    const int Cpad, const int Ppad,
+                                    const int board_size, const int batch_size) {
+    const int W = board_size;
+    const int H = board_size;
+    const int WTILES = board_size / kWinogradM + (board_size % kWinogradM != 0);
+    const int P = WTILES * WTILES;
+    const int CPpad = Ppad * Cpad;
+
+    const int spatial = W * H;
+
+    const int index = threadIdx.x + blockDim.x * blockIdx.x;
+    const int block = index % (batch_size * P);
+    const int ch = index / (batch_size * P);
+
+    const int batch = block / P;
+    const int block_x = (block - P * batch) % WTILES;
+    const int block_y = (block - P * batch) / WTILES;
+
+    // 6x6 tiles overlap by 2
+    const int yin = kWinogradM * block_y - 1;
+    const int xin = kWinogradM * block_x - 1;
+
+    if (block < batch_size * P && ch < C) {
+        // Cache input tile and handle zero padding
+        float x[kWinogradAlpha][kWinogradAlpha];
+
+        #pragma unroll
+        for (int i = 0; i < kWinogradAlpha; i++) {
+            #pragma unroll
+            for (int j = 0; j < kWinogradAlpha; j++) {
+                int a = xin + j;
+                int b = yin + i;
+                // x is transposed here for better layout later
+                if (b >= 0 && a >= 0 && b < H && a < W) {
+                    x[j][i] = in[batch * C * spatial + 
+                                     ch * spatial + b * W + a];
+                } else {
+                    x[j][i] = 0;
+                }
+            }
+        }
+
+        // V dimensions are [36, input_channels, batch_size * tiles].
+        // Padded with zeros as necessary for SGEMM
+        // = [36, Cpad, Ppad]
+
+        float T1[kWinogradAlpha][kWinogradAlpha];
+        float T2[kWinogradAlpha][kWinogradAlpha];
+
+        #pragma unroll
+        for (int j = 0; j < kWinogradAlpha; j++) {
+            multiply_bt(
+                &(T1[0][j]), &(T1[1][j]), &(T1[2][j]), &(T1[3][j]), &(T1[4][j]), &(T1[5][j]),
+                x[j][0], x[j][1], x[j][2], x[j][3], x[j][4], x[j][5]
+            );
+        }
+
+        #pragma unroll
+        for (int i = 0; i < kWinogradAlpha; i++){
+            multiply_bt(
+                &(T2[i][0]),  &(T2[i][1]),  &(T2[i][2]),  &(T2[i][3]),  &(T2[i][4]),  &(T2[i][5]),
+                T1[i][0], T1[i][1], T1[i][2], T1[i][3], T1[i][4], T1[i][5]
+            );
+        }
+
+        const int offset = ch * Ppad + block;
+
+        // Scatter each sub element in tile to separate matrices
+        #pragma unroll
+        for (int i = 0; i < kWinogradAlpha; i++) {
+            #pragma unroll
+            for (int j = 0; j < kWinogradAlpha; j++) {
+                // vstore_net_t(T2[i][j], (i*kWinogradAlpha + j)*CPpad + offset, V);
+                V[(i*kWinogradAlpha + j) * CPpad + offset] = T2[i][j];
+            }
+        }
+    }
+}
+
+__global__ void transform_out_kernel(const float * M,
+                                     float * Y,
+                                     const int K,
+                                     const int Kpad, const int Ppad,
+                                     const int board_size, 
+                                     const int batch_size) {
+    const int W = board_size;
+    const int H = board_size;
+    const int WTILES = board_size / kWinogradM + (board_size % kWinogradM != 0);
+    const int P = WTILES * WTILES;
+
+    const int index = threadIdx.x + blockDim.x * blockIdx.x;
+    const int block = index % (batch_size * P);
+    const int k = index / (batch_size * P);
+
+    if (k < K && block < batch_size * P) {
+        float temp[kWinogradM][kWinogradAlpha];
+        float o[kWinogradM][kWinogradM];
+
+        // M dimensions are [36, outputs, batch_size * tiles].
+        // Plus zero padding from SGEMM.
+        // const int offset = block * Kpad + k;
+        const int offset = k * Ppad + block;
+
+        // Calculates transpose(A).temp_m
+        #pragma unroll
+        for (int xn = 0; xn < kWinogradAlpha; xn++) {
+            float temp_m0 = M[(0 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
+            float temp_m1 = M[(1 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
+            float temp_m2 = M[(2 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
+            float temp_m3 = M[(3 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
+            float temp_m4 = M[(4 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
+            float temp_m5 = M[(5 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
+            multiply_at(
+                &(temp[0][xn]), &(temp[1][xn]), &(temp[2][xn]), &(temp[3][xn]),
+                temp_m0, temp_m1, temp_m2, temp_m3, temp_m4, temp_m5
+            );
+        }
+
+        // Calculates temp.A
+        #pragma unroll
+        for (int i = 0; i < kWinogradM; i++){
+            float r[4];
+            multiply_atv(
+                r,
+                temp[i][0], temp[i][1], temp[i][2], temp[i][3], temp[i][4], temp[i][5]
+            );
+
+            o[i][0] = r[0];
+            o[i][1] = r[1];
+            o[i][2] = r[2];
+            o[i][3] = r[3];
+        }
+
+        const int batch = block / P;
+        const int block_x = (block - P * batch) % WTILES;
+        const int block_y = (block - P * batch) / WTILES;
+        const int x = kWinogradM * block_x;
+        const int y = kWinogradM * block_y;
+        const int spatial = W * H;
+
+        #pragma unroll
+        for (int i = 0; i < kWinogradM; i++) {
+            #pragma unroll
+            for (int j = 0; j < kWinogradM; j++) {
+                const int out_idx =
+                    batch * K * spatial +
+                    k * spatial +
+                    (y + i) * W + (x + j);
+                if (y + i < H && x + j < W) {
+                    Y[out_idx] = o[i][j];
+                }
+            }
+        }
+    }
+}
+
+void winograd3_transform_in(const float *in, float *V,
+                            int batch, int channels, int board_size, cudaStream_t stream) {
+    const int ptiles = GetWinogradP(board_size);
+    const int total_elements = channels * batch * ptiles;
+
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(total_elements, block_size);
+
+    const int c_pad = channels;
+    const int p_pad = batch * ptiles;
+
+    transform_in_kernel<<<blocks, block_size, 0, stream>>>(
+        in, V, channels, c_pad, p_pad, board_size, batch);
+
+    ReportCUDAErrors(cudaGetLastError());
+}
+
+void winograd3_transform_out(const float *M, float *out,
+                             int batch, int channels, int board_size, cudaStream_t stream) {
+    const int ptiles = GetWinogradP(board_size);
+    const int total_elements = channels * batch * ptiles;
+
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(total_elements, block_size);
+
+    const int k_pad = channels;
+    const int p_pad = batch * ptiles;
+
+    transform_out_kernel<<<blocks, block_size, 0, stream>>>(
+        M, out, channels, k_pad, p_pad, board_size, batch);
+
+    ReportCUDAErrors(cudaGetLastError());
+}
+
+__global__ void conv_mul_mask_kernel(float * conv, const float *mask,
+                                     int N, int C, int spatial) {
+    int index = threadIdx.x + blockDim.x * blockIdx.x;
+    int size = N * C * spatial;
+    if (index < size) {
+        int batch   = index / (spatial * C);
+        int s_index = index % spatial;
+
+        float vmask = mask[batch * spatial + s_index];
+        float val = conv[index];
+
+        conv[index] = vmask * val;
+    }
+}
+
+void conv_mul_mask(float * conv, const float *mask,
+                   int batch, int channels, int spatial, cudaStream_t stream) {
+    const int total_elements = batch * channels * spatial;
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(total_elements, block_size);
+
+    conv_mul_mask_kernel<<<blocks, block_size, 0, stream>>>(
+        conv, mask, batch, channels, spatial);
 
     ReportCUDAErrors(cudaGetLastError());
 }
@@ -389,279 +735,6 @@ void gemm_strided_batched(bool TA, bool TB, int M, int N, int K, float ALPHA,
                            C_gpu, ldc, strideC,
                            batchsize));
 }
-
-template <typename T>
-__device__ __forceinline__ void multiply_bt(
-    T * o0, T * o1, T * o2, T * o3, T * o4, T * o5,
-    T i0,   T i1,   T i2,   T i3,   T i4,   T i5
-) {
-    const float SQ2 = kSqrt2;
-
-    T i3m1 = i1 * -SQ2 + i3 * (SQ2 / 2.0f);
-    T i4m2 = i2 * -2.0f + i4 * 1.0f;
-
-    *o0 = i0 + i2 * (-5.0f/2.0f) + i4;
-    *o1 = i3m1 + i4m2;
-    *o2 = -i3m1 + i4m2;
-
-    T i3m1_2 = i3 * (SQ2) + i1 * (-SQ2/2.0f);
-    T i4m2_2 = i2 * (-1.0f/2.0f) + i4;
-
-    *o3 = i3m1_2 + i4m2_2;
-    *o4 = -i3m1_2 + i4m2_2;
-
-    *o5 = i1 + i3 * (-5.0f/2.0f) + i5;
-}
-
-template <typename T>
-__device__ __forceinline__ void multiply_atv(
-    T * o,
-    T i0, T i1, T i2, T i3, T i4, T i5
-) {
-    const float SQ2 = kSqrt2;
-
-    T t1p2 = (i1 + i2) * (1.0f / 2.0f);
-    T t1m2 = (i1 - i2) * (SQ2/4.0f);
-    T t3p4 = i3 + i4;
-    T t3m4 = (i3 - i4) * (SQ2);
-
-    o[0] = i0 + t1p2 + t1p2 + t3p4;
-    o[1] = t1m2 + t1m2 + t3m4;
-    o[2] = t1p2 + t3p4 + t3p4;
-    o[3] = t1m2 + t3m4 + t3m4 + i5;
-}
-
-template <typename T>
-__device__ __forceinline__ void multiply_at(
-    T * o0, T * o1, T * o2, T * o3,
-    T i0,   T i1,   T i2,   T i3, T i4, T i5
-) {
-    T o[4];
-    multiply_atv(o, i0, i1, i2, i3, i4, i5);
-
-    *o0 = o[0];
-    *o1 = o[1];
-    *o2 = o[2];
-    *o3 = o[3];
-}
-
-template <typename T>
-__global__ void transform_in_kernel(const T *in, T *V,
-                                    const int C,
-                                    const int Cpad, const int Ppad,
-                                    const int board_size, const int batch_size) {
-    const int W = board_size;
-    const int H = board_size;
-    const int WTILES = board_size / kWinogradM + (board_size % kWinogradM != 0);
-    const int P = WTILES * WTILES;
-    const int CPpad = Ppad * Cpad;
-
-    const int spatial = W * H;
-
-    const int index = threadIdx.x + blockDim.x * blockIdx.x;
-    const int block = index % (batch_size * P);
-    const int ch = index / (batch_size * P);
-
-    const int batch = block / P;
-    const int block_x = (block - P * batch) % WTILES;
-    const int block_y = (block - P * batch) / WTILES;
-
-    // 6x6 tiles overlap by 2
-    const int yin = kWinogradM * block_y - 1;
-    const int xin = kWinogradM * block_x - 1;
-
-    if (block < batch_size * P && ch < C) {
-        // Cache input tile and handle zero padding
-        T x[kWinogradAlpha][kWinogradAlpha];
-        for (int i = 0; i < kWinogradAlpha; i++) {
-            for (int j = 0; j < kWinogradAlpha; j++) {
-                int a = xin + j;
-                int b = yin + i;
-                // x is transposed here for better layout later
-                if (b >= 0 && a >= 0 && b < H && a < W) {
-                    x[j][i] = in[batch * C * spatial + 
-                                     ch * spatial + b * W + a];
-                } else {
-                    x[j][i] = 0;
-                }
-            }
-        }
-
-        // V dimensions are [36, input_channels, batch_size * tiles].
-        // Padded with zeros as necessary for SGEMM
-        // = [36, Cpad, Ppad]
-
-        T T1[kWinogradAlpha][kWinogradAlpha];
-        T T2[kWinogradAlpha][kWinogradAlpha];
-
-        #pragma unroll
-        for (int j = 0; j < kWinogradAlpha; j++) {
-            multiply_bt(
-                &(T1[0][j]), &(T1[1][j]), &(T1[2][j]), &(T1[3][j]), &(T1[4][j]), &(T1[5][j]),
-                x[j][0], x[j][1], x[j][2], x[j][3], x[j][4], x[j][5]
-            );
-        }
-
-        #pragma unroll
-        for (int i = 0; i < kWinogradAlpha; i++){
-            multiply_bt(
-                &(T2[i][0]),  &(T2[i][1]),  &(T2[i][2]),  &(T2[i][3]),  &(T2[i][4]),  &(T2[i][5]),
-                T1[i][0], T1[i][1], T1[i][2], T1[i][3], T1[i][4], T1[i][5]
-            );
-        }
-
-        const int offset = ch * Ppad + block;
-
-        // Scatter each sub element in tile to separate matrices
-        for (int i = 0; i < kWinogradAlpha; i++) {
-            for (int j = 0; j < kWinogradAlpha; j++) {
-                // vstore_net_t(T2[i][j], (i*kWinogradAlpha + j)*CPpad + offset, V);
-                V[(i*kWinogradAlpha + j) * CPpad + offset] = T2[i][j];
-            }
-        }
-    }
-}
-
-template <typename T>
-__global__ void transform_out_kernel(const T * M,
-                                     T * Y,
-                                     const int K,
-                                     const int Kpad, const int Ppad,
-                                     const int board_size, 
-                                     const int batch_size) {
-    const int W = board_size;
-    const int H = board_size;
-    const int WTILES = board_size / kWinogradM + (board_size % kWinogradM != 0);
-    const int P = WTILES * WTILES;
-
-    const int index = threadIdx.x + blockDim.x * blockIdx.x;
-    const int block = index % (batch_size * P);
-    const int k = index / (batch_size * P);
-
-    if (k < K && block < batch_size * P) {
-        T temp[kWinogradM][kWinogradAlpha];
-        T o[kWinogradM][kWinogradM];
-
-        // M dimensions are [36, outputs, batch_size * tiles].
-        // Plus zero padding from SGEMM.
-        // const int offset = block * Kpad + k;
-        const int offset = k * Ppad + block;
-
-        // Calculates transpose(A).temp_m
-        #pragma unroll
-        for (int xn = 0; xn < kWinogradAlpha; xn++) {
-            T temp_m0 = M[(0 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
-            T temp_m1 = M[(1 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
-            T temp_m2 = M[(2 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
-            T temp_m3 = M[(3 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
-            T temp_m4 = M[(4 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
-            T temp_m5 = M[(5 * kWinogradAlpha + xn) * Kpad * Ppad + offset];
-            multiply_at(
-                &(temp[0][xn]), &(temp[1][xn]), &(temp[2][xn]), &(temp[3][xn]),
-                temp_m0, temp_m1, temp_m2, temp_m3, temp_m4, temp_m5
-            );
-        }
-
-        // Calculates temp.A
-        #pragma unroll
-        for (int i = 0; i < kWinogradM; i++){
-            T r[4];
-            multiply_atv(
-                r,
-                temp[i][0], temp[i][1], temp[i][2], temp[i][3], temp[i][4], temp[i][5]
-            );
-
-            o[i][0] = r[0];
-            o[i][1] = r[1];
-            o[i][2] = r[2];
-            o[i][3] = r[3];
-        }
-
-        const int batch = block / P;
-        const int block_x = (block - P * batch) % WTILES;
-        const int block_y = (block - P * batch) / WTILES;
-        const int x = kWinogradM * block_x;
-        const int y = kWinogradM * block_y;
-        const int spatial = W * H;
-
-        for (int i = 0; i < kWinogradM; i++) {
-            for (int j = 0; j < kWinogradM; j++) {
-                const int out_idx =
-                    batch * K * spatial +
-                    k * spatial +
-                    (y + i) * W + (x + j);
-                if (y + i < H && x + j < W) {
-                    const T oval = o[i][j];
-                    Y[out_idx] = oval;
-                }
-            }
-        }
-    }
-}
-
-template<typename T>
-void winograd3_transform_in(const T *in, T *V,
-                            int batch, int channels, int board_size, cudaStream_t stream) {
-    const int ptiles = GetWinogradP(board_size);
-    const int total_elements = channels * batch * ptiles;
-
-    const int block_size = KBLOCKSIZE;
-    const int blocks = DivUp(total_elements, block_size);
-
-    const int c_pad = channels;
-    const int p_pad = batch * ptiles;
-
-    transform_in_kernel<<<blocks, block_size, 0, stream>>>(
-        in, V, channels, c_pad, p_pad, board_size, batch);
-}
-
-template<typename T>
-void winograd3_transform_out(const T *M, T *out,
-                             int batch, int channels, int board_size, cudaStream_t stream) {
-    const int ptiles = GetWinogradP(board_size);
-    const int total_elements = channels * batch * ptiles;
-
-    const int block_size = KBLOCKSIZE;
-    const int blocks = DivUp(total_elements, block_size);
-
-    const int k_pad = channels;
-    const int p_pad = batch * ptiles;
-
-    transform_out_kernel<<<blocks, block_size, 0, stream>>>(
-        M, out, channels, k_pad, p_pad, board_size, batch);
-}
-
-template void batchnorm<float>(float *data, const float *means,
-                               const float *stddevs, int N, int channels,
-                               int spatial_size, const float *eltwise, bool relu, cudaStream_t stream);
-
-template void add_vectors<float>(float *c, float *a, float *b, int size, int asize, int bsize, bool relu, cudaStream_t stream);
-
-template void add_spatial<float>(float *a, float *b, float *c,
-                                 int asize, int bsize, int size,
-                                 int spatial, bool relu, cudaStream_t stream);
-
-template void im2col<float>(int filter_size, int C, int H, int W,
-                            float *data_im, float *data_col, cudaStream_t stream);
-
-template void im2col_batched<float>(int filter_size, int N, int C, int H, int W,
-                                    float *data_im, float *data_col, cudaStream_t stream);
-
-
-template void global_pool<float>(float *input, float *output, float b_coeff,
-                                 int batch, int channels, int spatial_size, cudaStream_t stream);
-
-template void head_global_pool<float>(float *input, float *output, float b_coeff0, float b_coeff1,
-                                      int batch, int channels, int spatial_size, cudaStream_t stream);
-
-template void se_scale<float>(const float *input, const float *se_bias, float *data,
-                              int batch, int channels, int spatial_size, cudaStream_t stream);
-
-template void winograd3_transform_in<float>(const float *in, float *V,
-                                            int batch, int channels, int board_size, cudaStream_t stream);
-
-template void winograd3_transform_out<float>(const float *M, float *out,
-                                             int batch, int channels, int board_size, cudaStream_t stream);
 
 } // namespace CUDA
 #endif

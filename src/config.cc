@@ -66,6 +66,7 @@ void InitOptionsMap() {
     kOptionsMap["winograd"] << Option::setoption(true);
 
     kOptionsMap["search_mode"] << Option::setoption(std::string{});
+    kOptionsMap["fixed_nn_boardsize"] << Option::setoption(0);
     kOptionsMap["defualt_boardsize"] << Option::setoption(kDefaultBoardSize);
     kOptionsMap["defualt_komi"] << Option::setoption(kDefaultKomi);
 
@@ -418,6 +419,13 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         if (IsParameter(res->Get<std::string>())) {
             auto fname = res->Get<std::string>();
             LogWriter::Get().SetFilename(fname);
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--fixed-nn-boardsize")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("fixed_nn_boardsize", res->Get<int>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

@@ -18,7 +18,7 @@ class CudaForwardPipe : public NetworkForwardPipe {
 public:
     virtual void Initialize(std::shared_ptr<DNNWeights> weights);
 
-    virtual OutputResult Forward(const InputData &inpnt);
+    virtual OutputResult Forward(const InputData &input);
 
     virtual bool Valid();
 
@@ -70,19 +70,19 @@ private:
                         const int board_size,
                         std::shared_ptr<DNNWeights> weights);
 
-        std::vector<OutputResult> BatchForward(const std::vector<InputData> &inpnt);
+        std::vector<OutputResult> BatchForward(const std::vector<InputData> &input);
 
         void DestroyGraph();
 
     private:
+        bool ApplyMask(const std::vector<InputData> &input);
+
         CUDA::CudaHandles handles_;
 
-        int board_size_;
+        int board_size_{0};
         int max_batch_;
 
         std::unique_ptr<Graph> graph_{nullptr};
-
-        std::array<float*, 2> cuda_scratch_op_;
 
         float *cuda_input_planes_;
         float *cuda_output_prob_;
@@ -90,9 +90,11 @@ private:
         float *cuda_output_val_;
         float *cuda_output_ownership_;
 
+        std::array<float*, 2> cuda_scratch_op_;
         std::array<float*, 3> cuda_conv_op_;
         std::array<float*, 3> cuda_pol_op_;
         std::array<float*, 3> cuda_val_op_;
+        std::array<float*, 2> cuda_mask_op_;
 
         std::mutex &io_mutex_;
 
@@ -130,6 +132,7 @@ private:
     std::vector<std::thread> workers_;
 
     int max_batch_;
+    int board_size_{0};
 
     void PrepareWorkers();
     void Worker(int gpu);

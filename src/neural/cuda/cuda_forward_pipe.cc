@@ -17,9 +17,32 @@ void CudaForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
     PrepareWorkers(); // Run the batch forwarding worker.
 }
 
-OutputResult CudaForwardPipe::Forward(const InputData &inpnt) {
+OutputResult CudaForwardPipe::Forward(const InputData &input) {
     OutputResult output;
-    auto entry = std::make_shared<ForwawrdEntry>(inpnt, output);
+    InputData reordered_input = input;
+
+    // Reorder the inputs data.
+    const int planes_bsize = input.board_size;
+    const bool should_reorder = planes_bsize != board_size_;
+
+    if (should_reorder) {
+        for (int c = 0; c < kInputChannels; ++c) {
+            int offset_r = c * board_size_ * board_size_;
+            int offset_p = c * planes_bsize * planes_bsize;
+
+            for (int idx = 0; idx < board_size_ * board_size_; ++idx) {
+                const int x = idx % board_size_;
+                const int y = idx / board_size_;
+                if (x < planes_bsize && y < planes_bsize) {
+                    reordered_input.planes[offset_r++] = input.planes[offset_p++];
+                } else {
+                    reordered_input.planes[offset_r++] = 0.f;
+                }
+            }
+        }
+    }
+
+    auto entry = std::make_shared<ForwawrdEntry>(reordered_input, output);
     std::unique_lock<std::mutex> lock(entry->mutex);
     {
         // Push the entry.
@@ -33,7 +56,27 @@ OutputResult CudaForwardPipe::Forward(const InputData &inpnt) {
     entry->cv.wait(lock); // Wait for batch forwarding worker.
     entry->done.store(true, std::memory_order_relaxed);
 
-    return output;
+    // Reorder the outputs data.
+    OutputResult reordered_ouput = output;
+
+    if (should_reorder) {
+        int offset_r = 0;
+        int offset_p = 0;
+        for (int idx = 0; idx < board_size_ * board_size_; ++idx) {
+            const int x = idx % board_size_;
+            const int y = idx / board_size_;  
+            if (x < planes_bsize && y < planes_bsize) {
+                reordered_ouput.probabilities[offset_r] = output.probabilities[offset_p];
+                reordered_ouput.ownership[offset_r] = output.ownership[offset_p];
+                offset_r++;
+                offset_p++;
+            } else {
+                offset_p++;
+            }
+        }
+    }
+
+    return reordered_ouput;
 }
 
 bool CudaForwardPipe::Valid() {
@@ -46,12 +89,24 @@ void CudaForwardPipe::Load(std::shared_ptr<DNNWeights> weights) {
 }
 
 void CudaForwardPipe::Reload(int board_size) {
+    if (board_size_ == board_size) {
+        return;
+    }
+
     Release();
 
     if (weights_ == nullptr) {
         return;
     }
 
+    // Select the matched size.
+    const int fixed_nn_boardsize =
+                  std::max(board_size, GetOption<int>("fixed_nn_boardsize"));
+    if (fixed_nn_boardsize > 0) {
+        board_size_ = fixed_nn_boardsize;
+    } else {
+        board_size_ = board_size;
+    }
     max_batch_ = GetOption<int>("batch_size");
     const auto d_cnt = CUDA::GetDeviceCount();
 
@@ -96,7 +151,7 @@ void CudaForwardPipe::Reload(int board_size) {
     }
 
     for (auto i = size_t{0}; i < gpus_list.size(); ++i) {
-        nngraphs_[i]->BuildGraph(gpus_list[i], max_batch_, board_size, weights_);
+        nngraphs_[i]->BuildGraph(gpus_list[i], max_batch_, board_size_, weights_);
     }
 }
 
@@ -394,6 +449,9 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
     const size_t val_op2_size = factor * value_extract_channels * 3;
     const size_t val_op3_size = factor * value_extract_channels * 3;
 
+    const size_t mask_op1_size = factor * num_intersections;
+    const size_t mask_op2_size = factor;
+
     CUDA::ReportCUDAErrors(cudaMalloc(&cuda_scratch_op_[0], scratch_size_));
     CUDA::ReportCUDAErrors(cudaMalloc(&cuda_scratch_op_[1], scratch_size_));
     CUDA::ReportCUDAErrors(cudaMalloc(&cuda_input_planes_, planes_size));
@@ -410,26 +468,86 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
     CUDA::ReportCUDAErrors(cudaMalloc(&cuda_val_op_[1], val_op2_size));
     CUDA::ReportCUDAErrors(cudaMalloc(&cuda_val_op_[2], val_op3_size));
 
+    CUDA::ReportCUDAErrors(cudaMalloc(&cuda_mask_op_[0], mask_op1_size));
+    CUDA::ReportCUDAErrors(cudaMalloc(&cuda_mask_op_[1], mask_op2_size));
+
     CUDA::ReportCUDAErrors(cudaMalloc(&cuda_output_prob_pass_, factor));
     CUDA::ReportCUDAErrors(cudaMalloc(&cuda_output_prob_, spatia_size));
     CUDA::ReportCUDAErrors(cudaMalloc(&cuda_output_ownership_, spatia_size));
     CUDA::ReportCUDAErrors(cudaMalloc(&cuda_output_val_, val_size));
 }
 
-std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vector<InputData> &inpnts) {
-    const auto batch_size = (int)inpnts.size();
-    auto bactch_output_result = std::vector<OutputResult>(batch_size);
+bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData> &inputs) {
+    const int batch_size = inputs.size();
+    if (batch_size == 0) {
+        return false;
+    }
+
+    const int num_intersections = board_size_ * board_size_;
+    bool should_apply_mask = false;
+
+    for (int b = 0; b < batch_size; ++b) {
+        if (board_size_ != inputs[b].board_size) {
+            should_apply_mask = true;
+            break;
+        }
+    }
+
+    if (should_apply_mask) {
+        auto spat_mask = std::vector<float>(batch_size * num_intersections);
+        auto sqrt_mask = std::vector<float>(batch_size);
+
+        for (int b = 0; b < batch_size; ++b) {
+            const int planes_bsize = inputs[b].board_size;
+            for (int idx = 0; idx < num_intersections; ++idx) {
+                const int x = idx % board_size_;
+                const int y = idx / board_size_;
+                if (x < planes_bsize && y < planes_bsize) {
+                    spat_mask[b * num_intersections + idx] = 1.f;
+                } else {
+                    spat_mask[b * num_intersections + idx] = 0.f;
+                }
+            }
+            sqrt_mask[b] = planes_bsize;
+        }
+
+        // Copy the mask to device.
+        io_mutex_.lock();
+        CUDA::SetDevice(handles_.gpu_id);
+        CUDA::ReportCUDAErrors(cudaMemcpy(cuda_mask_op_[0],
+                                          spat_mask.data(),
+                                          spat_mask.size() * sizeof(float),
+                                          cudaMemcpyHostToDevice));
+        CUDA::ReportCUDAErrors(cudaMemcpy(cuda_mask_op_[1],
+                                          sqrt_mask.data(),
+                                          sqrt_mask.size() * sizeof(float),
+                                          cudaMemcpyHostToDevice));
+        io_mutex_.unlock();
+    }
+
+    return should_apply_mask;
+}
+
+std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vector<InputData> &inputs) {
+    const auto batch_size = (int)inputs.size();
 
     assert(max_batch_ >= batch_size);
 
+    const auto should_apply_mask = ApplyMask(inputs);
     const auto num_intersections = board_size_ * board_size_;
     auto batch_planes = std::vector<float>(batch_size * kInputChannels * num_intersections);
 
     for (int b = 0; b < batch_size; ++b) {
-        const auto& inpnt = inpnts[b];
+        const auto& input = inputs[b];
         for (int idx = 0; idx < kInputChannels * num_intersections; ++idx) {
-            batch_planes[b * kInputChannels * num_intersections + idx] = inpnt.planes[idx];
+            batch_planes[b * kInputChannels * num_intersections + idx] = input.planes[idx];
         }
+    }
+
+    std::array<float *, 2> mask_buf = cuda_mask_op_;
+    if (!should_apply_mask) {
+        // Disable the mask.
+        mask_buf[0] = mask_buf[1] = nullptr;
     }
 
     io_mutex_.lock();
@@ -445,7 +563,8 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
                                cuda_input_planes_, cuda_conv_op_[0],
                                cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
     graph_->input_bnorm.Forward(batch_size,
-                                cuda_conv_op_[0]);
+                                cuda_conv_op_[0],
+                                nullptr, mask_buf[0]);
 
     // residual tower
     const auto residuals = weights_->residual_blocks;
@@ -457,19 +576,23 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
                                                cuda_conv_op_[0], cuda_conv_op_[1],
                                                cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
         graph_->tower_bnorm[t_offset+0].Forward(batch_size,
-                                                cuda_conv_op_[1]);
+                                                cuda_conv_op_[1],
+                                                nullptr, mask_buf[0]);
 
         graph_->tower_conv[t_offset+1].Forward(batch_size,
                                                cuda_conv_op_[1], cuda_conv_op_[2],
                                                cuda_scratch_op_[0],  cuda_scratch_op_[1], scratch_size_);
         if (tower_ptr->apply_se) {
             graph_->tower_bnorm[t_offset+1].Forward(batch_size,
-                                                    cuda_conv_op_[2]);
+                                                    cuda_conv_op_[2],
+                                                    nullptr, mask_buf[0]);
             graph_->tower_se[i].Forward(batch_size,
-                                        cuda_conv_op_[2], cuda_conv_op_[0]);
+                                        cuda_conv_op_[2], cuda_conv_op_[0],
+                                        mask_buf[0], mask_buf[1]);
         } else { 
             graph_->tower_bnorm[t_offset+1].Forward(batch_size,
-                                                    cuda_conv_op_[2], cuda_conv_op_[0]);
+                                                    cuda_conv_op_[2],
+                                                    cuda_conv_op_[0], mask_buf[0]);
             std::swap(cuda_conv_op_[0], cuda_conv_op_[2]);
         }
     }
@@ -482,17 +605,22 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     graph_->p_ex_conv.Forward(batch_size,
                               cuda_conv_op_[0], cuda_pol_op_[0],
                               cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
-    graph_->p_ex_bnorm.Forward(batch_size, cuda_pol_op_[0]);
+    graph_->p_ex_bnorm.Forward(batch_size, cuda_pol_op_[0], nullptr, mask_buf[0]);
 
     graph_->p_pool.Forward(batch_size,
-                           cuda_pol_op_[0], cuda_pol_op_[1]);
+                           cuda_pol_op_[0], cuda_pol_op_[1],
+                           mask_buf[0], mask_buf[1]);
     graph_->p_inter.Forward(batch_size,
                             cuda_pol_op_[1], cuda_pol_op_[2]);
 
     CUDA::add_spatial(cuda_pol_op_[0], cuda_pol_op_[2], cuda_pol_op_[0],
                       p_op_size1, p_op_size2, p_op_size1,
                       num_intersections, false, handles_.stream);
-
+    if (mask_buf[0]) {
+        CUDA::conv_mul_mask(cuda_pol_op_[0], mask_buf[0],
+                            batch_size,  policy_extract_channels,
+                            num_intersections, handles_.stream);
+    }
     graph_->p_prob.Forward(batch_size,
                            cuda_pol_op_[0], cuda_output_prob_,
                            cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_); 
@@ -503,10 +631,11 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     graph_->v_ex_conv.Forward(batch_size,
                               cuda_conv_op_[0], cuda_val_op_[0],
                               cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
-    graph_->v_ex_bnorm.Forward(batch_size, cuda_val_op_[0]);
+    graph_->v_ex_bnorm.Forward(batch_size, cuda_val_op_[0], nullptr, mask_buf[0]);
 
     graph_->v_pool.Forward(batch_size,
-                           cuda_val_op_[0], cuda_val_op_[1]);
+                           cuda_val_op_[0], cuda_val_op_[1],
+                           mask_buf[0], mask_buf[1]);
     graph_->v_inter.Forward(batch_size,
                             cuda_val_op_[1], cuda_val_op_[2]);
 
@@ -544,8 +673,10 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
                                       cudaMemcpyDeviceToHost));
     io_mutex_.unlock();
 
+    auto batch_output_result = std::vector<OutputResult>(batch_size);
+
     for (int b = 0; b < batch_size; ++b) {
-        auto &output_result = bactch_output_result[b];
+        auto &output_result = batch_output_result[b];
         for (int idx = 0; idx < num_intersections; ++idx) {
             output_result.probabilities[idx] = batch_prob[b * num_intersections + idx];
             output_result.ownership[idx] = batch_ownership[b * num_intersections + idx];
@@ -558,11 +689,11 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         output_result.stm_winrate = batch_value_misc[b * kOuputValueMisc + 3];
         output_result.final_score = batch_value_misc[b * kOuputValueMisc + 4];
 
-        output_result.board_size = inpnts[b].board_size;
-        output_result.komi = inpnts[b].komi;
+        output_result.board_size = inputs[b].board_size;
+        output_result.komi = inputs[b].komi;
     }
 
-    return bactch_output_result;
+    return batch_output_result;
 }
 
 void CudaForwardPipe::NNGraph::DestroyGraph() {
@@ -590,6 +721,9 @@ void CudaForwardPipe::NNGraph::DestroyGraph() {
     CUDA::ReportCUDAErrors(cudaFree(cuda_val_op_[0]));
     CUDA::ReportCUDAErrors(cudaFree(cuda_val_op_[1]));
     CUDA::ReportCUDAErrors(cudaFree(cuda_val_op_[2]));
+
+    CUDA::ReportCUDAErrors(cudaFree(cuda_mask_op_[0]));
+    CUDA::ReportCUDAErrors(cudaFree(cuda_mask_op_[1]));
 
     handles_.Release();
 

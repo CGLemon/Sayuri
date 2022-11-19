@@ -35,14 +35,15 @@ Batchnorm::~Batchnorm() {
 
 void Batchnorm::Forward(const int batch,
                         float *data,
-                        const float *const eltwise) {
+                        const float *const eltwise,
+                        const float *const mask) {
     if (!loaded_) {
         return;
     }
 
     assert(batch <= maxbatch_);
-    batchnorm(data, cuda_means_, cuda_stddevs_,
-              batch, channels_, spatial_size_, eltwise, relu_, handles_->stream);
+    batchnorm(data, cuda_means_, cuda_stddevs_, eltwise, mask,
+              batch, channels_, spatial_size_, relu_, handles_->stream);
 }
 
 
@@ -78,7 +79,6 @@ Convolution::Convolution(CudaHandles *handles,
                          const size_t output_channels) {
     width_ = board_size;
     height_ = board_size;
-    board_size_ = board_size;
     spatial_size_ = width_ * height_;
 
     in_channels_ = input_channels;
@@ -123,6 +123,8 @@ void Convolution::Forward(const int batch, float *input, float *output,
     }
 
     assert(batch <= maxbatch_);
+    const int board_size = (width_ + height_) / 2;
+
 #ifdef USE_CUDNN
     ReportCUDNNErrors(cudnnSetStream(handles_->cudnn_handle, handles_->stream));
     ReportCUDNNErrors(cudnnSetTensor4dDescriptor(in_tensor_desc_,
@@ -153,11 +155,11 @@ void Convolution::Forward(const int batch, float *input, float *output,
     if (winograd_) {
         // TODO: Merge batch norm layer with Winograd.
         auto scratch_op_other = reinterpret_cast<float*>(scratch_other);
-        const int batch_ptiles = batch * GetWinogradP(board_size_);
+        const int batch_ptiles = batch * GetWinogradP(board_size);
 
         winograd3_transform_in(
             input, scratch_op,
-            batch, in_channels_, board_size_, handles_->stream);
+            batch, in_channels_, board_size, handles_->stream);
 
         gemm_strided_batched(
             true, false,
@@ -172,7 +174,7 @@ void Convolution::Forward(const int batch, float *input, float *output,
 
         winograd3_transform_out(
             scratch_op_other, output,
-            batch, out_channels_, board_size_, handles_->stream);
+            batch, out_channels_, board_size, handles_->stream);
     } else {
 #ifdef USE_SINGLE_BATCH_CONV
         // We remain this code for debugging.
@@ -320,6 +322,8 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
 
     scratch_size = std::max(apply_scratch_size, scratch_size);
 #else
+    const int board_size = (width_ + height_) / 2;
+
     // TODO: Seem there are overflow bug in the convolution
     //       Kernel. We set a greater buffer size to avoid this 
     //       bug. Need to fix it later.
@@ -328,7 +332,7 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
 
     if (winograd_) {
         scratch_size_base = kWinogradTile *
-                                GetWinogradP(board_size_) *
+                                GetWinogradP(board_size) *
                                 std::max(out_channels_, in_channels_);
     } else {
         scratch_size_base = filter_dim_ * spatial_size_;
@@ -441,20 +445,13 @@ GlobalPooling::GlobalPooling(CudaHandles *handles,
     handles_ = handles;
 }
 
-void GlobalPooling::Forward(const int batch, float *input, float *output) {
-    const int board_size = (width_ + height_) / 2;
-    const float b_diff = (float)board_size - kAvgBSize;
-
+void GlobalPooling::Forward(const int batch, float *input, float *output, float *mask, float *sqrt_mask) {
     if (is_value_head_) {
-        const float b_coeff0 = b_diff / 10.f;
-        const float b_coeff1 = b_diff * b_diff / 100.f - kBSizeVaraince;
-
-        head_global_pool(input, output, b_coeff0, b_coeff1, batch,
-                         channels_, spatial_size_, handles_->stream);
+        head_global_pooling(input, output, sqrt_mask, batch,
+                            channels_, spatial_size_, handles_->stream);
     } else {
-        const float b_coeff = b_diff / 10.f;
-        global_pool(input, output, b_coeff, batch,
-                    channels_, spatial_size_, handles_->stream);
+        global_pooling(input, output, mask, sqrt_mask, batch,
+                       channels_, spatial_size_, handles_->stream);
     }
 }
 
@@ -515,10 +512,9 @@ void SEUnit::LoadingWeight(const std::vector<float> &weights_w1,
         cuda_weights_b2_, weights_b2.data(), weights_b2_size, cudaMemcpyHostToDevice));
 }
 
-void SEUnit::Forward(const int batch, float *input, float *ouput) {
-    const int board_size = (width_ + height_) / 2;
-    const float b_coeff = ((float)board_size - kAvgBSize) / 10.f;
-    global_pool(input, cuda_op_[0], b_coeff, batch, channels_, spatial_size_, handles_->stream);
+void SEUnit::Forward(const int batch, float *input, float *ouput, float *mask, float *sqrt_mask) {
+    global_pooling(input, cuda_op_[0], mask, sqrt_mask,
+                   batch, channels_, spatial_size_, handles_->stream);
 
     const size_t fc1_input_size = 3 * channels_;
     const size_t fc1_output_size = se_size_;
@@ -563,6 +559,11 @@ void SEUnit::Forward(const int batch, float *input, float *ouput) {
                 fc2_output_size * batch, fc2_output_size, fc2_output_size * batch, fc2_relu, handles_->stream);
 
     se_scale(input, cuda_op_[2], ouput, batch, channels_, spatial_size_, handles_->stream);
+
+    if (mask) {
+        conv_mul_mask(ouput, mask, batch, channels_,
+                      spatial_size_, handles_->stream);
+    }
 }
 
 SEUnit::~SEUnit() {
