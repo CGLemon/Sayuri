@@ -108,10 +108,10 @@ class GlobalPooling : public LayerBasic {
 public:
     GlobalPooling() = default; 
     GlobalPooling(CudaHandles *handles,
-               bool is_value_head,
-               const int batch,
-               const size_t board_size,
-               const size_t channels);
+                  bool is_value_head,
+                  const int batch,
+                  const size_t board_size,
+                  const size_t channels);
 
     void Forward(const int batch, float *input, float *output);
 

@@ -9,6 +9,7 @@
 #include "utils/random.h"
 #include "utils/threadpool.h"
 #include "utils/time.h"
+#include "utils/gzip_helper.h"
 
 #include "config.h"
 
@@ -93,6 +94,7 @@ void Supervised::FromSgfs(bool general,
             }
         }
 
+        // Save the remaining training data.
         if (!chunk.empty()) {
             SaveChunk(out_name_prefix, chunk);
         }
@@ -134,21 +136,33 @@ void Supervised::FromSgfs(bool general,
 
 bool Supervised::SaveChunk(std::string out_name_prefix,
                                std::vector<Training> &chunk) {
-    bool is_open = true;
-    auto file = std::ofstream{};
     auto out_name = Format("%s_%d.txt", 
                                out_name_prefix.c_str(),
                                file_cnt_.fetch_add(1));
-    file.open(out_name, std::ios_base::app);
-    if (!file.is_open()) {
-        LOGGING << "Fail to create the file: " << out_name << '!' << std::endl; 
-        running_threads_.store(-1, std::memory_order_relaxed);
-        is_open = false;
-    } else {
-        for (auto &data : chunk) {
-            data.StreamOut(file);
+
+    auto oss = std::ostringstream{};
+    for (auto &data : chunk) {
+        data.StreamOut(oss);
+    }
+
+    bool is_open = true;
+
+    try {
+        auto buf = oss.str();
+        SaveGzip(out_name, buf);
+    } catch (const char *err) {
+        auto file = std::ofstream{};
+        file.open(out_name, std::ios_base::app);
+        if (!file.is_open()) {
+            LOGGING << "Fail to create the file: " << out_name << '!' << std::endl; 
+            running_threads_.store(-1, std::memory_order_relaxed);
+            is_open = false;
+        } else {
+            for (auto &data : chunk) {
+                data.StreamOut(file);
+            }
+            file.close();
         }
-        file.close();
     }
     chunk.clear();
 

@@ -31,6 +31,7 @@ class Config:
         self.input_features = None
         self.boardsize = None
         self.value_misc = None
+        self.num_chunks = None
 
 def parse_training_config(json_data, config):
     train = json_data.get("Train", None)
@@ -55,6 +56,7 @@ def parse_training_config(json_data, config):
     config.max_steps = train.get("MaxStepsPerRunning", 16384000)
     config.fixup_batch_norm = train.get("FixUpBatchNorm", False)
     config.down_sample_rate = train.get("DownSampleRate", 16)
+    config.num_chunks  = train.get("NumberChunks", None)
 
     assert config.train_dir != None, ""
     assert config.store_path != None, ""

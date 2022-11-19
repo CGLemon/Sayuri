@@ -123,6 +123,7 @@ set(UTILS_SOURCES
     ${UTILS_SOURCES_DIR}/option.cc
     ${UTILS_SOURCES_DIR}/komi.cc
     ${UTILS_SOURCES_DIR}/gogui_helper.cc
+    ${UTILS_SOURCES_DIR}/gzip_helper.cc
     )
 
 if(DEBUG_MODE)
@@ -141,6 +142,13 @@ endif()
 if (USE_AVX)
     message(STATUS "Use the AVX instructions")
     set(CMAKE_CXX_FLAGS "-mavx -mfma ${CMAKE_CXX_FLAGS}")
+endif()
+
+if (USE_ZLIB)
+    add_definitions(-DUSE_ZLIB)
+    find_package(ZLIB REQUIRED)
+    include_directories(${ZLIB_INCLUDE_DIRS})
+    message(STATUS "Use the zlib library")
 endif()
 
 # Define the neural network default backend.
@@ -312,6 +320,9 @@ add_executable(Sayuri
 
 target_link_libraries(Sayuri Threads::Threads)
 target_link_libraries(Sayuri ${BLAS_LIBRARIES})
+if (USE_ZLIB)
+    target_link_libraries(Sayuri ${ZLIB_LIBRARIES})
+endif()
 
 if(_USE_CUDA)
     target_compile_definitions(Sayuri PRIVATE USE_CUDA_BACKEND)

@@ -15,7 +15,7 @@ private:
     void Initialize();
     void Loop();
 
-    bool SaveChunk(std::string out_name,
+    bool SaveChunk(const int out_id,
                        std::vector<Training> &chunk);
 
     std::mutex data_mutex_;

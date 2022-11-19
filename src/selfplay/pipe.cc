@@ -2,6 +2,7 @@
 #include "utils/random.h"
 #include "utils/filesystem.h"
 #include "utils/log.h"
+#include "utils/gzip_helper.h"
 #include "config.h"
 
 SelfPlayPipe::SelfPlayPipe() {
@@ -37,23 +38,43 @@ void SelfPlayPipe::Initialize() {
     data_directory_ = ConnectPath(target_directory_, "data");
 }
 
-bool SelfPlayPipe::SaveChunk(std::string out_name,
+bool SelfPlayPipe::SaveChunk(const int out_id,
                                  std::vector<Training> &chunk) {
-    bool is_open = true;
-    auto file = std::ofstream{};
-    file.open(out_name, std::ios_base::app);
 
-    if (!file.is_open()) {
-        LOGGING << "Fail to create the file: " << out_name << '!' << std::endl; 
-        is_open = false;
-    } else {
-        for (auto &data : chunk) {
-            data.StreamOut(file);
+    auto out_name = ConnectPath(
+                        data_directory_,
+                        filename_hash_ +
+                            "_" +
+                            std::to_string(out_id) + 
+                            ".txt");
+
+    auto oss = std::ostringstream{};
+    for (auto &data : chunk) {
+        data.StreamOut(oss);
+    }
+
+    bool is_open = true;
+
+    try {
+        auto buf = oss.str();
+        SaveGzip(out_name, buf);
+    } catch (const char *err) {
+        LOGGING << err << "\n";
+
+        auto file = std::ofstream{};
+        file.open(out_name, std::ios_base::app);
+
+        if (!file.is_open()) {
+            is_open = false;
+            LOGGING << "Fail to create the file: " << out_name << '!' << std::endl; 
+        } else {
+            for (auto &data : chunk) {
+                data.StreamOut(file);
+            }
+            file.close();
         }
-        file.close();
     }
     chunk.clear();
-
     return is_open;
 }
 
@@ -96,21 +117,18 @@ void SelfPlayPipe::Loop() {
                     engine_.SaveSgf(sgf_filename_, g);
 
                     {
+                        // Save the current chunk.
                         std::lock_guard<std::mutex> lock(data_mutex_);
 
                         int curr_games = accmulate_games_.fetch_add(1) + 1;
                         engine_.GatherTrainingData(chunk_, g);
 
                         if (curr_games % kGamesPerChunk == 0) {
-                            auto data_filename = ConnectPath(data_directory_,
-                                                                 filename_hash_ +
-                                                                     "_" +
-                                                                     std::to_string((curr_games-1)/kGamesPerChunk) + 
-                                                                     ".dat");
-                            SaveChunk(data_filename, chunk_);
+                            if (!SaveChunk((curr_games-1)/kGamesPerChunk, chunk_)) {
+                                break;
+                            }
                         }
                     }
-
 
                     played_games_.fetch_add(1);
                     auto played_games = played_games_.load(std::memory_order_relaxed);
@@ -126,14 +144,10 @@ void SelfPlayPipe::Loop() {
                     int curr_games = accmulate_games_.load(std::memory_order_relaxed)+1;
                     running_threads_.fetch_sub(1, std::memory_order_relaxed);
 
+                    // The last thread saves the remaining training data.
                     if (!chunk_.empty() &&
                             running_threads_.load(std::memory_order_relaxed) == 0) {
-                        auto data_filename = ConnectPath(data_directory_,
-                                                             filename_hash_ +
-                                                                 "_" +
-                                                                 std::to_string((curr_games-1)/kGamesPerChunk) + 
-                                                                 ".dat");
-                        SaveChunk(data_filename, chunk_);
+                        SaveChunk((curr_games-1)/kGamesPerChunk, chunk_);
                     }
                 }
             }

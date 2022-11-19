@@ -9,7 +9,7 @@ from data import Data, FIXED_DATA_VERSION
 from torch.nn import DataParallel
 from lazy_loader import LazyLoader
 
-def gather_filenames(root):
+def gather_filenames(root, num_chunks=None, sort_key_fn=None):
     def gather_recursive_files(root):
         l = list()
         for name in glob.glob(os.path.join(root, "*")):
@@ -18,7 +18,17 @@ def gather_filenames(root):
             else:
                 l.append(name)
         return l
-    return gather_recursive_files(root)
+    chunks = gather_recursive_files(root)
+
+    if num_chunks is not None:
+        if len(chunks) > num_chunks:
+            if sort_key_fn is None:
+                random.shuffle(chunks)
+            else:
+                chunks.sort(key=sort_key_fn, reverse=True)
+            chunks = chunks[:num_chunks]
+    return chunks
+
 
 class StreamLoader:
     def __init__(self):
@@ -195,6 +205,8 @@ class TrainingPipe():
         self.train_dir = cfg.train_dir
         self.validation_dir = cfg.validation_dir
 
+        self.num_chunks = cfg.num_chunks
+
         # The stpes of storing the last model and validating it per epoch.
         self.steps_per_epoch =  cfg.steps_per_epoch
 
@@ -341,8 +353,10 @@ class TrainingPipe():
         self.__stream_parser = StreamParser(self.down_sample_rate)
         self.__batch_gen = BatchGenerator(self.cfg.boardsize, self.cfg.input_channels)
 
+        sort_fn = os.path.getmtime
+
         self.train_lazy_loader = LazyLoader(
-            filenames = gather_filenames(self.train_dir),
+            filenames = gather_filenames(self.train_dir, self.num_chunks, sort_fn),
             stream_loader = self.__stream_loader,
             stream_parser = self.__stream_parser,
             batch_generator = self.__batch_gen,
@@ -357,7 +371,7 @@ class TrainingPipe():
 
         if self.validation_dir is not None:
             self.validation_lazy_loader = LazyLoader(
-                filenames = gather_filenames(self.validation_dir),
+                filenames = gather_filenames(self.validation_dir, self.num_chunks//10, sort_fn),
                 stream_loader = self.__stream_loader,
                 stream_parser = self.__stream_parser,
                 batch_generator = self.__batch_gen,
