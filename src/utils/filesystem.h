@@ -4,6 +4,7 @@
 #include <string>
 
 std::string ConnectPath(const std::string path_1, const std::string path_2);
+std::string ConnectPath(std::initializer_list<std::string> list);
 
 // Creates directory at a given path. Throws exception if cannot.
 // Returns silently if already exists.

@@ -639,7 +639,10 @@ int Search::GetSelfPlayMove() {
     auto result = Computation(max_playouts_, tag);
 
     int move = result.best_move;
-    if (param_->random_moves_cnt > result.movenum) {
+    int random_moves_cnt = param_->random_moves_factor *
+                               result.board_size * result.board_size;
+
+    if (random_moves_cnt > result.movenum) {
         move = result.random_move;
     }
 

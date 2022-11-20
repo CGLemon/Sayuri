@@ -111,8 +111,9 @@ void InitOptionsMap() {
     kOptionsMap["use_stm_winrate"] << Option::setoption(false);
 
     // self-play options
+    kOptionsMap["selfplay_query"] << Option::setoption(std::string{});
     kOptionsMap["random_min_visits"] << Option::setoption(1);
-    kOptionsMap["random_moves_cnt"] << Option::setoption(0);
+    kOptionsMap["random_moves_factor"] << Option::setoption(0.f);
 
     kOptionsMap["dirichlet_noise"] << Option::setoption(false);
     kOptionsMap["dirichlet_epsilon"] << Option::setoption(0.25f);
@@ -125,8 +126,7 @@ void InitOptionsMap() {
 
     kOptionsMap["num_games"] << Option::setoption(0);
     kOptionsMap["parallel_games"] << Option::setoption(1);
-    kOptionsMap["komi_mean"] << Option::setoption(0.f);
-    kOptionsMap["komi_variant"] << Option::setoption(0.f);
+    kOptionsMap["komi_variance"] << Option::setoption(0.f);
     kOptionsMap["target_directory"] << Option::setoption(std::string{});
 }
 
@@ -345,14 +345,35 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         parser.RemoveCommand(res->Index());
     }
 
-    if (const auto res = parser.Find({"--noise", "-n"})) {
+    if (const auto res = parser.Find({"--dirichlet-noise", "--noise", "-n"})) {
         SetOption("dirichlet_noise", true);
         parser.RemoveCommand(res->Index());
     }
 
-    if (const auto res = parser.FindNext("--random-moves")) {
+    if (const auto res = parser.FindNext("--dirichlet-epsilon")) {
         if (IsParameter(res->Get<std::string>())) {
-            SetOption("random_moves_cnt", res->Get<int>());
+            SetOption("dirichlet_epsilon", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--dirichlet-init")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("dirichlet_init", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--dirichlet-factor")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("dirichlet_factor", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--random-moves-factor")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("random_moves_factor", res->Get<float>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -605,16 +626,9 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
-    if (const auto res = parser.FindNext("--komi-mean")) {
+    if (const auto res = parser.FindNext("--komi-variance")) {
         if (IsParameter(res->Get<std::string>())) {
-            SetOption("komi_mean", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
-    }
-
-    if (const auto res = parser.FindNext("--komi-variant")) {
-        if (IsParameter(res->Get<std::string>())) {
-            SetOption("komi_variant", res->Get<float>());
+            SetOption("komi_variance", res->Get<float>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -622,6 +636,15 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext("--target-directory")) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("target_directory", res->Get<std::string>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    while (const auto res = parser.FindNext("--selfplay-query")) {
+        if (IsParameter(res->Get<std::string>())) {
+            auto query = GetOption<std::string>("selfplay_query");
+            query += (res->Get<std::string>() + " ");
+            SetOption("selfplay_query", query);
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

@@ -33,7 +33,7 @@ public:
         draw_factor = GetOption<float>("draw_root_factor");
 
         random_min_visits = GetOption<int>("random_min_visits");
-        random_moves_cnt = GetOption<int>("random_moves_cnt");
+        random_moves_factor = GetOption<float>("random_moves_factor");
 
         dirichlet_noise = GetOption<bool>("dirichlet_noise");
         dirichlet_epsilon = GetOption<float>("dirichlet_epsilon");
@@ -67,7 +67,7 @@ public:
     int ponder_factor;
     int const_time;
     int random_min_visits;
-    int random_moves_cnt;
+    float random_moves_factor;
 
     float resign_threshold;
 

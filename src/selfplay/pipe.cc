@@ -34,7 +34,7 @@ void SelfPlayPipe::Initialize() {
     ss << std::hex << Random<kXoroShiro128Plus>::Get().Generate() << std::dec;
 
     filename_hash_ = ss.str();
-    sgf_filename_ = ConnectPath(target_directory_, filename_hash_ + ".sgf");
+    sgf_directory_ = ConnectPath(target_directory_, "sgf");
     data_directory_ = ConnectPath(target_directory_, "data");
 }
 
@@ -103,18 +103,22 @@ void SelfPlayPipe::Loop() {
     if (!IsDirectoryExist(data_directory_)) {
         CreateDirectory(data_directory_);
     }
+    if (!IsDirectoryExist(sgf_directory_)) {
+        CreateDirectory(sgf_directory_);
+    }
 
     constexpr int kGamesPerChunk = 25;
 
     for (int g = 0; g < engine_.GetParallelGames(); ++g) {
         workers_.emplace_back(
             [this, g]() -> void {
+                auto sgf_filename = ConnectPath(
+                                        sgf_directory_, filename_hash_ + ".sgf");
                 running_threads_.fetch_add(1, std::memory_order_relaxed);
 
                 while (accmulate_games_.load(std::memory_order_relaxed) < max_games_) {
                     engine_.PrepareGame(g);
                     engine_.Selfplay(g);
-                    engine_.SaveSgf(sgf_filename_, g);
 
                     {
                         // Save the current chunk.
@@ -128,6 +132,7 @@ void SelfPlayPipe::Loop() {
                                 break;
                             }
                         }
+                        engine_.SaveSgf(sgf_filename, g);
                     }
 
                     played_games_.fetch_add(1);

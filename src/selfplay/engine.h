@@ -7,7 +7,6 @@
 
 #include <vector>
 #include <memory>
-#include <mutex>
 
 class Engine {
 public:
@@ -21,6 +20,13 @@ public:
     int GetParallelGames() const;
 
 private:
+    struct ProbQuery {
+        int board_size;
+        float komi;
+        float prob;
+    };
+
+    void ParseQueries();
     void SetNormalGame(int g);
     void SetHandicapGame(int g);
 
@@ -28,9 +34,9 @@ private:
 
     void Handel(int g);
 
-    std::mutex io_mtx_;
-
     int parallel_games_;
+
+    std::vector<ProbQuery> prob_queries_;
 
     std::unique_ptr<Network> network_{nullptr};
     std::vector<std::unique_ptr<Search>> search_pool_;

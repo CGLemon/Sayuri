@@ -512,17 +512,18 @@ bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData> &inputs) {
         }
 
         // Copy the mask to device.
-        io_mutex_.lock();
-        CUDA::SetDevice(handles_.gpu_id);
-        CUDA::ReportCUDAErrors(cudaMemcpy(cuda_mask_op_[0],
-                                          spat_mask.data(),
-                                          spat_mask.size() * sizeof(float),
-                                          cudaMemcpyHostToDevice));
-        CUDA::ReportCUDAErrors(cudaMemcpy(cuda_mask_op_[1],
-                                          sqrt_mask.data(),
-                                          sqrt_mask.size() * sizeof(float),
-                                          cudaMemcpyHostToDevice));
-        io_mutex_.unlock();
+        {
+            std::lock_guard<std::mutex> lock(io_mutex_);
+            CUDA::SetDevice(handles_.gpu_id);
+            CUDA::ReportCUDAErrors(cudaMemcpy(cuda_mask_op_[0],
+                                              spat_mask.data(),
+                                              spat_mask.size() * sizeof(float),
+                                              cudaMemcpyHostToDevice));
+            CUDA::ReportCUDAErrors(cudaMemcpy(cuda_mask_op_[1],
+                                              sqrt_mask.data(),
+                                              sqrt_mask.size() * sizeof(float),
+                                              cudaMemcpyHostToDevice));
+        }
     }
 
     return should_apply_mask;
@@ -550,14 +551,15 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         mask_buf[0] = mask_buf[1] = nullptr;
     }
 
-    io_mutex_.lock();
     // copy the inputs to device
-    CUDA::SetDevice(handles_.gpu_id);
-    CUDA::ReportCUDAErrors(cudaMemcpy(cuda_input_planes_,
-                                      batch_planes.data(),
-                                      batch_planes.size() * sizeof(float),
-                                      cudaMemcpyHostToDevice));
-    io_mutex_.unlock();
+    {
+        std::lock_guard<std::mutex> lock(io_mutex_);
+        CUDA::SetDevice(handles_.gpu_id);
+        CUDA::ReportCUDAErrors(cudaMemcpy(cuda_input_planes_,
+                                          batch_planes.data(),
+                                          batch_planes.size() * sizeof(float),
+                                          cudaMemcpyHostToDevice));
+    }
 
     graph_->input_conv.Forward(batch_size,
                                cuda_input_planes_, cuda_conv_op_[0],
@@ -652,26 +654,27 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
     CUDA::WaitToFinish(handles_.stream);
 
-    io_mutex_.lock();
+    {
+        std::lock_guard<std::mutex> lock(io_mutex_);
 
-    // copy the results to host memory
-    CUDA::SetDevice(handles_.gpu_id);
-    CUDA::ReportCUDAErrors(cudaMemcpy(batch_prob.data(), cuda_output_prob_,
-                                      batch_prob.size() * sizeof(float),
-                                      cudaMemcpyDeviceToHost));
+        // copy the results to host memory
+        CUDA::SetDevice(handles_.gpu_id);
+        CUDA::ReportCUDAErrors(cudaMemcpy(batch_prob.data(), cuda_output_prob_,
+                                          batch_prob.size() * sizeof(float),
+                                          cudaMemcpyDeviceToHost));
 
-    CUDA::ReportCUDAErrors(cudaMemcpy(batch_prob_pass.data(), cuda_output_prob_pass_,
-                                      batch_prob_pass.size() * sizeof(float),
-                                      cudaMemcpyDeviceToHost));
- 
-    CUDA::ReportCUDAErrors(cudaMemcpy(batch_value_misc.data(), cuda_output_val_,
-                                      batch_value_misc.size() * sizeof(float),
-                                      cudaMemcpyDeviceToHost));
+        CUDA::ReportCUDAErrors(cudaMemcpy(batch_prob_pass.data(), cuda_output_prob_pass_,
+                                          batch_prob_pass.size() * sizeof(float),
+                                          cudaMemcpyDeviceToHost));
+     
+        CUDA::ReportCUDAErrors(cudaMemcpy(batch_value_misc.data(), cuda_output_val_,
+                                          batch_value_misc.size() * sizeof(float),
+                                          cudaMemcpyDeviceToHost));
 
-    CUDA::ReportCUDAErrors(cudaMemcpy(batch_ownership.data(), cuda_output_ownership_,
-                                      batch_ownership.size() * sizeof(float),
-                                      cudaMemcpyDeviceToHost));
-    io_mutex_.unlock();
+        CUDA::ReportCUDAErrors(cudaMemcpy(batch_ownership.data(), cuda_output_ownership_,
+                                          batch_ownership.size() * sizeof(float),
+                                          cudaMemcpyDeviceToHost));
+    }
 
     auto batch_output_result = std::vector<OutputResult>(batch_size);
 

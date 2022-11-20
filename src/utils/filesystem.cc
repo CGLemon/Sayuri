@@ -18,6 +18,14 @@ std::string ConnectPath(const std::string path_1, const std::string path_2) {
 #endif
 }
 
+std::string ConnectPath(std::initializer_list<std::string> list) {
+    auto path = std::string{"."};
+    for (auto &v : list) {
+        path = ConnectPath(path, v);
+    }
+    return path;
+}
+
 void CreateDirectory(const std::string& path) {
 #ifdef WIN32
     if (CreateDirectoryA(path.c_str(), nullptr)) return;

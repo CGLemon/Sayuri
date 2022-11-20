@@ -31,7 +31,7 @@ private:
     Engine engine_;
 
     std::string target_directory_;
-    std::string sgf_filename_;
+    std::string sgf_directory_;
     std::string data_directory_;
     std::string filename_hash_;
 

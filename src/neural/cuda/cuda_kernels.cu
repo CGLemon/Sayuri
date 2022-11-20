@@ -20,8 +20,9 @@ __global__ void add_vectors_kernel(float *a, float *b, float *c,
     }
 }
 
-void add_vectors(float *a, float *b, float *c, int asize, int bsize,
-                 int size, bool relu, cudaStream_t stream) {
+void add_vectors(float *a, float *b, float *c,
+                 int asize, int bsize, int size,
+                 bool relu, cudaStream_t stream) {
     const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(size, block_size);
 
@@ -286,8 +287,8 @@ __global__ void global_pooling_and_mask_kernel(float *input, float *output,
         float vsqrt = sqrt_mask[n];
 
         for (int i = 0; i < spatial; ++i) {
-            float val = (float)input_ptr[i];
-            float vmask = mask[ n * spatial + i];
+            float val = input_ptr[i];
+            float vmask = mask[n * spatial + i];
 
             vsum += val;
             if ((1.0f-vmask) * (-5000.0f) + val > vmax) {
@@ -401,7 +402,6 @@ __global__ void se_scale_kernel(const float *input,
     int index = threadIdx.x + blockDim.x * blockIdx.x;
     int total_elements = N * C * spatial;
     if (index < total_elements) {
-    
         int c = (index / spatial) % C;
         int n = (index / spatial) / C;
         int start_idx = n * 2 * C;
