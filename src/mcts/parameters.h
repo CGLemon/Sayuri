@@ -40,10 +40,10 @@ public:
         dirichlet_factor = GetOption<float>("dirichlet_factor");
         dirichlet_init = GetOption<float>("dirichlet_init");
 
-        forced_policy_factor = GetOption<float>("forced_policy_factor");
         score_utility_factor = GetOption<float>("score_utility_factor");
         score_utility_div = GetOption<float>("score_utility_div");
-        cap_playouts = GetOption<float>("cap_playouts");
+        reduce_playouts = GetOption<float>("reduce_playouts");
+        reduce_playouts_prob = GetOption<float>("reduce_playouts_prob"); 
 
         lag_buffer = GetOption<int>("lag_buffer");
         ponder = GetOption<bool>("ponder");
@@ -87,14 +87,14 @@ public:
     float dirichlet_factor;
     float dirichlet_init;
 
-    float forced_policy_factor;
     float score_utility_factor;
     float score_utility_div;
 
     float root_policy_temp;
     float policy_temp;
 
-    int cap_playouts;
+    int reduce_playouts;
+    float reduce_playouts_prob;
     int lag_buffer;
     int expand_threshold;
 

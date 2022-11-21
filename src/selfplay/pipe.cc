@@ -40,7 +40,6 @@ void SelfPlayPipe::Initialize() {
 
 bool SelfPlayPipe::SaveChunk(const int out_id,
                                  std::vector<Training> &chunk) {
-
     auto out_name = ConnectPath(
                         data_directory_,
                         filename_hash_ +
@@ -163,6 +162,6 @@ void SelfPlayPipe::Loop() {
         t.join();
     }
     LOGGING << '[' << CurrentDateTime() << ']'
-                << "Finish the self-play loop. Total Played "
+                << "Finish the self-play loop. Totally played "
                 << played_games_.load(std::memory_order_relaxed) << " games." << std::endl;
 }

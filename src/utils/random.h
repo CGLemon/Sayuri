@@ -16,7 +16,7 @@ enum RandomType {
     kXoroShiro128Plus
 };
 
-template<RandomType>
+template<RandomType=kXoroShiro128Plus>
 class Random {
 public:
     Random() = delete;

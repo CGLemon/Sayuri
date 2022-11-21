@@ -120,8 +120,8 @@ void InitOptionsMap() {
     kOptionsMap["dirichlet_init"] << Option::setoption(0.03f);
     kOptionsMap["dirichlet_factor"] << Option::setoption(361.f);
 
-    kOptionsMap["forced_policy_factor"] << Option::setoption(0.f);
-    kOptionsMap["cap_playouts"] << Option::setoption(0);
+    kOptionsMap["reduce_playouts"] << Option::setoption(0);
+    kOptionsMap["reduce_playouts_prob"] << Option::setoption(0.f, 1.f, 0.f);
     kOptionsMap["first_pass_bonus"] << Option::setoption(false);
 
     kOptionsMap["num_games"] << Option::setoption(0);
@@ -591,16 +591,16 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
-    if (const auto res = parser.FindNext("--forced-policy-factor")) {
+    if (const auto res = parser.FindNext("--reduce-playouts")) {
         if (IsParameter(res->Get<std::string>())) {
-            SetOption("forced_policy_factor", res->Get<float>());
+            SetOption("reduce_playouts", res->Get<int>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--cap-playouts")) {
+    if (const auto res = parser.FindNext("--reduce-playouts-prob")) {
         if (IsParameter(res->Get<std::string>())) {
-            SetOption("cap_playouts", res->Get<int>());
+            SetOption("reduce_playouts_prob", res->Get<float>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

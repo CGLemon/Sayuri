@@ -514,6 +514,9 @@ std::string Sgf::ToString(GameState &state) {
     }
     out << MakePropertyVetexListString("AB", state.GetAppendMoves(kBlack), state);
     out << MakePropertyVetexListString("AW", state.GetAppendMoves(kWhite), state);
+    if (!state.GetComment(0).empty()) {
+        out << MakePropertyString("C", state.GetComment(0));
+    }
 
     const auto score = state.GetFinalScore();
     const auto pass_end = state.GetPasses() >= 2;
@@ -544,9 +547,12 @@ std::string Sgf::ToString(GameState &state) {
         out << ']';
     }
 
+    size_t i = 0;
     for (const auto &board : history) {
         auto color = !board->GetToMove();
         auto lastmove = board->GetLastMove();
+        auto c = state.GetComment(i++);
+
         if (lastmove != kNullVertex) {
             out << ';';
             if (color == kBlack) {
@@ -555,6 +561,9 @@ std::string Sgf::ToString(GameState &state) {
                 out << 'W';
             }
             out << '[' << state.VertexToSgf(lastmove) << ']';
+            if (!c.empty()) {
+                out << "C[" << c << ']';
+            }
         }
     }
     out << ')';

@@ -119,10 +119,10 @@ struct ComputationResult {
     float best_eval;
 
     std::vector<float> root_ownership;
-    std::vector<float> root_probabilities;
     std::vector<int> root_visits;
 
-    std::vector<float> target_probabilities;
+    std::vector<float> root_playouts_dist;
+    std::vector<float> target_playouts_dist;
 
     std::vector<std::vector<int>> alive_strings;
     std::vector<std::vector<int>> dead_strings;

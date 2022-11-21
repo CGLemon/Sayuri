@@ -116,6 +116,10 @@ public:
 
     std::uint64_t GetMoveHash(const int vtx, const int color) const;
 
+    void SetComment(std::string c);
+    void AppendComment(std::string c);
+    std::string GetComment(size_t i) const;
+
 private:
     using VertexColor = std::pair<int, int>;
 
@@ -126,13 +130,19 @@ private:
     // try to remove the dead string.
     void FillRandomMove();
 
+    void PushComment();
+
     std::string GetStateString() const;
 
     std::vector<std::shared_ptr<const Board>> game_history_;
 
+    std::vector<std::string> comments_;
+
     std::vector<std::uint64_t> ko_hash_history_;
 
     std::vector<VertexColor> append_moves_;
+
+    std::string last_comment_;
 
     // The board handicap.
     int handicap_;

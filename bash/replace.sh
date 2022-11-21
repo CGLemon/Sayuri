@@ -27,6 +27,6 @@ $TRAIN_CMD
 if [ -f $LAST_STEPS_FILE ]; then
     NUM_STEPS=$( cat $LAST_STEPS_FILE )
 fi
-TRANSFER_CMD="python3 torch/transfer.py -j torch/setting.json -n $WORKSPACE/model/s$NUM_STEPS"
+TRANSFER_CMD="python3 torch/transfer.py -j torch/setting.json -b -n $WORKSPACE/model/s$NUM_STEPS"
 $TRANSFER_CMD
 

@@ -40,7 +40,7 @@
          ],
 
         "FixUpBatchNorm": false,
-        "TrainDirectory": "selfplay-data",
+        "TrainDirectory": "selfplay/data",
         "StorePath" : "workspace"
     }
 }

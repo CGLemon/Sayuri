@@ -15,13 +15,16 @@ void GameState::Reset(const int boardsize, const float komi) {
     ko_hash_history_.clear();
     game_history_.clear();
     append_moves_.clear();
+    comments_.clear();
 
     ko_hash_history_.emplace_back(GetKoHash());
     game_history_.emplace_back(std::make_shared<Board>(board_));
+    comments_.emplace_back(std::string{});
 
     winner_ = kUndecide;
     handicap_ = 0;
     move_number_ = 0;
+    last_comment_.clear();
 }
 
 void GameState::ClearBoard() {
@@ -48,13 +51,17 @@ bool GameState::AppendMove(const int vtx, const int color) {
         board_.SetToMove(kBlack);
         board_.SetLastMove(kNullVertex, kNullVertex);
 
+        last_comment_.clear();
         move_number_ = 0;
+
         ko_hash_history_.clear();
         game_history_.clear();
+        comments_.clear();
 
         ko_hash_history_.emplace_back(GetKoHash());
         game_history_.emplace_back(std::make_shared<Board>(board_));
         append_moves_.emplace_back(vtx, color);
+        comments_.emplace_back(std::string{});
 
         return true;
     }
@@ -82,9 +89,11 @@ bool GameState::PlayMove(const int vtx, const int color) {
         // Cut off unused history.
         ko_hash_history_.resize(move_number_);
         game_history_.resize(move_number_);
+        comments_.resize(move_number_);
 
         ko_hash_history_.emplace_back(GetKoHash());
         game_history_.emplace_back(std::make_shared<Board>(board_));
+        PushComment();
 
         return true;
     }
@@ -96,6 +105,7 @@ bool GameState::UndoMove() {
         // Cut off unused history.
         ko_hash_history_.resize(move_number_);
         game_history_.resize(move_number_);
+        comments_.resize(move_number_);
 
         board_ = *game_history_[move_number_-1];
 
@@ -451,7 +461,7 @@ std::vector<int> GameState::GetOwnership() const {
 void GameState::FillRandomMove() {
     const int color = GetToMove();
     const int empty_cnt = board_.GetEmptyCount();
-    const int rand = Random<kXoroShiro128Plus>::Get().Generate() % empty_cnt;
+    const int rand = Random<>::Get().Generate() % empty_cnt;
     int select_move = kPass;
 
     auto filled_area = std::vector<int>(GetNumIntersections(), kInvalid);
@@ -524,9 +534,9 @@ void GameState::PlayRandomMove() {
     board_.GenerateCandidateMoves(candidate_moves, color);
     std::shuffle(std::begin(candidate_moves),
                      std::end(candidate_moves),
-                     Random<kXoroShiro128Plus>::Get());
+                     Random<>::Get());
 
-    if (Random<kXoroShiro128Plus>::Get().Roulette<10000>(0.90f)) {
+    if (Random<>::Get().Roulette<10000>(0.90f)) {
         // ~90%: capture
         for (const auto vtx : candidate_moves) {
             if (board_.IsCaptureMove(vtx, color)) {
@@ -535,7 +545,7 @@ void GameState::PlayRandomMove() {
             }
         }
     }
-    if (Random<kXoroShiro128Plus>::Get().Roulette<10000>(0.95f)) {
+    if (Random<>::Get().Roulette<10000>(0.95f)) {
         // ~95%: pattern3
         for (const auto vtx : candidate_moves) {
             if (board_.MatchPattern3(vtx) &&
@@ -545,7 +555,7 @@ void GameState::PlayRandomMove() {
             }
         }
     }
-    if (Random<kXoroShiro128Plus>::Get().Roulette<10000>(0.90f)) {
+    if (Random<>::Get().Roulette<10000>(0.90f)) {
         // ~90%: atari
         for (const auto vtx : candidate_moves) {
             if (board_.IsAtariMove(vtx, color) &&
@@ -555,7 +565,7 @@ void GameState::PlayRandomMove() {
             }
         }
     }
-    if (Random<kXoroShiro128Plus>::Get().Roulette<10000>(0.90f)) {
+    if (Random<>::Get().Roulette<10000>(0.90f)) {
         // ~90%: escape
         for (const auto vtx : candidate_moves) {
             if (board_.IsEscapeMove(vtx, color) &&
@@ -587,7 +597,7 @@ void GameState::PlayRandomMove() {
         return;
     }
 
-    int selected = Random<kXoroShiro128Plus>::Get().Generate() % legal_moves.size();
+    int selected = Random<>::Get().Generate() % legal_moves.size();
     PlayMoveFast(legal_moves[selected], color);
 }
 
@@ -868,4 +878,24 @@ std::uint64_t GameState::ComputeSymmetryHash(const int symm) const {
 
 std::uint64_t GameState::ComputeSymmetryKoHash(const int symm) const {
     return board_.ComputeKoHash(symm);
+}
+
+void GameState::SetComment(std::string c) {
+    last_comment_ = c;
+}
+
+void GameState::AppendComment(std::string c) {
+    last_comment_ += c;
+}
+
+std::string GameState::GetComment(size_t i) const {
+    if (i >= comments_.size()) {
+        return std::string{};
+    }
+    return comments_[i];
+}
+
+void GameState::PushComment() {
+    comments_.emplace_back(last_comment_);
+    last_comment_.clear();
 }

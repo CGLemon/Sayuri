@@ -24,7 +24,7 @@ public:
      * planes 1 -24 : last 8 history moves
      * plane     25 : ko move
      * plane     26 : pass-alive and pass-dead area
-     * planes 27-30 : strings with 1, 2, 3 and others liberties 
+     * planes 27-30 : strings with 1, 2, 3 and 4 liberties 
      * planes 31-34 : ladder features
      * plane     35 : komi/20
      * plane     36 : -komi/20

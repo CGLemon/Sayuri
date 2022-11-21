@@ -338,66 +338,6 @@ float Node::ComputeTreeComplexity() {
     return stddev;
 }
 
-// Experimental function.
-void Node::PolicyTargetPruning() {
-    WaitExpanded();
-    assert(HaveChildren());
-    InflateAllChildren();
-
-    auto buffer = std::vector<std::pair<int, int>>{};
-
-    int parentvisits = 0;
-    int most_visits_move = -1;
-    int most_visits = 0;
-
-    for (const auto &child : children_) {
-        const auto node = child.Get();
-
-        if (!node->IsActive()) {
-            continue;
-        }
-
-        const auto visits = node->GetVisits();
-        const auto vertex = node->GetVertex();
-        parentvisits += visits;
-        buffer.emplace_back(visits, vertex);
-
-        if (most_visits < visits) {
-            most_visits = visits;
-            most_visits_move = vertex;
-        }
-    }
-
-    assert(!buffer.empty());
-
-    const auto forced_policy_factor = param_->forced_policy_factor;
-    for (const auto &x : buffer) {
-        const auto visits = x.first;
-        const auto vertex = x.second;
-        auto node = GetChild(vertex);
-
-        auto forced_playouts = std::sqrt(forced_policy_factor *
-                                             node->GetPolicy() *
-                                             float(parentvisits));
-        auto new_visits = std::max(visits - int(forced_playouts), 0);
-        node->SetVisits(new_visits);
-    }
-
-    while (true) {
-        auto node = PuctSelectChild(color_, false);
-        if (node->GetVertex() == most_visits_move) {
-            break;
-        }
-        node->SetActive(false);
-    }
-
-    for (const auto &x : buffer) {
-        const auto visits = x.first;
-        const auto vertex = x.second;
-        GetChild(vertex)->SetVisits(visits);
-    }
-}
-
 Node *Node::ProbSelectChild() {
     WaitExpanded();
     assert(HaveChildren());
@@ -459,7 +399,6 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     const auto cpuct_init           = is_root ? param_->cpuct_root_init      : param_->cpuct_init;
     const auto cpuct_base           = is_root ? param_->cpuct_root_base      : param_->cpuct_base;
     const auto draw_factor          = is_root ? param_->draw_root_factor     : param_->draw_factor;
-    const auto forced_policy_factor = is_root ? param_->forced_policy_factor : 0.0f;
     const auto noise                = is_root ? param_->dirichlet_noise      : false;
     const auto score_utility_factor = param_->score_utility_factor;
     const auto score_utility_div    = param_->score_utility_div;
@@ -502,7 +441,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
 
         float denom = 1.0f;
         float utility = 0.0f; // the utility value
-        float bonus = 0.0f; // force playouts bonus
+
         if (is_pointer) {
             const auto visits = node->GetVisits();
             denom += visits;
@@ -512,23 +451,12 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
                 utility += score_utility_factor *
                                node->GetScoreUtility(color, score_utility_div, score);
             }
-
-            // According to Kata Go, we want to improve exploration in
-            // the self-play. Give it a large bonus if the visits is not
-            // enough.
-            int forced_playouts = std::sqrt(forced_policy_factor *
-                                                node->GetPolicy() *
-                                                float(parentvisits));
-
-            bonus += (int) (forced_playouts - denom + 1.0f);
-            bonus *= 10;
-            bonus = std::max(bonus, 0.0f);
         }
 
         // PUCT algorithm
         const float psa = GetSearchPolicy(child, noise);
         const float puct = cpuct * psa * (numerator / denom);
-        const float value = q_value + puct + utility + bonus;
+        const float value = q_value + puct + utility;
         assert(value > std::numeric_limits<float>::lowest());
 
         if (value > best_value) {
@@ -629,7 +557,7 @@ int Node::RandomizeFirstProportionally(float random_temp) {
     }
 
     auto distribution = std::uniform_real_distribution<float>{0.0, accum};
-    auto pick = distribution(Random<kXoroShiro128Plus>::Get());
+    auto pick = distribution(Random<>::Get());
     auto size = accum_vector.size();
 
     for (auto idx = size_t{0}; idx < size; ++idx) {
@@ -1218,7 +1146,7 @@ void Node::ApplyDirichletNoise(const float alpha) {
     auto gamma = std::gamma_distribution<float>(alpha, 1.0f);
 
     std::generate(std::begin(buffer), std::end(buffer),
-                      [&gamma] () { return gamma(Random<kXoroShiro128Plus>::Get()); });
+                      [&gamma] () { return gamma(Random<>::Get()); });
 
     auto sample_sum =
         std::accumulate(std::begin(buffer), std::end(buffer), 0.0f);

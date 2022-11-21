@@ -114,8 +114,6 @@ public:
     // Select the best UCT value node. For no-dcnn mode.
     Node *UctSelectChild(const int color, const bool is_root, const GameState &state);
 
-    void PolicyTargetPruning();
-
     // Randomly select one child by visits. 
     int RandomizeFirstProportionally(float random_temp);
 

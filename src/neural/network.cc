@@ -95,7 +95,7 @@ void Network::ClearCache() {
 Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
     Network::Result result{};
 
-    auto rng = Random<kXoroShiro128Plus>::Get();
+    auto rng = Random<>::Get();
     auto dis = std::uniform_real_distribution<float>(0, 1);
 
     const auto boardsize = inputs.board_size;
@@ -224,7 +224,7 @@ Network::GetOutput(const GameState &state,
     } else if (ensemble == kDirect) {
         assert(symmetry >= 0 && symmetry < Symmetry::kNumSymmetris);
     } else if (ensemble == kRandom) {
-        symmetry = Random<kXoroShiro128Plus>::Get().RandFix<Symmetry::kNumSymmetris>();
+        symmetry = Random<>::Get().RandFix<Symmetry::kNumSymmetris>();
     }
 
     bool probed = false;

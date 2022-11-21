@@ -9,6 +9,7 @@
 #include "neural/encoder.h"
 #include "utils/log.h"
 #include "utils/format.h"
+#include "utils/random.h"
 #include "game/book.h"
 
 #ifdef WIN32
@@ -85,16 +86,12 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
     if (node->HaveChildren() && !search_result.IsValid()) {
         auto color = currstate.GetToMove();
         Node *next = nullptr;
-        if (playouts_.load(std::memory_order_relaxed) < param_->cap_playouts) {
-            // Go to the next node by best polcy.
-            next = node->ProbSelectChild();
+
+        // Go to the next node by PUCT/UCT algoritim.
+        if (param_->no_dcnn) {
+            next = node->UctSelectChild(color, node == root_node, currstate);
         } else {
-            // Go to the next node by PUCT/UCT algoritim.
-            if (param_->no_dcnn) {
-                next = node->UctSelectChild(color, node == root_node, currstate);
-            } else {
-                next = node->PuctSelectChild(color, node == root_node);
-            }
+            next = node->PuctSelectChild(color, node == root_node);
         }
         auto vtx = next->GetVertex();
 
@@ -403,9 +400,9 @@ void Search::GatherComputationResult(ComputationResult &result) const {
 
     // Resize the childern status buffer.
     result.root_ownership.resize(num_intersections);
-    result.root_probabilities.resize(num_intersections+1);
+    result.root_playouts_dist.resize(num_intersections+1);
     result.root_visits.resize(num_intersections+1);
-    result.target_probabilities.resize(num_intersections+1);
+    result.target_playouts_dist.resize(num_intersections+1);
 
     // Fill ownership.
     auto ownership = root_node_->GetOwnership(color);
@@ -436,15 +433,12 @@ void Search::GatherComputationResult(ComputationResult &result) const {
 
     // Fill raw probabilities.
     for (int idx = 0; idx < num_intersections+1; ++idx) {
-        float prob = (float) result.root_visits[idx]/ (float) parentvisits;
-        result.root_probabilities[idx] = prob;
+        result.root_playouts_dist[idx] =
+            (float)(result.root_visits[idx]) / parentvisits;;
     }
 
-    // Fill target probabilities.
-
-    // TODO: Prune some bad children in order get better
-    //       target probabilities.
-    float tot_target_policy = 0.0f;
+    // Fill target distribution.
+    float acc_target_policy = 0.0f;
     for (int idx = 0; idx < num_intersections+1; ++idx) {
         const auto x = idx % board_size;
         const auto y = idx / board_size;
@@ -457,17 +451,22 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         }
 
         auto node = root_node_->GetChild(vertex);
-        if (node && node->IsActive()) {
-            const auto prob = result.root_probabilities[idx];
-            result.target_probabilities[idx] = prob;
-            tot_target_policy += prob;
+
+        // TODO: Prune some bad children in order to get better
+        //       target playouts distribution.
+        if (node != nullptr &&
+                node->IsActive() &&
+                node->GetVisits() > 1) {
+            const auto prob = result.root_playouts_dist[idx];
+            result.target_playouts_dist[idx] = prob;
+            acc_target_policy += prob;
         } else {
-            result.target_probabilities[idx] = 0.0f;
+            result.target_playouts_dist[idx] = 0.0f;
         }
     }
 
-    for (auto &prob : result.target_probabilities) {
-        prob /= tot_target_policy;
+    for (auto &prob : result.target_playouts_dist) {
+        prob /= acc_target_policy;
     }
 
     // Fill the dead strings and live strings.
@@ -508,7 +507,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         }
     }
 
-    // remove multiple mentions of the same string
+    // Remove multiple mentions of the same string
     // unique reorders and returns new iterator, erase actually deletes
     std::sort(std::begin(alive), std::end(alive));
     alive.erase(std::unique(std::begin(alive), std::end(alive)),
@@ -636,8 +635,16 @@ int Search::ThinkBestMove() {
 
 int Search::GetSelfPlayMove() {
     auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
-    auto result = Computation(max_playouts_, tag);
 
+    int playouts = max_playouts_;
+    float prob = param_->reduce_playouts_prob;
+    if (param_->reduce_playouts > 0 &&
+            Random<>::Get().Roulette<10000>(prob)) {
+        // The reduce playouts must be smaller than playouts.
+        playouts = std::min(playouts, param_->reduce_playouts);
+    }
+
+    auto result = Computation(playouts, tag);
     int move = result.best_move;
     int random_moves_cnt = param_->random_moves_factor *
                                result.board_size * result.board_size;
@@ -645,6 +652,18 @@ int Search::GetSelfPlayMove() {
     if (random_moves_cnt > result.movenum) {
         move = result.random_move;
     }
+
+    float root_eval = result.root_eval;
+    float root_score = result.root_final_score;
+
+    if (result.to_move == kWhite) {
+        root_eval = 1.0f - root_eval;
+        root_score = 0.f - root_score;
+    }
+    root_state_.SetComment(
+        Format("%d, %.2f, %.2f",
+            result.playouts,
+            root_eval, root_score));
 
     // Push the data to buffer.
     GatherData(root_state_, result);
@@ -705,6 +724,7 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
 
     auto chunk = std::vector<Training>{};
     GatherTrainingBuffer(chunk, end_state);
+
     for (auto &buf : chunk) {
         buf.StreamOut(file);
     }
@@ -712,16 +732,13 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
 }
 
 void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_state) {
-    auto fork_state = end_state;
 
-    // Now, compute the final status. remove the dead strings
-    // first.
-    fork_state.RemoveDeadStrings(200);
+    // Compute the final status positions. We do not remove the dead stones.
+    auto ownership = end_state.GetOwnership();
 
-    auto num_intersections = fork_state.GetNumIntersections();
+    auto num_intersections = end_state.GetNumIntersections();
     auto winner = kUndecide;
     auto black_final_score = 0.f;
-    auto ownership = fork_state.GetOwnership();
 
     // Compute the final score.
     for (const auto owner : ownership) {
@@ -731,7 +748,7 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
             black_final_score -= 1;
         }
     }
-    black_final_score -= fork_state.GetKomi();
+    black_final_score -= end_state.GetKomi();
 
     // Get the player who won the game.
     if (std::abs(black_final_score) < 1e-4f) {
@@ -808,7 +825,7 @@ void Search::GatherData(const GameState &state, ComputationResult &result) {
     // Map the root eval from [0 ~ 1] to [-1 ~ 1]
     data.q_value = 2 * result.root_eval - 1.f;
     data.planes = Encoder::Get().GetPlanes(state);
-    data.probabilities = result.target_probabilities;
+    data.probabilities = result.target_playouts_dist;
 
     training_buffer_.emplace_back(data);
 }
