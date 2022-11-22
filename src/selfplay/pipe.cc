@@ -17,11 +17,8 @@ void SelfPlayPipe::Initialize() {
     // Force that one game use one thread.
     SetOption("threads", 1);
 
-    if (GetOption<int>("playouts") == 0) {
-        SetOption("playouts", 200);
-    }
-
     engine_.Initialize();
+
     // TODO: Re-compute the NN cache size.
 
     target_directory_ = GetOption<std::string>("target_directory");
@@ -30,8 +27,11 @@ void SelfPlayPipe::Initialize() {
     played_games_.store(0, std::memory_order_relaxed);
     running_threads_.store(0, std::memory_order_relaxed);
 
+    chunk_games_ = 0;
+
     auto ss = std::ostringstream();
-    ss << std::hex << Random<kXoroShiro128Plus>::Get().Generate() << std::dec;
+    ss << std::hex << std::uppercase
+           << Random<>::Get().Generate() << std::dec;
 
     filename_hash_ = ss.str();
     sgf_directory_ = ConnectPath(target_directory_, "sgf");
@@ -115,7 +115,7 @@ void SelfPlayPipe::Loop() {
                                         sgf_directory_, filename_hash_ + ".sgf");
                 running_threads_.fetch_add(1, std::memory_order_relaxed);
 
-                while (accmulate_games_.load(std::memory_order_relaxed) < max_games_) {
+                while (accmulate_games_.fetch_add(1) < max_games_) {
                     engine_.PrepareGame(g);
                     engine_.Selfplay(g);
 
@@ -123,15 +123,15 @@ void SelfPlayPipe::Loop() {
                         // Save the current chunk.
                         std::lock_guard<std::mutex> lock(data_mutex_);
 
-                        int curr_games = accmulate_games_.fetch_add(1) + 1;
                         engine_.GatherTrainingData(chunk_, g);
 
-                        if (curr_games % kGamesPerChunk == 0) {
-                            if (!SaveChunk((curr_games-1)/kGamesPerChunk, chunk_)) {
+                        if ((chunk_games_+1) % kGamesPerChunk == 0) {
+                            if (!SaveChunk(chunk_games_/kGamesPerChunk, chunk_)) {
                                 break;
                             }
                         }
                         engine_.SaveSgf(sgf_filename, g);
+                        chunk_games_ += 1;
                     }
 
                     played_games_.fetch_add(1);
@@ -145,13 +145,13 @@ void SelfPlayPipe::Loop() {
 
                 {
                     std::lock_guard<std::mutex> lock(data_mutex_);
-                    int curr_games = accmulate_games_.load(std::memory_order_relaxed)+1;
                     running_threads_.fetch_sub(1, std::memory_order_relaxed);
 
                     // The last thread saves the remaining training data.
                     if (!chunk_.empty() &&
                             running_threads_.load(std::memory_order_relaxed) == 0) {
-                        SaveChunk((curr_games-1)/kGamesPerChunk, chunk_);
+                        SaveChunk(chunk_games_/kGamesPerChunk, chunk_);
+                        chunk_games_ += 1;
                     }
                 }
             }

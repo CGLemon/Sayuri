@@ -120,6 +120,7 @@ void InitOptionsMap() {
     kOptionsMap["dirichlet_init"] << Option::setoption(0.03f);
     kOptionsMap["dirichlet_factor"] << Option::setoption(361.f);
 
+    kOptionsMap["resign_playouts"] << Option::setoption(0);
     kOptionsMap["reduce_playouts"] << Option::setoption(0);
     kOptionsMap["reduce_playouts_prob"] << Option::setoption(0.f, 1.f, 0.f);
     kOptionsMap["first_pass_bonus"] << Option::setoption(false);
@@ -587,6 +588,13 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext("--policy-temp")) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("policy_temp", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--resign-playouts")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("resign_playouts", res->Get<int>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

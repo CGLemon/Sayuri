@@ -12,6 +12,8 @@
 void CudaForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
     LOGGING << CUDA::GetBackendInfo();
 
+    dump_gpu_info_ = true;
+
     Load(weights); // Will select max batch size.
 
     PrepareWorkers(); // Run the batch forwarding worker.
@@ -151,8 +153,11 @@ void CudaForwardPipe::Reload(int board_size) {
     }
 
     for (auto i = size_t{0}; i < gpus_list.size(); ++i) {
-        nngraphs_[i]->BuildGraph(gpus_list[i], max_batch_, board_size_, weights_);
+        nngraphs_[i]->BuildGraph(
+            dump_gpu_info_, gpus_list[i], max_batch_, board_size_, weights_);
     }
+
+    dump_gpu_info_ = false; // don't show the GPU info next time.
 }
 
 void CudaForwardPipe::Release() {
@@ -167,7 +172,8 @@ void CudaForwardPipe::Destroy() {
     QuitWorkers();
 }
 
-void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
+void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
+                                          const int gpu,
                                           const int max_batch_size,
                                           const int board_size,
                                           std::shared_ptr<DNNWeights> weights) {
@@ -181,7 +187,9 @@ void CudaForwardPipe::NNGraph::BuildGraph(const int gpu,
     CUDA::SetDevice(gpu);
     handles_.ApplyOnCurrentDevice();
 
-    LOGGING << CUDA::GetCurrentDeviceInfo();
+    if (dump_gpu_info) {
+        LOGGING << CUDA::GetCurrentDeviceInfo();
+    }
 
     board_size_ = board_size;
     scratch_size_ = 0;

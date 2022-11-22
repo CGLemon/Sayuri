@@ -65,7 +65,8 @@ private:
     public:
         NNGraph(std::mutex &mtx) : io_mutex_(mtx) {}
         ~NNGraph();
-        void BuildGraph(const int gpu, 
+        void BuildGraph(bool dump_gpu_info,
+                        const int gpu,
                         const int max_batch_size,
                         const int board_size,
                         std::shared_ptr<DNNWeights> weights);
@@ -131,6 +132,7 @@ private:
     std::vector<std::unique_ptr<NNGraph>> nngraphs_;
     std::vector<std::thread> workers_;
 
+    bool dump_gpu_info_;
     int max_batch_;
     int board_size_{0};
 

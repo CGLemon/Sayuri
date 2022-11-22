@@ -32,6 +32,7 @@ for ((i=0; i<$MAX_TRAINING_EPOCHES; i++)); do
     ENGINE_PLAY_CMD="./$ENGINE_NAME --mode selfplay --noise --random-moves-factor 0.08 --playouts 200 --komi-variance 2.5"
     ENGINE_PLAY_CMD="$ENGINE_PLAY_CMD --selfplay-query bkp:9:7:85 --selfplay-query bkp:7:9:15"
     ENGINE_PLAY_CMD="$ENGINE_PLAY_CMD --reduce-playouts 100 --reduce-playouts-prob 0.75"
+    ENGINE_PLAY_CMD="$ENGINE_PLAY_CMD --resign-playouts 50 --resign 0.05"
     ENGINE_PLAY_CMD="$ENGINE_PLAY_CMD --parallel-games 4 --batch-size 2"
     ENGINE_PLAY_CMD="$ENGINE_PLAY_CMD --cache-memory-mib 400 --early-symm-cache --first-pass-bonus"
     ENGINE_PLAY_CMD="$ENGINE_PLAY_CMD --target-directory $SELFPLAY_DIR --weights $CURR_WEIGHTS --num-games $GAMES_PER_EPOCH"

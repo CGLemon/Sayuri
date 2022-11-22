@@ -42,6 +42,7 @@ public:
 
         score_utility_factor = GetOption<float>("score_utility_factor");
         score_utility_div = GetOption<float>("score_utility_div");
+        resign_playouts = GetOption<float>("resign_playouts");
         reduce_playouts = GetOption<float>("reduce_playouts");
         reduce_playouts_prob = GetOption<float>("reduce_playouts_prob"); 
 
@@ -93,6 +94,7 @@ public:
     float root_policy_temp;
     float policy_temp;
 
+    int resign_playouts;
     int reduce_playouts;
     float reduce_playouts_prob;
     int lag_buffer;

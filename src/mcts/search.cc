@@ -236,7 +236,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         }
     }
 
-    // The SMP worker runs on every threads except the main thread.
+    // The SMP workers run on every threads except for the main thread.
     const auto Worker = [this]() -> void {
         while(running_.load(std::memory_order_relaxed)) {
             auto currstate = std::make_unique<GameState>(root_state_);
@@ -323,6 +323,16 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
             // Notice that the visits of root node start from one. We need to
             // reduce it.
             keep_running &= (root_node_->GetVisits() - 1 < playouts);
+        }
+        if (param_->resign_playouts > 0 &&
+                param_->resign_playouts <=
+                    playouts_.load(std::memory_order_relaxed)) {
+            // If someone already won the game, the winrate was not very effective
+            // in the MCTS. Low playouts with policy network is good enough. Just
+            // simply stop the tree search.
+            float wl = root_node_->GetWL(color, false);
+            keep_running &= !(wl < param_->resign_threshold ||
+                                wl > (1.f-param_->resign_threshold));
         }
         keep_running &= (elapsed < thinking_time);
         keep_running &= (playouts_.load(std::memory_order_relaxed) < playouts);
@@ -439,6 +449,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
 
     // Fill target distribution.
     float acc_target_policy = 0.0f;
+    size_t target_cnt = 0;
     for (int idx = 0; idx < num_intersections+1; ++idx) {
         const auto x = idx % board_size;
         const auto y = idx / board_size;
@@ -452,7 +463,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
 
         auto node = root_node_->GetChild(vertex);
 
-        // TODO: Prune some bad children in order to get better
+        // TODO: Prune more bad children in order to get better
         //       target playouts distribution.
         if (node != nullptr &&
                 node->IsActive() &&
@@ -460,13 +471,20 @@ void Search::GatherComputationResult(ComputationResult &result) const {
             const auto prob = result.root_playouts_dist[idx];
             result.target_playouts_dist[idx] = prob;
             acc_target_policy += prob;
+            target_cnt += 1;
         } else {
             result.target_playouts_dist[idx] = 0.0f;
         }
     }
 
-    for (auto &prob : result.target_playouts_dist) {
-        prob /= acc_target_policy;
+    if (target_cnt == 0) {
+        // All moves are pruned. We directly use the raw
+        // distribution.
+        result.target_playouts_dist = result.root_playouts_dist;
+    } else {
+        for (auto &prob : result.target_playouts_dist) {
+            prob /= acc_target_policy;
+        }
     }
 
     // Fill the dead strings and live strings.
@@ -644,15 +662,25 @@ int Search::GetSelfPlayMove() {
         playouts = std::min(playouts, param_->reduce_playouts);
     }
 
+    if (!network_.Valid()) {
+        // The network is dummy backend. The playing move is 
+        // random, so we only use one tenth playouts in order
+        // to reduce time.
+        playouts /= 10;
+    }
+
     auto result = Computation(playouts, tag);
     int move = result.best_move;
     int random_moves_cnt = param_->random_moves_factor *
                                result.board_size * result.board_size;
 
+    // Do the random move in the opening step in order to improve the
+    // game state diversity.
     if (random_moves_cnt > result.movenum) {
         move = result.random_move;
     }
 
+    // Save the move comment.
     float root_eval = result.root_eval;
     float root_score = result.root_final_score;
 

@@ -28,6 +28,7 @@ void Engine::Initialize() {
     }
 
     ThreadPool::Get(GetOption<int>("threads") * parallel_games_);
+
     ParseQueries();
 }
 
