@@ -20,7 +20,7 @@ public:
     int GetParallelGames() const;
 
 private:
-    struct ProbQuery {
+    struct BoardQuery {
         int board_size;
         float komi;
         float prob;
@@ -36,7 +36,7 @@ private:
 
     int parallel_games_;
 
-    std::vector<ProbQuery> prob_queries_;
+    std::vector<BoardQuery> board_queries_;
 
     std::unique_ptr<Network> network_{nullptr};
     std::vector<std::unique_ptr<Search>> search_pool_;

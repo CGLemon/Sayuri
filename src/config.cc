@@ -234,12 +234,12 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         if (cnt == 0) {
             return false;
         }
-        int t = 1;
+
         LOGGING << "Command(s) Error:" << std::endl;
         for (auto i = size_t{0}; i < cnt; ++i) {
             const auto command = parser.GetCommand(i)->Get<std::string>();
             if (!IsParameter(command)) {
-                LOGGING << " " << t << ". " << command << std::endl;
+                LOGGING << " " << i+1 << ". " << command << std::endl;
             }
         }
         LOGGING << " are not understood." << std::endl;

@@ -37,8 +37,7 @@ void Engine::ParseQueries() {
     std::istringstream iss{queries};
     std::string query;
 
-    int max_bsize = -1;
-    float acc_prob = 0.f;
+    float bq_acc_prob = 0.f;
 
     while (iss >> query) {
         for (char &c : query) {
@@ -55,37 +54,36 @@ void Engine::ParseQueries() {
             tokens.emplace_back(token);
         }
 
-        if (tokens[0] == "bkp") { 
+        if (tokens[0] == "bkp" && tokens.size() == 4) { 
             // boardsize-komi-probabilities
             // "bkp:19:7.5:20"
 
             // Assume the query is valid.
-            ProbQuery pq;
-
-            pq.board_size = std::stoi(tokens[1]);
-            pq.komi = std::stof(tokens[2]);
-            pq.prob = std::stof(tokens[3]);
-
-            prob_queries_.emplace_back(pq);
-            acc_prob += pq.prob;
+            BoardQuery q {
+                .board_size = std::stoi(tokens[1]),
+                .komi       = std::stof(tokens[2]),
+                .prob       = std::stof(tokens[3])};
+            board_queries_.emplace_back(q);
+            bq_acc_prob += q.prob;
         }
     }
 
-    for (auto &pd : prob_queries_) {
-        pd.prob /= acc_prob;
-        max_bsize = std::max(pd.board_size, max_bsize);
+    int max_bsize = -1;
+    if (board_queries_.empty()) {
+        BoardQuery q {
+            .board_size = GetOption<int>("defualt_boardsize"),
+            .komi = GetOption<float>("defualt_komi"),
+            .prob = 1.f };
+        board_queries_.emplace_back(q);
+        max_bsize = q.board_size;
+    } else {
+        for (auto &q : board_queries_) {
+            q.prob /= bq_acc_prob;
+            max_bsize = std::max(q.board_size, max_bsize);
+        }
     }
-    if (prob_queries_.empty()) {
-        ProbQuery pq;
-        pq.board_size = GetOption<int>("defualt_boardsize");
-        pq.komi = GetOption<float>("defualt_komi");
-        pq.prob = 1.0f;
-        prob_queries_.emplace_back(pq);
 
-        max_bsize = pq.board_size;
-    }
-
-    // Adjust matched NN size.
+    // Adjust the matched NN size.
     network_->Reload(max_bsize);
 }
 
@@ -118,24 +116,24 @@ void Engine::Selfplay(int g) {
 
 void Engine::SetNormalGame(int g) {
     constexpr std::uint32_t kRange = 1000000;
-    std::uint32_t rand = Random<kXoroShiro128Plus>::Get().RandFix<kRange>();
+    std::uint32_t rand = Random<>::Get().RandFix<kRange>();
 
     float acc_prob = 0.f;
     int select_bk_idx = 0;
 
-    for (int i = 0; i < (int)prob_queries_.size(); ++i) {
-        acc_prob += prob_queries_[i].prob;
+    for (int i = 0; i < (int)board_queries_.size(); ++i) {
+        acc_prob += board_queries_[i].prob;
         if (rand <= kRange * acc_prob) {
             select_bk_idx = i;
             break;
         }
     }
-    int query_boardsize = prob_queries_[select_bk_idx].board_size;
-    float query_komi = prob_queries_[select_bk_idx].komi;
+    int query_boardsize = board_queries_[select_bk_idx].board_size;
+    float query_komi = board_queries_[select_bk_idx].komi;
 
     float variance = GetOption<float>("komi_variance");
     auto dist = std::normal_distribution<float>(0.f, variance);
-    float bonus = dist(Random<kXoroShiro128Plus>::Get());
+    float bonus = dist(Random<>::Get());
 
     game_pool_[g].Reset(query_boardsize,
                             AdjustKomi<float>(query_komi + bonus));
@@ -144,7 +142,7 @@ void Engine::SetNormalGame(int g) {
 void Engine::SetHandicapGame(int g) {
     auto &state = game_pool_[g];
 
-    int handicap = Random<kXoroShiro128Plus>::Get().RandFix<4>() + 1;
+    int handicap = Random<>::Get().RandFix<4>() + 1;
     state.SetFixdHandicap(handicap);
 
     SetFairKomi(g);
