@@ -115,6 +115,7 @@ void InitOptionsMap() {
     kOptionsMap["random_min_visits"] << Option::setoption(1);
     kOptionsMap["random_moves_factor"] << Option::setoption(0.f);
 
+    kOptionsMap["gumbel_noise"] << Option::setoption(false);
     kOptionsMap["dirichlet_noise"] << Option::setoption(false);
     kOptionsMap["dirichlet_epsilon"] << Option::setoption(0.25f);
     kOptionsMap["dirichlet_init"] << Option::setoption(0.03f);
@@ -348,6 +349,11 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 
     if (const auto res = parser.Find({"--dirichlet-noise", "--noise", "-n"})) {
         SetOption("dirichlet_noise", true);
+        parser.RemoveCommand(res->Index());
+    }
+
+    if (const auto res = parser.Find("--gumbel-noise")) {
+        SetOption("gumbel_noise", true);
         parser.RemoveCommand(res->Index());
     }
 

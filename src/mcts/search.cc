@@ -476,6 +476,8 @@ void Search::GatherComputationResult(ComputationResult &result) const {
             result.target_playouts_dist[idx] = 0.0f;
         }
     }
+    root_node_->MixLogitsCompletedQ(
+        root_state_, result.target_playouts_dist);
 
     if (target_cnt == 0) {
         // All moves are pruned. We directly use the raw

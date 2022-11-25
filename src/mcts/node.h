@@ -171,6 +171,8 @@ public:
     // Set the network win-loss value from outside.
     void ApplyEvals(const NodeEvals *evals);
 
+    void MixLogitsCompletedQ(GameState &state, std::vector<float> &prob);
+
     void IncrementThreads();
     void DecrementThreads();
 

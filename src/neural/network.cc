@@ -286,7 +286,7 @@ std::string Network::GetOutputString(const GameState &state,
     return out.str();
 }
 
-std::vector<float> Network::Softmax(std::vector<float> &input, const float temperature) const {
+std::vector<float> Network::Softmax(std::vector<float> &input, const float temperature) {
     auto output = std::vector<float>{};
     output.reserve(input.size());
 

@@ -376,30 +376,45 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     assert(HaveChildren());
     // assert(color == color_);
 
+    const auto noise  = is_root ? param_->dirichlet_noise : false;
+    const auto gumbel = is_root ? param_->gumbel_noise    : false;
+    auto gumbel_type1 = std::extreme_value_distribution<float>(0, 1);
+
     // Gather all parent's visits.
+    auto policy_buf = std::vector<float>(kNumVertices + 10, -1e6f);
     int parentvisits = 0;
     float total_visited_policy = 0.0f;
-    for (const auto &child : children_) {
+    for (auto &child : children_) {
         const auto node = child.Get();
+
+        float vpol = GetSearchPolicy(child, noise);
+        if (gumbel) {
+            vpol = std::log(vpol) + gumbel_type1(Random<>::Get());
+        }
+        policy_buf[child.GetVertex()] = vpol;
+
         if (!node) {
             // There is no visits in uninflated node.
             continue;
-        }    
+        }
         if (node->IsValid()) {
             // The node status is pruned or active.
             const auto visits = node->GetVisits();
             parentvisits += visits;
             if (visits > 0) {
-                total_visited_policy += node->GetPolicy();
+                total_visited_policy += child.GetPolicy();
             }
         }
+    }
+
+    if (gumbel) {
+        policy_buf = Network::Softmax(policy_buf, 1.f);
     }
 
     const auto fpu_reduction_factor = is_root ? param_->fpu_root_reduction   : param_->fpu_reduction;
     const auto cpuct_init           = is_root ? param_->cpuct_root_init      : param_->cpuct_init;
     const auto cpuct_base           = is_root ? param_->cpuct_root_base      : param_->cpuct_base;
     const auto draw_factor          = is_root ? param_->draw_root_factor     : param_->draw_factor;
-    const auto noise                = is_root ? param_->dirichlet_noise      : false;
     const auto score_utility_factor = param_->score_utility_factor;
     const auto score_utility_div    = param_->score_utility_div;
 
@@ -454,7 +469,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
         }
 
         // PUCT algorithm
-        const float psa = GetSearchPolicy(child, noise);
+        const float psa = policy_buf[child.GetVertex()];
         const float puct = cpuct * psa * (numerator / denom);
         const float value = q_value + puct + utility;
         assert(value > std::numeric_limits<float>::lowest());
@@ -1222,4 +1237,54 @@ void Node::ComputeNodeCount(size_t &nodes, size_t &edges) {
             }
         }
     }
+}
+
+void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
+    const auto num_intersections = state.GetNumIntersections();
+    const auto color = state.GetToMove();
+
+    if (num_intersections != (int)prob.size()) {
+        return;
+    }
+
+    auto logits_q = std::vector<float>(num_intersections+1, -1e6f);
+    float value_pi = 0.f;
+    int max_visits = 0;
+
+    // Compute completed Q value.
+    for (auto & child : children_) {
+        const auto node = child.Get();
+        const bool is_pointer = node != nullptr;
+        if (is_pointer && !node->IsActive()) {
+            continue;
+        }
+        max_visits = std::max(max_visits, node->GetVisits());
+        value_pi += child.GetPolicy() *
+                        node->GetWL(color, false);
+    }
+
+    for (auto & child : children_) {
+        const auto node = child.Get();
+        const bool is_pointer = node != nullptr;
+        const auto vtx = child.GetVertex();
+
+        int idx = num_intersections; // pass move
+        if (vtx != kPass) {
+            idx = state.GetIndex(
+                      state.GetX(vtx), state.GetY(vtx));
+        }
+        if (is_pointer && !node->IsActive()) {
+            continue;
+        }
+        const float logits = std::log(prob[idx] + 1e-8f);
+        const int visits = node->GetVisits();
+        float completed_q;
+        if (visits == 0) {
+            completed_q = value_pi;
+        } else {
+            completed_q = node->GetWL(color, false);
+        }
+        logits_q[idx] = logits + (50 * max_visits) * 0.1f * completed_q;
+    }
+    prob = Network::Softmax(logits_q, 1.f);
 }
