@@ -971,7 +971,67 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
         }
 
         out << GtpSuccess(candidate_map.str());
-    } else {
+    } else if (const auto res = parser.Find("gogui-rules_game_id", 0)) {
+        out << GtpSuccess("Go");
+    } else if (const auto res = parser.Find("gogui-rules_board", 0)) {
+        const auto board_size = agent_->GetState().GetBoardSize();
+        auto board_oss = std::ostringstream{};
+
+        for (int y = board_size-1; y >= 0; --y) {
+            for (int x = 0; x < board_size; ++x) {
+                const auto s = agent_->GetState().GetState(x,y);
+                if (s == kBlack) {
+                    board_oss << "X";
+                } else if (s == kWhite) {
+                    board_oss << "O";
+                } else if (s == kEmpty) {
+                    board_oss << ".";
+                }
+                board_oss << " \n"[board_size == x+1]; 
+            }
+        }
+        out << GtpSuccess(board_oss.str());
+    } else if (const auto res = parser.Find("gogui-rules_board_size", 0)) {
+        out << GtpSuccess(std::to_string(agent_->GetState().GetBoardSize()));
+    } else if (const auto res = parser.Find("gogui-rules_legal_moves", 0)) {
+        if (agent_->GetState().IsGameOver()) { 
+            out << GtpSuccess("");
+        } else {
+            const auto board_size = agent_->GetState().GetBoardSize();
+            auto legal_list = std::vector<int>{kPass};
+
+            for (int y = board_size-1; y >= 0; --y) {
+                for (int x = 0; x < board_size; ++x) {
+                    const auto vtx = agent_->GetState().GetVertex(x,y);
+                    if (agent_->GetState().IsLegalMove(vtx)) {
+                        legal_list.emplace_back(vtx);
+                    }
+                }
+            }
+
+            auto legal_oss = std::ostringstream{};
+            for (auto v: legal_list) {
+                legal_oss << agent_->GetState().VertexToText(v) << ' ';
+            }
+            out << GtpSuccess(legal_oss.str());
+        }
+    } else if (const auto res = parser.Find("gogui-rules_side_to_move", 0)) {
+        if (agent_->GetState().GetToMove() == kBlack) {
+            out << GtpSuccess("black");
+        } else {
+            out << GtpSuccess("white");
+        }
+    } else if (const auto res = parser.Find("gogui-rules_final_result", 0)) {
+        auto score = agent_->GetState().GetFinalScore();
+
+        if (std::abs(score) < 1e-4f) {
+            out << GtpSuccess("draw"); 
+        } else if (score < 0.f) {
+            out << GtpSuccess(Format("w+%f", -score));
+        } else {
+            out << GtpSuccess(Format("b+%f", score));
+        }
+    }  else {
         try_ponder = prev_pondering_;
         out << GtpFail("unknown command");
     }

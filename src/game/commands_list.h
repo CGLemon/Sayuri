@@ -128,5 +128,17 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "gogui-ladder_map",
 
-    "gogui-rollout_candidate_moves"
+    "gogui-rollout_candidate_moves",
+
+    "gogui-rules_game_id",
+
+    "gogui-rules_board",
+
+    "gogui-rules_board_size",
+
+    "gogui-rules_legal_moves",
+
+    "gogui-rules_side_to_move",
+
+    "gogui-rules_final_result"
 };
