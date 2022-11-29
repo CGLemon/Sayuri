@@ -137,7 +137,9 @@ bool Node::ExpandChildren(Network &network,
                      symm < Symmetry::kNumSymmetris && !hash_found; ++symm) {
                 const auto symm_vtx = Symmetry::Get().TransformVertex(board_size, symm, vtx);
                 const auto symm_hash = symm_base_hash[symm] ^ state.GetMoveHash(symm_vtx, color_);
-                hash_found = (std::find(std::begin(moves_hash), std::end(moves_hash), symm_hash) != std::end(moves_hash));
+                hash_found = std::end(moves_hash) !=
+                                 std::find(std::begin(moves_hash),
+                                               std::end(moves_hash), symm_hash);
             }
 
             if (!hash_found) {
@@ -208,8 +210,8 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
 }
 
 void Node::ApplyNetOutput(GameState &state,
-                        const Network::Result &raw_netlist,
-                        NodeEvals& node_evals, const int color) {
+                              const Network::Result &raw_netlist,
+                              NodeEvals& node_evals, const int color) {
     auto black_ownership = std::array<float, kNumIntersections>{};
     auto black_fs = float(0.f);
     auto draw =raw_netlist.wdl[1];
@@ -377,21 +379,21 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     // assert(color == color_);
 
     const auto noise  = is_root ? param_->dirichlet_noise : false;
-    const auto gumbel = is_root ? param_->gumbel_noise    : false;
+    auto gumbel       = is_root ? param_->gumbel          : false;
     auto gumbel_type1 = std::extreme_value_distribution<float>(0, 1);
 
     // Gather all parent's visits.
-    auto policy_buf = std::vector<float>(kNumVertices + 10, -1e6f);
+    auto gumbel_logits = std::vector<float>(kNumVertices+10, -1e6f);
     int parentvisits = 0;
+    int max_visits = 0;
     float total_visited_policy = 0.0f;
     for (auto &child : children_) {
         const auto node = child.Get();
 
-        float vpol = GetSearchPolicy(child, noise);
         if (gumbel) {
-            vpol = std::log(vpol) + gumbel_type1(Random<>::Get());
+            gumbel_logits[child.GetVertex()] =
+                std::log((double)(GetSearchPolicy(child, noise)) + 1e-8f) + gumbel_type1(Random<>::Get());
         }
-        policy_buf[child.GetVertex()] = vpol;
 
         if (!node) {
             // There is no visits in uninflated node.
@@ -401,14 +403,18 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
             // The node status is pruned or active.
             const auto visits = node->GetVisits();
             parentvisits += visits;
+            max_visits = std::max(max_visits, visits);
             if (visits > 0) {
                 total_visited_policy += child.GetPolicy();
             }
         }
     }
 
+    gumbel &= param_->gumbel_playouts > parentvisits;
     if (gumbel) {
-        policy_buf = Network::Softmax(policy_buf, 1.f);
+        ProcessGumbelLogits(gumbel_logits, color,
+                                parentvisits, max_visits,
+                                param_->gumbel_considered_moves, -1e6f);
     }
 
     const auto fpu_reduction_factor = is_root ? param_->fpu_root_reduction   : param_->fpu_reduction;
@@ -469,15 +475,19 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
         }
 
         // PUCT algorithm
-        const float psa = policy_buf[child.GetVertex()];
+        const float psa = GetSearchPolicy(child, noise);
         const float puct = cpuct * psa * (numerator / denom);
-        const float value = q_value + puct + utility;
+        float value = q_value + puct + utility;
         assert(value > std::numeric_limits<float>::lowest());
 
+        if (gumbel) {
+            value = gumbel_logits[child.GetVertex()];
+        }
         if (value > best_value) {
             best_value = value;
             best_node = &child;
         }
+
     }
 
     Inflate(*best_node);
@@ -526,20 +536,20 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
         }
 
         float q_value = parent_qvalue;
-        int child_visits = 0;
+        int visits = 0;
 
         if (is_pointer) {
-            child_visits = node->GetVisits();
+            visits = node->GetVisits();
 
             if (node->IsExpanding()) {
                 q_value = -1.0f; // Give it a bad value.
-            } else if (child_visits > 0) {
+            } else if (visits > 0) {
                 q_value = node->GetWL(color);
             }
         }
 
         // UCT algorithm
-        const float denom = 1.0f + child_visits;
+        const float denom = 1.0f + visits;
         const float psa = child.GetPolicy();
         const float bouns = 1.0f * std::sqrt(1000.f / ((float)parentvisits + 1000.f)) * psa;
         const float uct = cpuct * std::sqrt(numerator / denom);
@@ -1034,8 +1044,6 @@ float Node::GetWL(const int color, const bool use_virtual_loss) const {
     }
 
     auto visits = GetVisits() + virtual_loss;
-    assert(visits >= 0);
-
     auto accumulated_wl = accumulated_black_wl_.load(std::memory_order_relaxed);
     if (color == kWhite && use_virtual_loss) {
         accumulated_wl += static_cast<double>(virtual_loss);
@@ -1243,7 +1251,7 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
     const auto num_intersections = state.GetNumIntersections();
     const auto color = state.GetToMove();
 
-    if (num_intersections != (int)prob.size()) {
+    if (num_intersections+1 != (int)prob.size()) {
         return;
     }
 
@@ -1251,7 +1259,6 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
     float value_pi = 0.f;
     int max_visits = 0;
 
-    // Compute completed Q value.
     for (auto & child : children_) {
         const auto node = child.Get();
         const bool is_pointer = node != nullptr;
@@ -1276,7 +1283,7 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
         if (is_pointer && !node->IsActive()) {
             continue;
         }
-        const float logits = std::log(prob[idx] + 1e-8f);
+        const float logits = std::log((double)prob[idx] + 1e-8f);
         const int visits = node->GetVisits();
         float completed_q;
         if (visits == 0) {
@@ -1284,7 +1291,68 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
         } else {
             completed_q = node->GetWL(color, false);
         }
-        logits_q[idx] = logits + (50 * max_visits) * 0.1f * completed_q;
+        logits_q[idx] = logits + NormalizeCompletedQ(
+                                     completed_q, max_visits);
     }
     prob = Network::Softmax(logits_q, 1.f);
+}
+
+float Node::NormalizeCompletedQ(const float completed_q,
+                                    const int max_visits) const {
+    return (50 * max_visits) * 0.1f * completed_q;
+}
+
+void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
+                                   const int color,
+                                   const int root_visits,
+                                   const int max_visists,
+                                   const int considered_moves, const float mval) {
+    const int n = std::log2(std::max(1,considered_moves)) + 1;
+    const int adj_considered_moves = std::pow(2, n-1); // Be sure that it is pow of 2.
+
+    auto table = std::vector<int>(adj_considered_moves, 0);
+    for (int i=0, r=1, w=adj_considered_moves; i < n; ++i, w/=2, r*=2) {
+        for (int j = 0; j < w; ++j) {
+            for (int k = 0; k < r; ++k) {
+                table[adj_considered_moves-j-1] += 1;
+            }
+        }
+    }
+
+    const int visits_per_round = n * adj_considered_moves;
+    const int rounds = root_visits / visits_per_round;
+    const int visits_this_round = root_visits - rounds * visits_per_round;
+    const int m = visits_this_round / adj_considered_moves;
+
+    int height = 0;
+    int width = adj_considered_moves;
+    int offset = 0;
+    for (int i = 0, t = 1; i < m; i++, t *= 2) {
+        height += t;
+        width /= 2;
+        offset += width;
+    }
+
+    const int idx = offset + root_visits%width;
+    const int condered_visists = table[idx] * rounds + height + 
+                                     (visits_this_round - m*adj_considered_moves)/width;
+
+    for (auto &child : children_) {
+        const auto node = child.Get();
+        const bool is_pointer = node != nullptr;
+
+        if (is_pointer && !node->IsActive()) {
+            continue;
+        }
+
+        auto visits = node->GetVisits();
+        if (visits == condered_visists) {
+            if (visits > 0) {
+                gumbel_logits[node->GetVertex()] += 
+                    NormalizeCompletedQ(node->GetWL(color, false), max_visists);
+            }
+        } else {
+            gumbel_logits[node->GetVertex()] = mval;
+        }
+    }
 }

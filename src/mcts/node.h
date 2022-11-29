@@ -222,6 +222,13 @@ private:
     int GetVirtualLoss() const;
 
     void ComputeNodeCount(size_t &nodes, size_t &edges);
+    float NormalizeCompletedQ(const float completed_q,
+                                  const int max_visits) const;
+    void ProcessGumbelLogits(std::vector<float> &gumbel_logits,
+                                 const int color,
+                                 const int root_visits,
+                                 const int max_visists,
+                                 const int considered_moves, const float mval);
 
     Parameters *GetParameters();
 

@@ -115,7 +115,10 @@ void InitOptionsMap() {
     kOptionsMap["random_min_visits"] << Option::setoption(1);
     kOptionsMap["random_moves_factor"] << Option::setoption(0.f);
 
-    kOptionsMap["gumbel_noise"] << Option::setoption(false);
+    kOptionsMap["gumbel_considered_moves"] << Option::setoption(16);
+    kOptionsMap["gumbel_playouts"] << Option::setoption(400);
+    kOptionsMap["gumbel"] << Option::setoption(false);
+
     kOptionsMap["dirichlet_noise"] << Option::setoption(false);
     kOptionsMap["dirichlet_epsilon"] << Option::setoption(0.25f);
     kOptionsMap["dirichlet_init"] << Option::setoption(0.03f);
@@ -352,8 +355,22 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         parser.RemoveCommand(res->Index());
     }
 
-    if (const auto res = parser.Find("--gumbel-noise")) {
-        SetOption("gumbel_noise", true);
+    if (const auto res = parser.FindNext("--gumbel-considered-moves")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("gumbel_considered_moves", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--gumbel-playouts")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("gumbel_playouts", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.Find("--gumbel")) {
+        SetOption("gumbel", true);
         parser.RemoveCommand(res->Index());
     }
 

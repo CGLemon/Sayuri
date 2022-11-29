@@ -35,7 +35,10 @@ public:
         random_min_visits = GetOption<int>("random_min_visits");
         random_moves_factor = GetOption<float>("random_moves_factor");
 
-        gumbel_noise = GetOption<bool>("gumbel_noise");
+        gumbel_considered_moves = GetOption<int>("gumbel_considered_moves");
+        gumbel_playouts = GetOption<int>("gumbel_playouts");
+        gumbel = GetOption<bool>("gumbel");
+
         dirichlet_noise = GetOption<bool>("dirichlet_noise");
         dirichlet_epsilon = GetOption<float>("dirichlet_epsilon");
         dirichlet_factor = GetOption<float>("dirichlet_factor");
@@ -84,7 +87,10 @@ public:
     float draw_factor;
     float draw_root_factor;
 
-    bool gumbel_noise;
+    int gumbel_considered_moves;
+    int gumbel_playouts;
+    bool gumbel;
+
     bool dirichlet_noise;
     float dirichlet_epsilon;
     float dirichlet_factor;
