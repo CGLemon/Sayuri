@@ -466,8 +466,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         // TODO: Prune more bad children in order to get better
         //       target playouts distribution.
         if (node != nullptr &&
-                node->IsActive() &&
-                node->GetVisits() > 1) {
+                node->IsActive()) {
             const auto prob = result.root_playouts_dist[idx];
             result.target_playouts_dist[idx] = prob;
             acc_target_policy += prob;
@@ -476,8 +475,6 @@ void Search::GatherComputationResult(ComputationResult &result) const {
             result.target_playouts_dist[idx] = 0.0f;
         }
     }
-    root_node_->MixLogitsCompletedQ(
-        root_state_, result.target_playouts_dist);
 
     if (target_cnt == 0) {
         // All moves are pruned. We directly use the raw
@@ -488,6 +485,10 @@ void Search::GatherComputationResult(ComputationResult &result) const {
             prob /= acc_target_policy;
         }
     }
+
+    // Mix the original distribution with completed Q.
+    root_node_->MixLogitsCompletedQ(
+        root_state_, result.target_playouts_dist);
 
     // Fill the dead strings and live strings.
     constexpr float kOwnshipThreshold = 0.75f;
