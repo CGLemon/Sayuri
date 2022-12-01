@@ -115,7 +115,7 @@ public:
     Node *UctSelectChild(const int color, const bool is_root, const GameState &state);
 
     // Randomly select one child by visits. 
-    int RandomizeFirstProportionally(float random_temp);
+    int RandomizeFirstProportionally(float temp, int min_visits);
 
     // Update the node.
     void Update(const NodeEvals *evals);
@@ -123,8 +123,11 @@ public:
     // Get children's LCB values. 
     std::vector<std::pair<float, int>> GetLcbUtilityList(const int color);
 
-    // Get best move(vertex) by LCB value.
+    // Get best move(vertex) with LCB value.
     int GetBestMove();
+
+    // Get best move(vertex) with Gumbel-Top-k trick.
+    int GetGumbelMove();
 
     const std::vector<Edge> &GetChildren() const;
 
@@ -171,6 +174,8 @@ public:
     // Set the network win-loss value from outside.
     void ApplyEvals(const NodeEvals *evals);
 
+    bool ShouldApplyGumbel() const;
+    std::vector<float> GetProbLogitsCompletedQ(GameState &state);
     void MixLogitsCompletedQ(GameState &state, std::vector<float> &prob);
 
     void IncrementThreads();
@@ -221,14 +226,16 @@ private:
     int GetThreads() const;
     int GetVirtualLoss() const;
 
-    void ComputeNodeCount(size_t &nodes, size_t &edges);
+    float GetGumbelQValue(int color, float parent_score) const;
     float NormalizeCompletedQ(const float completed_q,
                                   const int max_visits) const;
+    void ComputeNodeCount(size_t &nodes, size_t &edges);
     void ProcessGumbelLogits(std::vector<float> &gumbel_logits,
                                  const int color,
                                  const int root_visits,
                                  const int max_visists,
                                  const int considered_moves, const float mval);
+    Node *GumbelSelectChild(int color);
 
     Parameters *GetParameters();
 
