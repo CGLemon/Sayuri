@@ -382,7 +382,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     // search. Use the PUCT directly if there is already
     // enough visits (playouts).
     if (is_root && ShouldApplyGumbel()) {
-        return GumbelSelectChild(color);
+        return GumbelSelectChild(color, false);
     }
 
     // Gather all parent's visits.
@@ -1350,7 +1350,8 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
                                    const int color,
                                    const int root_visits,
                                    const int max_visists,
-                                   const int considered_moves, const float mval) {
+                                   const int considered_moves, const float mval,
+                                   bool only_max_visit) {
     const int n = std::log2(std::max(1,considered_moves)) + 1;
     const int adj_considered_moves = std::pow(2, n-1); // Be sure that it is pow of 2.
 
@@ -1379,8 +1380,11 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
 
     const auto parent_score = GetFinalScore(color);
     const int idx = offset + root_visits%width;
-    const int condered_visists = table[idx] * rounds + height + 
-                                     (visits_this_round - m*adj_considered_moves)/width;
+    const int condered_visists =
+        only_max_visit ?
+            max_visists :
+            table[idx] * rounds + height + 
+                (visits_this_round - m*adj_considered_moves)/width;
 
     for (auto &child : children_) {
         const auto node = child.Get();
@@ -1412,7 +1416,7 @@ bool Node::ShouldApplyGumbel() const {
                param_->gumbel_playouts > visits;
 }
 
-Node *Node::GumbelSelectChild(int color) {
+Node *Node::GumbelSelectChild(int color, bool only_max_visit) {
     WaitExpanded();
     assert(HaveChildren());
 
@@ -1442,9 +1446,12 @@ Node *Node::GumbelSelectChild(int color) {
         }
     }
 
+    const int considered_moves =
+        std::min(param_->gumbel_considered_moves, (int)children_.size());
     ProcessGumbelLogits(gumbel_logits, color,
                             parentvisits, max_visits,
-                            param_->gumbel_considered_moves, -1e6f);
+                            considered_moves, -1e6f,
+                            only_max_visit);
 
     Edge* best_node = nullptr;
     float best_value = std::numeric_limits<float>::lowest();
@@ -1463,5 +1470,5 @@ Node *Node::GumbelSelectChild(int color) {
 int Node::GetGumbelMove() {
     WaitExpanded();
     assert(HaveChildren());
-    return GumbelSelectChild(color_)->GetVertex();
+    return GumbelSelectChild(color_, true)->GetVertex();
 }

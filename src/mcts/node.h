@@ -234,8 +234,9 @@ private:
                                  const int color,
                                  const int root_visits,
                                  const int max_visists,
-                                 const int considered_moves, const float mval);
-    Node *GumbelSelectChild(int color);
+                                 const int considered_moves, const float mval,
+                                 bool only_max_visit);
+    Node *GumbelSelectChild(int color, bool only_max_visit);
 
     Parameters *GetParameters();
 
