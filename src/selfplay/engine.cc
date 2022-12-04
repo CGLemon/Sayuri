@@ -65,9 +65,9 @@ void Engine::ParseQueries() {
                 .prob       = std::stof(tokens[3])};
             board_queries_.emplace_back(q);
             bq_acc_prob += q.prob;
-        } else if (tokens[0] == "bhr" && tokens.size() == 4) {
+        } else if (tokens[0] == "bhp" && tokens.size() == 4) {
             // boardsize-handicaps-rate
-            // "bkp:9:2:0.1"
+            // "bhp:9:2:0.1"
 
             HandicapQuery q {
                 .board_size    = std::stoi(tokens[1]),
