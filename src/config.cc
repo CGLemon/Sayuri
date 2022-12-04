@@ -118,6 +118,7 @@ void InitOptionsMap() {
     kOptionsMap["gumbel_considered_moves"] << Option::setoption(16);
     kOptionsMap["gumbel_playouts"] << Option::setoption(400);
     kOptionsMap["gumbel"] << Option::setoption(false);
+    kOptionsMap["always_completed_q_policy"] << Option::setoption(false);
 
     kOptionsMap["dirichlet_noise"] << Option::setoption(false);
     kOptionsMap["dirichlet_epsilon"] << Option::setoption(0.25f);
@@ -371,6 +372,11 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 
     if (const auto res = parser.Find("--gumbel")) {
         SetOption("gumbel", true);
+        parser.RemoveCommand(res->Index());
+    }
+
+    if (const auto res = parser.Find("--always-completed-q-policy")) {
+        SetOption("always_completed_q_policy", true);
         parser.RemoveCommand(res->Index());
     }
 

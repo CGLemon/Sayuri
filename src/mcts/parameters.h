@@ -38,6 +38,7 @@ public:
         gumbel_considered_moves = GetOption<int>("gumbel_considered_moves");
         gumbel_playouts = GetOption<int>("gumbel_playouts");
         gumbel = GetOption<bool>("gumbel");
+        always_completed_q_policy = GetOption<bool>("always_completed_q_policy");
 
         dirichlet_noise = GetOption<bool>("dirichlet_noise");
         dirichlet_epsilon = GetOption<float>("dirichlet_epsilon");
@@ -118,6 +119,7 @@ public:
     bool symm_pruning;
     bool use_stm_winrate;
     bool analysis_verbose;
+    bool always_completed_q_policy;
 
     std::array<float, kNumVertices + 10> dirichlet_buffer;
 };

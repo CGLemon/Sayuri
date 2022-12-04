@@ -56,7 +56,7 @@ void Engine::ParseQueries() {
 
         if (tokens[0] == "bkp" && tokens.size() == 4) { 
             // boardsize-komi-probabilities
-            // "bkp:19:7.5:20"
+            // "bkp:19:7.5:0.2"
 
             // Assume the query is valid.
             BoardQuery q {
@@ -65,6 +65,17 @@ void Engine::ParseQueries() {
                 .prob       = std::stof(tokens[3])};
             board_queries_.emplace_back(q);
             bq_acc_prob += q.prob;
+        } else if (tokens[0] == "bhr" && tokens.size() == 4) {
+            // boardsize-handicaps-rate
+            // "bkp:9:2:0.1"
+
+            HandicapQuery q {
+                .board_size    = std::stoi(tokens[1]),
+                .handicaps     = std::stoi(tokens[2]),
+                .probabilities = std::stof(tokens[3])};
+            if (q.handicaps >= 2) {
+                handicap_queries_.emplace_back(q);
+            }
         }
     }
 
@@ -103,18 +114,6 @@ void Engine::PrepareGame(int g) {
 
     state.ClearBoard();
 
-    SetNormalGame(g);
-}
-
-void Engine::Selfplay(int g) {
-    Handel(g);
-    auto &state = game_pool_[g];
-    while (!state.IsGameOver()) {
-        state.PlayMove(search_pool_[g]->GetSelfPlayMove());
-    }
-}
-
-void Engine::SetNormalGame(int g) {
     constexpr std::uint32_t kRange = 1000000;
     std::uint32_t rand = Random<>::Get().RandFix<kRange>();
 
@@ -130,21 +129,46 @@ void Engine::SetNormalGame(int g) {
     }
     int query_boardsize = board_queries_[select_bk_idx].board_size;
     float query_komi = board_queries_[select_bk_idx].komi;
+    state.Reset(query_boardsize, query_komi);
+
+    const int h = GetHandicaps(g);
+    if (h > 0) {
+        SetHandicapGame(g, h);
+    } else {
+        SetNormalGame(g);
+    }
+}
+
+void Engine::Selfplay(int g) {
+    Handel(g);
+    auto &state = game_pool_[g];
+    while (!state.IsGameOver()) {
+        state.PlayMove(search_pool_[g]->GetSelfPlayMove());
+    }
+}
+
+void Engine::SetNormalGame(int g) {
+    auto &state = game_pool_[g];
+
+    int boardsize = state.GetBoardSize();
+    float komi = state.GetKomi();
 
     float variance = GetOption<float>("komi_variance");
     auto dist = std::normal_distribution<float>(0.f, variance);
     float bonus = dist(Random<>::Get());
 
-    game_pool_[g].Reset(query_boardsize,
-                            AdjustKomi<float>(query_komi + bonus));
+    game_pool_[g].Reset(boardsize, AdjustKomi<float>(komi + bonus));
 }
 
-void Engine::SetHandicapGame(int g) {
+void Engine::SetHandicapGame(int g, int handicaps) {
     auto &state = game_pool_[g];
 
-    int handicap = Random<>::Get().RandFix<4>() + 1;
-    state.SetFixdHandicap(handicap);
-
+    for (int i = 0; i < handicaps-1; ++i) {
+        auto result = search_pool_[g]->
+                          Computation(16, Search::kNullTag);
+        state.AppendMove(result.random_move, kBlack);
+    }
+    state.SetHandicap(handicaps);
     SetFairKomi(g);
 }
 
@@ -152,13 +176,27 @@ void Engine::SetFairKomi(int g) {
     auto &state = game_pool_[g];
     auto result = search_pool_[g]->Computation(400, Search::kNullTag);
     auto komi = state.GetKomi();
-    auto final_score = result.root_final_score;
+    auto score_lead = result.root_final_score;
 
-    if (state.GetToMove() == kBlack) {
-        final_score = 0.0f - final_score;
+    if (state.GetToMove() == kWhite) {
+        score_lead = 0.0f - score_lead;
     }
 
-    state.SetKomi(AdjustKomi<int>(final_score + komi));
+    state.SetKomi(AdjustKomi<int>(komi + score_lead));
+}
+
+int Engine::GetHandicaps(int g) {
+
+    auto &state = game_pool_[g];
+
+    for (auto &q : handicap_queries_) {
+        if (state.GetBoardSize() == q.board_size) {
+            if (Random<>::Get().Roulette<10000>(q.probabilities)) {
+                return Random<>::Get().Generate() % (q.handicaps-1) + 2;
+            }
+        }
+    }
+    return 0;
 }
 
 int Engine::GetParallelGames() const {

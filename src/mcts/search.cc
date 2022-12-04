@@ -451,7 +451,8 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     }
 
     // Fill target distribution.
-    if (root_node_->ShouldApplyGumbel()) {
+    if (root_node_->ShouldApplyGumbel() ||
+            param_->always_completed_q_policy) {
         result.target_playouts_dist =
             root_node_->GetProbLogitsCompletedQ(root_state_);
     } else {
