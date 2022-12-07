@@ -20,17 +20,11 @@ public:
         resign_threshold = GetOption<float>("resign_threshold");
         lcb_utility_factor = GetOption<float>("lcb_utility_factor");
         lcb_reduction = GetOption<float>("lcb_reduction");
-        fpu_root_reduction = GetOption<float>("fpu_root_reduction");
         fpu_reduction = GetOption<float>("fpu_reduction");
-
         cpuct_init = GetOption<float>("cpuct_init");
-        cpuct_root_init = GetOption<float>("cpuct_root_init");
-
+        cpuct_base_factor = GetOption<float>("cpuct_base_factor");
         cpuct_base = GetOption<float>("cpuct_base");
-        cpuct_root_base = GetOption<float>("cpuct_root_base");
-
         draw_factor = GetOption<float>("draw_factor");
-        draw_factor = GetOption<float>("draw_root_factor");
 
         random_min_visits = GetOption<int>("random_min_visits");
         random_moves_factor = GetOption<float>("random_moves_factor");
@@ -79,14 +73,11 @@ public:
 
     float lcb_utility_factor;
     float lcb_reduction;
-    float fpu_root_reduction;
     float fpu_reduction;
     float cpuct_init;
-    float cpuct_root_init;
+    float cpuct_base_factor;
     float cpuct_base;
-    float cpuct_root_base;
     float draw_factor;
-    float draw_root_factor;
 
     int gumbel_considered_moves;
     int gumbel_playouts;

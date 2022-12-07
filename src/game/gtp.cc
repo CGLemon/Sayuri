@@ -98,6 +98,8 @@ std::string GtpLoop::Execute(CommandParser &parser, bool &try_ponder) {
             out << GtpFail("invalid board size");
         }
     } else if (const auto res = parser.Find("clear_board", 0)){
+        agent_->GetSearch().ReleaseTree();
+        agent_->GetNetwork().ClearCache();
         agent_->GetState().ClearBoard();
         out << GtpSuccess("");
     } else if (const auto res = parser.Find("komi", 0)) {

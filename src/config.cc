@@ -92,13 +92,10 @@ void InitOptionsMap() {
     kOptionsMap["lcb_utility_factor"] << Option::setoption(0.05f);
     kOptionsMap["lcb_reduction"] << Option::setoption(0.02f, 1.f, 0.f);
     kOptionsMap["fpu_reduction"] << Option::setoption(0.25f);
-    kOptionsMap["fpu_root_reduction"] << Option::setoption(0.25f);
-    kOptionsMap["cpuct_init"] << Option::setoption(1.9f);
-    kOptionsMap["cpuct_root_init"] << Option::setoption(1.9f);
+    kOptionsMap["cpuct_init"] << Option::setoption(0.5f);
+    kOptionsMap["cpuct_base_factor"] << Option::setoption(1.0f);
     kOptionsMap["cpuct_base"] << Option::setoption(19652.f);
-    kOptionsMap["cpuct_root_base"] << Option::setoption(19652.f);
     kOptionsMap["draw_factor"] << Option::setoption(0.f);
-    kOptionsMap["draw_root_factor"] << Option::setoption(0.f);
     kOptionsMap["score_utility_factor"] << Option::setoption(0.15f);
     kOptionsMap["score_utility_div"] << Option::setoption(20.f);
     kOptionsMap["expand_threshold"] << Option::setoption(-1);
@@ -558,13 +555,6 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
-    if (const auto res = parser.FindNext("--fpu-root-reduction")) {
-        if (IsParameter(res->Get<std::string>())) {
-            SetOption("fpu_root_reduction", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
-    }
-
     if (const auto res = parser.FindNext("--cpuct-init")) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("cpuct_init", res->Get<float>());
@@ -572,9 +562,9 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
-    if (const auto res = parser.FindNext("--cpuct-root-init")) {
+    if (const auto res = parser.FindNext("--cpuct-base-factor")) {
         if (IsParameter(res->Get<std::string>())) {
-            SetOption("cpuct_root_init", res->Get<float>());
+            SetOption("cpuct_base_factor", res->Get<float>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -586,23 +576,9 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
-    if (const auto res = parser.FindNext("--cpuct-root-base")) {
-        if (IsParameter(res->Get<std::string>())) {
-            SetOption("cpuct_root_base", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
-    }
-
     if (const auto res = parser.FindNext("--draw-factor")) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("draw_factor", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
-    }
-
-    if (const auto res = parser.FindNext("--draw-root-factor")) {
-        if (IsParameter(res->Get<std::string>())) {
-            SetOption("draw_root_factor", res->Get<float>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

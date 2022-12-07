@@ -40,7 +40,7 @@ void Search::Initialize() {
 }
 
 void Search::PlaySimulation(GameState &currstate, Node *const node,
-                            Node *const root_node, SearchResult &search_result) {
+                            const int depth, SearchResult &search_result) {
     node->IncrementThreads();
 
     const bool end_by_passes = currstate.GetPasses() >= 2;
@@ -76,10 +76,6 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
                 }
             }
         }
-        if (search_result.IsValid() &&
-                param_->first_pass_bonus) {
-            search_result.AddPassBouns(currstate);
-        }
     }
 
     // Not the terminate node, search the next node.
@@ -89,14 +85,14 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
 
         // Go to the next node by PUCT/UCT algoritim.
         if (param_->no_dcnn) {
-            next = node->UctSelectChild(color, node == root_node, currstate);
+            next = node->UctSelectChild(color, depth == 0, currstate);
         } else {
-            next = node->PuctSelectChild(color, node == root_node);
+            next = node->PuctSelectChild(color, depth == 0);
         }
         auto vtx = next->GetVertex();
 
         currstate.PlayMove(vtx, color);
-        PlaySimulation(currstate, next, root_node, search_result);
+        PlaySimulation(currstate, next, depth+1, search_result);
     }
 
     // Now Update this node.
@@ -122,9 +118,8 @@ void Search::PrepareRootNode() {
     running_.store(true, std::memory_order_relaxed);
 
     auto node_evals = NodeEvals{};
-    auto root_noise = std::vector<float>{}; // unused
     const bool success = root_node_->PrepareRootNode(
-                             network_, root_state_, node_evals, analysis_config_, root_noise);
+                             network_, root_state_, node_evals, analysis_config_);
 
     if (!reused && success) {
         root_node_->Update(&node_evals);
@@ -241,7 +236,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         while(running_.load(std::memory_order_relaxed)) {
             auto currstate = std::make_unique<GameState>(root_state_);
             auto result = SearchResult{};
-            PlaySimulation(*currstate, root_node_.get(), root_node_.get(), result);
+            PlaySimulation(*currstate, root_node_.get(), 0, result);
             if (result.IsValid()) {
                 playouts_.fetch_add(1, std::memory_order_relaxed);
             }
@@ -298,7 +293,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         auto currstate = std::make_unique<GameState>(root_state_);
         auto result = SearchResult{};
 
-        PlaySimulation(*currstate, root_node_.get(), root_node_.get(), result);
+        PlaySimulation(*currstate, root_node_.get(), 0, result);
         if (result.IsValid()) {
             playouts_.fetch_add(1, std::memory_order_relaxed);
         }
@@ -474,6 +469,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
             // TODO: Prune more bad children in order to get better
             //       target playouts distribution.
             if (node != nullptr &&
+                    node->GetVisits() > 1 &&
                     node->IsActive()) {
                 const auto prob = result.root_playouts_dist[idx];
                 result.target_playouts_dist[idx] = prob;
@@ -493,8 +489,6 @@ void Search::GatherComputationResult(ComputationResult &result) const {
                 prob /= acc_target_policy;
             }
         }
-        root_node_->MixLogitsCompletedQ(
-                        root_state_, result.target_playouts_dist);
     }
 
     // Fill the dead strings and live strings.

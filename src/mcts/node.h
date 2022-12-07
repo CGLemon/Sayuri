@@ -102,8 +102,7 @@ public:
     bool PrepareRootNode(Network &network,
                              GameState &state,
                              NodeEvals& node_evals,
-                             AnalysisConfig &config,
-                             std::vector<float> &dirichlet);
+                             AnalysisConfig &config);
 
     // Select the best policy node.
     Node *ProbSelectChild();
@@ -176,7 +175,6 @@ public:
 
     bool ShouldApplyGumbel() const;
     std::vector<float> GetProbLogitsCompletedQ(GameState &state);
-    void MixLogitsCompletedQ(GameState &state, std::vector<float> &prob);
 
     void IncrementThreads();
     void DecrementThreads();
@@ -213,7 +211,8 @@ private:
     void LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist);
 
     float GetSearchPolicy(Edge& child, bool noise);
-    float GetScoreUtility(const int color, float div, float parent_score) const;
+    float GetScoreUtility(const int color, float div,
+                          float parent_score, bool half_bonus) const;
     float GetLcbVariance(const float default_var, const int visits) const;
     float GetLcb(const int color) const;
 
@@ -222,8 +221,6 @@ private:
 
     void InflateAllChildren();
     void ReleaseAllChildren();
-
-    int GetThreads() const;
     int GetVirtualLoss() const;
 
     float GetGumbelQValue(int color, float parent_score) const;
@@ -237,6 +234,7 @@ private:
                                  const int considered_moves, const float mval,
                                  bool only_max_visit);
     Node *GumbelSelectChild(int color, bool only_max_visit);
+    void MixLogitsCompletedQ(GameState &state, std::vector<float> &prob);
 
     Parameters *GetParameters();
 
