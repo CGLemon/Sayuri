@@ -44,6 +44,18 @@ bool Node::PrepareRootNode(Network &network,
         ApplyDirichletNoise(alpha);
     }
 
+    // Reset the bouns.
+    for (auto &child : children_) {
+        auto node = child.Get();
+        if (param_->first_pass_bonus &&
+                child.GetVertex() == kPass) {
+            // Half komi bouns may efficiently end the game.
+            node->SetScoreBouns(0.5f);
+        } else {
+            node->SetScoreBouns(0.f);
+        }
+    }
+
     return success;
 }
 
@@ -396,14 +408,13 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     const auto score_utility_factor = param_->score_utility_factor;
     const auto score_utility_div    = param_->score_utility_div;
     const auto noise                = is_root ? param_->dirichlet_noise  : false;
-    const auto first_pass_bonus     = is_root ? param_->first_pass_bonus : false;
 
     const float cpuct         = cpuct_init + cpuct_base_factor *
                                                  std::log((float(parentvisits) + cpuct_base + 1) / cpuct_base);
     const float numerator     = std::sqrt(float(parentvisits));
     const float fpu_reduction = fpu_reduction_factor * std::sqrt(total_visited_policy);
     const float fpu_value     = GetNetWL(color) - fpu_reduction;
-    const float score         = GetFinalScore(color);
+    const float parent_score  = GetFinalScore(color);
 
     Edge* best_node = nullptr;
     float best_value = std::numeric_limits<float>::lowest();
@@ -441,8 +452,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
                 // Heuristic value for score lead.
                 utility += score_utility_factor *
                                node->GetScoreUtility(
-                                   color, score_utility_div,
-                                   score, first_pass_bonus);
+                                   color, score_utility_div, parent_score);
             }
             denom += visits;
         }
@@ -629,12 +639,11 @@ std::array<float, kNumIntersections> Node::GetOwnership(int color) {
     return out;
 }
 
-float Node::GetScoreUtility(const int color, float div,
-                            float parent_score, bool half_bonus) const {
-    auto score = GetFinalScore(color);
-    if (half_bonus) {
-        score += 0.5f;
-    }
+float Node::GetScoreUtility(const int color,
+                            float div,
+                            float parent_score) const {
+    const auto score =
+        GetFinalScore(color) + score_bouns_;
     return std::tanh((score - parent_score)/div);
 }
 
@@ -930,7 +939,7 @@ std::vector<std::pair<float, int>> Node::GetLcbUtilityList(const int color) {
             auto lcb = node->GetLcb(color);
             auto utility = lcb_utility_factor *
                                node->GetScoreUtility(
-                                   color, score_utility_div, score, false);
+                                   color, score_utility_div, score);
             const auto ulcb = (lcb + utility) * (1.f - lcb_reduction) + 
                                   lcb_reduction * ((float)visits/parentvisits);
             list.emplace_back(ulcb, node->GetVertex());
@@ -1230,7 +1239,7 @@ float Node::GetGumbelQValue(int color, float parent_score) const {
     const auto mixed_q = GetWL(color, false) +
                              score_utility_factor *
                                  GetScoreUtility(
-                                     color, score_utility_div, parent_score, false);
+                                     color, score_utility_div, parent_score);
     return mixed_q;
 }
 
@@ -1410,12 +1419,11 @@ Node *Node::GumbelSelectChild(int color, bool only_max_visit) {
     assert(HaveChildren());
 
     auto gumbel_type1 = std::extreme_value_distribution<float>(0, 1);
-
-    // Gather all parent's visits.
     auto gumbel_logits = std::vector<float>(kNumVertices+10, -1e6f);
     int parentvisits = 0;
     int max_visits = 0;
 
+    // Gather all parent's visits.
     for (auto &child : children_) {
         const auto node = child.Get();
         const bool is_pointer = node != nullptr;
@@ -1443,7 +1451,7 @@ Node *Node::GumbelSelectChild(int color, bool only_max_visit) {
     float best_value = std::numeric_limits<float>::lowest();
 
     for (auto &child : children_) {
-        auto value = gumbel_logits[child.GetVertex()];
+        const auto value = gumbel_logits[child.GetVertex()];
         if (value > best_value) {
             best_value = value;
             best_node = &child;
@@ -1457,4 +1465,8 @@ int Node::GetGumbelMove() {
     WaitExpanded();
     assert(HaveChildren());
     return GumbelSelectChild(color_, true)->GetVertex();
+}
+
+void Node::SetScoreBouns(float val) {
+    score_bouns_ = val;
 }

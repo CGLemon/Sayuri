@@ -176,6 +176,8 @@ public:
     bool ShouldApplyGumbel() const;
     std::vector<float> GetProbLogitsCompletedQ(GameState &state);
 
+    void SetScoreBouns(float val);
+
     void IncrementThreads();
     void DecrementThreads();
 
@@ -211,8 +213,7 @@ private:
     void LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist);
 
     float GetSearchPolicy(Edge& child, bool noise);
-    float GetScoreUtility(const int color, float div,
-                          float parent_score, bool half_bonus) const;
+    float GetScoreUtility(const int color, float div, float parent_score) const;
     float GetLcbVariance(const float default_var, const int visits) const;
     float GetLcb(const int color) const;
 
@@ -267,10 +268,18 @@ private:
     // Color of the node. Set kInvalid if there are no children.
     int color_{kInvalid};
 
-    Parameters *param_;
+    Parameters *param_{nullptr};
+
+    // According to KataGo, to add a tiny bonus for pass move can
+    // efficiently end the game. It also does not affect the
+    // theoretical optimal play. Only add the bonus during search
+    // in order to do not affect the training result. Be care that
+    // the bouns is not side to move bouns. It will award any side
+    // score utility.
+    float score_bouns_{0.f};
 
     // The network win-loss value.
-    float black_wl_;
+    float black_wl_{0.5f};
 
     // The accumulated squared difference value.
     std::atomic<double> squared_eval_diff_{1e-4f};
