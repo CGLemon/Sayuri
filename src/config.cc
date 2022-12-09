@@ -89,14 +89,15 @@ void InitOptionsMap() {
     kOptionsMap["resign_threshold"] << Option::setoption(0.1f, 1.f, 0.f);
 
     kOptionsMap["ci_alpha"] << Option::setoption(1e-5f, 1.f, 0.f);
-    kOptionsMap["lcb_utility_factor"] << Option::setoption(0.05f);
+    kOptionsMap["lcb_utility_factor"] << Option::setoption(0.1f);
     kOptionsMap["lcb_reduction"] << Option::setoption(0.02f, 1.f, 0.f);
     kOptionsMap["fpu_reduction"] << Option::setoption(0.25f);
+    kOptionsMap["fpu_root_reduction"] << Option::setoption(-1.f);
     kOptionsMap["cpuct_init"] << Option::setoption(0.5f);
     kOptionsMap["cpuct_base_factor"] << Option::setoption(1.0f);
     kOptionsMap["cpuct_base"] << Option::setoption(19652.f);
     kOptionsMap["draw_factor"] << Option::setoption(0.f);
-    kOptionsMap["score_utility_factor"] << Option::setoption(0.15f);
+    kOptionsMap["score_utility_factor"] << Option::setoption(0.1f);
     kOptionsMap["score_utility_div"] << Option::setoption(20.f);
     kOptionsMap["expand_threshold"] << Option::setoption(-1);
 
@@ -181,6 +182,13 @@ void InitBasicParameters() {
     }
     if (!already_set_playouts) {
         SetOption("playouts", std::numeric_limits<int>::max() / 2);
+    }
+
+    // Set the root fpu value.
+    auto fpu_root_reduction = GetOption<float>("fpu_root_reduction");
+    if (fpu_root_reduction < 0.f) {
+        SetOption("fpu_root_reduction",
+                      GetOption<float>("fpu_reduction"));
     }
 
     // Parse the search mode.
@@ -551,6 +559,13 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     if (const auto res = parser.FindNext("--fpu-reduction")) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("fpu_reduction", res->Get<float>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--fpu-root-reduction")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("fpu_root_reduction", res->Get<float>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

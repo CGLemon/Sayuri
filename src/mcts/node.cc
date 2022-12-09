@@ -45,6 +45,7 @@ bool Node::PrepareRootNode(Network &network,
     }
 
     // Reset the bouns.
+    SetScoreBouns(0.f);
     for (auto &child : children_) {
         auto node = child.Get();
         if (param_->first_pass_bonus &&
@@ -400,14 +401,14 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
         }
     }
 
-    const auto fpu_reduction_factor = param_->fpu_reduction;  
     const auto cpuct_init           = param_->cpuct_init;
     const auto cpuct_base_factor    = param_->cpuct_base_factor;
-    const auto cpuct_base           = param_->cpuct_base;    
+    const auto cpuct_base           = param_->cpuct_base;
     const auto draw_factor          = param_->draw_factor;
     const auto score_utility_factor = param_->score_utility_factor;
     const auto score_utility_div    = param_->score_utility_div;
     const auto noise                = is_root ? param_->dirichlet_noise  : false;
+    const auto fpu_reduction_factor = is_root ? param_->fpu_root_reduction : param_->fpu_reduction;
 
     const float cpuct         = cpuct_init + cpuct_base_factor *
                                                  std::log((float(parentvisits) + cpuct_base + 1) / cpuct_base);
@@ -479,12 +480,11 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
     assert(HaveChildren());
     // assert(color == color_);
 
-    Edge* best_node = nullptr;
-    float best_value = std::numeric_limits<float>::lowest();
+    (void) is_root;
 
     const int parentvisits = std::max(1, GetVisits());
     const float numerator = std::log((float)parentvisits);
-    const float cpuct = is_root ? param_->cpuct_init : param_->cpuct_init;
+    const float cpuct = param_->cpuct_init;
     const float parent_qvalue = GetWL(color, false);
 
     std::vector<Edge*> edge_buf;
@@ -492,6 +492,9 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
     for (auto &child : children_) {
         edge_buf.emplace_back(&child);
     }
+
+    Edge* best_node = nullptr;
+    float best_value = std::numeric_limits<float>::lowest();
 
     int width = std::max(ComputeWidth(parentvisits), 1);
     int i = 0;

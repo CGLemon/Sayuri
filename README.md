@@ -116,7 +116,7 @@ Example setting 5: disable the network forwarding pipe, arond 5k on 9x9, 10k on 
 
 ## Graphical Interface
 
-Sayuri is not complete engine. You need a graphical interface for playing with her. She supports any GTP (version 2) interface application. [Sabaki](https://sabaki.yichuanshen.de/) and [GoGui](https://github.com/Remi-Coulom/gogui) are recommended that because Sayuri support some specific analysis commands. 
+Sayuri is not complete engine. You need a graphical interface for playing with her. She supports any GTP (version 2) interface application. [Sabaki](https://sabaki.yichuanshen.de/) and [GoGui](https://github.com/Remi-Coulom/gogui) are recommended that because Sayuri supports some specific analysis commands. 
 
 * Sabaki analysis mode
 
@@ -172,6 +172,12 @@ Although the Neural Network based engines are more powerful, I still recommend y
 * [Ray](https://github.com/kobanium/Ray), may be strongest open source engine before the 2016s.
 
 I am trying to implement this ancient technique currently. Merge the MM patterns based and the DCNN based technique to provide widely dynamic strength. It should be fun.
+
+### The Gumbel learning
+
+On the 2022 CGF Open, the Ray author, Yuki Kobayashi, implemented a new algorithm called Gumbel learning. it is a effective trick for AlphaZero and it guarantees to improve policy with low playouts. As far as I know, Ray is first successful compute Go engine with Gumbel learning on 19x19 except for original paper. Inspired by Ray, I decide to implement this ideal. Hope that this project would become another successful Gumbel learning engine.
+
+* [Policy improvement by planning with Gumbel](https://www.deepmind.com/publications/policy-improvement-by-planning-with-gumbel)
 
 ## Features
 
