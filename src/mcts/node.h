@@ -102,8 +102,7 @@ public:
     bool PrepareRootNode(Network &network,
                              GameState &state,
                              NodeEvals& node_evals,
-                             AnalysisConfig &config,
-                             std::vector<float> &dirichlet);
+                             AnalysisConfig &config);
 
     // Select the best policy node.
     Node *ProbSelectChild();
@@ -115,7 +114,7 @@ public:
     Node *UctSelectChild(const int color, const bool is_root, const GameState &state);
 
     // Randomly select one child by visits. 
-    int RandomizeFirstProportionally(float random_temp);
+    int RandomizeFirstProportionally(float temp, int min_visits);
 
     // Update the node.
     void Update(const NodeEvals *evals);
@@ -123,8 +122,11 @@ public:
     // Get children's LCB values. 
     std::vector<std::pair<float, int>> GetLcbUtilityList(const int color);
 
-    // Get best move(vertex) by LCB value.
+    // Get best move(vertex) with LCB value.
     int GetBestMove();
+
+    // Get best move(vertex) with Gumbel-Top-k trick.
+    int GetGumbelMove();
 
     const std::vector<Edge> &GetChildren() const;
 
@@ -171,6 +173,11 @@ public:
     // Set the network win-loss value from outside.
     void ApplyEvals(const NodeEvals *evals);
 
+    bool ShouldApplyGumbel() const;
+    std::vector<float> GetProbLogitsCompletedQ(GameState &state);
+
+    void SetScoreBouns(float val);
+
     void IncrementThreads();
     void DecrementThreads();
 
@@ -215,11 +222,20 @@ private:
 
     void InflateAllChildren();
     void ReleaseAllChildren();
-
-    int GetThreads() const;
     int GetVirtualLoss() const;
 
+    float GetGumbelQValue(int color, float parent_score) const;
+    float NormalizeCompletedQ(const float completed_q,
+                                  const int max_visits) const;
     void ComputeNodeCount(size_t &nodes, size_t &edges);
+    void ProcessGumbelLogits(std::vector<float> &gumbel_logits,
+                                 const int color,
+                                 const int root_visits,
+                                 const int max_visists,
+                                 const int considered_moves, const float mval,
+                                 bool only_max_visit);
+    Node *GumbelSelectChild(int color, bool only_max_visit);
+    void MixLogitsCompletedQ(GameState &state, std::vector<float> &prob);
 
     Parameters *GetParameters();
 
@@ -252,10 +268,18 @@ private:
     // Color of the node. Set kInvalid if there are no children.
     int color_{kInvalid};
 
-    Parameters *param_;
+    Parameters *param_{nullptr};
+
+    // According to KataGo, to add a tiny bonus for pass move can
+    // efficiently end the game. It also does not affect the
+    // theoretical optimal play. Only add the bonus during search
+    // in order to do not affect the training result. Be care that
+    // the bouns is not side to move bouns. It will award any side
+    // score utility.
+    float score_bouns_{0.f};
 
     // The network win-loss value.
-    float black_wl_;
+    float black_wl_{0.5f};
 
     // The accumulated squared difference value.
     std::atomic<double> squared_eval_diff_{1e-4f};

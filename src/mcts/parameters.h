@@ -20,20 +20,20 @@ public:
         resign_threshold = GetOption<float>("resign_threshold");
         lcb_utility_factor = GetOption<float>("lcb_utility_factor");
         lcb_reduction = GetOption<float>("lcb_reduction");
-        fpu_root_reduction = GetOption<float>("fpu_root_reduction");
         fpu_reduction = GetOption<float>("fpu_reduction");
-
+        fpu_root_reduction = GetOption<float>("fpu_root_reduction");
         cpuct_init = GetOption<float>("cpuct_init");
-        cpuct_root_init = GetOption<float>("cpuct_root_init");
-
+        cpuct_base_factor = GetOption<float>("cpuct_base_factor");
         cpuct_base = GetOption<float>("cpuct_base");
-        cpuct_root_base = GetOption<float>("cpuct_root_base");
-
         draw_factor = GetOption<float>("draw_factor");
-        draw_factor = GetOption<float>("draw_root_factor");
 
         random_min_visits = GetOption<int>("random_min_visits");
         random_moves_factor = GetOption<float>("random_moves_factor");
+
+        gumbel_considered_moves = GetOption<int>("gumbel_considered_moves");
+        gumbel_playouts = GetOption<int>("gumbel_playouts");
+        gumbel = GetOption<bool>("gumbel");
+        always_completed_q_policy = GetOption<bool>("always_completed_q_policy");
 
         dirichlet_noise = GetOption<bool>("dirichlet_noise");
         dirichlet_epsilon = GetOption<float>("dirichlet_epsilon");
@@ -74,14 +74,16 @@ public:
 
     float lcb_utility_factor;
     float lcb_reduction;
-    float fpu_root_reduction;
     float fpu_reduction;
+    float fpu_root_reduction;
     float cpuct_init;
-    float cpuct_root_init;
+    float cpuct_base_factor;
     float cpuct_base;
-    float cpuct_root_base;
     float draw_factor;
-    float draw_root_factor;
+
+    int gumbel_considered_moves;
+    int gumbel_playouts;
+    bool gumbel;
 
     bool dirichlet_noise;
     float dirichlet_epsilon;
@@ -110,6 +112,7 @@ public:
     bool symm_pruning;
     bool use_stm_winrate;
     bool analysis_verbose;
+    bool always_completed_q_policy;
 
     std::array<float, kNumVertices + 10> dirichlet_buffer;
 };

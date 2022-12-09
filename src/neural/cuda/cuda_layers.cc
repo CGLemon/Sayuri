@@ -323,11 +323,6 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
     scratch_size = std::max(apply_scratch_size, scratch_size);
 #else
     const int board_size = (width_ + height_) / 2;
-
-    // TODO: Seem there are overflow bug in the convolution
-    //       Kernel. We set a greater buffer size to avoid this 
-    //       bug. Need to fix it later.
-    const int overflow_factor = 16;
     int scratch_size_base = 0;
 
     if (winograd_) {
@@ -337,7 +332,7 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
     } else {
         scratch_size_base = filter_dim_ * spatial_size_;
     }
-    apply_scratch_size = maxbatch_ * scratch_size_base * overflow_factor;
+    apply_scratch_size = maxbatch_ * scratch_size_base * sizeof(float);
     scratch_size = std::max(apply_scratch_size, scratch_size);
 #endif
 }

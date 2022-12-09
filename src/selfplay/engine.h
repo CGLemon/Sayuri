@@ -25,18 +25,25 @@ private:
         float komi;
         float prob;
     };
+    struct HandicapQuery {
+        int board_size;
+        int handicaps;
+        float probabilities;
+    };
 
     void ParseQueries();
     void SetNormalGame(int g);
-    void SetHandicapGame(int g);
+    void SetHandicapGame(int g, int handicaps);
 
     void SetFairKomi(int g);
+    int GetHandicaps(int g);
 
     void Handel(int g);
 
     int parallel_games_;
 
     std::vector<BoardQuery> board_queries_;
+    std::vector<HandicapQuery> handicap_queries_;
 
     std::unique_ptr<Network> network_{nullptr};
     std::vector<std::unique_ptr<Search>> search_pool_;

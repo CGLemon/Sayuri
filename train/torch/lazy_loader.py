@@ -142,7 +142,10 @@ def __gather_batch(config, data_readers, batch_writer):
 
         # Send the batch.
         batch = batch_gen.func(data_list)
-        batch_writer.send(batch)
+        try:
+            batch_writer.send(batch)
+        except:
+            return
 
 def LazyLoader(*args, **kwargs):
     config = LoaderConfig()

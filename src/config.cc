@@ -89,17 +89,15 @@ void InitOptionsMap() {
     kOptionsMap["resign_threshold"] << Option::setoption(0.1f, 1.f, 0.f);
 
     kOptionsMap["ci_alpha"] << Option::setoption(1e-5f, 1.f, 0.f);
-    kOptionsMap["lcb_utility_factor"] << Option::setoption(0.05f);
+    kOptionsMap["lcb_utility_factor"] << Option::setoption(0.1f);
     kOptionsMap["lcb_reduction"] << Option::setoption(0.02f, 1.f, 0.f);
     kOptionsMap["fpu_reduction"] << Option::setoption(0.25f);
-    kOptionsMap["fpu_root_reduction"] << Option::setoption(0.25f);
-    kOptionsMap["cpuct_init"] << Option::setoption(1.9f);
-    kOptionsMap["cpuct_root_init"] << Option::setoption(1.9f);
+    kOptionsMap["fpu_root_reduction"] << Option::setoption(-1.f);
+    kOptionsMap["cpuct_init"] << Option::setoption(0.5f);
+    kOptionsMap["cpuct_base_factor"] << Option::setoption(1.0f);
     kOptionsMap["cpuct_base"] << Option::setoption(19652.f);
-    kOptionsMap["cpuct_root_base"] << Option::setoption(19652.f);
     kOptionsMap["draw_factor"] << Option::setoption(0.f);
-    kOptionsMap["draw_root_factor"] << Option::setoption(0.f);
-    kOptionsMap["score_utility_factor"] << Option::setoption(0.15f);
+    kOptionsMap["score_utility_factor"] << Option::setoption(0.1f);
     kOptionsMap["score_utility_div"] << Option::setoption(20.f);
     kOptionsMap["expand_threshold"] << Option::setoption(-1);
 
@@ -114,6 +112,11 @@ void InitOptionsMap() {
     kOptionsMap["selfplay_query"] << Option::setoption(std::string{});
     kOptionsMap["random_min_visits"] << Option::setoption(1);
     kOptionsMap["random_moves_factor"] << Option::setoption(0.f);
+
+    kOptionsMap["gumbel_considered_moves"] << Option::setoption(16);
+    kOptionsMap["gumbel_playouts"] << Option::setoption(400);
+    kOptionsMap["gumbel"] << Option::setoption(false);
+    kOptionsMap["always_completed_q_policy"] << Option::setoption(false);
 
     kOptionsMap["dirichlet_noise"] << Option::setoption(false);
     kOptionsMap["dirichlet_epsilon"] << Option::setoption(0.25f);
@@ -179,6 +182,13 @@ void InitBasicParameters() {
     }
     if (!already_set_playouts) {
         SetOption("playouts", std::numeric_limits<int>::max() / 2);
+    }
+
+    // Set the root fpu value.
+    auto fpu_root_reduction = GetOption<float>("fpu_root_reduction");
+    if (fpu_root_reduction < 0.f) {
+        SetOption("fpu_root_reduction",
+                      GetOption<float>("fpu_reduction"));
     }
 
     // Parse the search mode.
@@ -348,6 +358,30 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 
     if (const auto res = parser.Find({"--dirichlet-noise", "--noise", "-n"})) {
         SetOption("dirichlet_noise", true);
+        parser.RemoveCommand(res->Index());
+    }
+
+    if (const auto res = parser.FindNext("--gumbel-considered-moves")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("gumbel_considered_moves", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.FindNext("--gumbel-playouts")) {
+        if (IsParameter(res->Get<std::string>())) {
+            SetOption("gumbel_playouts", res->Get<int>());
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = parser.Find("--gumbel")) {
+        SetOption("gumbel", true);
+        parser.RemoveCommand(res->Index());
+    }
+
+    if (const auto res = parser.Find("--always-completed-q-policy")) {
+        SetOption("always_completed_q_policy", true);
         parser.RemoveCommand(res->Index());
     }
 
@@ -543,9 +577,9 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
-    if (const auto res = parser.FindNext("--cpuct-root-init")) {
+    if (const auto res = parser.FindNext("--cpuct-base-factor")) {
         if (IsParameter(res->Get<std::string>())) {
-            SetOption("cpuct_root_init", res->Get<float>());
+            SetOption("cpuct_base_factor", res->Get<float>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -557,23 +591,9 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
-    if (const auto res = parser.FindNext("--cpuct-root-base")) {
-        if (IsParameter(res->Get<std::string>())) {
-            SetOption("cpuct_root_base", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
-    }
-
     if (const auto res = parser.FindNext("--draw-factor")) {
         if (IsParameter(res->Get<std::string>())) {
             SetOption("draw_factor", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
-    }
-
-    if (const auto res = parser.FindNext("--draw-root-factor")) {
-        if (IsParameter(res->Get<std::string>())) {
-            SetOption("draw_root_factor", res->Get<float>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

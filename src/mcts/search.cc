@@ -40,7 +40,7 @@ void Search::Initialize() {
 }
 
 void Search::PlaySimulation(GameState &currstate, Node *const node,
-                            Node *const root_node, SearchResult &search_result) {
+                            const int depth, SearchResult &search_result) {
     node->IncrementThreads();
 
     const bool end_by_passes = currstate.GetPasses() >= 2;
@@ -76,10 +76,6 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
                 }
             }
         }
-        if (search_result.IsValid() &&
-                param_->first_pass_bonus) {
-            search_result.AddPassBouns(currstate);
-        }
     }
 
     // Not the terminate node, search the next node.
@@ -89,14 +85,14 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
 
         // Go to the next node by PUCT/UCT algoritim.
         if (param_->no_dcnn) {
-            next = node->UctSelectChild(color, node == root_node, currstate);
+            next = node->UctSelectChild(color, depth == 0, currstate);
         } else {
-            next = node->PuctSelectChild(color, node == root_node);
+            next = node->PuctSelectChild(color, depth == 0);
         }
         auto vtx = next->GetVertex();
 
         currstate.PlayMove(vtx, color);
-        PlaySimulation(currstate, next, root_node, search_result);
+        PlaySimulation(currstate, next, depth+1, search_result);
     }
 
     // Now Update this node.
@@ -122,9 +118,8 @@ void Search::PrepareRootNode() {
     running_.store(true, std::memory_order_relaxed);
 
     auto node_evals = NodeEvals{};
-    auto root_noise = std::vector<float>{}; // unused
     const bool success = root_node_->PrepareRootNode(
-                             network_, root_state_, node_evals, analysis_config_, root_noise);
+                             network_, root_state_, node_evals, analysis_config_);
 
     if (!reused && success) {
         root_node_->Update(&node_evals);
@@ -241,7 +236,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         while(running_.load(std::memory_order_relaxed)) {
             auto currstate = std::make_unique<GameState>(root_state_);
             auto result = SearchResult{};
-            PlaySimulation(*currstate, root_node_.get(), root_node_.get(), result);
+            PlaySimulation(*currstate, root_node_.get(), 0, result);
             if (result.IsValid()) {
                 playouts_.fetch_add(1, std::memory_order_relaxed);
             }
@@ -298,7 +293,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         auto currstate = std::make_unique<GameState>(root_state_);
         auto result = SearchResult{};
 
-        PlaySimulation(*currstate, root_node_.get(), root_node_.get(), result);
+        PlaySimulation(*currstate, root_node_.get(), 0, result);
         if (result.IsValid()) {
             playouts_.fetch_add(1, std::memory_order_relaxed);
         }
@@ -396,7 +391,10 @@ void Search::GatherComputationResult(ComputationResult &result) const {
 
     // Fill best moves, root eval and score.
     result.best_move = root_node_->GetBestMove();
-    result.random_move = root_node_->RandomizeFirstProportionally(1);
+    result.random_move = root_node_->
+                             RandomizeFirstProportionally(
+                                 1, param_->random_min_visits);
+    result.gumbel_move = root_node_->GetGumbelMove();
     result.root_final_score = root_node_->GetFinalScore(color);
     result.root_eval = root_node_->GetWL(color, false);
     {
@@ -448,42 +446,48 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     }
 
     // Fill target distribution.
-    float acc_target_policy = 0.0f;
-    size_t target_cnt = 0;
-    for (int idx = 0; idx < num_intersections+1; ++idx) {
-        const auto x = idx % board_size;
-        const auto y = idx / board_size;
-        int vertex;
-
-        if (idx == num_intersections) {
-            vertex = kPass;
-        } else {
-            vertex = root_state_.GetVertex(x, y);
-        }
-
-        auto node = root_node_->GetChild(vertex);
-
-        // TODO: Prune more bad children in order to get better
-        //       target playouts distribution.
-        if (node != nullptr &&
-                node->IsActive() &&
-                node->GetVisits() > 1) {
-            const auto prob = result.root_playouts_dist[idx];
-            result.target_playouts_dist[idx] = prob;
-            acc_target_policy += prob;
-            target_cnt += 1;
-        } else {
-            result.target_playouts_dist[idx] = 0.0f;
-        }
-    }
-
-    if (target_cnt == 0) {
-        // All moves are pruned. We directly use the raw
-        // distribution.
-        result.target_playouts_dist = result.root_playouts_dist;
+    if (root_node_->ShouldApplyGumbel() ||
+            param_->always_completed_q_policy) {
+        result.target_playouts_dist =
+            root_node_->GetProbLogitsCompletedQ(root_state_);
     } else {
-        for (auto &prob : result.target_playouts_dist) {
-            prob /= acc_target_policy;
+        float acc_target_policy = 0.0f;
+        size_t target_cnt = 0;
+        for (int idx = 0; idx < num_intersections+1; ++idx) {
+            const auto x = idx % board_size;
+            const auto y = idx / board_size;
+            int vertex;
+
+            if (idx == num_intersections) {
+                vertex = kPass;
+            } else {
+                vertex = root_state_.GetVertex(x, y);
+            }
+
+            auto node = root_node_->GetChild(vertex);
+
+            // TODO: Prune more bad children in order to get better
+            //       target playouts distribution.
+            if (node != nullptr &&
+                    node->GetVisits() > 1 &&
+                    node->IsActive()) {
+                const auto prob = result.root_playouts_dist[idx];
+                result.target_playouts_dist[idx] = prob;
+                acc_target_policy += prob;
+                target_cnt += 1;
+            } else {
+                result.target_playouts_dist[idx] = 0.0f;
+            }
+        }
+
+        if (target_cnt == 0) {
+            // All moves are pruned. We directly use the raw
+            // distribution.
+            result.target_playouts_dist = result.root_playouts_dist;
+        } else {
+            for (auto &prob : result.target_playouts_dist) {
+                prob /= acc_target_policy;
+            }
         }
     }
 
@@ -669,6 +673,10 @@ int Search::GetSelfPlayMove() {
         playouts /= 10;
     }
 
+    // There is at least one playout for the self-play move
+    // because some move select functions need at least one.
+    playouts = std::max(1, playouts);
+
     auto result = Computation(playouts, tag);
     int move = result.best_move;
     int random_moves_cnt = param_->random_moves_factor *
@@ -678,6 +686,12 @@ int Search::GetSelfPlayMove() {
     // game state diversity.
     if (random_moves_cnt > result.movenum) {
         move = result.random_move;
+    }
+
+    // The Gumbel-Top-k trick holds more information, so we use it instead
+    // of random move.
+    if (root_node_->ShouldApplyGumbel()) {
+        move = result.gumbel_move;
     }
 
     // Save the move comment.
@@ -863,10 +877,12 @@ bool Search::AdvanceToNewRootState() {
         return false;
     }
 
-    if (param_->dirichlet_noise || param_->root_dcnn) {
-        // Need to re-build the trees if we apply noise. Reuse the
-        // tree will ignore the noise. The root_dcnn option only
-        // apply the network at root. The tree shape of root is different
+    if (param_->gumbel ||
+            param_->dirichlet_noise ||
+            param_->root_dcnn) {
+        // Need to re-build the trees if we apply noise or Gumbel. Reuse
+        // the tree will ignore them. The root_dcnn option only apply
+        // the network at root. The tree shape of root is different
         // from children.
         return false;
     }
@@ -936,8 +952,8 @@ int Search::GetPonderPlayouts() const {
     //       too many system memory.
     const int ponder_playouts_base = std::min(param_->playouts,
                                                   kMaxPlayouts/div_factor);
-    const int ponder_playouts = std::max(4 * 1024,
-                                             ponder_playouts_base * div_factor);
+    const int ponder_playouts =  ponder_playouts_base * div_factor;
+
     return ponder_playouts;
 }
 
