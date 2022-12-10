@@ -440,14 +440,21 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     }
 
     // Fill raw probabilities.
-    for (int idx = 0; idx < num_intersections+1; ++idx) {
-        result.root_playouts_dist[idx] =
-            (float)(result.root_visits[idx]) / parentvisits;;
+    if (parentvisits != 0) {
+        for (int idx = 0; idx < num_intersections+1; ++idx) {
+            result.root_playouts_dist[idx] =
+                (float)(result.root_visits[idx]) / parentvisits;
+        }
+    } else {
+        for (int idx = 0; idx < num_intersections+1; ++idx) {
+            result.root_playouts_dist[idx] = 1.f/(num_intersections+1);
+        }
     }
 
     // Fill target distribution.
-    if (root_node_->ShouldApplyGumbel() ||
-            param_->always_completed_q_policy) {
+    if (parentvisits != 0 &&
+            (root_node_->ShouldApplyGumbel() ||
+             param_->always_completed_q_policy)) {
         result.target_playouts_dist =
             root_node_->GetProbLogitsCompletedQ(root_state_);
     } else {

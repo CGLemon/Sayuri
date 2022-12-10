@@ -565,7 +565,12 @@ int Node::RandomizeFirstProportionally(float temp, int min_visits) {
     }
 
     if (accum_vector.empty()) {
-        return RandomizeFirstProportionally(temp, 0);
+        if (min_visits > 0) {
+            return RandomizeFirstProportionally(temp, 0);
+        } else {
+            // There is no visits. Reture the best policy move.
+            return GetBestMove();
+        }
     }
 
     auto distribution = std::uniform_real_distribution<float>{0.0, accum};
