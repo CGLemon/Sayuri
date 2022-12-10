@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 
 void PatternHashAndCoordsInit();
 int CharToColor(char s);
