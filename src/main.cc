@@ -3,7 +3,7 @@
 #include "include.h"
 
 void DumpLicense() {
-    auto name_ver = Format("%s %s(%s)",
+    auto name_ver = Format("%s %s (%s)",
                                GetProgramName().c_str(),
                                GetProgramVersion().c_str(),
                                GetVersionName().c_str());

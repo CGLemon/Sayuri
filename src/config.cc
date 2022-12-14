@@ -20,16 +20,7 @@ template<>                                          \
 T GetOption<T>(std::string name) {                  \
     return kOptionsMap.find(name)->second.Get<T>(); \
 }                                                   \
-
-OPTIONS_EXPASSION(std::string)
-OPTIONS_EXPASSION(bool)
-OPTIONS_EXPASSION(int)
-OPTIONS_EXPASSION(float)
-OPTIONS_EXPASSION(char)
-
-#undef OPTIONS_EXPASSION
-
-#define OPTIONS_SET_EXPASSION(T)                    \
+                                                    \
 template<>                                          \
 bool SetOption<T>(std::string name, T val) {        \
     auto res = kOptionsMap.find(name);              \
@@ -40,16 +31,15 @@ bool SetOption<T>(std::string name, T val) {        \
     return false;                                   \
 }
 
-OPTIONS_SET_EXPASSION(std::string)
-OPTIONS_SET_EXPASSION(bool)
-OPTIONS_SET_EXPASSION(int)
-OPTIONS_SET_EXPASSION(float)
-OPTIONS_SET_EXPASSION(char)
+OPTIONS_EXPASSION(std::string)
+OPTIONS_EXPASSION(bool)
+OPTIONS_EXPASSION(int)
+OPTIONS_EXPASSION(float)
+OPTIONS_EXPASSION(char)
 
-#undef OPTIONS_SET_EXPASSION
+#undef OPTIONS_EXPASSION
 
-
-void InitOptionsMap() {
+void ArgsParser::InitOptionsMap() const {
     kOptionsMap["help"] << Option::setoption(false);
     kOptionsMap["mode"] << Option::setoption(std::string{"gtp"});
     
@@ -92,7 +82,7 @@ void InitOptionsMap() {
     kOptionsMap["lcb_utility_factor"] << Option::setoption(0.1f);
     kOptionsMap["lcb_reduction"] << Option::setoption(0.02f, 1.f, 0.f);
     kOptionsMap["fpu_reduction"] << Option::setoption(0.25f);
-    kOptionsMap["fpu_root_reduction"] << Option::setoption(-1.f);
+    kOptionsMap["fpu_root_reduction"] << Option::setoption(0.25f);
     kOptionsMap["cpuct_init"] << Option::setoption(0.5f);
     kOptionsMap["cpuct_base_factor"] << Option::setoption(1.0f);
     kOptionsMap["cpuct_base"] << Option::setoption(19652.f);
@@ -134,7 +124,7 @@ void InitOptionsMap() {
     kOptionsMap["target_directory"] << Option::setoption(std::string{});
 }
 
-void InitBasicParameters() {
+void ArgsParser::InitBasicParameters() const {
     PatternHashAndCoordsInit();
     Board::InitPattern3();
     Zobrist::Initialize();
@@ -185,8 +175,7 @@ void InitBasicParameters() {
     }
 
     // Set the root fpu value.
-    auto fpu_root_reduction = GetOption<float>("fpu_root_reduction");
-    if (fpu_root_reduction < 0.f) {
+    if (!init_fpu_root_) {
         SetOption("fpu_root_reduction",
                       GetOption<float>("fpu_reduction"));
     }
@@ -565,6 +554,7 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 
     if (const auto res = parser.FindNext("--fpu-root-reduction")) {
         if (IsParameter(res->Get<std::string>())) {
+            init_fpu_root_ = true;
             SetOption("fpu_root_reduction", res->Get<float>());
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         }

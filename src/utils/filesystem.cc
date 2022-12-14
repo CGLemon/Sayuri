@@ -19,9 +19,18 @@ std::string ConnectPath(const std::string path_1, const std::string path_2) {
 }
 
 std::string ConnectPath(std::initializer_list<std::string> list) {
-    auto path = std::string{"."};
-    for (auto &v : list) {
-        path = ConnectPath(path, v);
+    if (list.size() == 0) {
+        return std::string{};
+    }
+
+    auto next = std::begin(list);
+    auto path = *next;
+    while (true) {
+        next+=1;
+        if (next == std::end(list)) {
+            break;
+        }
+        path = ConnectPath(path, *next);
     }
     return path;
 }

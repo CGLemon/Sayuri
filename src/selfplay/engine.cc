@@ -66,7 +66,7 @@ void Engine::ParseQueries() {
             board_queries_.emplace_back(q);
             bq_acc_prob += q.prob;
         } else if (tokens[0] == "bhp" && tokens.size() == 4) {
-            // boardsize-handicaps-rate
+            // boardsize-handicaps-probabilities
             // "bhp:9:2:0.1"
 
             HandicapQuery q {
@@ -148,6 +148,7 @@ void Engine::Selfplay(int g) {
 }
 
 void Engine::SetNormalGame(int g) {
+    Handel(g);
     auto &state = game_pool_[g];
 
     int boardsize = state.GetBoardSize();
@@ -161,11 +162,12 @@ void Engine::SetNormalGame(int g) {
 }
 
 void Engine::SetHandicapGame(int g, int handicaps) {
+    Handel(g);
     auto &state = game_pool_[g];
 
     for (int i = 0; i < handicaps-1; ++i) {
         auto result = search_pool_[g]->
-                          Computation(16, Search::kNullTag);
+                          Computation(400, Search::kNoNoise);
         state.AppendMove(result.random_move, kBlack);
     }
     state.SetHandicap(handicaps);
@@ -173,8 +175,10 @@ void Engine::SetHandicapGame(int g, int handicaps) {
 }
 
 void Engine::SetFairKomi(int g) {
+    Handel(g);
     auto &state = game_pool_[g];
-    auto result = search_pool_[g]->Computation(400, Search::kNullTag);
+
+    auto result = search_pool_[g]->Computation(400, Search::kNoNoise);
     auto komi = state.GetKomi();
     auto score_lead = result.root_final_score;
 
@@ -186,7 +190,7 @@ void Engine::SetFairKomi(int g) {
 }
 
 int Engine::GetHandicaps(int g) {
-
+    Handel(g);
     auto &state = game_pool_[g];
 
     for (auto &q : handicap_queries_) {

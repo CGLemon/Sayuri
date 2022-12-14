@@ -24,7 +24,7 @@ void DNNLoder::FromFile(std::shared_ptr<DNNWeights> weights, std::string filenam
     auto line = std::string{};
 
     if (filename.empty()) {
-        LOGGING << "No weights file," << std::endl;
+        LOGGING << "There is no weights file." << std::endl;
         return;
     }
 

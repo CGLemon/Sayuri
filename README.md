@@ -175,9 +175,11 @@ I am trying to implement this ancient technique currently. Merge the MM patterns
 
 ### The Gumbel learning
 
-On the 2022 CGF Open, the Ray author, Yuki Kobayashi, implemented a new algorithm called Gumbel learning. it is a effective trick for AlphaZero and it guarantees to improve policy with low playouts. As far as I know, Ray is first successful compute Go engine with Gumbel learning on 19x19 except for original paper. Inspired by Ray, I decide to implement this ideal. Hope that this project would become another successful Gumbel learning engine.
+On the 2022 CGF Open, the Ray author, Yuki Kobayashi, implemented a new algorithm called Gumbel learning. it is a effective trick for AlphaZero and it guarantees to improve policy with low playouts. As far as I know, Ray is the first successful superhuman level engine with Gumbel learning on 19x19. Inspired by Ray, I decide to implement this ideal in my project. Hope that this project would become another successful Gumbel learning engine.
 
 * [Policy improvement by planning with Gumbel](https://www.deepmind.com/publications/policy-improvement-by-planning-with-gumbel)
+
+* [Ray's apeal letter for UEC 14](https://drive.google.com/file/d/1yLjGboOLMOryhHT-aWG_0zAF-G7LDcTH/view)
 
 ## Features
 

@@ -17,4 +17,8 @@ public:
 private:
     void DumpHelper() const;
     void DumpWarning() const;
+    void InitBasicParameters() const;
+    void InitOptionsMap() const;
+
+    bool init_fpu_root_{false};
 };

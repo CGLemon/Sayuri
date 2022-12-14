@@ -64,12 +64,12 @@ public:
 
         auto kgs_hint = GetOption<std::string>("kgs_hint");
         if (kgs_hint.empty()) {
-            version_verbose_ = Format("%s(%s)",
+            version_verbose_ = Format("%s (%s)",
                                           GetProgramVersion().c_str(),
                                           GetVersionName().c_str()
                                      );
         } else {
-            version_verbose_ = Format("%s(%s). %s",
+            version_verbose_ = Format("%s (%s). %s",
                                           GetProgramVersion().c_str(),
                                           GetVersionName().c_str(),
                                           kgs_hint.c_str()

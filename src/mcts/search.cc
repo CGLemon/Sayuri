@@ -202,6 +202,13 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         }
     }
 
+    // Disable any noise if we forbid them.
+    const bool gumbel = param_->gumbel;
+    const bool dirichlet_noise = param_->dirichlet_noise;
+    if (tag & kNoNoise) {
+        param_->gumbel = param_->dirichlet_noise = false;
+    }
+
     // Prepare some basic information.
     const auto color = root_state_.GetToMove();
     const auto board_size = root_state_.GetBoardSize();
@@ -375,11 +382,16 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     // Save the last game state.
     last_state_ = root_state_;
 
+    // Recover the search status.
     if (tag & kForced) {
         for (int i = 0; i < num_passes; ++i) {
             root_state_.PlayMove(kPass);
         }
     }
+    if (tag & kNoNoise) {
+        param_->gumbel = gumbel;
+        param_->dirichlet_noise = dirichlet_noise;
+    } 
 
     return computation_result;
 }

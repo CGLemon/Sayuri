@@ -36,12 +36,13 @@ void SelfPlayPipe::Initialize() {
     filename_hash_ = ss.str();
     sgf_directory_ = ConnectPath(target_directory_, "sgf");
     data_directory_ = ConnectPath(target_directory_, "data");
+    data_directory_hash_ = ConnectPath(data_directory_, filename_hash_);
 }
 
 bool SelfPlayPipe::SaveChunk(const int out_id,
                                  std::vector<Training> &chunk) {
     auto out_name = ConnectPath(
-                        data_directory_,
+                        data_directory_hash_,
                         filename_hash_ +
                             "_" +
                             std::to_string(out_id) + 
@@ -102,6 +103,9 @@ void SelfPlayPipe::Loop() {
     if (!IsDirectoryExist(data_directory_)) {
         CreateDirectory(data_directory_);
     }
+    if (!IsDirectoryExist(data_directory_hash_)) {
+        CreateDirectory(data_directory_hash_);
+    }
     if (!IsDirectoryExist(sgf_directory_)) {
         CreateDirectory(sgf_directory_);
     }
@@ -139,7 +143,7 @@ void SelfPlayPipe::Loop() {
 
                     if (played_games % 100 == 0) {
                         std::lock_guard<std::mutex> lock(log_mutex_);
-                        LOGGING << '[' << CurrentDateTime() << ']' << "Played " << played_games << " games." << std::endl;
+                        LOGGING << '[' << CurrentDateTime() << ']' << " Played " << played_games << " games." << std::endl;
                     }
                 }
 
@@ -162,6 +166,6 @@ void SelfPlayPipe::Loop() {
         t.join();
     }
     LOGGING << '[' << CurrentDateTime() << ']'
-                << "Finish the self-play loop. Totally played "
+                << " Finish the self-play loop. Totally played "
                 << played_games_.load(std::memory_order_relaxed) << " games." << std::endl;
 }
