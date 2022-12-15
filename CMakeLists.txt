@@ -38,6 +38,11 @@ else()
     cmake_minimum_required(VERSION 3.10)
 endif()
 
+if(BOARD_SIZE)
+     message("Use the specific ${BOARD_SIZE} x ${BOARD_SIZE} board size.")
+     add_definitions(-DMAX_BOARD_SIZE=${BOARD_SIZE})
+endif()
+
 # Set up the root.
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(GAME_SOURCES_DIR ${SOURCE_DIR}/game)
@@ -247,7 +252,6 @@ if(_USE_CUDA)
     endif()
     string(APPEND CMAKE_CUDA_FLAGS "-cudart shared")
     set(CMAKE_CUDA_RUNTIME_LIBRARY SHARED)
-
 else()
     if(_USE_EIGEN)
         message(STATUS "Backend is Eigen")

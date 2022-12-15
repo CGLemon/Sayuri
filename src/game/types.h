@@ -2,9 +2,11 @@
 
 #include <cstdint>
 
+#ifndef MAX_BOARD_SIZE
 #define MAX_BOARD_SIZE (19)
+#endif
 
-static constexpr int kDefaultBoardSize = 19;
+static constexpr int kDefaultBoardSize = MAX_BOARD_SIZE;
 static constexpr float kDefaultKomi = 7.5f;
 
 static constexpr int kBoardSize = MAX_BOARD_SIZE;
@@ -16,7 +18,7 @@ static constexpr int kNullVertex = 0;
 static constexpr int kPass = kNumVertices + 1;
 static constexpr int kResign = kNumVertices + 2;
 
-static constexpr int kMaxGTPBoardSize = 25;
+static constexpr int kMaxGTPBoardSize = 37;
 static constexpr int kMinGTPBoardSize = 2;
 
 static_assert(kDefaultBoardSize <= kBoardSize, "");

@@ -52,6 +52,9 @@ Accelerate to load the network file. Fast Float library is required.
 
     $ cmake .. -DUSE_FAST_PARSER=1
 
+Compile a bigger board size version.
+
+    $ cmake .. -DBOARD_SIZE=25
 
 ## Weights
 
