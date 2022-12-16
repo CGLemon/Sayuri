@@ -1,5 +1,4 @@
 #include "utils/option.h"
-#include "utils/parser.h"
 #include "utils/log.h"
 #include "utils/mutex.h"
 #include "game/zobrist.h"
@@ -12,6 +11,7 @@
 
 #include <limits>
 #include <sstream>
+#include <fstream>
 
 std::unordered_map<std::string, Option> kOptionsMap;
 
@@ -42,7 +42,7 @@ OPTIONS_EXPASSION(char)
 void ArgsParser::InitOptionsMap() const {
     kOptionsMap["help"] << Option::setoption(false);
     kOptionsMap["mode"] << Option::setoption(std::string{"gtp"});
-    
+    kOptionsMap["inputs"] << Option::setoption(std::string{});
 
     // engine options
     kOptionsMap["ponder"] << Option::setoption(false);
@@ -203,32 +203,78 @@ void ArgsParser::InitBasicParameters() const {
     }
 }
 
-std::string ParseHint(std::string raw_hint) {
-    auto hint = std::string{};
-
-    for (auto i = size_t{0}; i < raw_hint.size(); ++i) {
-        char c = raw_hint[i];
-
-        if (c == '+') {
-            hint += ' ';
-        } else {
-            hint += c;
-        }
+bool IsParameter(const std::string &param) {
+    if (param.empty()) {
+        return false;
     }
+    return param[0] != '-';
+};
 
-    return hint;
+std::string RemoveComment(std::string line) {
+    auto out = std::string{};
+    for (auto c : line) {
+        if (c == '#') break;
+        out += c;
+    }
+    return out;
+}
+
+std::string ParserToString(CommandParser &p) {
+    auto out = std::string{};
+    const auto cnt = p.GetCount();
+    for (auto i = size_t{0}; i < cnt; ++i) {
+        const auto res = p.GetCommand(i)->Get<>();
+        out += (res + " \0"[i+1 == cnt]);
+    }
+    return out;
 }
 
 ArgsParser::ArgsParser(int argc, char** argv) {
     auto parser = CommandParser(argc, argv);
-    const auto IsParameter = [](const std::string &param) -> bool {
-        if (param.empty()) {
-            return false;
-        }
-        return param[0] != '-';
-    };
 
-    const auto ErrorCommands = [IsParameter](CommandParser & parser) -> bool {
+    InitOptionsMap();
+    inputs_ = std::string{};
+
+    // Remove the name.
+    const auto name = parser.RemoveCommand(0);
+    (void) name;
+
+    auto config = std::string{};
+
+    if (const auto res = parser.FindNext({"--config", "-config"})) {
+        if (IsParameter(res->Get<std::string>())) {
+            config = res->Get<std::string>();
+            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (!config.empty()) {
+        auto file = std::ifstream{};
+
+        file.open(config);
+        if (file.is_open()) {
+            auto lines = std::string{};
+            auto line = std::string{};
+
+            while(std::getline(file, line)) {
+                line = RemoveComment(line);
+                if (!line.empty()) {
+                    lines += (line + ' ');
+                }
+            }
+            file.close();
+
+            auto cparser = CommandParser(lines);
+            Parse(cparser);
+        }
+    }
+
+    Parse(parser);
+    SetOption("inputs", inputs_);
+}
+
+void ArgsParser::Parse(CommandParser &parser) {
+    const auto ErrorCommands = [](CommandParser & parser) -> bool {
         const auto cnt = parser.GetCount();
         if (cnt == 0) {
             return false;
@@ -245,10 +291,16 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         return true;
     };
 
-    InitOptionsMap();
+    const auto TransferHint = [](std::string hint) {
+        for (auto &c : hint) {
+            if (c == '+') {
+                c = ' ';
+            }
+        }
+        return hint;
+    };
 
-    const auto name = parser.RemoveCommand(0);
-    (void) name;
+    inputs_ += (ParserToString(parser) + ' ');
 
     if (const auto res = parser.FindNext({"--mode", "-m"})) {
         if (IsParameter(res->Get<std::string>())) {
@@ -335,7 +387,7 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 
     if (const auto res = parser.FindNext("--kgs-hint")) {
         if (IsParameter(res->Get<std::string>())) {
-            SetOption("kgs_hint", ParseHint(res->Get<std::string>()));
+            SetOption("kgs_hint", TransferHint(res->Get<std::string>()));
             parser.RemoveSlice(res->Index()-1, res->Index()+1);
         } 
     }
@@ -694,7 +746,7 @@ void ArgsParser::DumpHelper() const {
                 << "\t\tWill reuse the sub-tree.\n\n"
 
                 << "\t--early-symm-cache\n"
-                << "\t\tAccelerate the searching on the opening stage.\n\n"
+                << "\t\tAccelerate the search on the opening stage.\n\n"
 
                 << "\t--friendly-pass\n"
                 << "\t\tDo pass move if the engine wins the game.\n\n"
