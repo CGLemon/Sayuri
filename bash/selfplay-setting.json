@@ -1,14 +1,18 @@
 {
     "NeuralNetwork" : {
         "NNType": "Residual",
-        "MaxBoardSize": 9,
+        "MaxBoardSize": 19,
         "InputChannels": 38,
-        "ResidualChannels": 64,
-        "PolicyExtract": 16,
-        "ValueExtract": 16,
+        "ResidualChannels": 128,
+        "PolicyExtract": 24,
+        "ValueExtract": 24,
         "ValueMisc": 5,
 
         "Stack" : [
+            "ResidualBlock",
+            "ResidualBlock",
+            "ResidualBlock-SE",
+            "ResidualBlock",
             "ResidualBlock",
             "ResidualBlock-SE"
         ]
@@ -17,26 +21,20 @@
     "Train" : {
         "UseGPU": null,
         "Optimizer": "SGD",
-        "StepsPerEpoch" : 1000,
+        "StepsPerEpoch" : 4000,
         "ValidationSteps": 100,
         "VerboseSteps" : 1000,
-        "MaxStepsPerRunning": 8000,
+        "MaxStepsPerRunning": 4000,
         "Workers": 4,
         "BatchSize": 256,
         "BufferSize" : 524288,
         "DownSampleRate": 16,
         "MacroFactor": 1,
         "WeightDecay": 1e-4,
-        "NumberChunks" : 5000,
+        "NumberChunks" : 20000,
 
         "LearningRateSchedule": [
-            [0,       1e-2],
-            [128000,  3e-3],
-            [256000,  1e-3],
-            [384000,  3e-4],
-            [512000,  1e-4],
-            [768000,  3e-5],
-            [1024000, 1e-5]
+            [0,       1e-2]
          ],
 
         "FixUpBatchNorm": false,

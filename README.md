@@ -154,6 +154,10 @@ The analysis Commands are useful on the modern GTP interface tool, like Sabaki. 
       * ```ownership True```: Output the predicted final ownership of every point on the board.
       * ```movesOwnership True```: Output the predicted final ownership of every point on the board for every individual move.
 
+## Reinforcement Learning
+
+Please see this [section](./bash/RL.md).
+
 ## Misc
 
 ### What's the Deep Learning technology?
