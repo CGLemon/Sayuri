@@ -50,12 +50,18 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
 
     // Terminated node, try to expand it. 
     if (node->Expandable()) {
+        const auto last_move = currstate.GetLastMove();
+
         if (end_by_passes) {
             if (node->SetTerminal() &&
                     search_result.IsValid()) {
                 // The game is over, setting the game result value.
                 node->ApplyEvals(search_result.GetEvals());
             }
+        } else if (last_move != kPass &&
+                       currstate.IsSuperko()) {
+            // Prune this superko move.
+            node->Invalidate();
         } else {
             const auto visits = node->GetVisits();
             if (param_->no_dcnn &&

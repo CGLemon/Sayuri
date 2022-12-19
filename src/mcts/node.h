@@ -187,7 +187,7 @@ public:
 
     bool IsPruned() const;
     void SetActive(const bool active);
-    void InvalidNode();
+    void Invalidate();
     bool IsActive() const;
     bool IsValid() const;
 
@@ -236,6 +236,8 @@ private:
                                  bool only_max_visit);
     Node *GumbelSelectChild(int color, bool only_max_visit);
     void MixLogitsCompletedQ(GameState &state, std::vector<float> &prob);
+
+    void KillRootSuperkos(GameState &state);
 
     Parameters *GetParameters();
 

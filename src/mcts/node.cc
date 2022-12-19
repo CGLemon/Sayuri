@@ -44,6 +44,9 @@ bool Node::PrepareRootNode(Network &network,
         ApplyDirichletNoise(alpha);
     }
 
+    // Remove all superkos in the root.
+    KillRootSuperkos(state);
+
     // Reset the bouns.
     SetScoreBouns(0.f);
     for (auto &child : children_) {
@@ -145,16 +148,6 @@ bool Node::ExpandChildren(Network &network,
                 moves_hash.emplace_back(state.GetHash() ^ state.GetMoveHash(vtx, color_));
             } else {
                 legal_accumulate += policy; // The pruned node is a legal move.
-                continue;
-            }
-        }
-
-        // Prune the super ko move.
-        if (state.board_.IsCaptureMove(vtx, color_)) {
-            auto fork_state = state;
-            fork_state.PlayMove(vtx);
-
-            if (fork_state.IsSuperko()) {
                 continue;
             }
         }
@@ -482,22 +475,30 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
 
     (void) is_root;
 
-    const int parentvisits = std::max(1, GetVisits());
-    const float numerator = std::log((float)parentvisits);
+    int parentvisits = 0;
     const float cpuct = param_->cpuct_init;
     const float parent_qvalue = GetWL(color, false);
 
     std::vector<Edge*> edge_buf;
 
     for (auto &child : children_) {
+        const auto node = child.Get();
+        const bool is_pointer = node != nullptr;
+        if (is_pointer && node->IsValid()) {
+            // The node status is pruned or active.
+            parentvisits += node->GetVisits();
+        }
         edge_buf.emplace_back(&child);
     }
+    const float numerator = std::log((float)parentvisits + 1);
 
     Edge* best_node = nullptr;
     float best_value = std::numeric_limits<float>::lowest();
 
     int width = std::max(ComputeWidth(parentvisits), 1);
     int i = 0;
+
+    //TODO: Sort the 'edge_buf' according to priority value.
 
     for (auto edge_ptr : edge_buf) {
         auto &child = *edge_ptr;
@@ -1093,7 +1094,7 @@ void Node::SetActive(const bool active) {
     }
 }
 
-void Node::InvalidNode() {
+void Node::Invalidate() {
     if (IsValid()) {
         status_.store(StatusType::kInvalid, std::memory_order_relaxed);
     }
@@ -1477,4 +1478,23 @@ int Node::GetGumbelMove() {
 
 void Node::SetScoreBouns(float val) {
     score_bouns_ = val;
+}
+
+void Node::KillRootSuperkos(GameState &state) {
+    for (const auto &child : children_) {
+        const auto vtx = child.GetVertex();
+
+        auto fork_state = state;
+        fork_state.PlayMove(vtx);
+
+        if (fork_state.IsSuperko()) {
+            child.Get()->Invalidate();
+        }
+    }
+
+    auto ite = std::remove_if(std::begin(children_), std::end(children_),
+                              [](Edge &ele) {
+                                  return !ele.Get()->IsValid();
+                              });
+    children_.erase(ite, std::end(children_));
 }
