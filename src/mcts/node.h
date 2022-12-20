@@ -242,8 +242,10 @@ private:
     Parameters *GetParameters();
 
     enum class StatusType : std::uint8_t {
-        kInvalid, // kInvalid means that the node is illegal.
-        kPruned,
+        kInvalid, // kInvalid means that this node is illegal, like
+                  // superko move.
+
+        kPruned,  // kPruned means that this node is pruned.
         kActive
     };
     std::atomic<StatusType> status_{StatusType::kActive};
@@ -255,16 +257,16 @@ private:
     };
     std::atomic<ExpandState> expand_state_{ExpandState::kInitial};
 
-    // INITIAL -> EXPANDING
+    // kInitial -> kExpanding
     bool AcquireExpanding();
 
-    // EXPANDING -> DONE
+    // kExpanding -> done
     void ExpandDone();
 
-    // EXPANDING -> INITIAL
+    // kExpanding -> kInitial
     void ExpandCancel();
 
-    // wait until we are on EXPANDED state
+    // wait until we are on kExpanded state
     void WaitExpanded() const;
 
     // Color of the node. Set kInvalid if there are no children.

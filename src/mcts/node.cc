@@ -44,7 +44,8 @@ bool Node::PrepareRootNode(Network &network,
         ApplyDirichletNoise(alpha);
     }
 
-    // Remove all superkos in the root.
+    // Remove all superkos at the root. In the most case,
+    // it will help simplify the state.
     KillRootSuperkos(state);
 
     // Reset the bouns.
@@ -122,7 +123,7 @@ bool Node::ExpandChildren(Network &network,
         const auto vtx = state.GetVertex(x, y);
         const auto policy = raw_netlist.probabilities[idx];
 
-        // Prune the illegal and unwise move.
+        // Prune the illegal, unwise and forbidden move.
         int movenum = state.GetMoveNumber();
         if (!state.IsLegalMove(vtx, color_,
                 [movenum, &config](int vtx, int color){
@@ -145,9 +146,16 @@ bool Node::ExpandChildren(Network &network,
             }
 
             if (!hash_found) {
-                moves_hash.emplace_back(state.GetHash() ^ state.GetMoveHash(vtx, color_));
+                // Get next game state hash. Is is not correct if the
+                // move is capture move. It is ok because we only need
+                // move hash in the opening stage. The capture move is
+                // unusual in the opening stage.
+                moves_hash.emplace_back(
+                    state.GetHash() ^ state.GetMoveHash(vtx, color_));
             } else {
-                legal_accumulate += policy; // The pruned node is a legal move.
+                // The pruned node is a legal move. We need accumulate
+                // the all legal moves policy.
+                legal_accumulate += policy;
                 continue;
             }
         }
@@ -1487,7 +1495,9 @@ void Node::KillRootSuperkos(GameState &state) {
         auto fork_state = state;
         fork_state.PlayMove(vtx);
 
-        if (fork_state.IsSuperko()) {
+        if (vtx != kPass &&
+                fork_state.IsSuperko()) {
+            // Prune the superko move.
             child.Get()->Invalidate();
         }
     }

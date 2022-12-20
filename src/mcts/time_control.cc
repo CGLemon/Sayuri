@@ -39,7 +39,7 @@ void TimeControl::TimeSettings(const int main_time,
 
     if ((byo_stones_ <= 0 && byo_periods_ <= 0) ||
             (byo_stones_ > 0 && byo_periods_ > 0)) {
-        // The byo_yomi_stones and byo_periods should not be greater or
+        // The byo yomi_stones and byo periods should not be greater or
         // smaller than zero at the same time.
         byo_time_ = byo_periods_ = 0;
     }
@@ -129,7 +129,7 @@ void TimeControl::SetLagBuffer(int lag_buffer) {
     constexpr int kMinLag = 25; // 0.25 second is big enough for CPU
                                 // forward pipe hiccupping.
 
-    lag_buffer *= 100;
+    lag_buffer *= 100; // second to centisecond
     lag_buffer_ = lag_buffer < kMinLag ? kMinLag : lag_buffer;
 
 }
@@ -244,9 +244,9 @@ float TimeControl::GetThinkingTime(int color, int boardsize, int move_num) const
     int inc_time = std::max(extra_time_per_move - lag_buffer_, 0);
 
 
-    // Output value may loss littel precision. It is ok that because the
-    // the of precision is smaller than one second. If it is greater than
-    // one second, the output value is very large. We don't care the little
+    // Output value may loss littel precision due to ieee754. We may ignore it
+    // because the precision is much smaller than one second. If it is greater
+    // than one second, the output value is very large. We don't care the little
     // error.
     return (float)(base_time + inc_time) / 100.f; // centisecond to second
 }
@@ -268,7 +268,7 @@ bool TimeControl::IsInfiniteTime(int /* color */) const {
 }
 
 int TimeControl::EstimateMovesExpected(int boardsize, int move_num, int delta) const {
-    // The Estimated number of moves is conservative. Avoid some extreme
+    // The estimated number of moves is conservative. Avoid some extreme
     // case that someone refuses to resign.
 
     delta = std::max(0, delta);
