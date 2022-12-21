@@ -758,13 +758,13 @@ int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
                                       : max_playouts_;
     auto result = Computation(playouts, tag);
 
-    // Clear confing after finishing the search.
-    analysis_config_.Clear();
-
-    // Disable the reuse the tree.
+    // Disable the reusing the tree.
     if (analysis_config_.MoveRestrictions()) {
         ReleaseTree();
     }
+
+    // Clear config after finishing the search.
+    analysis_config_.Clear();
 
     if (ShouldResign(root_state_, result, param_->resign_threshold)) {
         return kResign;
