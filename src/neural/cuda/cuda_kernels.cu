@@ -345,7 +345,7 @@ __global__ void head_global_pooling_kernel(float *input, float *output, int N, i
 
         output[offset + 0 * C] = vmean;
         output[offset + 1 * C] = vmean * (vsqrt - 14.f) * 0.1f;
-        output[offset + 2 * C] = vmean * (vsqrt - 14.f) * (vsqrt - 14.f) * 0.01f - 0.1f;
+        output[offset + 2 * C] = vmean * ((vsqrt - 14.f) * (vsqrt - 14.f) * 0.01f - 0.1f);
     }
 }
 
@@ -373,7 +373,7 @@ __global__ void head_global_pooling_and_mask_kernel(float *input, float *output,
 
         output[offset + 0 * C] = vmean;
         output[offset + 1 * C] = vmean * (vsqrt - 14.f) * 0.1f;
-        output[offset + 2 * C] = vmean * (vsqrt - 14.f) * (vsqrt - 14.f) * 0.01f - 0.1f;
+        output[offset + 2 * C] = vmean * ((vsqrt - 14.f) * (vsqrt - 14.f) * 0.01f - 0.1f);
     }
 }
 
