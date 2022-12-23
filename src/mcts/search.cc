@@ -4,6 +4,8 @@
 #include <iomanip>
 #include <fstream>
 #include <stack>
+#include <random>
+#include <cmath>
 
 #include "mcts/search.h"
 #include "neural/encoder.h"
@@ -684,11 +686,21 @@ int Search::GetSelfPlayMove() {
     auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
 
     int playouts = max_playouts_;
+    int reduce_playouts = param_->reduce_playouts;
     float prob = param_->reduce_playouts_prob;
-    if (param_->reduce_playouts > 0 &&
+    if (reduce_playouts > 0 &&
+            reduce_playouts < max_playouts_ &&
             Random<>::Get().Roulette<10000>(prob)) {
+
+        const auto diff = max_playouts_ - reduce_playouts;
+        auto geometric = std::geometric_distribution<>(
+                             1.f/(std::sqrt((float)diff)));
+        const auto v = std::min(geometric(Random<>::Get()), diff);
+
         // The reduce playouts must be smaller than playouts.
-        playouts = std::min(playouts, param_->reduce_playouts);
+        playouts = std::min(
+                       playouts,
+                       reduce_playouts + v);
     }
 
     if (!network_.Valid()) {
