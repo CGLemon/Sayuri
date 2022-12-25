@@ -852,9 +852,9 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
         buf.ownership.resize(num_intersections);
         for (int idx = 0; idx < num_intersections; ++idx) {
             const auto owner = ownership[idx];
-            if (buf.side_to_move == owner) {
+            if (owner == buf.side_to_move) {
                 buf.ownership[idx] = 1;
-            } else if (buf.side_to_move == !owner) {
+            } else if (owner == !buf.side_to_move) {
                 buf.ownership[idx] = -1;
             } else {
                 buf.ownership[idx] = 0;
