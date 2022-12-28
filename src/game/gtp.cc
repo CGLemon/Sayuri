@@ -1068,9 +1068,8 @@ std::string GtpLoop::GtpFail(std::string response) {
 
 AnalysisConfig GtpLoop::ParseAnalysisConfig(CommandParser &parser, int &color) {
     AnalysisConfig config;
-    std::string maybe_color_str, maybe_interval_str;
 
-    config.interval = 100;
+    config.interval = 0;
     auto main = parser.GetCommand(0)->Get<std::string>();
 
     if (main.find("sayuri") == 0) {
@@ -1193,7 +1192,8 @@ AnalysisConfig GtpLoop::ParseAnalysisConfig(CommandParser &parser, int &color) {
                 MoveToAvoid avoid_move;
                 avoid_move.vertex     = vtx;
                 avoid_move.color      = moves_color;
-                avoid_move.until_move = moves_movenum + agent_->GetState().GetMoveNumber() - 1;
+                avoid_move.until_move = moves_movenum +
+                                            agent_->GetState().GetMoveNumber() - 1;
                 if (avoid_move.Valid()) {
                     if (token->Lower() == "allow") {
                         config.allow_moves.emplace_back(avoid_move);

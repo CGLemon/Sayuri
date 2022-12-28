@@ -35,7 +35,7 @@ struct AnalysisConfig {
     bool ownership{false};
     bool moves_ownership{false};
 
-    int interval{100};
+    int interval{0};
     int min_moves{0};
     int max_moves{kNumIntersections+1};
 
@@ -57,7 +57,7 @@ struct AnalysisConfig {
         max_moves = kNumIntersections+1;
         avoid_moves.clear();
         allow_moves.clear();
-        interval = 100;
+        interval = 0;
     }
 
     bool IsLegal(const int vertex, const int color, const int movenum) const {

@@ -313,8 +313,9 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
             playouts_.fetch_add(1, std::memory_order_relaxed);
         }
 
-        if ((tag & kAnalyze) &&
-                analysis_timer.GetDurationMilliseconds() > analysis_config_.interval * 10) {
+        if ((tag & kAnalysis) &&
+                analysis_config_.interval * 10 <
+                    analysis_timer.GetDurationMilliseconds()) {
             // Output the analysis verbose for GTP interface, like sabaki...
             analysis_timer.Clock();
             if (root_node_->GetVisits() > 1) {
@@ -360,7 +361,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     if (tag & kThinking) {
         time_control_.TookTime(color);
     }
-    if (tag & kAnalyze) {
+    if (tag & kAnalysis) {
         // Output the last analysis verbose because the MCTS may
         // be finished in the short time. It can help the low playouts
         // MCTS to show current analysis graph in GUI.
@@ -757,11 +758,15 @@ void Search::TryPonder() {
 }
 
 int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
+    // Do not dump the analysis verbose if we do not
+    // send the interval value.
+    auto analysis_tag = analysis_config.interval > 0 ?
+                            kAnalysis : kNullTag;
     // Ponder mode always reuse the tree.
     auto reuse_tag = (param_->reuse_tree || ponder) ? kNullTag : kUnreused;
-    auto ponder_tag = ponder ? (kAnalyze | kPonder) : (kAnalyze | kThinking);
+    auto ponder_tag = ponder ? kPonder : kThinking;
 
-    auto tag = reuse_tag | ponder_tag;
+    auto tag = reuse_tag | ponder_tag | analysis_tag;
 
     // Set the current analysis config.
     analysis_config_ = analysis_config;
