@@ -219,32 +219,32 @@ std::string RemoveComment(std::string line) {
     return out;
 }
 
-std::string ParserToString(CommandParser &p) {
+std::string SplitterToString(Splitter &spt) {
     auto out = std::string{};
-    const auto cnt = p.GetCount();
+    const auto cnt = spt.GetCount();
     for (auto i = size_t{0}; i < cnt; ++i) {
-        const auto res = p.GetCommand(i)->Get<>();
+        const auto res = spt.GetWord(i)->Get<>();
         out += (res + " \0"[i+1 == cnt]);
     }
     return out;
 }
 
 ArgsParser::ArgsParser(int argc, char** argv) {
-    auto parser = CommandParser(argc, argv);
+    auto spt = Splitter(argc, argv);
 
     InitOptionsMap();
     inputs_ = std::string{};
 
     // Remove the name.
-    const auto name = parser.RemoveCommand(0);
+    const auto name = spt.RemoveWord(0);
     (void) name;
 
     auto config = std::string{};
 
-    if (const auto res = parser.FindNext({"--config", "-config"})) {
-        if (IsParameter(res->Get<std::string>())) {
-            config = res->Get<std::string>();
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+    if (const auto res = spt.FindNext({"--config", "-config"})) {
+        if (IsParameter(res->Get<>())) {
+            config = res->Get<>();
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
@@ -264,25 +264,25 @@ ArgsParser::ArgsParser(int argc, char** argv) {
             }
             file.close();
 
-            auto cparser = CommandParser(lines);
-            Parse(cparser);
+            auto cspt = Splitter(lines);
+            Parse(cspt);
         }
     }
 
-    Parse(parser);
+    Parse(spt);
     SetOption("inputs", inputs_);
 }
 
-void ArgsParser::Parse(CommandParser &parser) {
-    const auto ErrorCommands = [](CommandParser & parser) -> bool {
-        const auto cnt = parser.GetCount();
+void ArgsParser::Parse(Splitter &spt) {
+    const auto ErrorCommands = [](Splitter & spt) -> bool {
+        const auto cnt = spt.GetCount();
         if (cnt == 0) {
             return false;
         }
 
         LOGGING << "Command(s) Error:" << std::endl;
         for (auto i = size_t{0}; i < cnt; ++i) {
-            const auto command = parser.GetCommand(i)->Get<std::string>();
+            const auto command = spt.GetWord(i)->Get<>();
             if (!IsParameter(command)) {
                 LOGGING << " " << i+1 << ". " << command << std::endl;
             }
@@ -300,422 +300,422 @@ void ArgsParser::Parse(CommandParser &parser) {
         return hint;
     };
 
-    inputs_ += (ParserToString(parser) + ' ');
+    inputs_ += (SplitterToString(spt) + ' ');
 
-    if (const auto res = parser.FindNext({"--mode", "-m"})) {
-        if (IsParameter(res->Get<std::string>())) {
-            SetOption("mode", res->Get<std::string>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+    if (const auto res = spt.FindNext({"--mode", "-m"})) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("mode", res->Get<>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.Find({"--help", "-h"})) {
+    if (const auto res = spt.Find({"--help", "-h"})) {
         SetOption("help", true);
-        parser.RemoveCommand(res->Index());
+        spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = parser.Find({"--quiet", "-q"})) {
+    if (const auto res = spt.Find({"--quiet", "-q"})) {
         SetOption("quiet", true);
-        parser.RemoveCommand(res->Index());
+        spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = parser.Find("--ponder")) {
+    if (const auto res = spt.Find("--ponder")) {
         SetOption("ponder", true);
-        parser.RemoveCommand(res->Index());
+        spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = parser.Find("--reuse-tree")) {
+    if (const auto res = spt.Find("--reuse-tree")) {
         SetOption("reuse_tree", true);
-        parser.RemoveCommand(res->Index());
+        spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = parser.Find("--friendly-pass")) {
+    if (const auto res = spt.Find("--friendly-pass")) {
         SetOption("friendly_pass", true);
-        parser.RemoveCommand(res->Index());
+        spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = parser.Find("--early-symm-cache")) {
+    if (const auto res = spt.Find("--early-symm-cache")) {
         SetOption("early_symm_cache", true);
-        parser.RemoveCommand(res->Index());
+        spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = parser.Find("--symm-pruning")) {
+    if (const auto res = spt.Find("--symm-pruning")) {
         SetOption("symm_pruning", true);
-        parser.RemoveCommand(res->Index());
+        spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = parser.FindNext("--search-mode")) {
-        if (IsParameter(res->Get<std::string>())) {
-            SetOption("search_mode", res->Get<std::string>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+    if (const auto res = spt.FindNext("--search-mode")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("search_mode", res->Get<>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.Find("--first-pass-bonus")) {
+    if (const auto res = spt.Find("--first-pass-bonus")) {
         SetOption("first_pass_bonus", true);
-        parser.RemoveCommand(res->Index());
+        spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = parser.Find("--use-stm-winrate")) {
+    if (const auto res = spt.Find("--use-stm-winrate")) {
         SetOption("use_stm_winrate", true);
-        parser.RemoveCommand(res->Index());
+        spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = parser.Find("--no-dcnn")) {
+    if (const auto res = spt.Find("--no-dcnn")) {
         SetOption("no_dcnn", true);
-        parser.RemoveCommand(res->Index());
+        spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = parser.Find("--no-winograd")) {
+    if (const auto res = spt.Find("--no-winograd")) {
         SetOption("winograd", false);
-        parser.RemoveCommand(res->Index());
+        spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = parser.FindNext({"--resign-threshold", "-r"})) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext({"--resign-threshold", "-r"})) {
+        if (IsParameter(res->Get<>())) {
             SetOption("resign_threshold", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--expand-threshold")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--expand-threshold")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("expand_threshold", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--kgs-hint")) {
-        if (IsParameter(res->Get<std::string>())) {
-            SetOption("kgs_hint", TransferHint(res->Get<std::string>()));
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+    if (const auto res = spt.FindNext("--kgs-hint")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("kgs_hint", TransferHint(res->Get<>()));
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         } 
     }
 
-    if (const auto res = parser.Find({"--analysis-verbose", "-a"})) {
+    if (const auto res = spt.Find({"--analysis-verbose", "-a"})) {
         SetOption("analysis_verbose", true);
-        parser.RemoveCommand(res->Index());
+        spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = parser.Find({"--dirichlet-noise", "--noise", "-n"})) {
+    if (const auto res = spt.Find({"--dirichlet-noise", "--noise", "-n"})) {
         SetOption("dirichlet_noise", true);
-        parser.RemoveCommand(res->Index());
+        spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = parser.FindNext("--gumbel-considered-moves")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--gumbel-considered-moves")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("gumbel_considered_moves", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--gumbel-playouts")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--gumbel-playouts")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("gumbel_playouts", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.Find("--gumbel")) {
+    if (const auto res = spt.Find("--gumbel")) {
         SetOption("gumbel", true);
-        parser.RemoveCommand(res->Index());
+        spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = parser.Find("--always-completed-q-policy")) {
+    if (const auto res = spt.Find("--always-completed-q-policy")) {
         SetOption("always_completed_q_policy", true);
-        parser.RemoveCommand(res->Index());
+        spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = parser.FindNext("--dirichlet-epsilon")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--dirichlet-epsilon")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("dirichlet_epsilon", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--dirichlet-init")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--dirichlet-init")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("dirichlet_init", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--dirichlet-factor")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--dirichlet-factor")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("dirichlet_factor", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--random-moves-factor")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--random-moves-factor")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("random_moves_factor", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--gpu-waittime")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--gpu-waittime")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("gpu_waittime", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    while (const auto res = parser.FindNext({"--gpu", "-g"})) {
-        if (IsParameter(res->Get<std::string>())) {
+    while (const auto res = spt.FindNext({"--gpu", "-g"})) {
+        if (IsParameter(res->Get<>())) {
             auto gpus = GetOption<std::string>("gpus");
-            gpus += (res->Get<std::string>() + " ");
+            gpus += (res->Get<>() + " ");
             SetOption("gpus", gpus);
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext({"--threads", "-t"})) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext({"--threads", "-t"})) {
+        if (IsParameter(res->Get<>())) {
             SetOption("threads", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext({"--batch-size", "-b"})) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext({"--batch-size", "-b"})) {
+        if (IsParameter(res->Get<>())) {
             SetOption("batch_size", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--cache-memory-mib")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--cache-memory-mib")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("cache_memory_mib", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext({"--playouts", "-p"})) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext({"--playouts", "-p"})) {
+        if (IsParameter(res->Get<>())) {
             SetOption("playouts", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--ponder-factor")) {
-       if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--ponder-factor")) {
+       if (IsParameter(res->Get<>())) {
            SetOption("ponder_factor", res->Get<int>());
-           parser.RemoveSlice(res->Index()-1, res->Index()+1);
+           spt.RemoveSlice(res->Index()-1, res->Index()+1);
        }
     }
 
-    if (const auto res = parser.FindNext("--const-time")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--const-time")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("const_time", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext({"--logfile", "-l"})) {
-        if (IsParameter(res->Get<std::string>())) {
-            auto fname = res->Get<std::string>();
+    if (const auto res = spt.FindNext({"--logfile", "-l"})) {
+        if (IsParameter(res->Get<>())) {
+            auto fname = res->Get<>();
             LogWriter::Get().SetFilename(fname);
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--fixed-nn-boardsize")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--fixed-nn-boardsize")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("fixed_nn_boardsize", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext({"--board-size", "-s"})) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext({"--board-size", "-s"})) {
+        if (IsParameter(res->Get<>())) {
             SetOption("defualt_boardsize", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext({"--komi", "-k"})) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext({"--komi", "-k"})) {
+        if (IsParameter(res->Get<>())) {
             SetOption("defualt_komi", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--ci-alpha")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--ci-alpha")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("ci_alpha", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext({"--weights", "-w"})) {
-        if (IsParameter(res->Get<std::string>())) {
-            SetOption("weights_file", res->Get<std::string>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+    if (const auto res = spt.FindNext({"--weights", "-w"})) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("weights_file", res->Get<>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--book")) {
-        if (IsParameter(res->Get<std::string>())) {
-            SetOption("book_file", res->Get<std::string>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+    if (const auto res = spt.FindNext("--book")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("book_file", res->Get<>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--patterns")) {
-        if (IsParameter(res->Get<std::string>())) {
-            SetOption("patterns_file", res->Get<std::string>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+    if (const auto res = spt.FindNext("--patterns")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("patterns_file", res->Get<>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--score-utility-factor")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--score-utility-factor")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("score_utility_factor", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--score-utility-div")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--score-utility-div")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("score_utility_div", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--lcb-reduction")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--lcb-reduction")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("lcb_reduction", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--lcb-utility-factor")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--lcb-utility-factor")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("lcb_utility_factor", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--fpu-reduction")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--fpu-reduction")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("fpu_reduction", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--fpu-root-reduction")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--fpu-root-reduction")) {
+        if (IsParameter(res->Get<>())) {
             init_fpu_root_ = true;
             SetOption("fpu_root_reduction", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--cpuct-init")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--cpuct-init")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("cpuct_init", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--cpuct-base-factor")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--cpuct-base-factor")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("cpuct_base_factor", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--cpuct-base")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--cpuct-base")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("cpuct_base", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--draw-factor")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--draw-factor")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("draw_factor", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--root-policy-temp")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--root-policy-temp")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("root_policy_temp", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--policy-temp")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--policy-temp")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("policy_temp", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--resign-playouts")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--resign-playouts")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("resign_playouts", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--reduce-playouts")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--reduce-playouts")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("reduce_playouts", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--reduce-playouts-prob")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--reduce-playouts-prob")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("reduce_playouts_prob", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--lag-buffer")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--lag-buffer")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("lag_buffer", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--num-games")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--num-games")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("num_games", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--parallel-games")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--parallel-games")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("parallel_games", res->Get<int>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--komi-variance")) {
-        if (IsParameter(res->Get<std::string>())) {
+    if (const auto res = spt.FindNext("--komi-variance")) {
+        if (IsParameter(res->Get<>())) {
             SetOption("komi_variance", res->Get<float>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = parser.FindNext("--target-directory")) {
-        if (IsParameter(res->Get<std::string>())) {
-            SetOption("target_directory", res->Get<std::string>());
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+    if (const auto res = spt.FindNext("--target-directory")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("target_directory", res->Get<>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    while (const auto res = parser.FindNext("--selfplay-query")) {
-        if (IsParameter(res->Get<std::string>())) {
+    while (const auto res = spt.FindNext("--selfplay-query")) {
+        if (IsParameter(res->Get<>())) {
             auto query = GetOption<std::string>("selfplay_query");
-            query += (res->Get<std::string>() + " ");
+            query += (res->Get<>() + " ");
             SetOption("selfplay_query", query);
-            parser.RemoveSlice(res->Index()-1, res->Index()+1);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
@@ -723,7 +723,7 @@ void ArgsParser::Parse(CommandParser &parser) {
     SetOption("use_gpu", true);
 #endif
 
-    if (ErrorCommands(parser) || GetOption<bool>("help")) {
+    if (ErrorCommands(spt) || GetOption<bool>("help")) {
         DumpHelper();
     }
     DumpWarning();

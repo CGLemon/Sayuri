@@ -1,6 +1,6 @@
 #include "game/game_state.h"
 #include "game/types.h"
-#include "utils/parser.h"
+#include "utils/splitter.h"
 #include "utils/log.h"
 #include "utils/random.h"
 #include "utils/komi.h"
@@ -232,15 +232,15 @@ bool GameState::PlayTextMove(std::string input) {
     int color = kInvalid;
     int vertex = kNullVertex;
 
-    auto parser = CommandParser(input);
+    auto spt = Splitter(input);
 
-    if (parser.GetCount() == 2) {
-        const auto color_str = parser.GetCommand(0)->Get<std::string>();
-        const auto vtx_str = parser.GetCommand(1)->Get<std::string>();
+    if (spt.GetCount() == 2) {
+        const auto color_str = spt.GetWord(0)->Get<>();
+        const auto vtx_str = spt.GetWord(1)->Get<>();
         color = TextToColor(color_str);
         vertex = TextToVertex(vtx_str);
-    } else if (parser.GetCount() == 1) {
-        const auto vtx_str = parser.GetCommand(0)->Get<std::string>();
+    } else if (spt.GetCount() == 1) {
+        const auto vtx_str = spt.GetWord(0)->Get<>();
         color = board_.GetToMove();
         vertex = TextToVertex(vtx_str);
     }

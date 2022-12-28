@@ -1,104 +1,107 @@
-#include "utils/parser.h"
+#include "utils/splitter.h"
 
-constexpr size_t CommandParser::kMaxBufferSize;
+constexpr size_t Splitter::kMaxBufferSize;
 
-CommandParser::CommandParser(std::string &input) {
+Splitter::Splitter(std::string &input) {
     Parse(std::forward<std::string>(input), kMaxBufferSize);
 }
 
-CommandParser::CommandParser(std::string &input, const size_t max) {
+Splitter::Splitter(std::string &input, const size_t max) {
     Parse(std::forward<std::string>(input), std::min(max, kMaxBufferSize));
 }
 
-CommandParser::CommandParser(int argc, char** argv) {
-    auto out = std::ostringstream{};
+Splitter::Splitter(int argc, char** argv) {
+    auto oss = std::ostringstream{};
     for (int i = 0; i < argc; ++i) {
-        out << argv[i] << " ";
+        oss << argv[i] << " ";
     }
-    Parse(std::forward<std::string>(out.str()), kMaxBufferSize);
+    Parse(std::forward<std::string>(oss.str()), kMaxBufferSize);
 }
 
-bool CommandParser::Valid() const {
+bool Splitter::Valid() const {
     return count_ != 0;
 }
 
-void CommandParser::Parse(std::string &input, const size_t max) {
+void Splitter::Parse(std::string &input, const size_t max) {
     count_ = 0;
     auto stream = std::istringstream{input};
     auto in = std::string{};
     while (stream >> in) {
-        commands_buffer_.emplace_back(std::make_shared<std::string>(in));
+        bufffer_.emplace_back(std::make_shared<std::string>(in));
         count_++;
         if (count_ >= max) break;
     }
 }
 
-void CommandParser::Parse(std::string &&input, const size_t max) {
+void Splitter::Parse(std::string &&input, const size_t max) {
     count_ = 0;
     auto stream = std::istringstream{input};
     auto in = std::string{};
     while (stream >> in) {
-        commands_buffer_.emplace_back(std::make_shared<std::string>(in));
+        bufffer_.emplace_back(std::make_shared<std::string>(in));
         count_++;
         if (count_ >= max) break;
     }
 }
 
-size_t CommandParser::GetCount() const {
+size_t Splitter::GetCount() const {
     return count_;
 }
 
-std::shared_ptr<CommandParser::Reuslt> CommandParser::GetCommand(size_t id) const {
+std::shared_ptr<Splitter::Reuslt> Splitter::GetWord(size_t id) const {
     if (!Valid() || id >= count_) {
         return nullptr;
     }
-    return std::make_shared<Reuslt>(Reuslt(*commands_buffer_[id], (int)id));
+    return std::make_shared<Reuslt>(Reuslt(*bufffer_[id], (int)id));
 }
 
-std::shared_ptr<CommandParser::Reuslt> CommandParser::GetCommands(size_t b) const {
+std::shared_ptr<Splitter::Reuslt> Splitter::GetSlice(size_t b) const {
     return GetSlice(b, count_);
 }
 
-std::shared_ptr<CommandParser::Reuslt> CommandParser::GetSlice(size_t b, size_t e) const {
-     if (!Valid() || b >= count_ || e > count_ || b >= e) {
+std::shared_ptr<Splitter::Reuslt> Splitter::GetSlice(size_t b, size_t e) const {
+     if (!Valid() ||
+             b >= count_ ||
+             e > count_ ||
+             b >= e) {
          return nullptr;
      }
 
      auto out = std::ostringstream{};
-     auto begin = std::next(std::begin(commands_buffer_), b);
-     auto end = std::next(std::begin(commands_buffer_), e);
+     auto begin = std::next(std::begin(bufffer_), b);
+     auto end = std::next(std::begin(bufffer_), e);
      auto stop = std::prev(end, 1);
 
      if (begin != end) {
-         std::for_each(begin, stop, [&](auto in)
-                                        {  out << *in << " "; });
+         std::for_each(begin, stop,
+             [&](auto in) { out << *in << " "; });
      }
 
      out << **stop;
      return std::make_shared<Reuslt>(Reuslt(out.str(), -1));
 }
 
-std::shared_ptr<CommandParser::Reuslt> CommandParser::Find(const std::string input, int id) const {
+std::shared_ptr<Splitter::Reuslt> Splitter::Find(const std::string input, int id) const {
     if (!Valid()) {
         return nullptr;
     }
 
     if (id < 0) {
         for (auto i = size_t{0}; i < GetCount(); ++i) {
-            const auto res = GetCommand((size_t)i);
+            const auto res = GetWord(i);
             if (res->str_ == input) {
                 return res;
             }
         }
     } else {
-        if (const auto res = GetCommand((size_t)id)) {
+        if (const auto res = GetWord((size_t)id)) {
             return res->str_ == input ? res : nullptr;
         }
     }
     return nullptr;
 }
 
-std::shared_ptr<CommandParser::Reuslt> CommandParser::Find(const std::initializer_list<std::string> inputs, int id) const {
+std::shared_ptr<Splitter::Reuslt> Splitter::Find(const std::initializer_list<std::string> inputs, int id) const {
     for (const auto &in : inputs) {
         if (const auto res = Find(in, id)) {
             return res;
@@ -107,7 +110,7 @@ std::shared_ptr<CommandParser::Reuslt> CommandParser::Find(const std::initialize
     return nullptr;
 }
 
-std::shared_ptr<CommandParser::Reuslt> CommandParser::FindLower(const std::string input, int id) const {
+std::shared_ptr<Splitter::Reuslt> Splitter::FindLower(const std::string input, int id) const {
     if (!Valid()) {
         return nullptr;
     }
@@ -119,20 +122,20 @@ std::shared_ptr<CommandParser::Reuslt> CommandParser::FindLower(const std::strin
 
     if (id < 0) {
         for (auto i = size_t{0}; i < GetCount(); ++i) {
-            const auto res = GetCommand((size_t)i);
+            const auto res = GetWord(i);
             if (res->str_ == lower) {
                 return res;
             }
         }
     } else {
-        if (const auto res = GetCommand((size_t)id)) {
+        if (const auto res = GetWord((size_t)id)) {
             return res->str_ == lower ? res : nullptr;
         }
     }
     return nullptr;
 }
 
-std::shared_ptr<CommandParser::Reuslt> CommandParser::FindLower(const std::initializer_list<std::string> inputs, int id) const {
+std::shared_ptr<Splitter::Reuslt> Splitter::FindLower(const std::initializer_list<std::string> inputs, int id) const {
     for (const auto &in : inputs) {
         if (const auto res = FindLower(in, id)) {
             return res;
@@ -141,16 +144,16 @@ std::shared_ptr<CommandParser::Reuslt> CommandParser::FindLower(const std::initi
     return nullptr;
 }
 
-std::shared_ptr<CommandParser::Reuslt> CommandParser::FindNext(const std::string input) const {
+std::shared_ptr<Splitter::Reuslt> Splitter::FindNext(const std::string input) const {
     const auto res = Find(input);
 
     if (!res || res->idx_+1 > (int)GetCount()) {
         return nullptr;
     }
-    return GetCommand(res->idx_+1);
+    return GetWord(res->idx_+1);
 }
 
-std::shared_ptr<CommandParser::Reuslt> CommandParser::FindNext(const std::initializer_list<std::string> inputs) const {
+std::shared_ptr<Splitter::Reuslt> Splitter::FindNext(const std::initializer_list<std::string> inputs) const {
     for (const auto &in : inputs) {
         if (const auto res = FindNext(in)) {
             return res;
@@ -159,52 +162,52 @@ std::shared_ptr<CommandParser::Reuslt> CommandParser::FindNext(const std::initia
     return nullptr;
 }
 
-std::shared_ptr<CommandParser::Reuslt> CommandParser::FindDigit(int id) const {
+std::shared_ptr<Splitter::Reuslt> Splitter::FindDigit(int id) const {
     if (!Valid()) {
         return nullptr;
     }
 
     if (id < 0) {
         for (auto i = size_t{0}; i < GetCount(); ++i) {
-            const auto res = GetCommand((size_t)i);
+            const auto res = GetWord(i);
             if (res->IsDigit()) {
                 return res;
             }
         }
     } else {
-        if (const auto res = GetCommand((size_t)id)) {
+        if (const auto res = GetWord((size_t)id)) {
             return res->IsDigit() ? res : nullptr;
         }
     }
     return nullptr;
 }
 
-std::shared_ptr<CommandParser::Reuslt> CommandParser::RemoveCommand(size_t id) {
+std::shared_ptr<Splitter::Reuslt> Splitter::RemoveWord(size_t id) {
     if (id > GetCount()) {
         return nullptr;
     }
 
-    const auto str_ = *commands_buffer_[id];
-    commands_buffer_.erase(std::begin(commands_buffer_)+id);
+    const auto str_ = *bufffer_[id];
+    bufffer_.erase(std::begin(bufffer_)+id);
     count_--;
 
     return std::make_shared<Reuslt>(Reuslt(str_, -1));
 }
 
-std::shared_ptr<CommandParser::Reuslt> CommandParser::RemoveSlice(size_t b, size_t e) {
+std::shared_ptr<Splitter::Reuslt> Splitter::RemoveSlice(size_t b, size_t e) {
     if (b > GetCount() || e > GetCount() || b > e) {
         return nullptr;
     }
     if (b == e) {
-        return RemoveCommand(e);
+        return RemoveWord(e);
     }
     auto out = GetSlice(b, e);
-    commands_buffer_.erase(std::begin(commands_buffer_)+b, std::begin(commands_buffer_)+e);
+    bufffer_.erase(std::begin(bufffer_)+b, std::begin(bufffer_)+e);
     count_ -= (e-b);
     return out;
 }
 
-std::string CommandParser::Reuslt::Upper() const {
+std::string Splitter::Reuslt::Upper() const {
     auto upper = str_;
     for (auto & c: upper) {
         c = std::toupper(c);
@@ -212,7 +215,7 @@ std::string CommandParser::Reuslt::Upper() const {
     return upper;
 }
 
-std::string CommandParser::Reuslt::Lower() const {
+std::string Splitter::Reuslt::Lower() const {
     auto lower = str_;
     for (auto & c: lower) {
         c = std::tolower(c);
@@ -220,7 +223,7 @@ std::string CommandParser::Reuslt::Lower() const {
     return lower;
 }
 
-bool CommandParser::Reuslt::IsDigit() const {
+bool Splitter::Reuslt::IsDigit() const {
     bool is_digit = true;
 
     for (char c : str_) {
@@ -230,30 +233,30 @@ bool CommandParser::Reuslt::IsDigit() const {
 }
 
 template<>
-std::string CommandParser::Reuslt::Get<std::string>() const {
+std::string Splitter::Reuslt::Get<std::string>() const {
     return str_;
 }
 
 template<>
-int CommandParser::Reuslt::Get<int>() const {
+int Splitter::Reuslt::Get<int>() const {
     return std::stoi(str_);
 }
 
 template<>
-float CommandParser::Reuslt::Get<float>() const{
+float Splitter::Reuslt::Get<float>() const{
     return std::stof(str_);
 }
 
 template<>
-char CommandParser::Reuslt::Get<char>() const{
+char Splitter::Reuslt::Get<char>() const{
     return str_[0];
 }
 
 template<>
-const char* CommandParser::Reuslt::Get<const char*>() const{
+const char* Splitter::Reuslt::Get<const char*>() const{
     return str_.c_str();
 }
 
-int CommandParser::Reuslt::Index() const {
+int Splitter::Reuslt::Index() const {
     return idx_;
 }

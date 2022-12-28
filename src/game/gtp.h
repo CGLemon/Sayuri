@@ -6,7 +6,7 @@
 #include "config.h"
 #include "mcts/search.h"
 #include "mcts/node.h"
-#include "utils/parser.h"
+#include "utils/splitter.h"
 #include "utils/threadpool.h"
 #include "utils/format.h"
 #include "pattern/gammas_dict.h"
@@ -89,9 +89,9 @@ private:
     std::string GtpSuccess(std::string);
     std::string GtpFail(std::string);
 
-    AnalysisConfig ParseAnalysisConfig(CommandParser &parser, int &color);
+    AnalysisConfig ParseAnalysisConfig(Splitter &spt, int &color);
 
-    std::string Execute(CommandParser &parser, bool &try_ponder);
+    std::string Execute(Splitter &spt, bool &try_ponder);
 
     std::unique_ptr<Agent> agent_{nullptr};
 

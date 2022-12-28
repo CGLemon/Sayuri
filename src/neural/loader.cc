@@ -1,6 +1,6 @@
 #include "neural/loader.h"
 #include "neural/network_basic.h"
-#include "utils/parser.h"
+#include "utils/splitter.h"
 #include "utils/log.h"
 #include "utils/format.h"
 #include "utils/parse_float.h"
@@ -74,9 +74,9 @@ void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) 
     auto line = std::string{};
 
     if (std::getline(buffer, line)) {
-        const auto p = CommandParser(line, 2);
-        if (p.GetCommand(0)->Get<std::string>() != "get" ||
-                p.GetCommand(1)->Get<std::string>() != "main") {
+        const auto spt = Splitter(line, 2);
+        if (spt.GetWord(0)->Get<>() != "get" ||
+                spt.GetWord(1)->Get<>() != "main") {
             throw "Weights file format is not acceptable";
         }
     } else {
@@ -87,16 +87,16 @@ void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) 
     auto netstruct = NetStruct{};
 
     while (std::getline(buffer, line)) {
-        const auto p = CommandParser(line, 2);
-        if (p.GetCommand(0)->Get<std::string>() == "get") {
-            if (p.GetCommand(1)->Get<std::string>() == "info") {
+        const auto spt = Splitter(line, 2);
+        if (spt.GetWord(0)->Get<>() == "get") {
+            if (spt.GetWord(1)->Get<>() == "info") {
                 ParseInfo(netinfo, buffer);
-            } else if (p.GetCommand(1)->Get<std::string>() == "struct") {
+            } else if (spt.GetWord(1)->Get<>() == "struct") {
                 ParseStruct(netstruct, buffer);
-            } else if (p.GetCommand(1)->Get<std::string>() == "parameters") {
+            } else if (spt.GetWord(1)->Get<>() == "parameters") {
                 break;
             }
-        } else if (p.GetCommand(0)->Get<std::string>() == "end") {
+        } else if (spt.GetWord(0)->Get<std::string>() == "end") {
             // do nothing...
         }
     }
@@ -108,9 +108,9 @@ void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) 
 
     // Now start to parse the weights.
     while (std::getline(buffer, line)) {
-        const auto p = CommandParser(line);
-        if (p.GetCommand(0)->Get<std::string>() == "get") {
-            if (p.GetCommand(1)->Get<std::string>() == "parameters") {
+        const auto spt = Splitter(line);
+        if (spt.GetWord(0)->Get<>() == "get") {
+            if (spt.GetWord(1)->Get<>() == "parameters") {
                 FillWeights(netinfo, netstruct, weights, buffer);
             }
         }
@@ -120,14 +120,14 @@ void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) 
 void DNNLoder::ParseInfo(NetInfo &netinfo, std::istream &buffer) const {
     auto line = std::string{};
     while (std::getline(buffer, line)) {
-        const auto p = CommandParser(line);
-        if (p.GetCommand(0)->Get<std::string>()[0] == '#') {
+        const auto spt = Splitter(line);
+        if (spt.GetWord(0)->Get<>()[0] == '#') {
             continue;
-        } else if (p.GetCommand(0)->Get<std::string>() == "end") {
+        } else if (spt.GetWord(0)->Get<>() == "end") {
             break;
         }
-        netinfo.emplace(p.GetCommand(0)->Get<std::string>(),
-                            p.GetCommand(1)->Get<std::string>());
+        netinfo.emplace(spt.GetWord(0)->Get<>(),
+                            spt.GetWord(1)->Get<>());
     }
 
     const auto NotFound = [](NetInfo &netinfo, std::string target) -> bool {
@@ -155,28 +155,29 @@ void DNNLoder::ParseStruct(NetStruct &netstruct, std::istream &buffer) const {
     auto line = std::string{};
     auto cnt = size_t{0};
     while (std::getline(buffer, line)) {
-        const auto p = CommandParser(line);
-        if (p.GetCommand(0)->Get<std::string>()[0] == '#') {
+        const auto spt = Splitter(line);
+        if (spt.GetWord(0)->Get<>()[0] == '#') {
             continue;
-        } else if (p.GetCommand(0)->Get<std::string>() == "end") {
+        } else if (spt.GetWord(0)->Get<>() == "end") {
             break;
         }
             
         netstruct.emplace_back(LayerShape{});
-        for (auto i = size_t{1}; i < p.GetCount(); ++i) {
-            const auto s = p.GetCommand(i)->Get<int>();
+        for (auto i = size_t{1}; i < spt.GetCount(); ++i) {
+            const auto s = spt.GetWord(i)->Get<int>();
             netstruct[cnt].emplace_back(s);
         }
 
-        if (p.GetCommand(0)->Get<std::string>() == "FullyConnect") {
+        const auto layer_name = spt.GetWord(0)->Get<>();
+        if (layer_name == "FullyConnect") {
             if (netstruct[cnt].size() != 2) {
                 throw "The FullyConnect Layer shape is error";
             }
-        } else if (p.GetCommand(0)->Get<std::string>() == "Convolution") {
+        } else if (layer_name == "Convolution") {
             if (netstruct[cnt].size() != 3) {
                 throw "The Convolution Layer shape is error";
             }
-        } else if (p.GetCommand(0)->Get<std::string>() == "BatchNorm") {
+        } else if (layer_name == "BatchNorm") {
             if (netstruct[cnt].size() != 1) {
                 throw "The BatchNorm layer shape is error";
             }
@@ -438,8 +439,8 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
 
     auto line = std::string{};
     std::getline(buffer, line);
-    const auto p = CommandParser(line);
-    if (p.GetCommand(0)->Get<std::string>() != "end") {
+    const auto spt = Splitter(line);
+    if (spt.GetWord(0)->Get<std::string>() != "end") {
         throw "Not end? Weights file format is not acceptable";
     }
     weights->loaded = true;
