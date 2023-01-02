@@ -387,16 +387,15 @@ class ConvBlock(nn.Module):
         #
         # We get:
         #     tgt_std = std / gamma
-        #     tgt_mean = (mean - beta) * (std / gamma)
+        #     tgt_mean = mean - beta * (std / gamma)
 
         if self.bn.gamma is not None:
             bn_std = bn_std / self.bn.gamma
         if self.bn.beta is not None:
             bn_mean = bn_mean - self.bn.beta * bn_std
-        bn_var = torch.square(bn_std) - self.bn.eps
 
         out += tensor_to_text(bn_mean, use_bin)
-        out += tensor_to_text(bn_var, use_bin)
+        out += tensor_to_text(bn_std, use_bin)
         return out
 
     def forward(self, x, mask):
@@ -509,6 +508,7 @@ class Network(nn.Module):
         self.value_extract = cfg.value_extract
         self.value_misc = cfg.value_misc
         self.stack = cfg.stack
+        self.version = 2
 
         self.construct_layers()
 
@@ -762,7 +762,7 @@ class Network(nn.Module):
 
             f.write(str_to_bin("get info\n"))
             f.write(str_to_bin("NNType {}\n".format(self.nntype)))
-            f.write(str_to_bin("Version {}\n".format(1)))
+            f.write(str_to_bin("Version {}\n".format(self.version)))
             f.write(str_to_bin("FloatType {}\n".format("float32bin")))
             f.write(str_to_bin("InputChannels {}\n".format(self.input_channels)))
             f.write(str_to_bin("ResidualChannels {}\n".format(self.residual_channels)))
@@ -795,7 +795,7 @@ class Network(nn.Module):
 
             f.write("get info\n")
             f.write("NNType {}\n".format(self.nntype))
-            f.write("Version {}\n".format(1))
+            f.write("Version {}\n".format(self.version))
             f.write("FloatType {}\n".format("float32"))
             f.write("InputChannels {}\n".format(self.input_channels))
             f.write("ResidualChannels {}\n".format(self.residual_channels))

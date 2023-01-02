@@ -46,11 +46,15 @@ void BatchNormLayer::LoadMeans(std::vector<float> &load_weights){
     means_ = std::move(load_weights);
 }
 
-void BatchNormLayer::LoadStddevs(std::vector<float> &load_weights){
+void BatchNormLayer::LoadStddevs(std::vector<float> &load_weights, bool is_v1){
     if ((int)load_weights.size() != GetChannels()) {
         throw "The StdDevs size of batch normalization layer is not acceptable";
     }
-    ProcessVariant(load_weights);
+    if (is_v1) {
+        ProcessVariance(load_weights); // variance -> 1/stddev
+    } else {
+        ProcessStddev(load_weights); // stddev -> 1/stddev
+    }
     stddevs_ = std::move(load_weights);
 }
 

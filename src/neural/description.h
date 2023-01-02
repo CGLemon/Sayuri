@@ -30,7 +30,7 @@ public:
     void Set(int channels);
 
     void LoadMeans(std::vector<float> &load_weights);
-    void LoadStddevs(std::vector<float> &load_weights);
+    void LoadStddevs(std::vector<float> &load_weights, bool is_v1);
 
     std::vector<float>& GetMeans();
     std::vector<float>& GetStddevs();
@@ -39,10 +39,16 @@ public:
 
 private:
     template <typename container>
-    void ProcessVariant(container &weights) {
+    void ProcessVariance(container &weights) {
         static constexpr float epsilon = 1e-5f;
         for (auto &&w : weights) {
             w = 1.0f / std::sqrt(w + epsilon);
+        }
+    }
+    template <typename container>
+    void ProcessStddev(container &weights) {
+        for (auto &&w : weights) {
+            w = 1.0f / w;
         }
     }
 

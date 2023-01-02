@@ -104,7 +104,7 @@ void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) 
     buffer.clear();
     buffer.seekg(0, std::ios::beg);
 
-    CkeckFloat(netinfo);
+    CkeckMisc(netinfo);
 
     // Now start to parse the weights.
     while (std::getline(buffer, line)) {
@@ -188,36 +188,49 @@ void DNNLoder::ParseStruct(NetStruct &netstruct, std::istream &buffer) const {
     }
 }
 
-void DNNLoder::CkeckFloat(NetInfo &netinfo) {
+void DNNLoder::CkeckMisc(NetInfo &netinfo) {
     const auto NotFound = [](NetInfo &netinfo, std::string target) -> bool {
         return std::end(netinfo) == netinfo.find(target);
     };
 
     use_binary_ = false;
+    version_ = 1;
 
-    if (NotFound(netinfo, "FloatType")) {
-        return;
+    if (!NotFound(netinfo, "FloatType")) {
+        if (netinfo["FloatType"] == "float32bin") {
+            use_binary_ = true;
+        }
     }
 
-    if (netinfo["FloatType"] == "float32bin") {
-        use_binary_ = true;
+    if (!NotFound(netinfo, "Version")) {
+        version_ = std::stoi(netinfo["Version"]);
+
+        // v1: Base format.
+        //
+        // v2: Fixed the batch normalize layer weights
+        //     format. There are some error in the gammas
+        //     compression process.
+    }
+
+    if (!NotFound(netinfo, "NNType")) {
+        // Not used now.
     }
 }
 
 void DNNLoder::DumpInfo(std::shared_ptr<DNNWeights> weights) const {
     auto out = std::ostringstream{};
 
-    out << "Input channels: " << weights->input_channels << '\n';
-
+    out << "Network Verison: " << version_ << '\n';
+    out << "Input Channels: " << weights->input_channels << '\n';
     out << "Residual Blocks: " << weights->residual_blocks << '\n';
     out << "Residual Channels: " << weights->residual_channels << '\n';
 
-    for (auto i = 0; i < weights->residual_blocks; ++i) {
-        out << "  " << "block" << ' ' << i+1 << ':';
+    for (int i = 0; i < weights->residual_blocks; ++i) {
+        out << "  block " << i+1 << ':';
         if (weights->tower[i].apply_se) {
-            out << ' ' << "ResidualBlock-SE" << '\n';
+            out << " ResidualBlock-SE" << '\n';
         } else {
-            out << ' ' << "ResidualBlock" << '\n';
+            out << " ResidualBlock" << '\n';
         }
     }
 
@@ -243,6 +256,19 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
     if (weights->input_channels != kInputChannels) {
         throw "The number of input channels is wrong.";
     }
+
+    // There are three types layer. Each layer has
+    // two line weights. Here they are.
+    //
+    // a). Fully connect layer
+    //   1. weights
+    //   2. biases
+    // b). Convolution layer
+    //   1. weights
+    //   2. biases
+    // c). Batch normalize layer (v2)
+    //   1. mean
+    //   2. standard deviation 
 
     // input layer
     const auto inputs_cnt = 2;
@@ -570,7 +596,7 @@ void DNNLoder::FillBatchnormLayer(BatchNormLayer &layer,
     layer.LoadMeans(weights);
 
     GetWeightsFromBuffer(weights, buffer);
-    layer.LoadStddevs(weights);
+    layer.LoadStddevs(weights, version_==1);
 }
 
 void DNNLoder::FillConvolutionLayer(ConvLayer &layer,

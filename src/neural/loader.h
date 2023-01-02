@@ -21,7 +21,7 @@ private:
     void Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer);
     void ParseInfo(NetInfo &netinfo, std::istream &buffer) const;
     void ParseStruct(NetStruct &netstruct, std::istream &buffer) const;
-    void CkeckFloat(NetInfo &netinfo);
+    void CkeckMisc(NetInfo &netinfo);
     void DumpInfo(std::shared_ptr<DNNWeights> weights) const;
 
     void FillWeights(NetInfo &netinfo,
@@ -49,4 +49,5 @@ private:
                                   const int kernel_size) const;
 
     bool use_binary_;
+    int version_;
 };
