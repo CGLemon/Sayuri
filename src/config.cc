@@ -90,6 +90,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["score_utility_factor"] << Option::setoption(0.1f);
     kOptionsMap["score_utility_div"] << Option::setoption(20.f);
     kOptionsMap["expand_threshold"] << Option::setoption(-1);
+    kOptionsMap["completed_q_utility_factor"] << Option::setoption(0.0f);
 
     kOptionsMap["root_policy_temp"] << Option::setoption(1.f, 1.f, 0.f);
     kOptionsMap["policy_temp"] << Option::setoption(1.f, 1.f, 0.f);
@@ -579,6 +580,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--score-utility-div")) {
         if (IsParameter(res->Get<>())) {
             SetOption("score_utility_div", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--completed-q-utility-factor")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("completed_q_utility_factor", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

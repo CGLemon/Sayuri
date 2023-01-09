@@ -40,6 +40,7 @@ public:
         dirichlet_factor = GetOption<float>("dirichlet_factor");
         dirichlet_init = GetOption<float>("dirichlet_init");
 
+        completed_q_utility_factor = GetOption<float>("completed_q_utility_factor");
         score_utility_factor = GetOption<float>("score_utility_factor");
         score_utility_div = GetOption<float>("score_utility_div");
         resign_playouts = GetOption<float>("resign_playouts");
@@ -90,6 +91,7 @@ public:
     float dirichlet_factor;
     float dirichlet_init;
 
+    float completed_q_utility_factor;
     float score_utility_factor;
     float score_utility_div;
 

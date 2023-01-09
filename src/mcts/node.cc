@@ -430,9 +430,10 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
             continue;
         }
 
-        // Apply First Play Urgency(FPU). We tend to search the expanded
-        // node in the PUCT algorithm. So give the unexpanded node a little
-        // bad value.
+        // Apply First Play Urgency (FPU). We should think the value of the 
+        // unvisited nodes are same as parent. But the NN-based MCTS tends to
+        // search the visited node. So give the unvisited node a little bad
+        // value (FPU reduction).
         float q_value = fpu_value;
 
         float denom = 1.0f;
@@ -1251,10 +1252,14 @@ void Node::ComputeNodeCount(size_t &nodes, size_t &edges) {
 }
 
 float Node::GetGumbelQValue(int color, float parent_score) const {
+    // Get non-normalized complete Q value. In the original
+    // paper, it is Q value. We mixe Q value and score lead
+    // in order to optimize the move probabilities if one side
+    // has won the game.
     const auto score_utility_div = param_->score_utility_div;
-    const auto score_utility_factor = param_->score_utility_factor;
+    const auto completed_q_utility_factor = param_->completed_q_utility_factor;
     const auto mixed_q = GetWL(color, false) +
-                             score_utility_factor *
+                             completed_q_utility_factor *
                                  GetScoreUtility(
                                      color, score_utility_div, parent_score);
     return mixed_q;
@@ -1262,7 +1267,9 @@ float Node::GetGumbelQValue(int color, float parent_score) const {
 
 float Node::NormalizeCompletedQ(const float completed_q,
                                     const int max_visits) const {
-    return (50 + max_visits) * 0.1f * completed_q;
+    // The transformation progressively increases the scale for
+    // Q value and reduces the effect of the prior policy.
+    return (50.f + max_visits) * 0.1f * completed_q;
 }
 
 std::vector<float> Node::GetProbLogitsCompletedQ(GameState &state) {
@@ -1299,52 +1306,85 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
 
     const auto parent_score = GetFinalScore(color);
     auto logits_q = std::vector<float>(num_intersections+1, -1e6f);
-    float value_pi = 0.f;
-    int max_visits = 0;
 
+    int max_visits = 0;
+    int parentvisits = 0;
+    float weighted_q = 0.f;
+    float weighted_pi = 0.f;
+
+    // Gather some basic informations.
     for (auto & child : children_) {
         const auto node = child.Get();
         const bool is_pointer = node != nullptr;
-        if (is_pointer && !node->IsActive()) {
-            continue;
-        }
 
-        const int visits = node->GetVisits();
-        max_visits = std::max(max_visits, visits);
-        if (visits > 0) {
-            value_pi += child.GetPolicy() *
-                            node->GetGumbelQValue(color, parent_score);
+        int visits = 0;
+        if (is_pointer && node->IsActive()) {
+            visits = node->GetVisits();
         }
+        parentvisits += visits;
+        max_visits = std::max(max_visits, visits);
+
+       if (visits > 0) {
+           weighted_q += child.GetPolicy() * 
+                             node->GetGumbelQValue(color, parent_score);
+           weighted_pi += child.GetPolicy();
+       }
     }
 
+    // Compute the all children's completed Q.
+    auto completed_q_list = std::vector<float>{};
+    float max_completed_q = std::numeric_limits<float>::min();
+    float min_completed_q = std::numeric_limits<float>::max();
+    float raw_value = this->GetGumbelQValue(color, parent_score);
+
     for (auto & child : children_) {
         const auto node = child.Get();
         const bool is_pointer = node != nullptr;
-        const auto vtx = child.GetVertex();
-
-        int idx = num_intersections; // pass move
-        if (vtx != kPass) {
-            idx = state.GetIndex(
-                      state.GetX(vtx), state.GetY(vtx));
-        }
 
         int visits = 0;
         if (is_pointer && node->IsActive()) {
             visits = node->GetVisits();
         }
 
-        const float logits = std::log((double)prob[idx] + 1e-8f);
         float completed_q;
         if (visits == 0) {
-            completed_q = value_pi;
+            // Use the mixed value instead of raw value network evaluation. It
+            // is a approximate value.
+            completed_q = (raw_value + (parentvisits/weighted_pi) *
+                               weighted_q) / (1 + parentvisits);
         } else {
             completed_q = node->GetGumbelQValue(color, parent_score);
         }
+        completed_q_list.emplace_back(completed_q);
+
+        max_completed_q = std::max(max_completed_q, completed_q);
+        min_completed_q = std::min(min_completed_q, completed_q);
+    }
+
+    // Rescale the the completed Q.
+    for (auto &q : completed_q_list) {
+        q = (q - min_completed_q) /
+                std::max(max_completed_q - min_completed_q, 1e-8f);
+    }
+
+    // Apply the completed Q with policy.
+    int completed_q_idx = 0;
+    for (auto & child : children_) {
+        const auto vtx = child.GetVertex();
+        int idx = num_intersections; // pass move
+        if (vtx != kPass) {
+            idx = state.GetIndex(
+                      state.GetX(vtx), state.GetY(vtx));
+        }
+
+        const float logits = std::log((double)prob[idx] + 1e-8f);
+        const float completed_q = completed_q_list[completed_q_idx++];
         logits_q[idx] = logits + NormalizeCompletedQ(
                                      completed_q, max_visits);
     }
     prob = Network::Softmax(logits_q, 1.f);
 
+    // Prune the bad policy.
     double psize = prob.size();
     double noise_threshold = 1.f/(psize * psize);
     double o = 0.f;
@@ -1367,6 +1407,36 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
                                    const int max_visists,
                                    const int considered_moves, const float mval,
                                    bool only_max_visit) {
+
+    // The Variant of Sequential Halving algorithm. The input N playous
+    // is always log2(considered moves) * (considered moves) for each
+    // epoch. It is same as Sequential Halving with Gumbel algorithm if 
+    // the playous is low.
+    //
+    // Round 1.
+    // distribution -> 1 | 1 | 1 | 1
+    // accumulation -> 1 | 1 | 1 | 1
+    //
+    // Round 2.
+    // distribution -> 2 | 2 | 0 | 0
+    // accumulation -> 3 | 3 | 1 | 1
+    //
+    // Round 3.(first epoch is end)
+    // distribution -> 4 | 0 | 0 | 0
+    // accumulation -> 7 | 3 | 1 | 1
+    //
+    // Round 4.
+    // distribution -> 1 | 1 | 1 | 1
+    // accumulation -> 8 | 4 | 2 | 2
+    //
+    // Round 5.
+    // distribution -> 2  | 2 | 0 | 0
+    // accumulation -> 10 | 6 | 2 | 2
+    //
+    // Round 6. (second epoch is end)
+    // distribution -> 4  | 0 | 0 | 0
+    // accumulation -> 14 | 6 | 2 | 2
+
     const int n = std::log2(std::max(1,considered_moves)) + 1;
     const int adj_considered_moves = std::pow(2, n-1); // Be sure that it is pow of 2.
 
@@ -1416,6 +1486,8 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
                     NormalizeCompletedQ(
                         node->GetGumbelQValue(color, parent_score), max_visists);
             }
+            // Each completed Q value is same if the considered visists is
+            // zero. To do nothing is Ok.
         } else {
             gumbel_logits[node->GetVertex()] = mval;
         }
@@ -1423,9 +1495,8 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
 }
 
 bool Node::ShouldApplyGumbel() const {
-    // We simply think the parent visits is
-    // currents visits. Ignore the pruned
-    // method.
+    // We simply think the parent's visits is
+    // current visits. Ignore the pruned node.
     const int visits = GetVisits() - 1;
     return param_->gumbel &&
                param_->gumbel_playouts > visits;

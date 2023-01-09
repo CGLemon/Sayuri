@@ -2,7 +2,7 @@
 
 ## Requirements
 
-* Be sure that you had built the engine. The engine should be in the ```build```.
+* Be sure that you had built the engine. The engine should be in the ```build``` directory.
 * PyTorch 1.x (for python)
 * Numpy (for python)
 
@@ -16,7 +16,7 @@ There three bash files. The ```setup.sh``` will do the initialization. The ```se
     $ bash selfplay.sh
 
 
-Two important parameters ```GAMES_PER_EPOCH``` and ```MAX_TRAINING_EPOCHES``` controls the totally played games
+There two important parameters ```GAMES_PER_EPOCH``` and ```MAX_TRAINING_EPOCHES``` in selfplay.sh. They control the totally played games.
 
 ## The Training Setting
 
@@ -89,8 +89,9 @@ The ```selfplay-config.txt``` controls the self-play process. Here are the param
 
 --cpuct-init 1.25
 --lcb-reduction 0
---score-utility-factor 0.1
---lcb-utility-factor 0.1
+--score-utility-factor 0.05
+--lcb-utility-factor 0.05
+--completed-q-utility-factor 0.05
 
 --selfplay-query bkp:9:7:0.9 # The format is boardsize-komi-prob.
                              # It means 90% games are 9x9 with komi 7.
@@ -110,7 +111,7 @@ The ```selfplay-config.txt``` controls the self-play process. Here are the param
 
 --always-completed-q-policy
 
---reduce-playouts 100
+--reduce-playouts 100        # 85% uses 100 playouts 
 --reduce-playouts-prob 0.85
 
 --resign-playouts 85

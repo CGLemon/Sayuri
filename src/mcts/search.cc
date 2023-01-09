@@ -316,7 +316,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         if ((tag & kAnalysis) &&
                 analysis_config_.interval * 10 <
                     analysis_timer.GetDurationMilliseconds()) {
-            // Output the analysis verbose for GTP interface, like sabaki...
+            // Output the analysis string for GTP interface, like sabaki...
             analysis_timer.Clock();
             if (root_node_->GetVisits() > 1) {
                 DUMPING << root_node_->ToAnalysisString(
@@ -338,7 +338,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         if (param_->resign_playouts > 0 &&
                 param_->resign_playouts <=
                     playouts_.load(std::memory_order_relaxed)) {
-            // If someone already won the game, the winrate was not very effective
+            // If someone already won the game, the Q value was not very effective
             // in the MCTS. Low playouts with policy network is good enough. Just
             // simply stop the tree search.
             float wl = root_node_->GetWL(color, false);
@@ -758,7 +758,7 @@ void Search::TryPonder() {
 }
 
 int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
-    // Do not dump the analysis verbose if we do not
+    // Do not dump the analysis string if we do not
     // send the interval value.
     auto analysis_tag = analysis_config.interval > 0 ?
                             kAnalysis : kNullTag;
