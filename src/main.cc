@@ -8,7 +8,7 @@ void DumpLicense() {
                                GetProgramVersion().c_str(),
                                GetVersionName().c_str());
     LOGGING
-            << "    " << name_ver << "  " << "Copyright (C) 2021-2022  Hung Zhe Lin\n"
+            << "    " << name_ver << "  " << "Copyright (C) 2021-2023  Hung Zhe Lin\n"
             << "    This program comes with ABSOLUTELY NO WARRANTY.\n"
             << "    This is free software, and you are welcome to redistribute it\n"
             << "    under certain conditions; see the COPYING file for details.\n"

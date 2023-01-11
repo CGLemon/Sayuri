@@ -58,7 +58,7 @@ Compile a bigger board size version.
 
 ## Weights
 
-You may download the weights file, opening book and patterns from my [google drive](https://drive.google.com/drive/folders/1cXAoOghgkUfNVZWRzEyvfB4uY_TTbaVH?usp=share_link). Here is the description list. Because I may update the network format or encoder, be sure that you download the correspond weights for the last engine. I do not promise the any file is backward compatible.
+You may download the SL weights file, opening book and patterns from my [google drive](https://drive.google.com/drive/folders/1cXAoOghgkUfNVZWRzEyvfB4uY_TTbaVH?usp=share_link). Here is the description list. Because I may update the network format or encoder, be sure that you download the correspond weights for the last engine. I do not promise the any file is backward compatible.
 
 | File                    | Description                                    |
 | :---------------------- | :--------------------------------------------- |
@@ -67,6 +67,8 @@ You may download the weights file, opening book and patterns from my [google dri
 | MM Patterns             | It is for no-dcnn mode, trained on the games of high level players from KGS. |
 
 <br/>
+
+Download last RL weights file from [zero](https://drive.google.com/drive/folders/1PlPTOH1amP3J7HR5uxi9Q_Dd_CL9rEX8?usp=share_link) directory. The file name ```zero-10k.bin.txt```, ```10k``` means it played 10000 self-play games. The self-play note is [here](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJew5OFci).
 
 ## Engine Arguments
 
