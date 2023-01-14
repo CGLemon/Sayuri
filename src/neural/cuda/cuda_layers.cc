@@ -123,7 +123,6 @@ void Convolution::Forward(const int batch, float *input, float *output,
     }
 
     assert(batch <= maxbatch_);
-    const int board_size = (width_ + height_) / 2;
 
 #ifdef USE_CUDNN
     ReportCUDNNErrors(cudnnSetStream(handles_->cudnn_handle, handles_->stream));
@@ -151,6 +150,8 @@ void Convolution::Forward(const int batch, float *input, float *output,
 #else
     (void) scratch_size;
     auto scratch_op = reinterpret_cast<float*>(scratch);
+
+    const int board_size = (width_ + height_) / 2;
 
     if (winograd_) {
         // TODO: Merge batch norm layer with Winograd.
