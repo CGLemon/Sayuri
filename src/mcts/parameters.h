@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game/types.h"
+#include "utils/option.h"
 #include "config.h"
 
 #include <array>
@@ -43,8 +44,8 @@ public:
         completed_q_utility_factor = GetOption<float>("completed_q_utility_factor");
         score_utility_factor = GetOption<float>("score_utility_factor");
         score_utility_div = GetOption<float>("score_utility_div");
-        resign_playouts = GetOption<float>("resign_playouts");
-        reduce_playouts = GetOption<float>("reduce_playouts");
+        resign_playouts = GetOption<int>("resign_playouts");
+        reduce_playouts = GetOption<int>("reduce_playouts");
         reduce_playouts_prob = GetOption<float>("reduce_playouts_prob"); 
 
         lag_buffer = GetOption<int>("lag_buffer");

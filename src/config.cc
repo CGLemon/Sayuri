@@ -13,116 +13,90 @@
 #include <sstream>
 #include <fstream>
 
-std::unordered_map<std::string, Option> kOptionsMap;
-
-#define OPTIONS_EXPASSION(T)                        \
-template<>                                          \
-T GetOption<T>(std::string name) {                  \
-    return kOptionsMap.find(name)->second.Get<T>(); \
-}                                                   \
-                                                    \
-template<>                                          \
-bool SetOption<T>(std::string name, T val) {        \
-    auto res = kOptionsMap.find(name);              \
-    if (res != std::end(kOptionsMap)) {             \
-        res->second.Set<T>(val);                    \
-        return true;                                \
-    }                                               \
-    return false;                                   \
-}
-
-OPTIONS_EXPASSION(std::string)
-OPTIONS_EXPASSION(bool)
-OPTIONS_EXPASSION(int)
-OPTIONS_EXPASSION(float)
-OPTIONS_EXPASSION(char)
-
-#undef OPTIONS_EXPASSION
-
 void ArgsParser::InitOptionsMap() const {
-    kOptionsMap["help"] << Option::setoption(false);
-    kOptionsMap["mode"] << Option::setoption(std::string{"gtp"});
-    kOptionsMap["inputs"] << Option::setoption(std::string{});
+    kOptionsMap["help"] << Option::SetOption(false);
+    kOptionsMap["mode"] << Option::SetOption(std::string{"gtp"});
+    kOptionsMap["inputs"] << Option::SetOption(std::string{});
 
     // engine options
-    kOptionsMap["ponder"] << Option::setoption(false);
-    kOptionsMap["reuse_tree"] << Option::setoption(false);
-    kOptionsMap["friendly_pass"] << Option::setoption(false);
-    kOptionsMap["analysis_verbose"] << Option::setoption(false);
-    kOptionsMap["quiet"] << Option::setoption(false);
-    kOptionsMap["rollout"] << Option::setoption(false);
-    kOptionsMap["no_dcnn"] << Option::setoption(false);
-    kOptionsMap["root_dcnn"] << Option::setoption(false);
-    kOptionsMap["winograd"] << Option::setoption(true);
+    kOptionsMap["ponder"] << Option::SetOption(false);
+    kOptionsMap["reuse_tree"] << Option::SetOption(false);
+    kOptionsMap["friendly_pass"] << Option::SetOption(false);
+    kOptionsMap["analysis_verbose"] << Option::SetOption(false);
+    kOptionsMap["quiet"] << Option::SetOption(false);
+    kOptionsMap["rollout"] << Option::SetOption(false);
+    kOptionsMap["no_dcnn"] << Option::SetOption(false);
+    kOptionsMap["root_dcnn"] << Option::SetOption(false);
+    kOptionsMap["winograd"] << Option::SetOption(true);
 
-    kOptionsMap["search_mode"] << Option::setoption(std::string{});
-    kOptionsMap["fixed_nn_boardsize"] << Option::setoption(0);
-    kOptionsMap["defualt_boardsize"] << Option::setoption(kDefaultBoardSize);
-    kOptionsMap["defualt_komi"] << Option::setoption(kDefaultKomi);
+    kOptionsMap["search_mode"] << Option::SetOption(std::string{});
+    kOptionsMap["fixed_nn_boardsize"] << Option::SetOption(0);
+    kOptionsMap["defualt_boardsize"] << Option::SetOption(kDefaultBoardSize);
+    kOptionsMap["defualt_komi"] << Option::SetOption(kDefaultKomi);
 
-    kOptionsMap["cache_memory_mib"] << Option::setoption(400);
-    kOptionsMap["playouts"] << Option::setoption(-1);
-    kOptionsMap["ponder_factor"] << Option::setoption(100);
-    kOptionsMap["const_time"] << Option::setoption(0);
-    kOptionsMap["batch_size"] << Option::setoption(0);
-    kOptionsMap["threads"] << Option::setoption(0);
+    kOptionsMap["cache_memory_mib"] << Option::SetOption(400);
+    kOptionsMap["playouts"] << Option::SetOption(-1);
+    kOptionsMap["ponder_factor"] << Option::SetOption(100);
+    kOptionsMap["const_time"] << Option::SetOption(0);
+    kOptionsMap["batch_size"] << Option::SetOption(0);
+    kOptionsMap["threads"] << Option::SetOption(0);
 
-    kOptionsMap["kgs_hint"] << Option::setoption(std::string{});
-    kOptionsMap["weights_file"] << Option::setoption(std::string{});
-    kOptionsMap["book_file"] << Option::setoption(std::string{});
-    kOptionsMap["patterns_file"] << Option::setoption(std::string{});
+    kOptionsMap["kgs_hint"] << Option::SetOption(std::string{});
+    kOptionsMap["weights_file"] << Option::SetOption(std::string{});
+    kOptionsMap["book_file"] << Option::SetOption(std::string{});
+    kOptionsMap["patterns_file"] << Option::SetOption(std::string{});
 
-    kOptionsMap["use_gpu"] << Option::setoption(false);
-    kOptionsMap["gpus"] << Option::setoption(std::string{});
-    kOptionsMap["gpu_waittime"] << Option::setoption(2);
+    kOptionsMap["use_gpu"] << Option::SetOption(false);
+    kOptionsMap["gpus"] << Option::SetOption(-1);
+    kOptionsMap["gpu_waittime"] << Option::SetOption(2);
 
-    kOptionsMap["resign_threshold"] << Option::setoption(0.1f, 1.f, 0.f);
+    kOptionsMap["resign_threshold"] << Option::SetOption(0.1f, 1.f, 0.f);
 
-    kOptionsMap["ci_alpha"] << Option::setoption(1e-5f, 1.f, 0.f);
-    kOptionsMap["lcb_utility_factor"] << Option::setoption(0.1f);
-    kOptionsMap["lcb_reduction"] << Option::setoption(0.02f, 1.f, 0.f);
-    kOptionsMap["fpu_reduction"] << Option::setoption(0.25f);
-    kOptionsMap["fpu_root_reduction"] << Option::setoption(0.25f);
-    kOptionsMap["cpuct_init"] << Option::setoption(0.5f);
-    kOptionsMap["cpuct_base_factor"] << Option::setoption(1.0f);
-    kOptionsMap["cpuct_base"] << Option::setoption(19652.f);
-    kOptionsMap["draw_factor"] << Option::setoption(0.f);
-    kOptionsMap["score_utility_factor"] << Option::setoption(0.1f);
-    kOptionsMap["score_utility_div"] << Option::setoption(20.f);
-    kOptionsMap["expand_threshold"] << Option::setoption(-1);
-    kOptionsMap["completed_q_utility_factor"] << Option::setoption(0.0f);
+    kOptionsMap["ci_alpha"] << Option::SetOption(1e-5f, 1.f, 0.f);
+    kOptionsMap["lcb_utility_factor"] << Option::SetOption(0.1f);
+    kOptionsMap["lcb_reduction"] << Option::SetOption(0.02f, 1.f, 0.f);
+    kOptionsMap["fpu_reduction"] << Option::SetOption(0.25f);
+    kOptionsMap["fpu_root_reduction"] << Option::SetOption(0.25f);
+    kOptionsMap["cpuct_init"] << Option::SetOption(0.5f);
+    kOptionsMap["cpuct_base_factor"] << Option::SetOption(1.0f);
+    kOptionsMap["cpuct_base"] << Option::SetOption(19652.f);
+    kOptionsMap["draw_factor"] << Option::SetOption(0.f);
+    kOptionsMap["score_utility_factor"] << Option::SetOption(0.1f);
+    kOptionsMap["score_utility_div"] << Option::SetOption(20.f);
+    kOptionsMap["expand_threshold"] << Option::SetOption(-1);
+    kOptionsMap["completed_q_utility_factor"] << Option::SetOption(0.0f);
 
-    kOptionsMap["root_policy_temp"] << Option::setoption(1.f, 1.f, 0.f);
-    kOptionsMap["policy_temp"] << Option::setoption(1.f, 1.f, 0.f);
-    kOptionsMap["lag_buffer"] << Option::setoption(0);
-    kOptionsMap["early_symm_cache"] << Option::setoption(false);
-    kOptionsMap["symm_pruning"] << Option::setoption(false);
-    kOptionsMap["use_stm_winrate"] << Option::setoption(false);
+    kOptionsMap["root_policy_temp"] << Option::SetOption(1.f, 1.f, 0.f);
+    kOptionsMap["policy_temp"] << Option::SetOption(1.f, 1.f, 0.f);
+    kOptionsMap["lag_buffer"] << Option::SetOption(0);
+    kOptionsMap["early_symm_cache"] << Option::SetOption(false);
+    kOptionsMap["symm_pruning"] << Option::SetOption(false);
+    kOptionsMap["use_stm_winrate"] << Option::SetOption(false);
 
     // self-play options
-    kOptionsMap["selfplay_query"] << Option::setoption(std::string{});
-    kOptionsMap["random_min_visits"] << Option::setoption(1);
-    kOptionsMap["random_moves_factor"] << Option::setoption(0.f);
+    kOptionsMap["selfplay_query"] << Option::SetOption(std::string{});
+    kOptionsMap["random_min_visits"] << Option::SetOption(1);
+    kOptionsMap["random_moves_factor"] << Option::SetOption(0.f);
 
-    kOptionsMap["gumbel_considered_moves"] << Option::setoption(16);
-    kOptionsMap["gumbel_playouts"] << Option::setoption(400);
-    kOptionsMap["gumbel"] << Option::setoption(false);
-    kOptionsMap["always_completed_q_policy"] << Option::setoption(false);
+    kOptionsMap["gumbel_considered_moves"] << Option::SetOption(16);
+    kOptionsMap["gumbel_playouts"] << Option::SetOption(400);
+    kOptionsMap["gumbel"] << Option::SetOption(false);
+    kOptionsMap["always_completed_q_policy"] << Option::SetOption(false);
 
-    kOptionsMap["dirichlet_noise"] << Option::setoption(false);
-    kOptionsMap["dirichlet_epsilon"] << Option::setoption(0.25f);
-    kOptionsMap["dirichlet_init"] << Option::setoption(0.03f);
-    kOptionsMap["dirichlet_factor"] << Option::setoption(361.f);
+    kOptionsMap["dirichlet_noise"] << Option::SetOption(false);
+    kOptionsMap["dirichlet_epsilon"] << Option::SetOption(0.25f);
+    kOptionsMap["dirichlet_init"] << Option::SetOption(0.03f);
+    kOptionsMap["dirichlet_factor"] << Option::SetOption(361.f);
 
-    kOptionsMap["resign_playouts"] << Option::setoption(0);
-    kOptionsMap["reduce_playouts"] << Option::setoption(0);
-    kOptionsMap["reduce_playouts_prob"] << Option::setoption(0.f, 1.f, 0.f);
-    kOptionsMap["first_pass_bonus"] << Option::setoption(false);
+    kOptionsMap["resign_playouts"] << Option::SetOption(0);
+    kOptionsMap["reduce_playouts"] << Option::SetOption(0);
+    kOptionsMap["reduce_playouts_prob"] << Option::SetOption(0.f, 1.f, 0.f);
+    kOptionsMap["first_pass_bonus"] << Option::SetOption(false);
 
-    kOptionsMap["num_games"] << Option::setoption(0);
-    kOptionsMap["parallel_games"] << Option::setoption(1);
-    kOptionsMap["komi_variance"] << Option::setoption(0.f);
-    kOptionsMap["target_directory"] << Option::setoption(std::string{});
+    kOptionsMap["num_games"] << Option::SetOption(0);
+    kOptionsMap["parallel_games"] << Option::SetOption(1);
+    kOptionsMap["komi_variance"] << Option::SetOption(0.f);
+    kOptionsMap["target_directory"] << Option::SetOption(std::string{});
 }
 
 void ArgsParser::InitBasicParameters() const {
@@ -133,6 +107,8 @@ void ArgsParser::InitBasicParameters() const {
     LcbEntries::Get().Initialize(GetOption<float>("ci_alpha"));
     LogOptions::Get().SetQuiet(GetOption<bool>("quiet"));
 
+    // If the threads is zero, program select a reasonable number
+    // and the batch size is same.
     bool already_set_thread = GetOption<int>("threads") > 0;
     bool already_set_batchsize = GetOption<int>("batch_size") > 0;
     bool use_gpu = GetOption<bool>("use_gpu");
@@ -165,8 +141,8 @@ void ArgsParser::InitBasicParameters() const {
     SetOption("batch_size", std::max(select_batchsize, 1));
 
     // Try to select a reasonable number for const time and playouts.
-    bool already_set_time = GetOption<int>("const_time") > 0;
-    bool already_set_playouts = GetOption<int>("playouts") > -1;
+    bool already_set_time = !IsOptionDefault("const_time");
+    bool already_set_playouts = !IsOptionDefault("playouts");
 
     if (!already_set_time && !already_set_playouts) {
         SetOption("const_time", 10); // 10 seconds
@@ -176,9 +152,12 @@ void ArgsParser::InitBasicParameters() const {
     }
 
     // Set the root fpu value.
-    if (!init_fpu_root_) {
+    bool already_set_fpu_root = !IsOptionDefault("fpu_root_reduction");
+    if (!already_set_fpu_root) {
+        bool as_default = true;
         SetOption("fpu_root_reduction",
-                      GetOption<float>("fpu_reduction"));
+                      GetOption<float>("fpu_reduction"),
+                      as_default);
     }
 
     // Parse the search mode.
@@ -464,9 +443,7 @@ void ArgsParser::Parse(Splitter &spt) {
 
     while (const auto res = spt.FindNext({"--gpu", "-g"})) {
         if (IsParameter(res->Get<>())) {
-            auto gpus = GetOption<std::string>("gpus");
-            gpus += (res->Get<>() + " ");
-            SetOption("gpus", gpus);
+            SetOption("gpus", res->Get<int>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -614,7 +591,6 @@ void ArgsParser::Parse(Splitter &spt) {
 
     if (const auto res = spt.FindNext("--fpu-root-reduction")) {
         if (IsParameter(res->Get<>())) {
-            init_fpu_root_ = true;
             SetOption("fpu_root_reduction", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }

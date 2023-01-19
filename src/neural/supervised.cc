@@ -10,6 +10,7 @@
 #include "utils/threadpool.h"
 #include "utils/time.h"
 #include "utils/gzip_helper.h"
+#include "utils/option.h"
 
 #include "config.h"
 

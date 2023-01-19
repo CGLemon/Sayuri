@@ -4,6 +4,7 @@
 #include "utils/log.h"
 #include "utils/format.h"
 #include "utils/parse_float.h"
+#include "utils/option.h"
 #include "config.h"
 
 #include <iostream>

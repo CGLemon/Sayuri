@@ -2,112 +2,46 @@
 
 #include <sstream>
 
-bool Option::BoundaryValid() const {
-    OptionHandle();
-    return !(max_ == 0 && min_ == 0);
-}
-
-template<>
-Option Option::setoption<std::string>(std::string val, int /*max*/, int /*min*/) {
-    return Option{Type::kString, val, 0, 0};
-}
-
-template<>
-Option Option::setoption<const char *>(const char *val, int /*max*/, int /*min*/) {
-    return Option{Type::kString, std::string{val}, 0, 0};
-}
-
-template<>
-Option Option::setoption<bool>(bool val, int /*max*/, int /*min*/) {
-    if (val) {
-        return Option{Type::kBool, "true", 0, 0};
-    }
-    return Option{Type::kBool, "false", 0, 0};
-}
-
-template<>
-Option Option::setoption<int>(int val, int max, int min) {
-    auto op = Option{Type::kInteger, std::to_string(val), max, min};
-    op.Adjust<int>();
-    return op;
-}
-
-template<>
-Option Option::setoption<float>(float val, int max, int min) {
-    auto op = Option{Type::kFloat, std::to_string(val), max, min};
-    op.Adjust<float>();
-    return op;
-}
-
-template<>
-Option Option::setoption<char>(char val, int /*max*/, int /*min*/) {
-    return Option{Type::kChar, std::string{val}, 0, 0};
-}
-
-#define OPTION_EXPASSION(T) \
-template<>                  \
-T Option::Get<T>() const {  \
-    return (T)*this;        \
-}
-
-OPTION_EXPASSION(std::string)
-OPTION_EXPASSION(bool)
-OPTION_EXPASSION(float)
-OPTION_EXPASSION(int)
-OPTION_EXPASSION(char)
-
-template<>
-const char* Option::Get<const char*>() const {
-    return value_.c_str();
-}
-
-#undef OPTION_EXPASSION
-
-template<>
-void Option::Set<std::string>(std::string value) {
-    OptionHandle();
-    value_ = value;
-}
-
-template<>
-void Option::Set<bool>(bool value) {
-    OptionHandle();
-    if (value) {
-        value_ = std::string{"true"};
-    } else {
-        value_ = std::string{"false"};
+void Option::Adjust() {
+    HandleInvalid();
+    for (auto &sval : val_list_) {
+        if (type_ == Type::kInteger)  {
+            auto ival = std::stoi(sval);
+            if (use_max_) {
+                ival = std::min(ival, std::stoi(max_));
+            }
+            if (use_min_) {
+                ival = std::max(ival, std::stoi(min_));
+            }
+            sval = std::to_string(ival);
+        } else if (type_ == Type::kFloating) {
+            auto fval = std::stof(sval);
+            if (use_max_) {
+                fval = std::min(fval, std::stof(max_));
+            }
+            if (use_min_) {
+                fval = std::max(fval, std::stof(min_));
+            }
+            sval = std::to_string(fval);
+        }
     }
 }
 
-template<>
-void Option::Set<int>(int value) {
-    OptionHandle();
-    value_ = std::to_string(value);
-    Adjust<int>();
+std::string Option::GetCurrentVal() const {
+    return *std::rbegin(val_list_);
 }
 
-template<>
-void Option::Set<float>(float value) {
-    OptionHandle();
-    value_ = std::to_string(value);
-    Adjust<float>();
-}
-
-template<>
-void Option::Set<char>(char value) {
-    OptionHandle();
-    value_ = std::string{value};
-}
-
-void Option::OptionHandle() const {
-    if (max_ < min_) {
-        auto out = std::ostringstream{};
-        out << " Option Error :";
-        out << " Max : " << max_ << " |";
-        out << " Min : " << min_ << " |";
-        out << " Minimal is bigger than maximal.";
-        out << " It is not accepted.";
-        throw std::runtime_error(out.str());
+void Option::HandleInvalid() const {
+    if (use_max_ && use_min_) {
+        if (std::stof(max_) < std::stof(min_)) {
+            auto out = std::ostringstream{};
+            out << " Option Error :";
+            out << " Max : " << max_ << " |";
+            out << " Min : " << min_ << " |";
+            out << " Minimal is bigger than maximal.";
+            out << " It is not accepted.";
+            throw std::runtime_error(out.str());
+        }
     }
 
     if (type_ == Type::kInvalid) {
@@ -117,3 +51,5 @@ void Option::OptionHandle() const {
         throw std::runtime_error(out.str());
     }
 };
+
+std::unordered_map<std::string, Option> kOptionsMap;

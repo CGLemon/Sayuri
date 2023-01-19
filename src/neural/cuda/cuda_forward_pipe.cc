@@ -1,6 +1,7 @@
 #ifdef USE_CUDA
 
 #include <sstream>
+#include <stdexcept>
 
 #include "config.h"
 #include "neural/cuda/cuda_forward_pipe.h"
@@ -8,6 +9,7 @@
 #include "neural/cuda/cuda_kernels.h"
 #include "utils/log.h"
 #include "utils/format.h"
+#include "utils/option.h"
 
 void CudaForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
     LOGGING << CUDA::GetBackendInfo();
@@ -112,18 +114,17 @@ void CudaForwardPipe::Reload(int board_size) {
     max_batch_ = GetOption<int>("batch_size");
     const auto d_cnt = CUDA::GetDeviceCount();
 
-    auto gpus_str = GetOption<std::string>("gpus");
+    auto already_set_gpu = !IsOptionDefault("gpus");
     auto gpus_list = std::vector<int>{};
 
-    if (gpus_str.empty()) {
+    if (!already_set_gpu) {
          for (int i = 0; i < d_cnt; ++i) {
              gpus_list.emplace_back(i);
          } 
     } else {
-        std::istringstream iss{gpus_str};
-        int gpu_id;
-
-        while (iss >> gpu_id) {
+        auto gpus_cnt = GetOptionCount("gpus");
+        for (int idx = 0; idx < gpus_cnt; ++idx) {
+            auto gpu_id = GetOption<int>("gpus", idx);
             if (gpu_id < d_cnt) {
                 gpus_list.emplace_back(gpu_id);
             } else {
@@ -133,9 +134,13 @@ void CudaForwardPipe::Reload(int board_size) {
     }
 
     if (gpus_list.empty()) {
-        LOGGING << "Not found any GPU devices! Now assign the GPU(s) automatically.\n";
+        LOGGING << "Not found any GPU device! Now assign the GPU(s) automatically.\n";
         for (int i = 0; i < d_cnt; ++i) {
             gpus_list.emplace_back(i);
+        }
+
+        if (gpus_list.empty()) {
+            throw std::runtime_error("No executable GPU device!");
         }
     }
 

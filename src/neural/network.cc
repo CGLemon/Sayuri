@@ -25,6 +25,7 @@
 #include "utils/log.h"
 #include "utils/random.h"
 #include "utils/format.h"
+#include "utils/option.h"
 
 #include <random>
 #include <sstream>
