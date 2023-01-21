@@ -10,13 +10,14 @@
 
 There three bash files. The ```setup.sh``` will do the initialization. The ```selfplay.sh``` will do the self-play loop. The ```replace.sh``` will train a new network.
 
-    $ cp -r bush selfplay-course
+    $ cp -r bash selfplay-course
     $ cd selfplay-course
     $ bash setup.sh -s ..
     $ bash selfplay.sh
 
+The ```selfplay.sh``` will do the inifinite loop. If you want to stop the loop, you need to create a kill file.
 
-There two important parameters ```GAMES_PER_EPOCH``` and ```MAX_TRAINING_EPOCHES``` in selfplay.sh. They control the totally played games.
+    $ vim kill.txt
 
 ## The Training Setting
 
@@ -32,7 +33,7 @@ The ```selfplay-setting.json``` controls the training process. Here are the para
                                     # performance
 
         "InputChannels": 38,
-        "ResidualChannels": 128,    # channel size
+        "ResidualChannels": 128,    # channel size of residual.
         "PolicyExtract": 24,        # channel size of policy head
         "ValueExtract": 24,         # channel size of value head
         "ValueMisc": 5,
@@ -107,20 +108,23 @@ The ```selfplay-config.txt``` controls the self-play process. Here are the param
 --gumbel                     # Enable Gumbel search.
 
 --gumbel-playouts 50         # Do the Gumbel search if the current playous
-                             # below this. 
+                             # below this value. 
 
 --always-completed-q-policy
 
---reduce-playouts 100        # 85% uses 100 playouts 
---reduce-playouts-prob 0.85
+--reduce-playouts 100        # 75% uses 100 playouts 
+--reduce-playouts-prob 0.75  # 75% uses reduce-playouts.
 
---resign-playouts 85
+--resign-playouts 85         # Use this playout if someone's winrate below
+                             # threshold.
 --resign-threshold 0.02      # If someone's winrate is below this value,
                              # will use the resign-playouts.
 
 --parallel-games 128         # Parallel games at the same time.
---batch-size 64
+--batch-size 64              # Network evalutaion batch size.
 --cache-memory-mib 400
 --early-symm-cache
 --first-pass-bonus
+
+--num-games 10000            # Self-play games per epoch.
 ```

@@ -39,3 +39,5 @@
 --cache-memory-mib 400
 --early-symm-cache
 --first-pass-bonus
+
+--num-games 10000
