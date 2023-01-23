@@ -32,31 +32,43 @@ void add_vectors(float *a, float *b, float *c,
     ReportCUDAErrors(cudaGetLastError());
 }
 
+__global__ void add_spatial_kernel(float *data, const float *biases,
+                                   const float *eltwise, const float *mask,
+                                   int N, int C, int spatial, bool relu) {
+    int index = threadIdx.x + blockDim.x * blockIdx.x;
+    int size = N * C * spatial;
+    if (index < size) {
+        int w_index = (index / (spatial)) % C;
+        int batch = index / (C * spatial);
+        int s_index = index % spatial;
 
-__global__ void add_spatial_kernel(float *a, float *b, float *c,
-                                   int asize, int bsize, int size,
-                                   int spatial, bool relu) {
-    int i = threadIdx.x + blockDim.x * blockIdx.x;
-    if (i < size) {
-        float aval = a[i % asize];
-        float bval = b[(i / spatial) % bsize];
+        float el = data[index];
 
-        float cval = aval + bval;
-        if (relu && (cval < 0)) {
-            cval = 0;
+        if (biases) {
+            el += biases[w_index];
         }
-        c[i] = cval;
+        if (eltwise) {
+            el += eltwise[index];
+        }
+        if (mask) {
+            el *= mask[batch * spatial + s_index];
+        }
+        if (relu && el < 0) {
+            el = 0;
+        }
+        data[index] = el;
     }
 }
 
-void add_spatial(float *a, float *b, float *c,
-                 int asize, int bsize, int size,
-                 int spatial, bool relu, cudaStream_t stream) {
+void add_spatial(float *data, const float *biases,
+                 const float *eltwise, const float *mask,
+                 int batch, int channels, int spatial, bool relu, cudaStream_t stream) {
+    const int total_elements = batch * channels * spatial;
     const int block_size = KBLOCKSIZE;
-    const int blocks = DivUp(size, block_size);
+    const int blocks = DivUp(total_elements, block_size);
 
     add_spatial_kernel<<<blocks, block_size, 0, stream>>>(
-        a, b, c, asize, bsize, size, spatial, relu);
+        data, biases, eltwise, mask, batch, channels, spatial, relu);
 
     ReportCUDAErrors(cudaGetLastError());
 }
@@ -565,12 +577,15 @@ __global__ void transform_in_kernel(const float *in, float *V,
     }
 }
 
-__global__ void transform_out_kernel(const float * M,
-                                     float * Y,
+__global__ void transform_out_kernel(const float *M,
+                                     const float *biases,
+                                     const float *eltwise,
+                                     const float *mask,
+                                     float *Y,
                                      const int K,
                                      const int Kpad, const int Ppad,
                                      const int board_size, 
-                                     const int batch_size) {
+                                     const int batch_size, bool relu) {
     const int W = board_size;
     const int H = board_size;
     const int WTILES = board_size / kWinogradM + (board_size % kWinogradM != 0);
@@ -583,6 +598,10 @@ __global__ void transform_out_kernel(const float * M,
     if (k < K && block < batch_size * P) {
         float temp[kWinogradM][kWinogradAlpha];
         float o[kWinogradM][kWinogradM];
+        float bias = 0.f;
+        if (biases) {
+            bias = biases[k];
+        }
 
         // M dimensions are [36, outputs, batch_size * tiles].
         // Plus zero padding from SGEMM.
@@ -613,10 +632,10 @@ __global__ void transform_out_kernel(const float * M,
                 temp[i][0], temp[i][1], temp[i][2], temp[i][3], temp[i][4], temp[i][5]
             );
 
-            o[i][0] = r[0];
-            o[i][1] = r[1];
-            o[i][2] = r[2];
-            o[i][3] = r[3];
+            o[i][0] = r[0] + bias;
+            o[i][1] = r[1] + bias;
+            o[i][2] = r[2] + bias;
+            o[i][3] = r[3] + bias;
         }
 
         const int batch = block / P;
@@ -635,7 +654,19 @@ __global__ void transform_out_kernel(const float * M,
                     k * spatial +
                     (y + i) * W + (x + j);
                 if (y + i < H && x + j < W) {
-                    Y[out_idx] = o[i][j];
+                    float val =  o[i][j];
+                    if (eltwise) {
+                        val += eltwise[out_idx];
+                    }
+                    if (mask) {
+                        int spatial = board_size * board_size;
+                        int s_index = out_idx % spatial;
+                        val *= mask[batch * spatial + s_index];
+                    }
+                    if (relu && val < 0) {
+                        val = 0.f;
+                    }
+                    Y[out_idx] = val;
                 }
             }
         }
@@ -659,8 +690,11 @@ void winograd3_transform_in(const float *in, float *V,
     ReportCUDAErrors(cudaGetLastError());
 }
 
-void winograd3_transform_out(const float *M, float *out,
-                             int batch, int channels, int board_size, cudaStream_t stream) {
+void winograd3_transform_out(const float *M, const float *biases,
+                             const float *eltwise, const float *mask,
+                             float *out,
+                             int batch, int channels, int board_size,
+                             bool relu, cudaStream_t stream) {
     const int ptiles = GetWinogradP(board_size);
     const int total_elements = channels * batch * ptiles;
 
@@ -671,7 +705,8 @@ void winograd3_transform_out(const float *M, float *out,
     const int p_pad = batch * ptiles;
 
     transform_out_kernel<<<blocks, block_size, 0, stream>>>(
-        M, out, channels, k_pad, p_pad, board_size, batch);
+        M, biases, eltwise, mask, out, channels,
+        k_pad, p_pad, board_size, batch, relu);
 
     ReportCUDAErrors(cudaGetLastError());
 }

@@ -9,9 +9,12 @@ namespace CUDA {
 void add_vectors(float *c, float *a, float *b,
                  int size, int asize, int bsize, bool relu, cudaStream_t stream);
 
-void add_spatial(float *a, float *b, float *c,
-                 int asize, int bsize, int size,
-                 int spatial, bool relu, cudaStream_t stream);
+void add_spatial(float *data, const float *biases,
+                 const float *eltwise, const float *mask,
+                 int batch, int channels, int spatial, bool relu, cudaStream_t stream);
+
+void add_eltwise(float *a, float *b, float *c, const float *mask,
+                 int size, bool relu, cudaStream_t stream);
 
 void batchnorm(float *data, const float *means, const float *stddevs,
                const float *eltwise, const float *mask,
@@ -39,8 +42,11 @@ void se_scale(const float *input, const float* se_bias, float* data,
 void winograd3_transform_in(const float *in, float *V,
                             int batch, int channels, int board_size, cudaStream_t stream);
 
-void winograd3_transform_out(const float *M, float *out,
-                             int batch, int channels, int board_size, cudaStream_t stream);
+void winograd3_transform_out(const float *M, const float *biases,
+                             const float *eltwise, const float *mask,
+                             float *out,
+                             int batch, int channels, int board_size,
+                             bool relu, cudaStream_t stream);
 
 void conv_mul_mask(float * conv, const float *mask,
                    int batch, int channels, int spatial, cudaStream_t stream);
