@@ -4,6 +4,7 @@
 #include <cassert>
 
 #include "neural/cuda/cuda_common.h"
+
 namespace CUDA {
 
 void add_vectors(float *c, float *a, float *b,
@@ -32,7 +33,7 @@ void head_global_pooling(float *input, float *output, const float *sqrt_mask,
                          int batch, int channels, int spatial, cudaStream_t stream);
 
 void se_scale(const float *input, const float* se_bias,
-              const float *mask, float* data,
+              const float *mask, float *output,
               int batch, int channels, int spatial, cudaStream_t stream);
 
 void winograd3_transform_in(const float *in, float *V,
@@ -43,9 +44,6 @@ void winograd3_transform_out(const float *M, const float *biases,
                              float *out,
                              int batch, int channels, int board_size,
                              bool relu, cudaStream_t stream);
-
-void conv_mul_mask(float * conv, const float *mask,
-                   int batch, int channels, int spatial, cudaStream_t stream);
 
 void gemm(bool TA, bool TB, int M, int N, int K, float ALPHA,
           const float *A_gpu, int lda, const float *B_gpu, int ldb,

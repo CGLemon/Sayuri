@@ -546,23 +546,21 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         const auto t_offset = 2 * i;
         const auto tower_ptr = weights_->tower.data() + i;
 
+        // 1st layer
         graph_->tower_conv[t_offset+0].Forward(batch_size,
                                                cuda_conv_op_[0], cuda_conv_op_[1],
                                                nullptr, mask_buf[0],
                                                cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
-
+        // 2nd layer
+        float *skip = tower_ptr->apply_se ? nullptr : cuda_conv_op_[0];
+        graph_->tower_conv[t_offset+1].Forward(batch_size,
+                                               cuda_conv_op_[1], cuda_conv_op_[2],
+                                               skip, mask_buf[0],
+                                               cuda_scratch_op_[0],  cuda_scratch_op_[1], scratch_size_);
         if (tower_ptr->apply_se) {
-            graph_->tower_conv[t_offset+1].Forward(batch_size,
-                                                   cuda_conv_op_[1], cuda_conv_op_[2],
-                                                   nullptr, mask_buf[0],
-                                                   cuda_scratch_op_[0],  cuda_scratch_op_[1], scratch_size_);
             graph_->tower_se[i].Forward(batch_size,
                                         cuda_conv_op_[2], cuda_conv_op_[0], mask_buf[0]);
-        } else { 
-            graph_->tower_conv[t_offset+1].Forward(batch_size,
-                                                   cuda_conv_op_[1], cuda_conv_op_[2],
-                                                   cuda_conv_op_[0], mask_buf[0],
-                                                   cuda_scratch_op_[0],  cuda_scratch_op_[1], scratch_size_);
+        } else {
             std::swap(cuda_conv_op_[0], cuda_conv_op_[2]);
         }
     }

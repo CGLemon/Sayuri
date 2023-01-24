@@ -38,14 +38,14 @@ __global__ void add_spatial_kernel(float *data, const float *biases,
     int index = threadIdx.x + blockDim.x * blockIdx.x;
     int size = N * C * spatial;
     if (index < size) {
-        int w_index = (index / (spatial)) % C;
         int batch = index / (C * spatial);
+        int c_index = (index / spatial) % C;
         int s_index = index % spatial;
 
         float val = data[index];
 
         if (biases) {
-            val += biases[w_index];
+            val += biases[c_index];
         }
         if (eltwise) {
             val += eltwise[index];
@@ -80,13 +80,13 @@ __global__ void batchnorm_kernel(float *data, const float *means, const float *s
     int index = threadIdx.x + blockDim.x * blockIdx.x;
     int size = N * C * spatial;
     if (index < size) {
-        int w_index = (index / (spatial)) % C;
         int batch = index / (C * spatial);
+        int c_index = (index / spatial) % C;
         int s_index = index % spatial;
 
         float el = data[index];
-        float mean = means[w_index];
-        float scale_stddev = stddevs[w_index];
+        float mean = means[c_index];
+        float scale_stddev = stddevs[c_index];
 
         el -= mean;
         el *= scale_stddev;
@@ -325,7 +325,7 @@ void head_global_pooling(float *input, float *output,
 __global__ void se_scale_kernel(const float *input,
                                 const float *se_bias,
                                 const float *mask,
-                                float *data,
+                                float *output,
                                 int N, int C, int spatial) {
     int index = threadIdx.x + blockDim.x * blockIdx.x;
     int total_elements = N * C * spatial;
@@ -340,29 +340,29 @@ __global__ void se_scale_kernel(const float *input,
         gamma = 1.0f / (1.0f + exp(-gamma));
 
         float beta = se_bias[start_idx + c + C];
-        float res = data[index];
+        float res = output[index];
 
-        float op = gamma * val + beta + res;
+        val = gamma * val + beta + res;
 
         if (mask) {
-            op *= mask[n * spatial + s_index];
+            val *= mask[n * spatial + s_index];
         }
-        if (op < 0) {
-            op = 0;
+        if (val < 0) {
+            val = 0;
         }
-        data[index] = op;
+        output[index] = val;
     }
 }
 
 void se_scale(const float *input, const float* se_bias,
-              const float *mask, float* data,
+              const float *mask, float* output,
               int batch, int channels, int spatial, cudaStream_t stream) {
     const int total_elements = channels * spatial * batch;
     const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(total_elements, block_size);
 
     se_scale_kernel<<<blocks, block_size, 0, stream>>>(
-        input, se_bias, mask, data, batch, channels, spatial);
+        input, se_bias, mask, output, batch, channels, spatial);
 
     ReportCUDAErrors(cudaGetLastError());
 }
@@ -630,33 +630,6 @@ void winograd3_transform_out(const float *M, const float *biases,
     transform_out_kernel<<<blocks, block_size, 0, stream>>>(
         M, biases, eltwise, mask, out, channels,
         k_pad, p_pad, board_size, batch, relu);
-
-    ReportCUDAErrors(cudaGetLastError());
-}
-
-__global__ void conv_mul_mask_kernel(float * conv, const float *mask,
-                                     int N, int C, int spatial) {
-    int index = threadIdx.x + blockDim.x * blockIdx.x;
-    int size = N * C * spatial;
-    if (index < size) {
-        int batch   = index / (spatial * C);
-        int s_index = index % spatial;
-
-        float vmask = mask[batch * spatial + s_index];
-        float val = conv[index];
-
-        conv[index] = vmask * val;
-    }
-}
-
-void conv_mul_mask(float * conv, const float *mask,
-                   int batch, int channels, int spatial, cudaStream_t stream) {
-    const int total_elements = batch * channels * spatial;
-    const int block_size = KBLOCKSIZE;
-    const int blocks = DivUp(total_elements, block_size);
-
-    conv_mul_mask_kernel<<<blocks, block_size, 0, stream>>>(
-        conv, mask, batch, channels, spatial);
 
     ReportCUDAErrors(cudaGetLastError());
 }
