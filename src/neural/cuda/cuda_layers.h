@@ -138,8 +138,10 @@ public:
                        const std::vector<float> &weights_w2,
                        const std::vector<float> &weights_b2);
 
-    void Forward(const int batch, float *input, float *output,
-                 float *mask, float *sqrt_mask);
+    void Forward(const int batch,
+                 float *input,
+                 float *output,
+                 float *mask);
  
 private:
     int se_size_;

@@ -450,7 +450,7 @@ void GlobalPooling::Forward(const int batch, float *input, float *output, float 
         head_global_pooling(input, output, sqrt_mask, batch,
                             channels_, spatial_size_, handles_->stream);
     } else {
-        global_pooling(input, output, mask, sqrt_mask, batch,
+        global_pooling(input, output, mask, batch,
                        channels_, spatial_size_, handles_->stream);
     }
 }
@@ -512,8 +512,8 @@ void SEUnit::LoadingWeight(const std::vector<float> &weights_w1,
         cuda_weights_b2_, weights_b2.data(), weights_b2_size, cudaMemcpyHostToDevice));
 }
 
-void SEUnit::Forward(const int batch, float *input, float *ouput, float *mask, float *sqrt_mask) {
-    global_pooling(input, cuda_op_[0], mask, sqrt_mask,
+void SEUnit::Forward(const int batch, float *input, float *ouput, float *mask) {
+    global_pooling(input, cuda_op_[0], mask,
                    batch, channels_, spatial_size_, handles_->stream);
 
     const size_t fc1_input_size = 3 * channels_;
@@ -558,12 +558,8 @@ void SEUnit::Forward(const int batch, float *input, float *ouput, float *mask, f
     add_vectors(cuda_op_[2], cuda_weights_b2_, cuda_op_[2],
                 fc2_output_size * batch, fc2_output_size, fc2_output_size * batch, fc2_relu, handles_->stream);
 
-    se_scale(input, cuda_op_[2], ouput, batch, channels_, spatial_size_, handles_->stream);
-
-    if (mask) {
-        conv_mul_mask(ouput, mask, batch, channels_,
-                      spatial_size_, handles_->stream);
-    }
+    se_scale(input, cuda_op_[2], mask, ouput,
+             batch, channels_, spatial_size_, handles_->stream);
 }
 
 SEUnit::~SEUnit() {

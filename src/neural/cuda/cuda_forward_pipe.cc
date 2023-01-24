@@ -557,8 +557,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
                                                    nullptr, mask_buf[0],
                                                    cuda_scratch_op_[0],  cuda_scratch_op_[1], scratch_size_);
             graph_->tower_se[i].Forward(batch_size,
-                                        cuda_conv_op_[2], cuda_conv_op_[0],
-                                        mask_buf[0], mask_buf[1]);
+                                        cuda_conv_op_[2], cuda_conv_op_[0], mask_buf[0]);
         } else { 
             graph_->tower_conv[t_offset+1].Forward(batch_size,
                                                    cuda_conv_op_[1], cuda_conv_op_[2],

@@ -13,9 +13,6 @@ void add_spatial(float *data, const float *biases,
                  const float *eltwise, const float *mask,
                  int batch, int channels, int spatial, bool relu, cudaStream_t stream);
 
-void add_eltwise(float *a, float *b, float *c, const float *mask,
-                 int size, bool relu, cudaStream_t stream);
-
 void batchnorm(float *data, const float *means, const float *stddevs,
                const float *eltwise, const float *mask,
                int batch, int channels, int spatial,
@@ -28,15 +25,14 @@ void im2col_batched(int filter_size, int N, int C, int H, int W,
                     float *data_im, float *data_col, cudaStream_t stream);
 
 
-void global_pooling(float *input, float *output,
-                    const float *mask, const float *sqrt_mask,
+void global_pooling(float *input, float *output, const float *mask,
                     int batch, int channels, int spatial, cudaStream_t stream);
 
-void head_global_pooling(float *input, float *output,
-                         const float *sqrt_mask,
+void head_global_pooling(float *input, float *output, const float *sqrt_mask,
                          int batch, int channels, int spatial, cudaStream_t stream);
 
-void se_scale(const float *input, const float* se_bias, float* data,
+void se_scale(const float *input, const float* se_bias,
+              const float *mask, float* data,
               int batch, int channels, int spatial, cudaStream_t stream);
 
 void winograd3_transform_in(const float *in, float *V,
