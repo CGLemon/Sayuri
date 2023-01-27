@@ -30,6 +30,7 @@
 #include <random>
 #include <sstream>
 #include <iomanip>
+#include <exception>
 
 void Network::Initialize(const std::string &weightsfile) {
 #ifndef __APPLE__
@@ -68,6 +69,18 @@ void Network::Initialize(const std::string &weightsfile) {
         dnn_weights.reset();
         dnn_weights = nullptr;
     }
+
+#ifdef SELF_CHECK
+#ifdef USE_CUDA
+    auto copy_dnn_weights = std::make_shared<DNNWeights>(*dnn_weights);
+    self_check_pipe_ = std::make_unique<BlasForwardPipe>();
+    self_check_pipe_->Initialize(copy_dnn_weights);
+
+    LOGGING << "Use self check pipe." << std::endl;
+#else
+    self_check_pipe_ = nullptr;
+#endif
+#endif
 
     pipe_->Initialize(dnn_weights);
     SetCacheSize(GetOption<int>("cache_memory_mib"));
@@ -115,6 +128,42 @@ Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
     return result;
 }
 
+bool Network::SelfCheck(Network::Result &other, const Network::Inputs& inputs) const {
+#ifdef SELF_CHECK
+    auto IsNotEqual = [](float a, float b) {
+        return std::abs(a - b ) > 1e-4f;
+    };
+
+    if (!self_check_pipe_) {
+        return true;
+    }
+    auto comp = self_check_pipe_->Forward(inputs);
+    if (IsNotEqual(comp.pass_probability, other.pass_probability)) {
+        return false;
+    }
+    if (IsNotEqual(comp.final_score, other.final_score)) {
+        return false;
+    }
+    for (int i = 0; i < 3; ++i) {
+        if (IsNotEqual(comp.wdl[i], other.wdl[i])) {
+            return false;
+        }
+    }
+    auto size = comp.board_size * comp.board_size;
+    for (int i = 0; i < size; ++i) {
+        if (IsNotEqual(comp.probabilities[i], other.probabilities[i])) {
+            return false;
+        }
+    }
+    for (int i = 0; i < size; ++i) {
+        if (IsNotEqual(comp.ownership[i], other.ownership[i])) {
+            return false;
+        }
+    }
+#endif
+    return true;
+}
+
 Network::Result
 Network::GetOutputInternal(const GameState &state, const int symmetry) {
     Network::Result out_result;
@@ -125,6 +174,9 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
 
     if (pipe_->Valid()) {
         result_buf = pipe_->Forward(inputs);
+        if (!SelfCheck(result_buf, inputs)) {
+            throw std::runtime_error{"Bad CUDA network."};
+        }
     } else {
         result_buf = DummyForward(inputs);
     }

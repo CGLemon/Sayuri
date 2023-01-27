@@ -9,6 +9,8 @@
 #include <cmath>
 #include <string>
 
+#define SELF_CHECK
+
 class Network {
 public:
     enum Ensemble {
@@ -46,6 +48,8 @@ public:
     static std::vector<float> Softmax(std::vector<float> &input, const float temperature);
 
 private:
+    bool SelfCheck(Network::Result &other, const Network::Inputs& inputs) const;
+
     void ActivatePolicy(Result &result, const float temperature) const;
 
     bool ProbeCache(const GameState &state, Result &result);
@@ -56,5 +60,9 @@ private:
 
     std::unique_ptr<NetworkForwardPipe> pipe_{nullptr};
     Cache nn_cache_;
+
+#ifdef SELF_CHECK
+    std::unique_ptr<NetworkForwardPipe> self_check_pipe_{nullptr};
+#endif
 };
 
