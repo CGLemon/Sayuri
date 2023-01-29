@@ -10,6 +10,13 @@ public:
                         std::vector<float> &input,
                         const std::vector<float> &biases,
                         bool ReLU = false);
+
+    static void Forward(const size_t board_size,
+                        const size_t channels,
+                        std::vector<float> &input,
+                        const std::vector<float> &biases,
+                        std::vector<float> &eltwise,
+                        bool ReLU = false);
 };
 
 

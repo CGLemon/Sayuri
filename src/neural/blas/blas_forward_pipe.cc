@@ -112,10 +112,9 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                               workspace0, conv_out);
     }
 
-    Batchnorm::Forward(board_size, output_channels,
-                       conv_out,
-                       weights_->input_bn.GetMeans(),
-                       weights_->input_bn.GetStddevs());
+    AddSpatialBiases::Forward(board_size, output_channels,
+                              conv_out,
+                              weights_->input_conv.GetBiases(), true);
 
     // The residual tower.
     const auto residuals =  weights_->residual_blocks;
@@ -136,10 +135,9 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                                   tower_ptr->conv1.GetWeights(),
                                   workspace0, conv_out);
         }
-        Batchnorm::Forward(board_size, tower_channels,
-                           conv_out,
-                           tower_ptr->bn1.GetMeans(),
-                           tower_ptr->bn1.GetStddevs());
+        AddSpatialBiases::Forward(board_size, tower_channels,
+                                  conv_out,
+                                  tower_ptr->conv1.GetBiases(), true);
 
         std::swap(conv_in, res);
         std::swap(conv_out, conv_in);
@@ -159,11 +157,9 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
 
         // The SE process.
         if (tower_ptr->apply_se) {
-            Batchnorm::Forward(board_size, tower_channels,
-                               conv_out,
-                               tower_ptr->bn2.GetMeans(),
-                               tower_ptr->bn2.GetStddevs(),
-                               nullptr, false);
+            AddSpatialBiases::Forward(board_size, tower_channels,
+                                      conv_out,
+                                      tower_ptr->conv2.GetBiases(), false);
 
             const size_t se_size = tower_ptr->se_size;
             SEUnit::Forward(board_size, tower_channels, se_size,
@@ -174,11 +170,10 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                             tower_ptr->excite.GetBiases());
         
         } else {
-             Batchnorm::Forward(board_size, tower_channels,
-                                conv_out,
-                                tower_ptr->bn2.GetMeans(),
-                                tower_ptr->bn2.GetStddevs(),
-                                res.data());
+            AddSpatialBiases::Forward(board_size, tower_channels,
+                                      conv_out,
+                                      tower_ptr->conv2.GetBiases(),
+                                      res, true);
         }
     }
 
@@ -191,11 +186,9 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                           weights_->p_ex_conv.GetWeights(),
                           workspace0, policy_conv);
 
-    Batchnorm::Forward(board_size, policy_extract_channels,
-                       policy_conv,
-                       weights_->p_ex_bn.GetMeans(),
-                       weights_->p_ex_bn.GetStddevs());
-
+    AddSpatialBiases::Forward(board_size, policy_extract_channels,
+                              policy_conv,
+                              weights_->p_ex_conv.GetBiases(), true);
 
     GlobalPooling<false>::Forward(board_size, policy_extract_channels,
                                   policy_conv, pooling);
@@ -235,10 +228,9 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                           weights_->v_ex_conv.GetWeights(),
                           workspace0, value_conv);
 
-    Batchnorm::Forward(board_size, value_extract_channels,
-                       value_conv,
-                       weights_->v_ex_bn.GetMeans(),
-                       weights_->v_ex_bn.GetStddevs());
+    AddSpatialBiases::Forward(board_size, value_extract_channels,
+                              value_conv,
+                              weights_->v_ex_conv.GetBiases(), true);
 
     GlobalPooling<true>::Forward(board_size, value_extract_channels,
                                  value_conv, pooling);

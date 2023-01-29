@@ -44,10 +44,13 @@ public:
     Convolution() = default;
     Convolution(CudaHandles *handles, const int batch,
                 const size_t board_size, const size_t filter,
-                const size_t in_channels, const size_t out_channels);
+                const size_t in_channels, const size_t out_channels,
+                bool ReLU = true);
     ~Convolution();
 
     void Forward(const int batch, float *input, float *output,
+                 const float *const eltwise,
+                 const float *const mask,
                  void *scratch, void *scratch_other, size_t scratch_size);
 
     void LoadingWeight(const std::vector<float> &weights,
@@ -60,6 +63,7 @@ public:
                        bool winograd);
 
 private:
+    bool relu_;
     int filter_dim_;
     int filters_;
     int in_channels_;
@@ -134,8 +138,10 @@ public:
                        const std::vector<float> &weights_w2,
                        const std::vector<float> &weights_b2);
 
-    void Forward(const int batch, float *input, float *output,
-                 float *mask, float *sqrt_mask);
+    void Forward(const int batch,
+                 float *input,
+                 float *output,
+                 float *mask);
  
 private:
     int se_size_;
