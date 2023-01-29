@@ -448,9 +448,6 @@ GlobalPooling::GlobalPooling(CudaHandles *handles,
 }
 
 void GlobalPooling::Forward(const int batch, float *input, float *output, float *mask, float *sqrt_mask) {
-    if (!loaded_) {
-        return;
-    }
     if (is_value_head_) {
         head_global_pooling(input, output, sqrt_mask, batch,
                             channels_, spatial_size_, handles_->stream);
