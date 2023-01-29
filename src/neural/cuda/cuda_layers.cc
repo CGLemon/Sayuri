@@ -148,6 +148,7 @@ void Convolution::Forward(const int batch,
 
     add_spatial(output, cuda_biases_,
                 eltwise, mask,
+                out_channels_,
                 batch, out_channels_, spatial_size_, relu_,
                 handles_->stream);
 
@@ -228,6 +229,7 @@ void Convolution::Forward(const int batch,
 
         add_spatial(output, cuda_biases_,
                     eltwise, mask,
+                    out_channels_,
                     batch, out_channels_, spatial_size_, relu_,
                     handles_->stream);
 #endif
@@ -446,6 +448,9 @@ GlobalPooling::GlobalPooling(CudaHandles *handles,
 }
 
 void GlobalPooling::Forward(const int batch, float *input, float *output, float *mask, float *sqrt_mask) {
+    if (!loaded_) {
+        return;
+    }
     if (is_value_head_) {
         head_global_pooling(input, output, sqrt_mask, batch,
                             channels_, spatial_size_, handles_->stream);
@@ -513,6 +518,9 @@ void SEUnit::LoadingWeight(const std::vector<float> &weights_w1,
 }
 
 void SEUnit::Forward(const int batch, float *input, float *ouput, float *mask) {
+    if (!loaded_) {
+        return;
+    }
     global_pooling(input, cuda_op_[0], mask,
                    batch, channels_, spatial_size_, handles_->stream);
 

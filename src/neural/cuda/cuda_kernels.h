@@ -12,7 +12,8 @@ void add_vectors(float *c, float *a, float *b,
 
 void add_spatial(float *data, const float *biases,
                  const float *eltwise, const float *mask,
-                 int batch, int channels, int spatial, bool relu, cudaStream_t stream);
+                 int bsize, int batch, int channels, int spatial,
+                 bool relu, cudaStream_t stream);
 
 void batchnorm(float *data, const float *means, const float *stddevs,
                const float *eltwise, const float *mask,

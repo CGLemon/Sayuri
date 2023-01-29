@@ -34,18 +34,18 @@ void add_vectors(float *a, float *b, float *c,
 
 __global__ void add_spatial_kernel(float *data, const float *biases,
                                    const float *eltwise, const float *mask,
-                                   int N, int C, int spatial, bool relu) {
+                                   int bsize, int N, int C, int spatial, bool relu) {
     int index = threadIdx.x + blockDim.x * blockIdx.x;
     int size = N * C * spatial;
     if (index < size) {
         int batch = index / (C * spatial);
-        int c_index = (index / spatial) % C;
+        int b_index = (index / spatial) % bsize;
         int s_index = index % spatial;
 
         float val = data[index];
 
         if (biases) {
-            val += biases[c_index];
+            val += biases[b_index];
         }
         if (eltwise) {
             val += eltwise[index];
@@ -62,13 +62,14 @@ __global__ void add_spatial_kernel(float *data, const float *biases,
 
 void add_spatial(float *data, const float *biases,
                  const float *eltwise, const float *mask,
-                 int batch, int channels, int spatial, bool relu, cudaStream_t stream) {
+                 int bsize, int batch, int channels, int spatial,
+                 bool relu, cudaStream_t stream) {
     const int total_elements = batch * channels * spatial;
     const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(total_elements, block_size);
 
     add_spatial_kernel<<<blocks, block_size, 0, stream>>>(
-        data, biases, eltwise, mask, batch, channels, spatial, relu);
+        data, biases, eltwise, mask, bsize, batch, channels, spatial, relu);
 
     ReportCUDAErrors(cudaGetLastError());
 }
@@ -268,7 +269,7 @@ __global__ void global_pooling_kernel(float *input, float *output,
 void global_pooling(float *input, float *output, const float *mask,
                     int batch, int channels, int spatial, cudaStream_t stream) {
     const int total_elements = batch * channels;
-    const int block_size = 64;
+    const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(total_elements, block_size);
 
     global_pooling_kernel<<<blocks, block_size, 0, stream>>>(
@@ -313,7 +314,7 @@ void head_global_pooling(float *input, float *output,
                          const float *sqrt_mask,
                          int batch, int channels, int spatial, cudaStream_t stream) {
     const int total_elements = batch * channels;
-    const int block_size = 64;
+    const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(total_elements, block_size);
 
     head_global_pooling_kernel<<<blocks, block_size, 0, stream>>>(

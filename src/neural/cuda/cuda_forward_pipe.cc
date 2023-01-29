@@ -283,11 +283,12 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     );
     graph_->p_prob = CUDA::Convolution(
         &handles_,
-        max_batch_,                 // max batch size
-        board_size_,                // board size
-        1,                          // kernel size
-        policy_extract_channels,    // input channels
-        kOuputProbabilitiesChannels // output channels
+        max_batch_,                  // max batch size
+        board_size_,                 // board size
+        1,                           // kernel size
+        policy_extract_channels,     // input channels
+        kOuputProbabilitiesChannels, // output channels
+        false                        // relu
     );
     graph_->p_prob_pass = CUDA::FullyConnect(
         &handles_,
@@ -327,7 +328,8 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         board_size_,              // board size
         1,                        // kernel size
         value_extract_channels,   // input channels
-        kOuputOwnershipChannels   // output channels
+        kOuputOwnershipChannels,  // output channels
+        false                     // relu
     );
     graph_->v_misc = CUDA::FullyConnect(
         &handles_,
@@ -581,6 +583,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
     CUDA::add_spatial(cuda_pol_op_[0], cuda_pol_op_[2],
                       nullptr, mask_buf[0],
+                      batch_size * policy_extract_channels,
                       batch_size, policy_extract_channels, num_intersections,
                       false, handles_.stream);
 
@@ -730,7 +733,7 @@ void CudaForwardPipe::Worker(int gpu) {
                 break; // Finish the loop.
             }
 
-            // Wait some time in order to avoid busy waiting.
+            // Wait for some time in order to avoid busy waiting.
             std::unique_lock<std::mutex> lock(worker_mutex_);
             bool timeout = !cv_.wait_for(lock, std::chrono::milliseconds(waittime),
                                              [this](){ return !((int)entry_queue_.size() < max_batch_); }
