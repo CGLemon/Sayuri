@@ -127,38 +127,45 @@ Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
 
     return result;
 }
-
-bool Network::SelfCheck(Network::Result &other, const Network::Inputs& inputs) const {
+#include <iostream>
+bool Network::SelfCheck(Network::Result &other, const Network::Inputs& inputs, int &type) const {
 #ifdef SELF_CHECK
     auto IsNotEqual = [](float a, float b) {
-        return std::abs(a - b ) > 1e-4f;
+        return std::abs(a - b) > 1e-4f;
     };
 
     if (!self_check_pipe_) {
         return true;
     }
     auto comp = self_check_pipe_->Forward(inputs);
+    type = 0;
     if (IsNotEqual(comp.pass_probability, other.pass_probability)) {
-        return false;
+        fprintf(stderr, "%f | %f\n", comp.pass_probability, other.pass_probability);
+        type |= 1;
     }
     if (IsNotEqual(comp.final_score, other.final_score)) {
-        return false;
+        fprintf(stderr, "%f | %f\n", comp.final_score, other.final_score);
+        type |= (1 << 1);
     }
     for (int i = 0; i < 3; ++i) {
         if (IsNotEqual(comp.wdl[i], other.wdl[i])) {
-            return false;
+            fprintf(stderr, "%f | %f\n", comp.wdl[i], other.wdl[i]);
+            type |= (1 << 2);
         }
     }
     auto size = comp.board_size * comp.board_size;
     for (int i = 0; i < size; ++i) {
         if (IsNotEqual(comp.probabilities[i], other.probabilities[i])) {
-            return false;
+            type |= (1 << 3);
         }
     }
     for (int i = 0; i < size; ++i) {
         if (IsNotEqual(comp.ownership[i], other.ownership[i])) {
-            return false;
+            type |= (1 << 4);
         }
+    }
+    if (type > 0) {
+        return false;
     }
 #endif
     return true;
@@ -174,8 +181,10 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
 
     if (pipe_->Valid()) {
         result_buf = pipe_->Forward(inputs);
-        if (!SelfCheck(result_buf, inputs)) {
-            throw std::runtime_error{"Bad CUDA network."};
+        int type;
+        if (!SelfCheck(result_buf, inputs, type)) {
+            throw std::runtime_error{
+                      Format("Bad CUDA network. Type is %d", type)};
         }
     } else {
         result_buf = DummyForward(inputs);

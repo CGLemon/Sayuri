@@ -19,7 +19,6 @@ public:
                         bool ReLU = false);
 };
 
-
 class AddVectorBiases {
 public:
     AddVectorBiases() = delete;

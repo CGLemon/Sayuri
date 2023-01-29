@@ -48,7 +48,7 @@ public:
     static std::vector<float> Softmax(std::vector<float> &input, const float temperature);
 
 private:
-    bool SelfCheck(Network::Result &other, const Network::Inputs& inputs) const;
+    bool SelfCheck(Network::Result &other, const Network::Inputs& inputs, int &type) const;
 
     void ActivatePolicy(Result &result, const float temperature) const;
 
