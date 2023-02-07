@@ -76,7 +76,8 @@ Convolution::Convolution(CudaHandles *handles,
                          const size_t board_size, 
                          const size_t filter_size,
                          const size_t input_channels,
-                         const size_t output_channels) {
+                         const size_t output_channels,
+                         bool ReLU) {
     width_ = board_size;
     height_ = board_size;
     spatial_size_ = width_ * height_;
@@ -90,6 +91,7 @@ Convolution::Convolution(CudaHandles *handles,
     handles_ = handles;
 
     loaded_ = false;
+    relu_ = ReLU;
 }
 
 Convolution::~Convolution() {
@@ -113,7 +115,10 @@ Convolution::~Convolution() {
     }
 }
 
-void Convolution::Forward(const int batch, float *input, float *output,
+void Convolution::Forward(const int batch,
+                          float *input, float *output,
+                          const float *const eltwise,
+                          const float *const mask,
                           void *scratch, void *scratch_other, size_t scratch_size) {
     if (!loaded_) {
         return;
@@ -141,11 +146,11 @@ void Convolution::Forward(const int batch, float *input, float *output,
                       conv_desc_, conv_algo_, scratch, scratch_size, &beta, out_tensor_desc_,
                       output));
 
-
-    if (cuda_biases_) {
-        ReportCUDNNErrors(cudnnAddTensor(handles_->cudnn_handle, &alpha, bias_desc_, cuda_biases_,
-                                         &alpha, out_tensor_desc_, output));
-    }
+    add_spatial(output, cuda_biases_,
+                eltwise, mask,
+                out_channels_,
+                batch, out_channels_, spatial_size_, relu_,
+                handles_->stream);
 
 #else
     (void) scratch_size;
@@ -174,8 +179,9 @@ void Convolution::Forward(const int batch, float *input, float *output,
             handles_->cublas_handle, handles_->stream);
 
         winograd3_transform_out(
-            scratch_op_other, output,
-            batch, out_channels_, board_size, handles_->stream);
+            scratch_op_other, cuda_biases_,
+            eltwise, mask, output,
+            batch, out_channels_, board_size, relu_, handles_->stream);
     } else {
 #ifdef USE_SINGLE_BATCH_CONV
         // We remain this code for debugging.
@@ -220,13 +226,13 @@ void Convolution::Forward(const int batch, float *input, float *output,
                 batch,
                 handles_->cublas_handle, handles_->stream);
         }
+
+        add_spatial(output, cuda_biases_,
+                    eltwise, mask,
+                    out_channels_,
+                    batch, out_channels_, spatial_size_, relu_,
+                    handles_->stream);
 #endif
-    }
-    if (cuda_biases_) {
-        const auto op_size = out_channels_ * spatial_size_;
-        add_spatial(output, cuda_biases_, output,
-                    op_size * batch, out_channels_, op_size * batch,
-                    spatial_size_, false, handles_->stream);
     }
 #endif
 }
@@ -446,7 +452,7 @@ void GlobalPooling::Forward(const int batch, float *input, float *output, float 
         head_global_pooling(input, output, sqrt_mask, batch,
                             channels_, spatial_size_, handles_->stream);
     } else {
-        global_pooling(input, output, mask, sqrt_mask, batch,
+        global_pooling(input, output, mask, batch,
                        channels_, spatial_size_, handles_->stream);
     }
 }
@@ -508,8 +514,11 @@ void SEUnit::LoadingWeight(const std::vector<float> &weights_w1,
         cuda_weights_b2_, weights_b2.data(), weights_b2_size, cudaMemcpyHostToDevice));
 }
 
-void SEUnit::Forward(const int batch, float *input, float *ouput, float *mask, float *sqrt_mask) {
-    global_pooling(input, cuda_op_[0], mask, sqrt_mask,
+void SEUnit::Forward(const int batch, float *input, float *ouput, float *mask) {
+    if (!loaded_) {
+        return;
+    }
+    global_pooling(input, cuda_op_[0], mask,
                    batch, channels_, spatial_size_, handles_->stream);
 
     const size_t fc1_input_size = 3 * channels_;
@@ -554,12 +563,8 @@ void SEUnit::Forward(const int batch, float *input, float *ouput, float *mask, f
     add_vectors(cuda_op_[2], cuda_weights_b2_, cuda_op_[2],
                 fc2_output_size * batch, fc2_output_size, fc2_output_size * batch, fc2_relu, handles_->stream);
 
-    se_scale(input, cuda_op_[2], ouput, batch, channels_, spatial_size_, handles_->stream);
-
-    if (mask) {
-        conv_mul_mask(ouput, mask, batch, channels_,
-                      spatial_size_, handles_->stream);
-    }
+    se_scale(input, cuda_op_[2], mask, ouput,
+             batch, channels_, spatial_size_, handles_->stream);
 }
 
 SEUnit::~SEUnit() {

@@ -479,34 +479,78 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
 void DNNLoder::ProcessWeights(std::shared_ptr<DNNWeights> weights) const {
     // input layer
     for (auto idx = size_t{0}; idx < weights->input_conv.GetBiases().size(); ++idx) {
-        weights->input_bn.GetMeans()[idx] -= weights->input_conv.GetBiases()[idx] *
-                                                 weights->input_bn.GetStddevs()[idx];
-        weights->input_conv.GetBiases()[idx] = 0.0f;
+        weights->input_conv.GetBiases()[idx] -= weights->input_bn.GetMeans()[idx];
+        weights->input_bn.GetMeans()[idx] = 0.0f;
+
+        size_t stride = weights->input_conv.GetWeights().size() /
+                            weights->input_conv.GetBiases().size();
+        auto scale = weights->input_bn.GetStddevs()[idx];
+        for (auto k = size_t{0}; k < stride; ++k) {
+            weights->input_conv.GetWeights()[stride * idx + k] *= scale;
+        }
+        weights->input_conv.GetBiases()[idx] *= scale;
+        weights->input_bn.GetStddevs()[idx] = 1.0f;
     }
+
     // residual tower
     for (auto &residual : weights->tower) {
+        // 1st layer
         for (auto idx = size_t{0}; idx < residual.conv1.GetBiases().size(); ++idx) {
-            residual.bn1.GetMeans()[idx] -= residual.conv1.GetBiases()[idx] *
-                                                residual.bn1.GetStddevs()[idx];
-            residual.conv1.GetBiases()[idx] = 0.0f;
+            residual.conv1.GetBiases()[idx] -= residual.bn1.GetMeans()[idx];
+            residual.bn1.GetMeans()[idx] = 0.0f;
+
+            size_t stride1 = residual.conv1.GetWeights().size() /
+                                residual.conv1.GetBiases().size();
+            auto scale1 = residual.bn1.GetStddevs()[idx];
+            for (auto k = size_t{0}; k < stride1; ++k) {
+                residual.conv1.GetWeights()[stride1 * idx + k] *= scale1;
+            }
+            residual.conv1.GetBiases()[idx] *= scale1;
+            residual.bn1.GetStddevs()[idx] = 1.0f;
         }
+
+        // 2nd layer
         for (auto idx = size_t{0}; idx < residual.conv2.GetBiases().size(); ++idx) {
-            residual.bn2.GetMeans()[idx] -= residual.conv2.GetBiases()[idx] *
-                                                residual.bn2.GetStddevs()[idx];
-            residual.conv2.GetBiases()[idx] = 0.0f;
+            residual.conv2.GetBiases()[idx] -= residual.bn2.GetMeans()[idx];
+            residual.bn2.GetMeans()[idx] = 0.0f;
+
+            size_t stride2 = residual.conv2.GetWeights().size() /
+                                residual.conv2.GetBiases().size();
+            auto scale2 = residual.bn2.GetStddevs()[idx];
+            for (auto k = size_t{0}; k < stride2; ++k) {
+                residual.conv2.GetWeights()[stride2 * idx + k] *= scale2;
+            }
+            residual.conv2.GetBiases()[idx] *= scale2;
+            residual.bn2.GetStddevs()[idx] = 1.0f;
         }
     }
     // policy head
     for (auto idx = size_t{0}; idx < weights->p_ex_conv.GetBiases().size(); ++idx) {
-        weights->p_ex_bn.GetMeans()[idx] -= weights->p_ex_conv.GetBiases()[idx] *
-                                             weights->p_ex_bn.GetStddevs()[idx];
-        weights->p_ex_conv.GetBiases()[idx] = 0.0f;
+        weights->p_ex_conv.GetBiases()[idx] -= weights->p_ex_bn.GetMeans()[idx];
+        weights->p_ex_bn.GetMeans()[idx] = 0.0f;
+
+        size_t stride = weights->p_ex_conv.GetWeights().size() /
+                            weights->p_ex_conv.GetBiases().size();
+        auto scale = weights->p_ex_bn.GetStddevs()[idx];
+        for (auto k = size_t{0}; k < stride; ++k) {
+            weights->p_ex_conv.GetWeights()[stride * idx + k] *= scale;
+        }
+        weights->p_ex_conv.GetBiases()[idx] *= scale;
+        weights->p_ex_bn.GetStddevs()[idx] = 1.0f;
     }
     // value head
     for (auto idx = size_t{0}; idx < weights->v_ex_conv.GetBiases().size(); ++idx) {
-        weights->v_ex_bn.GetMeans()[idx] -= weights->v_ex_conv.GetBiases()[idx] *
-                                             weights->v_ex_bn.GetStddevs()[idx];
-        weights->v_ex_conv.GetBiases()[idx] = 0.0f;
+        weights->v_ex_conv.GetBiases()[idx] -= weights->v_ex_bn.GetMeans()[idx];
+        weights->v_ex_bn.GetMeans()[idx] = 0.0f;
+
+        size_t stride = weights->v_ex_conv.GetWeights().size() /
+                            weights->v_ex_conv.GetBiases().size();
+        auto scale = weights->v_ex_bn.GetStddevs()[idx];
+        for (auto k = size_t{0}; k < stride; ++k) {
+            weights->v_ex_conv.GetWeights()[stride * idx + k] *= scale;
+        }
+        weights->v_ex_conv.GetBiases()[idx] *= scale;
+        weights->v_ex_bn.GetStddevs()[idx] = 1.0f;
     }
 }
 
