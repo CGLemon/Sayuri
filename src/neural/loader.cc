@@ -85,6 +85,7 @@ void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) 
     }
 
     auto netinfo = NetInfo{};
+    auto netstack = NetStack{};
     auto netstruct = NetStruct{};
 
     while (std::getline(buffer, line)) {
@@ -92,6 +93,8 @@ void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) 
         if (spt.GetWord(0)->Get<>() == "get") {
             if (spt.GetWord(1)->Get<>() == "info") {
                 ParseInfo(netinfo, buffer);
+            } else if (spt.GetWord(1)->Get<>() == "stack") {
+                ParseStack(netstack, buffer);
             } else if (spt.GetWord(1)->Get<>() == "struct") {
                 ParseStruct(netstruct, buffer);
             } else if (spt.GetWord(1)->Get<>() == "parameters") {
@@ -105,14 +108,14 @@ void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) 
     buffer.clear();
     buffer.seekg(0, std::ios::beg);
 
-    CkeckMisc(netinfo);
+    CkeckMisc(netinfo, netstack, netstruct);
 
     // Now start to parse the weights.
     while (std::getline(buffer, line)) {
         const auto spt = Splitter(line);
         if (spt.GetWord(0)->Get<>() == "get") {
             if (spt.GetWord(1)->Get<>() == "parameters") {
-                FillWeights(netinfo, netstruct, weights, buffer);
+                FillWeights(netinfo, netstack, netstruct, weights, buffer);
             }
         }
     }
@@ -149,6 +152,19 @@ void DNNLoder::ParseInfo(NetInfo &netinfo, std::istream &buffer) const {
     }
     if (NotFound(netinfo, "ValueExtract")) {
         throw "ValueExtract must be provided";
+    }
+}
+
+void DNNLoder::ParseStack(NetStack &netstack, std::istream &buffer) const {
+    auto line = std::string{};
+    while (std::getline(buffer, line)) {
+        const auto spt = Splitter(line);
+        if (spt.GetWord(0)->Get<>()[0] == '#') {
+            continue;
+        } else if (spt.GetWord(0)->Get<>() == "end") {
+            break;
+        }
+        netstack.emplace_back(spt.GetWord(0)->Get<>());
     }
 }
 
@@ -189,7 +205,7 @@ void DNNLoder::ParseStruct(NetStruct &netstruct, std::istream &buffer) const {
     }
 }
 
-void DNNLoder::CkeckMisc(NetInfo &netinfo) {
+void DNNLoder::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstruct) {
     const auto NotFound = [](NetInfo &netinfo, std::string target) -> bool {
         return std::end(netinfo) == netinfo.find(target);
     };
@@ -211,10 +227,60 @@ void DNNLoder::CkeckMisc(NetInfo &netinfo) {
         // v2: Fixed the batch normalize layer weights
         //     format. There are some error in the gammas
         //     compression process.
+
+        if (version_ > 2) {
+            throw "Do not support this version";
+        }
     }
 
     if (!NotFound(netinfo, "NNType")) {
         // Not used now.
+    }
+
+    // Build the stack if it is not in weights file. It only
+    // supports for residual block with SE.
+    if (netstack.empty()) {
+        const auto residuals = std::stoi(netinfo["ResidualBlocks"]);
+
+        // First convolution layer.
+        const auto inputs_cnt = 2;
+
+        // The head layers.
+        const auto heads_cnt = 10;
+
+        auto inner_cnt = 0;
+        for (int b = 0; b < residuals; ++b) {
+            auto block_type = std::string{"ResidualBlock"}; 
+            inner_cnt += 4;
+            if (netstruct[inner_cnt+inputs_cnt].size() == 2 /* fullyconnect layer */) {
+                block_type += "-SE";
+                inner_cnt += 2;
+            }
+            netstack.emplace_back(block_type);
+        }
+
+        if ((int)netstruct.size() != heads_cnt + inner_cnt + inputs_cnt) {
+            throw "Do not support this weights format";
+        }
+    }
+
+    for (auto &block_type : netstack) {
+        for (auto &c: block_type) {
+            if (c == '-') {
+                c = ' ';
+            }
+        }
+        const auto spt = Splitter(block_type);
+        for (int i = 0; i < (int)spt.GetCount(); ++i) {
+            const auto component = spt.GetWord(i)->Get<>();
+
+            if (component == "ResidualBlock" || component == "SE") {
+                // do nothing...
+            } else {
+                throw Format("Do not support this block type [%s].",
+                                 block_type.c_str());
+            }
+        }
     }
 }
 
@@ -242,6 +308,7 @@ void DNNLoder::DumpInfo(std::shared_ptr<DNNWeights> weights) const {
 }
 
 void DNNLoder::FillWeights(NetInfo &netinfo,
+                               NetStack &netstack,
                                NetStruct &netstruct,
                                std::shared_ptr<DNNWeights> weights,
                                std::istream &buffer) const {
@@ -257,6 +324,13 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
     if (weights->input_channels != kInputChannels) {
         throw "The number of input channels is wrong.";
     }
+
+    const auto SplitterFound = [](const Splitter &spt, std::string key) -> bool {
+        if (const auto res = spt.Find(key)) {
+            return true;
+        }
+        return false;
+    };
 
     // There are three types layer. Each layer has
     // two line weights. Here they are.
@@ -294,13 +368,18 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
     const auto residuals = weights->residual_blocks;
     auto se_cnt = 0;
     for (int b = 0; b < residuals; ++b) {
+        const auto block_spt = Splitter(netstack[b]);
+        if (SplitterFound(block_spt, "ResidualBlock")) {
+            weights->tower.emplace_back(ResidualBlock{});
+        } else {
+            throw "Miss the ResidualBlock";
+        }
+
         const auto t_offset = 4 * b + 2 * se_cnt + inputs_cnt;
         const auto res_conv1_shape = netstruct[t_offset];
         const auto res_bn1_shape = netstruct[t_offset+1];
         const auto res_conv2_shape = netstruct[t_offset+2];
         const auto res_bn2_shape = netstruct[t_offset+3];
-
-        weights->tower.emplace_back(ResidualBlock{});
         auto tower_ptr = weights->tower.data() + b;
         
         FillConvolutionLayer(tower_ptr->conv1,
@@ -336,9 +415,8 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
                 res_conv2_shape[2] != 3) {
             throw "The Residual Block(2) is wrong";
         }
-            
-        const auto res_next_shape = netstruct[t_offset+4];
-        if (res_next_shape.size() == 2 /* fullyconnect layer */) {
+
+        if (SplitterFound(block_spt, "SE")) {
             tower_ptr->apply_se = true;
             se_cnt++;
             const auto se_squeeze_shape = netstruct[t_offset+4];
