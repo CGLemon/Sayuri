@@ -658,23 +658,6 @@ void winograd3_transform_out(const T *M, const T *biases,
     ReportCUDAErrors(cudaGetLastError());
 }
 
-template <typename SrcType, typename DstType>
-__global__ void copy_type_converted_kernel(SrcType* ip, DstType* op, int N) {
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (tid >= N) return;
-
-    DstType el = (DstType)(ip[tid]);
-    op[tid] = el;
-}
-
-template <typename SrcType, typename DstType>
-void copy_type_converted(SrcType* ip, DstType* op, int N, cudaStream_t stream) {
-    const int block_size = KBLOCKSIZE;
-    int blocks = DivUp(N, block_size);
-    copy_type_converted_kernel<<<blocks, block_size, 0, stream>>>(ip, op, N);
-}
-
 template<>
 void gemm<float>(bool TA, bool TB, int M, int N, int K, float ALPHA,
                  const float *A_gpu, int lda, const float *B_gpu, int ldb,
@@ -785,9 +768,6 @@ template void winograd3_transform_out<float>(const float *M, const float *biases
                                              int batch, int channels, int board_size,
                                              bool relu, cudaStream_t stream);
 
-template void copy_type_converted<float, float>(float* ip, float* op, int N,
-                                                cudaStream_t stream);
-
 #ifdef CUDA_SUPPORTS_FP16
 template void add_vectors<half>(half* c, half* a, half* b, int size, int asize,
                                 int bsize,  bool relu, cudaStream_t stream);
@@ -826,15 +806,6 @@ template void winograd3_transform_out<half>(const half *M, const half *biases,
                                             half *out,
                                             int batch, int channels, int board_size,
                                             bool relu, cudaStream_t stream);
-
-
-template void copy_type_converted<half, float>(half* ip, float* op, int N,
-                                               cudaStream_t stream);
-template void copy_type_converted<float, half>(float* ip, half* op, int N,
-                                               cudaStream_t stream);
-template void copy_type_converted<half, half>(half* ip, half* op, int N,
-                                              cudaStream_t stream);
-
 #endif
 
 } // namespace CUDA

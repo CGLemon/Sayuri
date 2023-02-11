@@ -57,9 +57,6 @@ void winograd3_transform_out(const T *M, const T *biases,
                              int batch, int channels, int board_size,
                              bool relu, cudaStream_t stream);
 
-template <typename SrcType, typename DstType>
-void copy_type_converted(SrcType *ip, DstType *op, int N, cudaStream_t stream);
-
 template <typename T>
 void gemm(bool TA, bool TB, int M, int N, int K, T ALPHA,
           const T *A_gpu, int lda, const T *B_gpu, int ldb,

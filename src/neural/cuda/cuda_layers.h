@@ -20,25 +20,6 @@ protected:
     int spatial_size_{0};
 };
 
-class Batchnorm : public LayerBasic {
-public:
-    Batchnorm() = default;
-    Batchnorm(CudaHandles *handles, const int batch,
-              const size_t board_size, const size_t channels, bool ReLU = true);
-    ~Batchnorm();
-
-    void Forward(const int batch, float *data,
-                 const float *const eltwise,
-                 const float *const mask);
-
-    void LoadingWeight(const std::vector<float> &means,
-                       const std::vector<float> &stddevs);
-private:
-    float *cuda_means_;
-    float *cuda_stddevs_;
-    int channels_;
-};
-
 class Convolution : public LayerBasic {
 public:
     Convolution() = default;

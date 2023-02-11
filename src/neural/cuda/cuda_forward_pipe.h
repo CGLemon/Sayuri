@@ -36,16 +36,13 @@ private:
         struct Graph {
             // intput
             CUDA::Convolution input_conv;
-            CUDA::Batchnorm input_bnorm;
 
             // residual towers
             std::vector<CUDA::Convolution> tower_conv;
-            std::vector<CUDA::Batchnorm> tower_bnorm;
             std::vector<CUDA::SEUnit> tower_se;
 
             // policy head 
             CUDA::Convolution p_ex_conv;
-            CUDA::Batchnorm p_ex_bnorm;
             CUDA::GlobalPooling p_pool;
             CUDA::FullyConnect p_inter;
 
@@ -54,7 +51,6 @@ private:
 
             // value head
             CUDA::Convolution v_ex_conv;
-            CUDA::Batchnorm v_ex_bnorm;
             CUDA::GlobalPooling v_pool;
             CUDA::FullyConnect v_inter;
 

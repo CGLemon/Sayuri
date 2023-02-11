@@ -10,67 +10,6 @@
 
 namespace CUDA {
 
-Batchnorm::Batchnorm(CudaHandles *handles,
-                     const int max_batch,
-                     const size_t board_size,
-                     const size_t output_channels,
-                     bool ReLU) {
-    width_ = board_size;
-    height_ = board_size;
-    spatial_size_ = width_ * height_;
-
-    channels_ = output_channels;
-    maxbatch_ = max_batch;
-    relu_ = ReLU;
-    loaded_ = false;
-    handles_ = handles;
-}
-
-Batchnorm::~Batchnorm() {
-    if (loaded_) {
-        ReportCUDAErrors(cudaFree(cuda_means_));
-        ReportCUDAErrors(cudaFree(cuda_stddevs_));
-    }
-}
-
-void Batchnorm::Forward(const int batch,
-                        float *data,
-                        const float *const eltwise,
-                        const float *const mask) {
-    if (!loaded_) {
-        return;
-    }
-
-    assert(batch <= maxbatch_);
-    batchnorm(data, cuda_means_, cuda_stddevs_, eltwise, mask,
-              batch, channels_, spatial_size_, relu_, handles_->stream);
-}
-
-
-void Batchnorm::LoadingWeight(const std::vector<float> &means,
-                              const std::vector<float> &stddevs) {
-    if (loaded_) {
-        return;
-    }
-
-    const size_t weights_size = sizeof(float) * channels_;
-    assert(weights_size == sizeof(float) * means.size() &&
-               weights_size == sizeof(float) * stddevs.size());
-
-    ReportCUDAErrors(cudaMalloc(&cuda_means_, weights_size));
-    ReportCUDAErrors(cudaMalloc(&cuda_stddevs_, weights_size));
-
-    // Push the weights.
-    ReportCUDAErrors(cudaMemcpy(cuda_means_, means.data(),
-                                    weights_size,
-                                    cudaMemcpyHostToDevice));
-
-    ReportCUDAErrors(cudaMemcpy(cuda_stddevs_, stddevs.data(),
-                                    weights_size,
-                                    cudaMemcpyHostToDevice));
-    loaded_ = true;
-}
-
 Convolution::Convolution(CudaHandles *handles,
                          const int max_batch,
                          const size_t board_size, 
