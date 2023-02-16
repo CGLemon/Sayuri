@@ -8,6 +8,14 @@
 
 namespace CUDA {
 
+//TODO: Reorder the functions parameters. The order
+//      should be like
+//
+//      in_ptr, out_ptr, other ptrs...
+//      N, C, others...
+//      bool options...
+//      stream
+
 template <typename T>
 void add_vectors(T *c, T *a, T *b,
                  int size, int asize, int bsize,

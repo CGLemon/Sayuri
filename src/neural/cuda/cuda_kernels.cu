@@ -3,9 +3,9 @@
 
 #ifdef USE_CUDA
 
-#if __CUDA_ARCH__ >= 530
+// #if __CUDA_ARCH__ >= 530
 #define CUDA_SUPPORTS_FP16
-#endif
+// #endif
 namespace CUDA {
 
 template <typename T>
@@ -769,7 +769,7 @@ template void winograd3_transform_out<float>(const float *M, const float *biases
                                              bool relu, cudaStream_t stream);
 
 #ifdef CUDA_SUPPORTS_FP16
-template void add_vectors<half>(half* c, half* a, half* b, int size, int asize,
+template void add_vectors<half>(half *c, half *a, half *b, int size, int asize,
                                 int bsize,  bool relu, cudaStream_t stream);
 
 template void add_spatial<half>(half *data, const half *biases,

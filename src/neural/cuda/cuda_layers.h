@@ -8,11 +8,17 @@
 
 namespace CUDA {
 
+void AddSpatial(bool fp16, void *data, const void *biases,
+                    const void *eltwise, const void *mask,
+                    int bsize, int batch, int channels, int spatial,
+                    bool relu, cudaStream_t stream);
+
 class LayerBasic {
 protected:
-    CudaHandles *handles_;
+    CudaHandles *handles_{nullptr};
     bool loaded_{false};
     bool relu_{false};
+    bool fp16_{false};
 
     int maxbatch_{0};
     int width_{0};
@@ -24,15 +30,15 @@ class Convolution : public LayerBasic {
 public:
     Convolution() = default;
     Convolution(CudaHandles *handles, const int batch,
-                const size_t board_size, const size_t filter,
-                const size_t in_channels, const size_t out_channels,
-                bool ReLU = true);
+                    const int board_size, const int filter,
+                    const int in_channels, const int out_channels,
+                    bool ReLU = true);
     ~Convolution();
 
-    void Forward(const int batch, float *input, float *output,
-                 const float *const eltwise,
-                 const float *const mask,
-                 void *scratch, void *scratch_other, size_t scratch_size);
+    void Forward(const int batch, void *input, void *output,
+                     const void *eltwise,
+                     const void *mask,
+                     void *scratch, void *scratch_other, size_t scratch_size);
 
     void LoadingWeight(const std::vector<float> &weights,
                        size_t &scratch_size,
@@ -62,21 +68,21 @@ private:
     cudnnConvolutionFwdAlgo_t conv_algo_;
 #endif
 
-    float *cuda_weights_;
-    float *cuda_biases_{nullptr};
+    void *cuda_weights_;
+    void *cuda_biases_{nullptr};
 };
 
 class FullyConnect : public LayerBasic {
 public:
     FullyConnect() = default;
     FullyConnect(CudaHandles *handles,
-                 const int batch, const size_t inputs, 
-                 const size_t outputs, bool ReLU);
+                     const int batch, const size_t inputs, 
+                     const size_t outputs, bool ReLU);
     ~FullyConnect();
 
     void Forward(const int batch,
-                 float *input,
-                 float *output);
+                     void *input,
+                     void *output);
 
     void LoadingWeight(const std::vector<float> &weights,
                        const std::vector<float> &biases);
@@ -85,21 +91,24 @@ private:
     int inputs_;
     int outputs_;
 
-    float *cuda_weights_;
-    float *cuda_biases_;
+    void *cuda_weights_;
+    void *cuda_biases_;
 };
 
 class GlobalPooling : public LayerBasic {
 public:
     GlobalPooling() = default; 
     GlobalPooling(CudaHandles *handles,
-                  bool is_value_head,
-                  const int batch,
-                  const size_t board_size,
-                  const size_t channels);
+                      bool is_value_head,
+                      const int batch,
+                      const int board_size,
+                      const int channels);
 
-    void Forward(const int batch, float *input, float *output,
-                 float *mask, float *sqrt_mask);
+    void Forward(const int batch,
+                     void *input,
+                     void *output,
+                     void *mask,
+                     void *sqrt_mask);
 
 private:
     int channels_;
@@ -110,8 +119,11 @@ private:
 class SEUnit : public LayerBasic {
 public:
     SEUnit() = default;
-    SEUnit(CudaHandles *handles, const int batch,
-           const size_t board_size, const size_t channels, const size_t se_size);
+    SEUnit(CudaHandles *handles,
+               const int batch,
+               const int board_size,
+               const int channels,
+               const int se_size);
     ~SEUnit();
 
     void LoadingWeight(const std::vector<float> &weights_w1,
@@ -120,20 +132,20 @@ public:
                        const std::vector<float> &weights_b2);
 
     void Forward(const int batch,
-                 float *input,
-                 float *output,
-                 float *mask);
+                     void *input,
+                     void *output,
+                     void *mask);
  
 private:
     int se_size_;
     int channels_;
 
-    std::array<float *, 3> cuda_op_;
+    std::array<void *, 3> cuda_op_;
 
-    float *cuda_weights_w1_;
-    float *cuda_weights_b1_;
-    float *cuda_weights_w2_;
-    float *cuda_weights_b2_;
+    void *cuda_weights_w1_;
+    void *cuda_weights_b1_;
+    void *cuda_weights_w2_;
+    void *cuda_weights_b2_;
 };
 } // namespace CUDA
 
