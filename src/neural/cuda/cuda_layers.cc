@@ -210,6 +210,35 @@ void GemmStridedBatched(bool fp16, bool TA, bool TB,
     }
 }
 
+void MallocAndCopy(bool fp16, void **cude_op, const std::vector<float> &weights) {
+    size_t wsize = weights.size();
+    if (fp16) {
+        auto buf = std::vector<half_float_t>(wsize);
+        for (size_t i = 0; i < wsize; ++i) {
+            buf[i] = GetFp16(weights[i]);
+        }
+        size_t op_size = wsize * sizeof(half_float_t);
+        ReportCUDAErrors(cudaMalloc(&(*cude_op), op_size));
+        ReportCUDAErrors(cudaMemcpy(
+            *cude_op, buf.data(), op_size, cudaMemcpyHostToDevice));
+    } else {
+        size_t op_size = wsize * sizeof(float);
+        ReportCUDAErrors(cudaMalloc(&(*cude_op), op_size));
+        ReportCUDAErrors(cudaMemcpy(
+            *cude_op, weights.data(), op_size, cudaMemcpyHostToDevice));
+    }
+}
+
+void MallocCudaOp(bool fp16, void **cude_op, size_t size) {
+    size_t op_size = size;
+    if (fp16) {
+        op_size *= sizeof(half_float_t);
+    } else {
+        op_size *= sizeof(float);
+    }
+    ReportCUDAErrors(cudaMalloc(&(*cude_op), op_size));
+}
+
 Convolution::Convolution(CudaHandles *handles,
                              const int max_batch,
                              const int board_size, 
@@ -414,11 +443,7 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
                            weights_copy, out_channels_, in_channels_);
     }
 
-    const size_t weights_size = sizeof(float) * weights_copy.size();
-
-    ReportCUDAErrors(cudaMalloc(&cuda_weights_, weights_size));
-    ReportCUDAErrors(cudaMemcpy(cuda_weights_, weights_copy.data(), weights_size,
-                                    cudaMemcpyHostToDevice));
+    MallocAndCopy(fp16_, &cuda_weights_, weights_copy);
 
     loaded_ = true;
     size_t apply_scratch_size = 0;
@@ -504,12 +529,8 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
     if (loaded_) {
         return;
     }
-    const size_t biases_size = sizeof(float) * biases.size();
-    assert((int)biases.size() == out_channels_);
 
-    ReportCUDAErrors(cudaMalloc(&cuda_biases_, biases_size));
-    ReportCUDAErrors(cudaMemcpy(cuda_biases_, biases.data(), biases_size,
-                                cudaMemcpyHostToDevice));
+    MallocAndCopy(fp16_, &cuda_biases_, biases);
 
 #ifdef USE_CUDNN
     cudnnCreateTensorDescriptor(&bias_desc_);
@@ -545,19 +566,8 @@ void FullyConnect::LoadingWeight(const std::vector<float> &weights,
     if (loaded_) { 
         return;
     }
-    const size_t weights_size = sizeof(float) * weights.size();
-    const size_t biases_size = sizeof(float) * biases.size();
-
-    assert((int)weights.size() == inputs_ * outputs_);
-    assert((int)biases.size() == outputs_);
-
-    ReportCUDAErrors(cudaMalloc(&cuda_weights_, weights_size));
-    ReportCUDAErrors(cudaMalloc(&cuda_biases_, biases_size));
-  
-    ReportCUDAErrors(cudaMemcpy(
-        cuda_weights_, weights.data(), weights_size, cudaMemcpyHostToDevice));
-    ReportCUDAErrors(cudaMemcpy(
-        cuda_biases_, biases.data(), biases_size, cudaMemcpyHostToDevice));
+    MallocAndCopy(fp16_, &cuda_weights_, weights);
+    MallocAndCopy(fp16_, &cuda_biases_, biases);
     loaded_ = true;
 }
 
@@ -630,40 +640,19 @@ void SEUnit::LoadingWeight(const std::vector<float> &weights_w1,
     if (loaded_) { 
         return;
     }
-    const size_t type_size = sizeof(float);
-    const size_t weights_w1_size = type_size * weights_w1.size();
-    const size_t weights_b1_size = type_size * weights_b1.size();
-    const size_t weights_w2_size = type_size * weights_w2.size();
-    const size_t weights_b2_size = type_size * weights_b2.size();
+    MallocAndCopy(fp16_, &cuda_weights_w1_, weights_w1);
+    MallocAndCopy(fp16_, &cuda_weights_b1_, weights_b1);
+    MallocAndCopy(fp16_, &cuda_weights_w2_, weights_w2);
+    MallocAndCopy(fp16_, &cuda_weights_b2_, weights_b2);
 
-    assert((int)weights_w1.size() == channels_ * se_size_);
-    assert((int)weights_b1.size() == se_size_);
-    assert((int)weights_w2.size() == 2 * se_size_  * channels_);
-    assert((int)weights_b2.size() == 2 * channels_);
+    const size_t fc1_scratch_size = maxbatch_ * se_size_;
+    const size_t fc2_scratch_size = 2 * maxbatch_ * channels_;
+    const size_t pool_scratch_size = maxbatch_ * 3 * channels_;
 
-    ReportCUDAErrors(cudaMalloc(&cuda_weights_w1_, weights_w1_size));
-    ReportCUDAErrors(cudaMalloc(&cuda_weights_b1_, weights_b1_size));
-    ReportCUDAErrors(cudaMalloc(&cuda_weights_w2_, weights_w2_size));
-    ReportCUDAErrors(cudaMalloc(&cuda_weights_b2_, weights_b2_size));
-
-    const size_t fc1_scratch_size = type_size * maxbatch_ * se_size_;
-    const size_t fc2_scratch_size = type_size * 2 * maxbatch_ * channels_;
-    const size_t pool_scratch_size = type_size * maxbatch_ * 3 * channels_;
-
-    ReportCUDAErrors(cudaMalloc(&cuda_op_[0], pool_scratch_size));
-    ReportCUDAErrors(cudaMalloc(&cuda_op_[1], fc1_scratch_size));
-    ReportCUDAErrors(cudaMalloc(&cuda_op_[2], fc2_scratch_size));
-
+    MallocCudaOp(fp16_, &(cuda_op_[0]), pool_scratch_size);
+    MallocCudaOp(fp16_, &(cuda_op_[1]), fc1_scratch_size);
+    MallocCudaOp(fp16_, &(cuda_op_[2]), fc2_scratch_size);
     loaded_ = true;
-
-    ReportCUDAErrors(cudaMemcpy(
-        cuda_weights_w1_, weights_w1.data(), weights_w1_size, cudaMemcpyHostToDevice));
-    ReportCUDAErrors(cudaMemcpy(
-        cuda_weights_b1_, weights_b1.data(), weights_b1_size, cudaMemcpyHostToDevice));
-    ReportCUDAErrors(cudaMemcpy(
-        cuda_weights_w2_, weights_w2.data(), weights_w2_size, cudaMemcpyHostToDevice));
-    ReportCUDAErrors(cudaMemcpy(
-        cuda_weights_b2_, weights_b2.data(), weights_b2_size, cudaMemcpyHostToDevice));
 }
 
 void SEUnit::Forward(const int batch, void *input, void *ouput, void *mask) {

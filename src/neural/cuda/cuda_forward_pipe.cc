@@ -582,11 +582,12 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
                             cuda_pol_op_[1], cuda_pol_op_[2]);
 
     float *null_op = nullptr;
-    CUDA::add_spatial(cuda_pol_op_[0], cuda_pol_op_[2],
-                      null_op, mask_buf[0],
-                      batch_size * policy_extract_channels,
-                      batch_size, policy_extract_channels, num_intersections,
-                      false, handles_.stream);
+    CUDA::AddSpatial(
+        false, cuda_pol_op_[0], cuda_pol_op_[2],
+        null_op, mask_buf[0],
+        batch_size * policy_extract_channels,
+        batch_size, policy_extract_channels, num_intersections,
+        false, handles_.stream);
 
     graph_->p_prob.Forward(batch_size,
                            cuda_pol_op_[0], cuda_output_prob_,

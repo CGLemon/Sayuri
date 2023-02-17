@@ -13,6 +13,11 @@ void AddSpatial(bool fp16, void *data, const void *biases,
                     int bsize, int batch, int channels, int spatial,
                     bool relu, cudaStream_t stream);
 
+void MallocAndCopy(bool fp16, void **cude_op,
+                       const std::vector<float> &weights);
+
+void MallocCudaOp(bool fp16, void **cude_op, size_t size);
+
 class LayerBasic {
 protected:
     CudaHandles *handles_{nullptr};
