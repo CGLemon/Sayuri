@@ -105,3 +105,10 @@ inline half_float_t GetFp16(float fp32) {
     FloatToHalf(fp16, fp32);
     return fp16;
 }
+
+inline float GetFp32(half_float_t fp16) {
+    float fp32;
+    HalfToFloat(fp32, fp16);
+    return fp32;
+}
+

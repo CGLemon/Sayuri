@@ -6,7 +6,7 @@
 // #if __CUDA_ARCH__ >= 530
 #define CUDA_SUPPORTS_FP16
 // #endif
-namespace CUDA {
+namespace cuda {
 
 template <typename T>
 __global__ void add_vectors_kernel(T *a, T *b, T *c,
@@ -808,5 +808,5 @@ template void winograd3_transform_out<half>(const half *M, const half *biases,
                                             bool relu, cudaStream_t stream);
 #endif
 
-} // namespace CUDA
+} // namespace cuda
 #endif

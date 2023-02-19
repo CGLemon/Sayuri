@@ -38,9 +38,14 @@ else()
     cmake_minimum_required(VERSION 3.10)
 endif()
 
-if(BOARD_SIZE)
+if (BOARD_SIZE)
      message("Use the specific ${BOARD_SIZE} x ${BOARD_SIZE} board size.")
      add_definitions(-DMAX_BOARD_SIZE=${BOARD_SIZE})
+endif()
+
+if (ENABLE_FP16)
+    message("Enable the CUDA FP16.")
+    add_definitions(-DUSE_FP16)
 endif()
 
 # Set up the root.

@@ -1,16 +1,16 @@
+#ifdef USE_CUDA
+
 #include "neural/cuda/cuda_layers.h"
 #include "neural/cuda/cuda_kernels.h"
 #include "neural/winograd_helper.h"
 #include "neural/blas/winograd_convolution3.h"
 #include "utils/half.h"
 
-
 #include <cassert>
 #include <iostream>
 #include <algorithm>
-#ifdef USE_CUDA
 
-namespace CUDA {
+namespace cuda {
 
 void AddVectors(bool fp16, void *c, void *a, void *b,
                     int size, int asize, int bsize,
@@ -210,36 +210,8 @@ void GemmStridedBatched(bool fp16, bool TA, bool TB,
     }
 }
 
-void MallocAndCopy(bool fp16, void **cude_op, const std::vector<float> &weights) {
-    size_t wsize = weights.size();
-    if (fp16) {
-        auto buf = std::vector<half_float_t>(wsize);
-        for (size_t i = 0; i < wsize; ++i) {
-            buf[i] = GetFp16(weights[i]);
-        }
-        size_t op_size = wsize * sizeof(half_float_t);
-        ReportCUDAErrors(cudaMalloc(&(*cude_op), op_size));
-        ReportCUDAErrors(cudaMemcpy(
-            *cude_op, buf.data(), op_size, cudaMemcpyHostToDevice));
-    } else {
-        size_t op_size = wsize * sizeof(float);
-        ReportCUDAErrors(cudaMalloc(&(*cude_op), op_size));
-        ReportCUDAErrors(cudaMemcpy(
-            *cude_op, weights.data(), op_size, cudaMemcpyHostToDevice));
-    }
-}
-
-void MallocCudaOp(bool fp16, void **cude_op, size_t size) {
-    size_t op_size = size;
-    if (fp16) {
-        op_size *= sizeof(half_float_t);
-    } else {
-        op_size *= sizeof(float);
-    }
-    ReportCUDAErrors(cudaMalloc(&(*cude_op), op_size));
-}
-
 Convolution::Convolution(CudaHandles *handles,
+                             bool fp16,
                              const int max_batch,
                              const int board_size, 
                              const int filter_size,
@@ -258,6 +230,7 @@ Convolution::Convolution(CudaHandles *handles,
 
     handles_ = handles;
 
+    fp16_ = fp16;
     loaded_ = false;
     relu_ = ReLU;
 }
@@ -298,14 +271,16 @@ void Convolution::Forward(const int batch,
     assert(batch <= maxbatch_);
 
 #ifdef USE_CUDNN
+    cudnnDataType_t cudnn_data_type = GetCudnnDataType(fp16_);
+
     ReportCUDNNErrors(cudnnSetStream(handles_->cudnn_handle, handles_->stream));
     ReportCUDNNErrors(cudnnSetTensor4dDescriptor(in_tensor_desc_,
                                                  CUDNN_TENSOR_NCHW,
-                                                 CUDNN_DATA_FLOAT,
+                                                 cudnn_data_type,
                                                  batch, in_channels_, height_, width_));
     ReportCUDNNErrors(cudnnSetTensor4dDescriptor(out_tensor_desc_,
                                                  CUDNN_TENSOR_NCHW,
-                                                 CUDNN_DATA_FLOAT,
+                                                 cudnn_data_type,
                                                  batch, out_channels_, height_, width_));
   
     static constexpr float alpha = 1.0f, beta = 0.0f;
@@ -449,28 +424,30 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
     size_t apply_scratch_size = 0;
 
 #ifdef USE_CUDNN
+    cudnnDataType_t cudnn_data_type = GetCudnnDataType(fp16_);
+
     cudnnCreateFilterDescriptor(&filter_desc_);
     cudnnCreateTensorDescriptor(&in_tensor_desc_);
     cudnnCreateTensorDescriptor(&out_tensor_desc_);
 
     cudnnCreateConvolutionDescriptor(&conv_desc_);
 
-    ReportCUDNNErrors(cudnnSetFilter4dDescriptor(filter_desc_, CUDNN_DATA_FLOAT, CUDNN_TENSOR_NCHW,
+    ReportCUDNNErrors(cudnnSetFilter4dDescriptor(filter_desc_, cudnn_data_type, CUDNN_TENSOR_NCHW,
                                                  out_channels_, in_channels_, filters_, filters_));
   
     const size_t padding = filters_ / 2;
     ReportCUDNNErrors(cudnnSetConvolution2dDescriptor(
                       conv_desc_, padding, padding, 1, 1, 1, 1,
-                      CUDNN_CROSS_CORRELATION, CUDNN_DATA_FLOAT));
+                      CUDNN_CROSS_CORRELATION, cudnn_data_type));
 
     ReportCUDNNErrors(cudnnSetTensor4dDescriptor(in_tensor_desc_,
                                                  CUDNN_TENSOR_NCHW,
-                                                 CUDNN_DATA_FLOAT,
+                                                 cudnn_data_type,
                                                  maxbatch_, in_channels_, height_, width_));
 
     ReportCUDNNErrors(cudnnSetTensor4dDescriptor(out_tensor_desc_,
                                                  CUDNN_TENSOR_NCHW,
-                                                 CUDNN_DATA_FLOAT,
+                                                 cudnn_data_type,
                                                  maxbatch_, out_channels_, height_, width_));
 
     ReportCUDNNErrors(cudnnSetConvolutionMathType(conv_desc_, CUDNN_DEFAULT_MATH));
@@ -533,22 +510,25 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
     MallocAndCopy(fp16_, &cuda_biases_, biases);
 
 #ifdef USE_CUDNN
+    cudnnDataType_t cudnn_data_type = GetCudnnDataType(fp16_);
+
     cudnnCreateTensorDescriptor(&bias_desc_);
     ReportCUDNNErrors(cudnnSetTensor4dDescriptor(bias_desc_,
                                                  CUDNN_TENSOR_NCHW,
-                                                 CUDNN_DATA_FLOAT,
+                                                 cudnn_data_type,
                                                  1, out_channels_, 1, 1));
 #endif
     LoadingWeight(weights, scratch_size, winpgrad);
 }
 
 
-FullyConnect::FullyConnect(CudaHandles *handles,
+FullyConnect::FullyConnect(CudaHandles *handles, bool fp16,
                            const int max_batch, const size_t inputs, 
                            const size_t outputs, bool ReLU) {
     maxbatch_ = max_batch;
     inputs_ = inputs;
     outputs_ = outputs;
+    fp16_ = fp16;
     loaded_ = false;
     relu_ = ReLU;
     handles_ = handles;
@@ -590,6 +570,7 @@ void FullyConnect::Forward(const int batch, void *input, void *output) {
 }
 
 GlobalPooling::GlobalPooling(CudaHandles *handles,
+                                 bool fp16,
                                  bool is_value_head,
                                  const int max_batch,
                                  const int board_size,
@@ -599,6 +580,7 @@ GlobalPooling::GlobalPooling(CudaHandles *handles,
     spatial_size_ = width_ * height_;
     is_value_head_ = is_value_head;
 
+    fp16_ = fp16;
     maxbatch_ = max_batch;
     channels_ = channels;
     handles_ = handles;
@@ -618,6 +600,7 @@ void GlobalPooling::Forward(const int batch, void *input, void *output, void *ma
 
 
 SEUnit::SEUnit(CudaHandles *handles,
+                   bool fp16,
                    const int max_batch,
                    const int board_size,
                    const int channels,
@@ -626,6 +609,7 @@ SEUnit::SEUnit(CudaHandles *handles,
     height_ = board_size;
     spatial_size_ = width_ * height_;
 
+    fp16_ = fp16;
     se_size_ = se_size;
     maxbatch_ = max_batch;
     channels_ = channels;
@@ -710,6 +694,6 @@ SEUnit::~SEUnit() {
     }
 }
 
-} // namespace CUDA
+} // namespace cuda
 
 #endif

@@ -35,27 +35,27 @@ private:
     class NNGraph {
         struct Graph {
             // intput
-            CUDA::Convolution input_conv;
+            cuda::Convolution input_conv;
 
             // residual towers
-            std::vector<CUDA::Convolution> tower_conv;
-            std::vector<CUDA::SEUnit> tower_se;
+            std::vector<cuda::Convolution> tower_conv;
+            std::vector<cuda::SEUnit> tower_se;
 
             // policy head 
-            CUDA::Convolution p_ex_conv;
-            CUDA::GlobalPooling p_pool;
-            CUDA::FullyConnect p_inter;
+            cuda::Convolution p_ex_conv;
+            cuda::GlobalPooling p_pool;
+            cuda::FullyConnect p_inter;
 
-            CUDA::Convolution p_prob;
-            CUDA::FullyConnect p_prob_pass;
+            cuda::Convolution p_prob;
+            cuda::FullyConnect p_prob_pass;
 
             // value head
-            CUDA::Convolution v_ex_conv;
-            CUDA::GlobalPooling v_pool;
-            CUDA::FullyConnect v_inter;
+            cuda::Convolution v_ex_conv;
+            cuda::GlobalPooling v_pool;
+            cuda::FullyConnect v_inter;
 
-            CUDA::Convolution v_ownership;
-            CUDA::FullyConnect v_misc;
+            cuda::Convolution v_ownership;
+            cuda::FullyConnect v_misc;
         };
 
     public:
@@ -74,24 +74,25 @@ private:
     private:
         bool ApplyMask(const std::vector<InputData> &input);
 
-        CUDA::CudaHandles handles_;
+        cuda::CudaHandles handles_;
 
+        bool fp16_{false};
         int board_size_{0};
         int max_batch_;
 
         std::unique_ptr<Graph> graph_{nullptr};
 
-        float *cuda_input_planes_;
-        float *cuda_output_prob_;
-        float *cuda_output_prob_pass_;
-        float *cuda_output_val_;
-        float *cuda_output_ownership_;
+        void *cuda_input_planes_;
+        void *cuda_output_prob_;
+        void *cuda_output_prob_pass_;
+        void *cuda_output_val_;
+        void *cuda_output_ownership_;
 
-        std::array<float*, 2> cuda_scratch_op_;
-        std::array<float*, 3> cuda_conv_op_;
-        std::array<float*, 3> cuda_pol_op_;
-        std::array<float*, 3> cuda_val_op_;
-        std::array<float*, 2> cuda_mask_op_;
+        std::array<void*, 2> cuda_scratch_op_;
+        std::array<void*, 3> cuda_conv_op_;
+        std::array<void*, 3> cuda_pol_op_;
+        std::array<void*, 3> cuda_val_op_;
+        std::array<void*, 2> cuda_mask_op_;
 
         std::mutex &io_mutex_;
 

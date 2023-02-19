@@ -6,17 +6,12 @@
 #include <vector>
 #include <array>
 
-namespace CUDA {
+namespace cuda {
 
 void AddSpatial(bool fp16, void *data, const void *biases,
                     const void *eltwise, const void *mask,
                     int bsize, int batch, int channels, int spatial,
                     bool relu, cudaStream_t stream);
-
-void MallocAndCopy(bool fp16, void **cude_op,
-                       const std::vector<float> &weights);
-
-void MallocCudaOp(bool fp16, void **cude_op, size_t size);
 
 class LayerBasic {
 protected:
@@ -34,7 +29,7 @@ protected:
 class Convolution : public LayerBasic {
 public:
     Convolution() = default;
-    Convolution(CudaHandles *handles, const int batch,
+    Convolution(CudaHandles *handles, bool fp16, const int batch,
                     const int board_size, const int filter,
                     const int in_channels, const int out_channels,
                     bool ReLU = true);
@@ -80,7 +75,7 @@ private:
 class FullyConnect : public LayerBasic {
 public:
     FullyConnect() = default;
-    FullyConnect(CudaHandles *handles,
+    FullyConnect(CudaHandles *handles, bool fp16,
                      const int batch, const size_t inputs, 
                      const size_t outputs, bool ReLU);
     ~FullyConnect();
@@ -104,6 +99,7 @@ class GlobalPooling : public LayerBasic {
 public:
     GlobalPooling() = default; 
     GlobalPooling(CudaHandles *handles,
+                      bool fp16,
                       bool is_value_head,
                       const int batch,
                       const int board_size,
@@ -125,6 +121,7 @@ class SEUnit : public LayerBasic {
 public:
     SEUnit() = default;
     SEUnit(CudaHandles *handles,
+               bool fp16,
                const int batch,
                const int board_size,
                const int channels,
@@ -152,6 +149,6 @@ private:
     void *cuda_weights_w2_;
     void *cuda_weights_b2_;
 };
-} // namespace CUDA
+} // namespace cuda
 
 #endif

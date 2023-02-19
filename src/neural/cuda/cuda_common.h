@@ -7,6 +7,7 @@
 #include <cuda_fp16.h>
 #include <cublas_v2.h>
 #include <cuda.h>
+#include <vector>
 
 #ifdef USE_CUDNN
 #include <cudnn.h>
@@ -15,13 +16,14 @@
 #include <string>
 #include <sstream>
 
-namespace CUDA {
+namespace cuda {
 
 static constexpr int kMaxSupportGPUs = 256; // Give it a large value.
 
 #define KBLOCKSIZE 256
 
 #ifdef USE_CUDNN
+cudnnDataType_t GetCudnnDataType(bool fp16);
 void CudnnError(cudnnStatus_t status);
 #define ReportCUDNNErrors(status) CudnnError(status)
 #endif
@@ -36,7 +38,7 @@ int GetDevice();
 void SetDevice(int n);
 void WaitToFinish(cudaStream_t s);
 
-inline static int DivUp(int a, int b) { return (a + b - 1) / b; }
+inline int DivUp(int a, int b) { return (a + b - 1) / b; }
 
 struct CudaHandles {
 #ifdef USE_CUDNN
@@ -55,6 +57,18 @@ struct CudaHandles {
 std::string GetBackendInfo();
 std::string GetCurrentDeviceInfo();
 
-} // namespace CUDA
+size_t GetCudaTypeSize(bool fp16);
+
+void MallocAndCopy(bool fp16, void **cude_op,
+                       const std::vector<float> &weights);
+
+void MallocCudaOp(bool fp16, void **cude_op, size_t size);
+
+void CopyToCudaOp(bool fp16, void **cude_op,
+                      const std::vector<float> &inputs);
+
+void CopyToHostOp(bool fp16, std::vector<float> &output, void **cude_op);
+
+} // namespace cuda
 
 #endif

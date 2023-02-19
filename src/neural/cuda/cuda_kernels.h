@@ -6,7 +6,7 @@
 
 #include "neural/cuda/cuda_common.h"
 
-namespace CUDA {
+namespace cuda {
 
 //TODO: Reorder the functions parameters. The order
 //      should be like
@@ -75,6 +75,6 @@ void gemm_strided_batched(bool TA, bool TB, int M, int N, int K, T ALPHA,
                           const T *A_gpu, int lda, int strideA, const T *B_gpu, int ldb, int strideB,
                           T BETA, T *C_gpu, int ldc, int strideC, int batchsize, cublasHandle_t handle, cudaStream_t stream);
 
-} // namespace CUDA
+} // namespace cuda
 
 #endif

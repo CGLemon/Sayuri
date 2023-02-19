@@ -1,13 +1,14 @@
 #ifdef USE_CUDA
 
 #include "neural/cuda/cuda_common.h"
+#include "utils/half.h"
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
 #include <sstream>
 
-namespace CUDA {
+namespace cuda {
 
 const char* cublasGetErrorString(cublasStatus_t status) {
     switch(status) {
@@ -44,6 +45,12 @@ void CudaError(cudaError_t status) {
 }
 
 #ifdef USE_CUDNN
+cudnnDataType_t GetCudnnDataType(bool fp16) {
+    return fp16 ?
+               CUDNN_DATA_HALF :
+               CUDNN_DATA_FLOAT;
+}
+
 void CudnnError(cudnnStatus_t status) {
     if (status != CUDNN_STATUS_SUCCESS) {
         const char *cause = cudnnGetErrorString(status);
@@ -108,14 +115,6 @@ void CudaHandles::Release() {
     }
 }
 
-bool UseCuDNN() {
-#ifdef USE_CUDNN
-    return true;
-#else
-    return false;
-#endif
-}
-
 std::string OutputSpec(const cudaDeviceProp &dev_prop) {
     auto out = std::ostringstream{};
 
@@ -159,19 +158,28 @@ std::string GetBackendInfo() {
                 << ", Minor " << minor << '\n';
     }
 
-    out << "Use cuDNN: ";
-    if (UseCuDNN()) {
+    {
+        out << "Use FP16: ";
+#ifdef USE_FP16
         out << "Yes\n";
+#else
+        out << "No\n";
+#endif
+    }
+
+    {
+        out << "Use cuDNN: ";
 #ifdef USE_CUDNN
+        out << "Yes\n";
         const auto cudnn_version = cudnnGetVersion();
         const auto major = cudnn_version/1000;
         const auto minor = (cudnn_version -  major * 1000)/100;
         out << "cuDNN version:"
                 << " Major " << major
                 << ", Minor " << minor << '\n';
-#endif
-    } else {
+#else
         out << "No\n";
+#endif
     }
 
     out << "Number of CUDA devices: " << devicecount << '\n';
@@ -190,6 +198,76 @@ std::string GetCurrentDeviceInfo() {
     return out.str();
 }
 
-} // namespace CUDA
+size_t GetCudaTypeSize(bool fp16) {
+    return fp16 ?
+               sizeof(half_float_t) :
+               sizeof(float);
+}
+
+void MallocAndCopy(bool fp16, void **cude_op, const std::vector<float> &weights) {
+    size_t wsize = weights.size();
+    if (fp16) {
+        auto buf = std::vector<half_float_t>(wsize);
+        for (size_t i = 0; i < wsize; ++i) {
+            buf[i] = GetFp16(weights[i]); // aussume it is the normal number
+        }
+        size_t op_size = wsize * sizeof(half_float_t);
+        ReportCUDAErrors(cudaMalloc(&(*cude_op), op_size));
+        ReportCUDAErrors(cudaMemcpy(
+            *cude_op, buf.data(), op_size, cudaMemcpyHostToDevice));
+    } else {
+        size_t op_size = wsize * sizeof(float);
+        ReportCUDAErrors(cudaMalloc(&(*cude_op), op_size));
+        ReportCUDAErrors(cudaMemcpy(
+            *cude_op, weights.data(), op_size, cudaMemcpyHostToDevice));
+    }
+}
+
+void MallocCudaOp(bool fp16, void **cude_op, size_t size) {
+    size_t op_size = size;
+    if (fp16) {
+        op_size *= sizeof(half_float_t);
+    } else {
+        op_size *= sizeof(float);
+    }
+    ReportCUDAErrors(cudaMalloc(&(*cude_op), op_size));
+}
+
+void CopyToCudaOp(bool fp16, void **cude_op,
+                      const std::vector<float> &inputs) {
+    size_t in_size = inputs.size();
+    if (fp16) {
+        auto buf = std::vector<half_float_t>(in_size);
+        for (size_t i = 0; i < in_size; ++i) {
+            buf[i] = GetFp16(inputs[i]); // aussume it is the normal number
+        }
+        size_t op_size = in_size * sizeof(half_float_t);
+        ReportCUDAErrors(cudaMemcpy(
+            *cude_op, buf.data(), op_size, cudaMemcpyHostToDevice));
+    } else {
+        size_t op_size = in_size * sizeof(float);
+        ReportCUDAErrors(cudaMemcpy(
+            *cude_op, inputs.data(), op_size, cudaMemcpyHostToDevice));
+    }
+}
+
+void CopyToHostOp(bool fp16, std::vector<float> &output, void **cude_op) {
+    size_t out_size = output.size();
+    if (fp16) {
+        auto buf = std::vector<half_float_t>(out_size);
+        size_t op_size = out_size * sizeof(half_float_t);
+        ReportCUDAErrors(cudaMemcpy(
+            buf.data(), *cude_op, op_size, cudaMemcpyDeviceToHost));
+        for (size_t i = 0; i < out_size; ++i) {
+            output[i] = GetFp32(buf[i]);
+        }
+    } else {
+        size_t op_size = out_size * sizeof(float);
+        ReportCUDAErrors(cudaMemcpy(
+            output.data(), *cude_op, op_size, cudaMemcpyDeviceToHost));
+    }
+}
+
+} // namespace cuda
 
 #endif
