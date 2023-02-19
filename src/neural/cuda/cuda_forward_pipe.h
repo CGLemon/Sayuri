@@ -10,6 +10,7 @@
 #include <thread>
 #include <condition_variable>
 
+#include "neural/cuda/cuda_common.h"
 #include "neural/cuda/cuda_layers.h"
 #include "neural/network_basic.h"
 #include "neural/description.h"
@@ -62,21 +63,22 @@ private:
         NNGraph(std::mutex &mtx) : io_mutex_(mtx) {}
         ~NNGraph();
         void BuildGraph(bool dump_gpu_info,
-                        const int gpu,
-                        const int max_batch_size,
-                        const int board_size,
-                        std::shared_ptr<DNNWeights> weights);
+                            const int gpu,
+                            const int max_batch_size,
+                            const int board_size,
+                            std::shared_ptr<DNNWeights> weights);
 
         std::vector<OutputResult> BatchForward(const std::vector<InputData> &input);
 
         void DestroyGraph();
 
     private:
+        void SetComputationMode(cuda::CudaHandles *handles);
+
         bool ApplyMask(const std::vector<InputData> &input);
 
         cuda::CudaHandles handles_;
 
-        bool fp16_{false};
         int board_size_{0};
         int max_batch_;
 

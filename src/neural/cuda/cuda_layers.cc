@@ -16,9 +16,11 @@ void AddVectors(bool fp16, void *c, void *a, void *b,
                     int size, int asize, int bsize,
                     bool relu, cudaStream_t stream) {
     if (fp16) {
+#ifdef ENABLE_FP16
         add_vectors(
             (half *)c, (half *)a, (half *)b,
             size, asize, bsize, relu, stream);
+#endif
     } else {
         add_vectors(
             (float *)c, (float *)a, (float *)b,
@@ -31,10 +33,12 @@ void AddSpatial(bool fp16, void *data, const void *biases,
                     int bsize, int batch, int channels, int spatial,
                     bool relu, cudaStream_t stream) {
     if (fp16) {
+#ifdef ENABLE_FP16
         add_spatial(
             (half *)data, (const half *)biases,
             (const half *)eltwise, (const half *)mask,
             bsize, batch, channels, spatial, relu, stream);
+#endif
     } else {
         add_spatial(
             (float *)data, (const float *)biases,
@@ -46,10 +50,12 @@ void AddSpatial(bool fp16, void *data, const void *biases,
 void Im2Col(bool fp16, void *data_col, void *data_im,
             int filter_size, int channels,
             int height, int width, cudaStream_t stream) {
-    if (fp16) { 
+    if (fp16) {
+#ifdef ENABLE_FP16
         im2col(
             filter_size, channels, height, width,
             (half *)data_im, (half *)data_col, stream);
+#endif
     } else {
         im2col(
             filter_size, channels, height, width,
@@ -60,10 +66,12 @@ void Im2Col(bool fp16, void *data_col, void *data_im,
 void Im2ColBatched(bool fp16, void *data_col, void *data_im,
                        int filter_size, int batches, int channels,
                        int height, int width, cudaStream_t stream) {
-    if (fp16) { 
+    if (fp16) {
+#ifdef ENABLE_FP16
         im2col_batched(
             filter_size, batches, channels, height, width,
             (half *)data_im, (half *)data_col, stream);
+#endif
     } else {
         im2col_batched(
             filter_size, batches, channels, height, width,
@@ -73,10 +81,12 @@ void Im2ColBatched(bool fp16, void *data_col, void *data_im,
 
 void NormalGlobalPooling(bool fp16, void *output, void *input, const void *mask,
                              int batch, int channels, int spatial, cudaStream_t stream) {
-    if (fp16) { 
+    if (fp16) {
+#ifdef ENABLE_FP16
         global_pooling(
             (half *)input, (half *)output, (const half *)mask,
             batch, channels, spatial, stream);
+#endif
     } else {
         global_pooling(
             (float *)input, (float *)output, (const float *)mask,
@@ -86,10 +96,12 @@ void NormalGlobalPooling(bool fp16, void *output, void *input, const void *mask,
 
 void HeadGlobalPooling(bool fp16, void *output, void *input, const void *sqrt_mask,
                            int batch, int channels, int spatial, cudaStream_t stream) {
-    if (fp16) { 
+    if (fp16) {
+#ifdef ENABLE_FP16
         head_global_pooling(
             (half *)input, (half *)output, (const half *)sqrt_mask,
             batch, channels, spatial, stream);
+#endif
     } else {
         head_global_pooling(
             (float *)input, (float *)output, (const float *)sqrt_mask,
@@ -101,11 +113,13 @@ void SeScale(bool fp16, void *output, const void *input,
                  const void *se_bias, const void *mask,
                  int batch, int channels,
                  int spatial, cudaStream_t stream) {
-    if (fp16) { 
+    if (fp16) {
+#ifdef ENABLE_FP16
         se_scale(
             (const half *)input, (const half*)se_bias,
             (const half *)mask, (half *)output,
             batch, channels, spatial, stream);
+#endif
     } else {
         se_scale(
             (const float *)input, (const float*)se_bias,
@@ -116,10 +130,12 @@ void SeScale(bool fp16, void *output, const void *input,
 
 void Winograd3TransformIn(bool fp16, void *output, const void *input,
                               int batch, int channels, int board_size, cudaStream_t stream) {
-    if (fp16) { 
+    if (fp16) {
+#ifdef ENABLE_FP16
         winograd3_transform_in(
             (const half *)input, (half *)output,
             batch, channels, board_size, stream);
+#endif
     } else {
         winograd3_transform_in(
             (const float *)input, (float *)output,
@@ -131,10 +147,12 @@ void Winograd3TransformOut(bool fp16, void *output, const void *input,
                                const void *biases, const void *eltwise, const void *mask,
                                int batch, int channels, int board_size, bool relu, cudaStream_t stream) {
     if (fp16) {
+#ifdef ENABLE_FP16
         winograd3_transform_out(
             (const half *)input, (const half *)biases,
             (const half *)eltwise, (const half *)mask, (half *)output,
             batch, channels, board_size, relu, stream);
+#endif
     } else {
         winograd3_transform_out(
             (const float *)input, (const float *)biases,
@@ -152,6 +170,7 @@ void Gemm(bool fp16, bool TA, bool TB,
               void *C_gpu, int ldc,
               cublasHandle_t handle, cudaStream_t stream) {
     if (fp16) {
+#ifdef ENABLE_FP16
         half_float_t alpha = GetFp16(ALPHA);
         half_float_t beta = GetFp16(BETA);
         gemm(TA, TB,
@@ -162,6 +181,7 @@ void Gemm(bool fp16, bool TA, bool TB,
              *(half*)&beta,
              (half *)C_gpu, ldc,
              handle, stream);
+#endif
     } else {
         gemm(TA, TB,
              M, N, K,
@@ -184,6 +204,7 @@ void GemmStridedBatched(bool fp16, bool TA, bool TB,
                             int batchsize,
                             cublasHandle_t handle, cudaStream_t stream) {
     if (fp16) {
+#ifdef ENABLE_FP16
         half_float_t alpha = GetFp16(ALPHA);
         half_float_t beta = GetFp16(BETA);
         gemm_strided_batched(
@@ -196,6 +217,7 @@ void GemmStridedBatched(bool fp16, bool TA, bool TB,
             batchsize,
             handle, stream
         );
+#endif
     } else {
         gemm_strided_batched(
             TA, TB, M, N, K,
@@ -211,7 +233,6 @@ void GemmStridedBatched(bool fp16, bool TA, bool TB,
 }
 
 Convolution::Convolution(CudaHandles *handles,
-                             bool fp16,
                              const int max_batch,
                              const int board_size, 
                              const int filter_size,
@@ -230,9 +251,17 @@ Convolution::Convolution(CudaHandles *handles,
 
     handles_ = handles;
 
-    fp16_ = fp16;
+    fp16_ = handles->fp16;
     loaded_ = false;
     relu_ = ReLU;
+
+#ifdef USE_CUDNN
+    cudnnCreateFilterDescriptor(&filter_desc_);
+    cudnnCreateTensorDescriptor(&in_tensor_desc_);
+    cudnnCreateTensorDescriptor(&out_tensor_desc_);
+    cudnnCreateConvolutionDescriptor(&conv_desc_);
+    cudnnCreateTensorDescriptor(&bias_desc_);
+#endif
 }
 
 Convolution::~Convolution() {
@@ -244,10 +273,7 @@ Convolution::~Convolution() {
         cudnnDestroyConvolutionDescriptor(conv_desc_);
         cudnnDestroyTensorDescriptor(in_tensor_desc_);
         cudnnDestroyTensorDescriptor(out_tensor_desc_);
-        if (cuda_biases_) {
-            cudnnDestroyTensorDescriptor(bias_desc_);
-        }
-
+        cudnnDestroyTensorDescriptor(bias_desc_);
 #endif
 
         if (cuda_biases_) {
@@ -273,7 +299,7 @@ void Convolution::Forward(const int batch,
 #ifdef USE_CUDNN
     cudnnDataType_t cudnn_data_type = GetCudnnDataType(fp16_);
 
-    ReportCUDNNErrors(cudnnSetStream(handles_->cudnn_handle, handles_->stream));
+    ReportCUDNNErrors(cudnnSetStream(handles_->cudnn_handle, handles_->stream));   
     ReportCUDNNErrors(cudnnSetTensor4dDescriptor(in_tensor_desc_,
                                                  CUDNN_TENSOR_NCHW,
                                                  cudnn_data_type,
@@ -426,11 +452,10 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
 #ifdef USE_CUDNN
     cudnnDataType_t cudnn_data_type = GetCudnnDataType(fp16_);
 
-    cudnnCreateFilterDescriptor(&filter_desc_);
-    cudnnCreateTensorDescriptor(&in_tensor_desc_);
-    cudnnCreateTensorDescriptor(&out_tensor_desc_);
-
-    cudnnCreateConvolutionDescriptor(&conv_desc_);
+    if (handles_->has_tensor_cores) {
+        ReportCUDNNErrors(cudnnSetConvolutionMathType(
+                              conv_desc_, CUDNN_TENSOR_OP_MATH));
+    }
 
     ReportCUDNNErrors(cudnnSetFilter4dDescriptor(filter_desc_, cudnn_data_type, CUDNN_TENSOR_NCHW,
                                                  out_channels_, in_channels_, filters_, filters_));
@@ -511,8 +536,6 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
 
 #ifdef USE_CUDNN
     cudnnDataType_t cudnn_data_type = GetCudnnDataType(fp16_);
-
-    cudnnCreateTensorDescriptor(&bias_desc_);
     ReportCUDNNErrors(cudnnSetTensor4dDescriptor(bias_desc_,
                                                  CUDNN_TENSOR_NCHW,
                                                  cudnn_data_type,
@@ -522,13 +545,15 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
 }
 
 
-FullyConnect::FullyConnect(CudaHandles *handles, bool fp16,
-                           const int max_batch, const size_t inputs, 
-                           const size_t outputs, bool ReLU) {
+FullyConnect::FullyConnect(CudaHandles *handles,
+                               const int max_batch,
+                               const int inputs, 
+                               const int outputs,
+                               bool ReLU) {
     maxbatch_ = max_batch;
     inputs_ = inputs;
     outputs_ = outputs;
-    fp16_ = fp16;
+    fp16_ = handles->fp16;
     loaded_ = false;
     relu_ = ReLU;
     handles_ = handles;
@@ -570,7 +595,6 @@ void FullyConnect::Forward(const int batch, void *input, void *output) {
 }
 
 GlobalPooling::GlobalPooling(CudaHandles *handles,
-                                 bool fp16,
                                  bool is_value_head,
                                  const int max_batch,
                                  const int board_size,
@@ -580,7 +604,7 @@ GlobalPooling::GlobalPooling(CudaHandles *handles,
     spatial_size_ = width_ * height_;
     is_value_head_ = is_value_head;
 
-    fp16_ = fp16;
+    fp16_ = handles->fp16;
     maxbatch_ = max_batch;
     channels_ = channels;
     handles_ = handles;
@@ -600,7 +624,6 @@ void GlobalPooling::Forward(const int batch, void *input, void *output, void *ma
 
 
 SEUnit::SEUnit(CudaHandles *handles,
-                   bool fp16,
                    const int max_batch,
                    const int board_size,
                    const int channels,
@@ -609,7 +632,7 @@ SEUnit::SEUnit(CudaHandles *handles,
     height_ = board_size;
     spatial_size_ = width_ * height_;
 
-    fp16_ = fp16;
+    fp16_ = handles->fp16;
     se_size_ = se_size;
     maxbatch_ = max_batch;
     channels_ = channels;

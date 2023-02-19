@@ -4,10 +4,13 @@
 
 #include <cstdio>
 #include <cuda_runtime.h>
-#include <cuda_fp16.h>
 #include <cublas_v2.h>
 #include <cuda.h>
 #include <vector>
+
+#ifdef ENABLE_FP16
+#include <cuda_fp16.h>
+#endif
 
 #ifdef USE_CUDNN
 #include <cudnn.h>
@@ -33,6 +36,8 @@ void CudaError(cudaError_t status);
 #define ReportCUBLASErrors(status) CublasError(status)
 #define ReportCUDAErrors(status) CudaError(status)
 
+size_t GetCudaTypeSize(bool fp16);
+cudaDeviceProp GetDeviceProp();
 int GetDeviceCount();
 int GetDevice();
 void SetDevice(int n);
@@ -48,6 +53,9 @@ struct CudaHandles {
 
     cudaStream_t stream;
 
+    bool fp16;
+    bool has_tensor_cores;
+
     int gpu_id;
 
     void ApplyOnCurrentDevice();
@@ -55,9 +63,7 @@ struct CudaHandles {
 };
 
 std::string GetBackendInfo();
-std::string GetCurrentDeviceInfo();
-
-size_t GetCudaTypeSize(bool fp16);
+std::string GetCurrentDeviceInfo(CudaHandles *handles);
 
 void MallocAndCopy(bool fp16, void **cude_op,
                        const std::vector<float> &weights);

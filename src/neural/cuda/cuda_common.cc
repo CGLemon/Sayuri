@@ -46,9 +46,8 @@ void CudaError(cudaError_t status) {
 
 #ifdef USE_CUDNN
 cudnnDataType_t GetCudnnDataType(bool fp16) {
-    return fp16 ?
-               CUDNN_DATA_HALF :
-               CUDNN_DATA_FLOAT;
+    return fp16 ? CUDNN_DATA_HALF :
+                      CUDNN_DATA_FLOAT;
 }
 
 void CudnnError(cudnnStatus_t status) {
@@ -99,6 +98,18 @@ void CudaHandles::ApplyOnCurrentDevice() {
     ReportCUDNNErrors(cudnnCreate(&cudnn_handle));
 #endif
     ReportCUDAErrors(cudaStreamCreate(&stream));
+
+    fp16 = has_tensor_cores = false;
+
+#ifdef ENABLE_FP16
+    cudaDeviceProp dev_prop = GetDeviceProp();
+    if (dev_prop.major >= 7) {
+        fp16 = has_tensor_cores = true;
+    } else if (dev_prop.major == 6 ||
+                   dev_prop.major == 5) {
+        fp16 = true;
+    }
+#endif
 
     gpu_id = i;
     handles_init[i] = true;
@@ -159,15 +170,6 @@ std::string GetBackendInfo() {
     }
 
     {
-        out << "Use FP16: ";
-#ifdef USE_FP16
-        out << "Yes\n";
-#else
-        out << "No\n";
-#endif
-    }
-
-    {
         out << "Use cuDNN: ";
 #ifdef USE_CUDNN
         out << "Yes\n";
@@ -187,21 +189,39 @@ std::string GetBackendInfo() {
     return out.str();
 }
 
-std::string GetCurrentDeviceInfo() {
-    auto out = std::stringstream{};
-
+cudaDeviceProp GetDeviceProp() {
     cudaDeviceProp dev_prop;
     ReportCUDAErrors(cudaGetDeviceProperties(&dev_prop, GetDevice()));
+    return dev_prop;
+}
+
+std::string GetCurrentDeviceInfo(CudaHandles *handles) {
+    auto out = std::stringstream{};
+
+    cudaDeviceProp dev_prop = GetDeviceProp();
     out << "=== Device: " << GetDevice() <<" ===\n";
-    out << OutputSpec(dev_prop);
+
+    out << "  Name: " << dev_prop.name << '\n';
+    out << "  Compute capability: "
+            << dev_prop.major << "."
+            << dev_prop.minor << '\n';
+    if (handles->fp16) {
+        out << "  Enable the FP16\n";
+    } else {
+        out << "  Disable the FP16\n";
+    }
+    if (handles->has_tensor_cores) {
+        out << "  Enable the tensor cores\n";
+    } else {
+        out << "  Disable the tensor cores\n";
+    }
 
     return out.str();
 }
 
 size_t GetCudaTypeSize(bool fp16) {
-    return fp16 ?
-               sizeof(half_float_t) :
-               sizeof(float);
+    return fp16 ? sizeof(half_float_t) :
+                      sizeof(float);
 }
 
 void MallocAndCopy(bool fp16, void **cude_op, const std::vector<float> &weights) {

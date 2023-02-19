@@ -43,9 +43,11 @@ if (BOARD_SIZE)
      add_definitions(-DMAX_BOARD_SIZE=${BOARD_SIZE})
 endif()
 
-if (ENABLE_FP16)
-    message("Enable the CUDA FP16.")
-    add_definitions(-DUSE_FP16)
+if (DISABLE_FP16)
+    message("Disable the CUDA FP16.")
+    add_definitions(-DENABLE_FP16)
+else()
+    add_definitions(-DENABLE_FP16)
 endif()
 
 # Set up the root.

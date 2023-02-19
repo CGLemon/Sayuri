@@ -5,7 +5,6 @@
 
 #include "config.h"
 #include "neural/cuda/cuda_forward_pipe.h"
-#include "neural/cuda/cuda_common.h"
 #include "neural/cuda/cuda_kernels.h"
 #include "utils/log.h"
 #include "utils/format.h"
@@ -178,10 +177,10 @@ void CudaForwardPipe::Destroy() {
 }
 
 void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
-                                          const int gpu,
-                                          const int max_batch_size,
-                                          const int board_size,
-                                          std::shared_ptr<DNNWeights> weights) {
+                                              const int gpu,
+                                              const int max_batch_size,
+                                              const int board_size,
+                                              std::shared_ptr<DNNWeights> weights) {
     if (graph_ != nullptr) {
         return;
     }
@@ -189,29 +188,24 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     graph_ = std::make_unique<Graph>();
     weights_ = weights;
 
-#ifdef USE_FP16
-    fp16_ = true;
-#endif
-
     cuda::SetDevice(gpu);
     handles_.ApplyOnCurrentDevice();
 
+    SetComputationMode(&handles_);
     if (dump_gpu_info) {
-        LOGGING << cuda::GetCurrentDeviceInfo();
+        LOGGING << cuda::GetCurrentDeviceInfo(&handles_);
     }
 
     board_size_ = board_size;
     scratch_size_ = 0;
     max_batch_ = max_batch_size;
 
-    const auto output_channels = weights_->residual_channels;
-
     // Build the graph first.
+    const auto output_channels = weights_->residual_channels;
 
     // input layer
     graph_->input_conv = cuda::Convolution(
         &handles_,
-        fp16_,
         max_batch_,          // max batch size
         board_size_,         // board size
         3,                   // kernel size
@@ -234,7 +228,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     
         graph_->tower_conv[t_offset+0] = cuda::Convolution(
             &handles_,
-            fp16_,
             max_batch_,          // max batch size
             board_size_,         // board size
             3,                   // kernel size
@@ -243,7 +236,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         );
         graph_->tower_conv[t_offset+1] = cuda::Convolution(
             &handles_,
-            fp16_,
             max_batch_,          // max batch size
             board_size_,         // board size
             3,                   // kernel size
@@ -256,7 +248,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
             const size_t se_size = tower_ptr->se_size;
             graph_->tower_se[i] = cuda::SEUnit(
                 &handles_,
-                fp16_,
                 max_batch_,      // max batch size
                 board_size_,     // board size
                 tower_channels,  // channels
@@ -269,7 +260,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     const auto policy_extract_channels = weights_->policy_extract_channels;
     graph_->p_ex_conv = cuda::Convolution(
         &handles_,
-        fp16_,
         max_batch_,              // max batch size
         board_size_,             // board size
         1,                       // kernel size
@@ -278,7 +268,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     );
     graph_->p_pool = cuda::GlobalPooling(
         &handles_,
-        fp16_,
         false,
         max_batch_,               // max batch size
         board_size_,              // board size
@@ -286,7 +275,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     );
     graph_->p_inter = cuda::FullyConnect(
         &handles_,
-        fp16_,
         max_batch_,               // max batch size
         3*policy_extract_channels,// input sizes
         policy_extract_channels,  // outpur size
@@ -294,7 +282,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     );
     graph_->p_prob = cuda::Convolution(
         &handles_,
-        fp16_,
         max_batch_,                  // max batch size
         board_size_,                 // board size
         1,                           // kernel size
@@ -304,7 +291,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     );
     graph_->p_prob_pass = cuda::FullyConnect(
         &handles_,
-        fp16_,
         max_batch_,               // max batch size
         policy_extract_channels,  // input sizes
         kOuputPassProbability,    // outpur size
@@ -315,7 +301,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     const auto value_extract_channels = weights_->value_extract_channels;
     graph_->v_ex_conv = cuda::Convolution(
         &handles_,
-        fp16_,
         max_batch_,               // max batch size
         board_size_,              // board size
         1,                        // kernel size
@@ -324,7 +309,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     );
     graph_->v_pool = cuda::GlobalPooling(
         &handles_,
-        fp16_,
         true,
         max_batch_,               // max batch size
         board_size_,              // board size
@@ -332,7 +316,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     );
     graph_->v_inter = cuda::FullyConnect(
         &handles_,
-        fp16_,
         max_batch_,               // max batch size
         3*value_extract_channels, // input sizes
         3*value_extract_channels, // outpur size
@@ -340,7 +323,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     );
     graph_->v_ownership = cuda::Convolution(
         &handles_,
-        fp16_,
         max_batch_,               // max batch size
         board_size_,              // board size
         1,                        // kernel size
@@ -350,7 +332,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     );
     graph_->v_misc = cuda::FullyConnect(
         &handles_,
-        fp16_,
         max_batch_,               // max batch size
         3*value_extract_channels, // input size
         kOuputValueMisc,          // output size
@@ -426,7 +407,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         weights_->v_misc.GetWeights(), weights_->v_misc.GetBiases());
 
     // Allocate all buffers.
-    const size_t factor = max_batch_ * cuda::GetCudaTypeSize(fp16_);
+    const size_t factor = max_batch_ * cuda::GetCudaTypeSize(handles_.fp16);
     const size_t num_intersections = board_size_ * board_size_;
 
     const size_t planes_size = factor * kInputChannels * num_intersections;
@@ -471,6 +452,26 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_val_, val_size));
 }
 
+void CudaForwardPipe::NNGraph::SetComputationMode(cuda::CudaHandles *handles) {
+    cudaDeviceProp dev_prop = cuda::GetDeviceProp();
+
+    if (dev_prop.major <= 5) {
+        // The device is too old. Disable the 
+        // FP16 computation.
+        handles->fp16 = false;
+    }
+
+    if (!(handles->fp16)) {
+        handles->has_tensor_cores = false;
+    }
+
+    if (handles->has_tensor_cores) {
+        cuda::ReportCUBLASErrors(cublasSetMathMode(
+            handles->cublas_handle,
+            CUBLAS_TENSOR_OP_MATH));
+    }
+}
+
 bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData> &inputs) {
     const int batch_size = inputs.size();
     if (batch_size == 0) {
@@ -510,8 +511,8 @@ bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData> &inputs) {
             std::lock_guard<std::mutex> lock(io_mutex_);
             cuda::SetDevice(handles_.gpu_id);
 
-            cuda::CopyToCudaOp(fp16_, &(cuda_mask_op_[0]), spat_mask);
-            cuda::CopyToCudaOp(fp16_, &(cuda_mask_op_[1]), sqrt_mask);
+            cuda::CopyToCudaOp(handles_.fp16, &(cuda_mask_op_[0]), spat_mask);
+            cuda::CopyToCudaOp(handles_.fp16, &(cuda_mask_op_[1]), sqrt_mask);
         }
     }
 
@@ -544,7 +545,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     {
         std::lock_guard<std::mutex> lock(io_mutex_);
         cuda::SetDevice(handles_.gpu_id);
-        cuda::CopyToCudaOp(fp16_, &cuda_input_planes_, batch_planes);
+        cuda::CopyToCudaOp(handles_.fp16, &cuda_input_planes_, batch_planes);
     }
 
     graph_->input_conv.Forward(batch_size,
@@ -593,7 +594,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
     void *null_op = nullptr;
     cuda::AddSpatial(
-        fp16_, cuda_pol_op_[0], cuda_pol_op_[2],
+        handles_.fp16, cuda_pol_op_[0], cuda_pol_op_[2],
         null_op, mask_buf[0],
         batch_size * policy_extract_channels,
         batch_size, policy_extract_channels, num_intersections,
@@ -638,10 +639,10 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         // copy the results to host memory
         cuda::SetDevice(handles_.gpu_id);
 
-        cuda::CopyToHostOp(fp16_, batch_prob, &cuda_output_prob_);
-        cuda::CopyToHostOp(fp16_, batch_prob_pass, &cuda_output_prob_pass_);
-        cuda::CopyToHostOp(fp16_, batch_value_misc, &cuda_output_val_);
-        cuda::CopyToHostOp(fp16_, batch_ownership, &cuda_output_ownership_);
+        cuda::CopyToHostOp(handles_.fp16, batch_prob, &cuda_output_prob_);
+        cuda::CopyToHostOp(handles_.fp16, batch_prob_pass, &cuda_output_prob_pass_);
+        cuda::CopyToHostOp(handles_.fp16, batch_value_misc, &cuda_output_val_);
+        cuda::CopyToHostOp(handles_.fp16, batch_ownership, &cuda_output_ownership_);
     }
 
     auto batch_output_result = std::vector<OutputResult>(batch_size);
@@ -722,7 +723,7 @@ void CudaForwardPipe::Worker(int gpu) {
     const auto gether_batches = [this, gpu_waittime_base](){
         auto entries = std::vector<std::shared_ptr<ForwawrdEntry>>{};
 
-        // Running the loop until there are enough entry size.
+        // Running the loop until there is enough entry size.
         while(true) {
             if (!worker_running_.load(std::memory_order_relaxed)) {
                 return entries;
@@ -746,11 +747,11 @@ void CudaForwardPipe::Worker(int gpu) {
                 waittime = std::min(waittime, gpu_waittime_base);
 
                 if (timeout && narrow_pipe) {
-                    // Set zero if there are still some(small than max batch size) entries
-                    // in the queue.
+                    // Set zero if there are still some (smaller than max batch size)
+                    // entries in the queue.
                     waittime = 0;
                 } else if (waittime > 0) {
-                    // Decrease waiting time if it is time out.
+                    // Decrease the waiting time if it is time out.
                     waittime -= 2;
                 }
 

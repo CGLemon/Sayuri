@@ -3,9 +3,6 @@
 
 #ifdef USE_CUDA
 
-// #if __CUDA_ARCH__ >= 530
-#define CUDA_SUPPORTS_FP16
-// #endif
 namespace cuda {
 
 template <typename T>
@@ -693,7 +690,7 @@ void gemm_strided_batched<float>(bool TA, bool TB, int M, int N, int K, float AL
                            batchsize));
 }
 
-#ifdef CUDA_SUPPORTS_FP16
+#ifdef ENABLE_FP16
 template<>
 void gemm<half>(bool TA, bool TB, int M, int N, int K, half ALPHA,
                 const half *A_gpu, int lda, const half *B_gpu, int ldb,
@@ -768,7 +765,7 @@ template void winograd3_transform_out<float>(const float *M, const float *biases
                                              int batch, int channels, int board_size,
                                              bool relu, cudaStream_t stream);
 
-#ifdef CUDA_SUPPORTS_FP16
+#ifdef ENABLE_FP16
 template void add_vectors<half>(half *c, half *a, half *b, int size, int asize,
                                 int bsize,  bool relu, cudaStream_t stream);
 
