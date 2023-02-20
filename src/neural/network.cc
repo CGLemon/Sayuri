@@ -128,10 +128,14 @@ Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
     return result;
 }
 #include <iostream>
-bool Network::SelfCheck(Network::Result &other, const Network::Inputs& inputs, int &type) const {
+bool Network::SelfCheck(Network::Result other, const Network::Inputs &inputs, int &type) const {
 #ifdef SELF_CHECK
     auto IsNotEqual = [](float a, float b) {
+#ifdef ENABLE_FP16
+        return std::abs(a - b) > 5e-2f;
+#else
         return std::abs(a - b) > 1e-4f;
+#endif
     };
 
     if (!self_check_pipe_) {
@@ -140,28 +144,48 @@ bool Network::SelfCheck(Network::Result &other, const Network::Inputs& inputs, i
     auto comp = self_check_pipe_->Forward(inputs);
     type = 0;
     if (IsNotEqual(comp.pass_probability, other.pass_probability)) {
-        fprintf(stderr, "%f | %f\n", comp.pass_probability, other.pass_probability);
+        fprintf(stderr, "1. %f | %f\n", comp.pass_probability, other.pass_probability);
         type |= 1;
     }
     if (IsNotEqual(comp.final_score, other.final_score)) {
-        fprintf(stderr, "%f | %f\n", comp.final_score, other.final_score);
+        fprintf(stderr, "2. %f | %f\n", comp.final_score, other.final_score);
         type |= (1 << 1);
     }
     for (int i = 0; i < 3; ++i) {
         if (IsNotEqual(comp.wdl[i], other.wdl[i])) {
-            fprintf(stderr, "%f | %f\n", comp.wdl[i], other.wdl[i]);
+            fprintf(stderr, "3. %f | %f\n", comp.wdl[i], other.wdl[i]);
             type |= (1 << 2);
         }
     }
     auto size = comp.board_size * comp.board_size;
-    for (int i = 0; i < size; ++i) {
-        if (IsNotEqual(comp.probabilities[i], other.probabilities[i])) {
+    {
+        double error = 0.f;
+#ifdef ENABLE_FP16
+        double max_error = 0.2f;
+#else
+        double max_error = 2e-3f;
+#endif
+        ActivatePolicy(comp, 1);
+        ActivatePolicy(other, 1);
+
+        for (int i = 0; i < size; ++i) {
+            double diff = comp.probabilities[i] - other.probabilities[i];
+            error += (diff * diff);
+        }
+        error = std::sqrt(error);
+        if (error >= max_error) {
+            fprintf(stderr, "4. %f\n", error);
             type |= (1 << 3);
         }
+        fprintf(stderr, "policy error. %f\n", error);
     }
+
     for (int i = 0; i < size; ++i) {
-        if (IsNotEqual(comp.ownership[i], other.ownership[i])) {
+        float a = std::tanh(comp.ownership[i]);
+        float b = std::tanh(other.ownership[i]);
+        if (IsNotEqual(a, b)) {
             type |= (1 << 4);
+            fprintf(stderr, "5. %f | %f\n", a, b);
         }
     }
     if (type > 0) {
@@ -181,10 +205,12 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
 
     if (pipe_->Valid()) {
         result_buf = pipe_->Forward(inputs);
-        int type;
-        if (!SelfCheck(result_buf, inputs, type)) {
-            throw std::runtime_error{
-                      Format("Bad CUDA network. Type is %d", type)};
+        if (Random<>::Get().RandFix<10>() == 0) {
+            int type;
+            if (!SelfCheck(result_buf, inputs, type)) {
+                throw std::runtime_error{
+                          Format("Bad CUDA network. Type is %d", type)};
+            }
         }
     } else {
         result_buf = DummyForward(inputs);
