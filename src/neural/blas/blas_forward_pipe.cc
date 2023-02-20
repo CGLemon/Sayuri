@@ -8,7 +8,6 @@
 #include "neural/winograd_helper.h"
 
 #include <algorithm>
-#include <iostream>
 
 void BlasForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
     Load(weights);
@@ -259,6 +258,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     // Now copy the result.
     auto result = OutputResult{};
 
+    result.fp16 = false;
     result.board_size = board_size;
     result.komi = inpnts.komi;
     result.wdl[0] = output_misc[0];

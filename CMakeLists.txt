@@ -45,7 +45,6 @@ endif()
 
 if (DISABLE_FP16)
     message("Disable the CUDA FP16.")
-    add_definitions(-DENABLE_FP16)
 else()
     add_definitions(-DENABLE_FP16)
 endif()

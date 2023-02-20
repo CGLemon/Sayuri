@@ -663,6 +663,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
         output_result.board_size = inputs[b].board_size;
         output_result.komi = inputs[b].komi;
+        output_result.fp16 = handles_.fp16;
     }
 
     return batch_output_result;
