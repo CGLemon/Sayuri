@@ -597,6 +597,72 @@ int Node::RandomizeFirstProportionally(float temp, int min_visits) {
     return select_vertex;
 }
 
+int Node::RandomizeMoveWithGumbel(GameState &state, int temp, int min_visits) {
+    const auto num_intersections = state.GetNumIntersections();
+    auto prob = std::vector<float>(num_intersections+1, 0.f);
+    auto vertices_table = std::vector<int>(num_intersections+1, kNullVertex);
+    int acc_visists = 0;
+
+    for (const auto &child : children_) {
+        auto node = child.Get();
+        const auto visits = node->GetVisits();
+        const auto vtx = child.GetVertex();
+        int idx = num_intersections; // pass move
+
+        // Do not need to prune the low visits move because
+        // the Q value reduce will reduce the bad moves
+        // probabilities. 
+        if (vtx != kPass) {
+            idx = state.GetIndex(
+                      state.GetX(vtx), state.GetY(vtx));
+        }
+        acc_visists += visits;
+        prob[idx] = visits;
+        vertices_table[idx] = vtx;
+    }
+
+    if (acc_visists == 0) {
+        // There is no visits. Reture the best policy move.
+        return GetBestMove();
+    }
+    for (float &p : prob) {
+        p /= (float)acc_visists;
+    }
+    MixLogitsCompletedQ(state, prob);
+
+    auto int_prob_acc_table = std::vector<int>(num_intersections+1, 0);
+    constexpr int int_factor = 100000;
+    int int_prob_acc = 0;
+
+    for (int idx = 0; idx < num_intersections+1; ++idx) {
+        // Prune the unvisited moves.
+        if (vertices_table[idx] != kNullVertex) {
+            int integer_val = int(int_factor * prob[idx]);
+            int_prob_acc += integer_val;
+            int_prob_acc_table[idx] = int_prob_acc;
+        }
+    }
+
+    if (int_prob_acc == 0) {
+        // All possible moves are pruned or the valid probabilities
+        // are too small. Use the traditional random move.
+        return RandomizeFirstProportionally(temp, min_visits);
+    }
+
+    int select_vertex = kNullVertex; 
+    int pick = Random<>::Get().RandFix<int_factor>();
+
+    for (int idx = 0; idx < num_intersections+1; ++idx) {
+        if (pick < int_prob_acc_table[idx]) {
+            select_vertex = vertices_table[idx];
+            if (select_vertex != kNullVertex) {
+                break;
+            }
+        }
+    }
+    return select_vertex;
+}
+
 void Node::Update(const NodeEvals *evals) {
     auto WelfordDelta = [](double eval,
                                double old_acc_eval,
@@ -1300,6 +1366,8 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
     const auto num_intersections = state.GetNumIntersections();
     const auto color = state.GetToMove();
 
+    // The 'prob' size should be intersections number plus
+    // one pass move.
     if (num_intersections+1 != (int)prob.size()) {
         return;
     }

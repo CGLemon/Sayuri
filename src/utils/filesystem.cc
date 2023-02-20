@@ -10,15 +10,15 @@
 #include <sys/stat.h>
 #endif
 
-std::string ConnectPath(const std::string path_1, const std::string path_2) {
+std::string ConcatPath(const std::string path_1, const std::string path_2) {
 #ifdef WIN32
-    return path_1 + '\\' + path_2;
+    return path_1 + "\\" + path_2;
 #else
-    return path_1 + '/' + path_2;
+    return path_1 + "/" + path_2;
 #endif
 }
 
-std::string ConnectPath(std::initializer_list<std::string> list) {
+std::string ConcatPath(std::initializer_list<std::string> list) {
     if (list.size() == 0) {
         return std::string{};
     }
@@ -30,7 +30,7 @@ std::string ConnectPath(std::initializer_list<std::string> list) {
         if (next == std::end(list)) {
             break;
         }
-        path = ConnectPath(path, *next);
+        path = ConcatPath(path, *next);
     }
     return path;
 }
@@ -161,13 +161,13 @@ std::vector<std::string> SearchFileTree(const std::string& directory, size_t *co
     return result;
 }
 
-uint64_t GetFileSize(const std::string& filename) {
+std::uint64_t GetFileSize(const std::string& filename) {
 #ifdef WIN32
     WIN32_FILE_ATTRIBUTE_DATA s;
     if (!GetFileAttributesExA(filename.c_str(), GetFileExInfoStandard, &s)) {
         return 0;
     }
-    return (static_cast<uint64_t>(s.nFileSizeHigh) << 32) + s.nFileSizeLow;
+    return (static_cast<std::uint64_t>(s.nFileSizeHigh) << 32) + s.nFileSizeLow;
 #else
     struct stat s;
     if (stat(filename.c_str(), &s) < 0) {
@@ -183,7 +183,7 @@ time_t GetFileTime(const std::string& filename) {
     if (!GetFileAttributesExA(filename.c_str(), GetFileExInfoStandard, &s)) {
         return 0;
     }
-    return (static_cast<uint64_t>(s.ftLastWriteTime.dwHighDateTime) << 32) +
+    return (static_cast<std::uint64_t>(s.ftLastWriteTime.dwHighDateTime) << 32) +
                s.ftLastWriteTime.dwLowDateTime;
 #else
     struct stat s;

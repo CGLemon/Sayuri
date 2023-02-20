@@ -14,7 +14,7 @@ void SelfPlayPipe::Initialize() {
     // Close search verbose.
     SetOption("analysis_verbose", false);
 
-    // Force that one game use one thread.
+    // Force that one game uses one thread.
     SetOption("threads", 1);
 
     engine_.Initialize();
@@ -29,19 +29,37 @@ void SelfPlayPipe::Initialize() {
 
     chunk_games_ = 0;
 
-    auto ss = std::ostringstream();
-    ss << std::hex << std::uppercase
-           << Random<>::Get().Generate() << std::dec;
+    while (true) {
+        auto ss = std::ostringstream();
+        ss << std::hex << std::uppercase
+               << Random<>::Get().Generate() << std::dec;
 
-    filename_hash_ = ss.str();
-    sgf_directory_ = ConnectPath(target_directory_, "sgf");
-    data_directory_ = ConnectPath(target_directory_, "data");
-    data_directory_hash_ = ConnectPath(data_directory_, filename_hash_);
+        filename_hash_ = ss.str();
+        sgf_directory_ = ConcatPath(target_directory_, "sgf");
+        data_directory_ = ConcatPath(target_directory_, "data");
+        data_directory_hash_ = ConcatPath(data_directory_, filename_hash_);
+
+        bool not_existence = true;
+        if (IsDirectoryExist(data_directory_hash_)) {
+            not_existence = false;
+        }
+
+        for (auto sgf_name : GetFileList(sgf_directory_)) {
+            if ((filename_hash_ + ".sgf") == sgf_name) {
+                not_existence = false;
+                break;
+            }
+        }
+
+        if (not_existence) {
+            break;
+        }
+    }
 }
 
 bool SelfPlayPipe::SaveChunk(const int out_id,
                                  std::vector<Training> &chunk) {
-    auto out_name = ConnectPath(
+    auto out_name = ConcatPath(
                         data_directory_hash_,
                         filename_hash_ +
                             "_" +
@@ -115,7 +133,7 @@ void SelfPlayPipe::Loop() {
     for (int g = 0; g < engine_.GetParallelGames(); ++g) {
         workers_.emplace_back(
             [this, g]() -> void {
-                auto sgf_filename = ConnectPath(
+                auto sgf_filename = ConcatPath(
                                         sgf_directory_, filename_hash_ + ".sgf");
                 running_threads_.fetch_add(1, std::memory_order_relaxed);
 

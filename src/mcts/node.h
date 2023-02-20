@@ -116,6 +116,9 @@ public:
     // Randomly select one child by visits. 
     int RandomizeFirstProportionally(float temp, int min_visits);
 
+    // 
+    int RandomizeMoveWithGumbel(GameState &state, int temp, int min_visits);
+
     // Update the node.
     void Update(const NodeEvals *evals);
 
