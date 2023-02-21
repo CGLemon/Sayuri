@@ -455,7 +455,8 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
 void CudaForwardPipe::NNGraph::SetComputationMode(cuda::CudaHandles *handles) {
     cudaDeviceProp dev_prop = cuda::GetDeviceProp();
 
-    if (dev_prop.major <= 5) {
+    if (dev_prop.major <= 5 ||
+            !GetOption<bool>("fp16")) {
         // The device is too old. Disable the 
         // FP16 computation.
         handles->fp16 = false;

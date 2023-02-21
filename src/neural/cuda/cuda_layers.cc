@@ -47,34 +47,18 @@ void AddSpatial(bool fp16, void *data, const void *biases,
     }
 }
 
-void Im2Col(bool fp16, void *data_col, void *data_im,
-            int filter_size, int channels,
-            int height, int width, cudaStream_t stream) {
-    if (fp16) {
-#ifdef ENABLE_FP16
-        im2col(
-            filter_size, channels, height, width,
-            (half *)data_im, (half *)data_col, stream);
-#endif
-    } else {
-        im2col(
-            filter_size, channels, height, width,
-            (float *)data_im, (float *)data_col, stream);
-    }
-}
-
 void Im2ColBatched(bool fp16, void *data_col, void *data_im,
-                       int filter_size, int batches, int channels,
+                       int filter_size, int batch, int channels,
                        int height, int width, cudaStream_t stream) {
     if (fp16) {
 #ifdef ENABLE_FP16
         im2col_batched(
-            filter_size, batches, channels, height, width,
+            filter_size, batch, channels, height, width,
             (half *)data_im, (half *)data_col, stream);
 #endif
     } else {
         im2col_batched(
-            filter_size, batches, channels, height, width,
+            filter_size, batch, channels, height, width,
             (float *)data_im, (float *)data_col, stream);
     }
 }
@@ -324,13 +308,13 @@ void Convolution::Forward(const int batch,
 
 #else
     (void) scratch_size;
-    auto scratch_op = reinterpret_cast<float*>(scratch);
+    auto scratch_op = reinterpret_cast<void *>(scratch);
 
     const int board_size = (width_ + height_) / 2;
 
     if (winograd_) {
         // TODO: Merge batch norm layer with Winograd.
-        auto scratch_op_other = reinterpret_cast<float*>(scratch_other);
+        auto scratch_op_other = reinterpret_cast<void *>(scratch_other);
         const int batch_ptiles = batch * GetWinogradP(board_size);
 
         Winograd3TransformIn(
@@ -351,37 +335,6 @@ void Convolution::Forward(const int batch,
             cuda_biases_, eltwise, mask,
             batch, out_channels_, board_size, relu_, handles_->stream);
     } else {
-#ifdef USE_SINGLE_BATCH_CONV
-        // We remain this code for debugging.
-        const size_t input_shift = in_channels_ * spatial_size_;
-        const size_t output_shift = out_channels_ * spatial_size_;
-        for (int b = 0; b < batch; ++b) {
-            float *input_ptr = reinterpret_cast<float*>(input) + b * input_shift;
-            float *output_ptr = reinterpret_cast<float*>(output) + b * output_shift;
-            if (filters_ != 1) {
-                Im2Col(
-                    fp16_, scratch_op, input_ptr,
-                    filters_, in_channels_, height_, width_, handles_->stream);
-                Gemm(fp16_, false, false,
-                     out_channels_, spatial_size_, filter_dim_,
-                     1.0f,
-                     cuda_weights_, filter_dim_,
-                     scratch_op, spatial_size_,
-                     0.0f,
-                     output_ptr, spatial_size_,
-                     handles_->cublas_handle, handles_->stream);
-            } else {
-                Gemm(fp16_, false, false,
-                     out_channels_, spatial_size_, filter_dim_,
-                     1.0f,
-                     cuda_weights_, filter_dim_,
-                     input_ptr, spatial_size_,
-                     0.0f,
-                     output_ptr, spatial_size_,
-                     handles_->cublas_handle, handles_->stream);
-            }
-        }
-#else
         if (filters_ != 1) {
             Im2ColBatched(
                 fp16_, scratch_op, input, filters_,
@@ -408,14 +361,12 @@ void Convolution::Forward(const int batch,
                 batch,
                 handles_->cublas_handle, handles_->stream);
         }
-
         AddSpatial(
             fp16_, output, cuda_biases_,
             eltwise, mask,
             out_channels_,
             batch, out_channels_, spatial_size_, relu_,
             handles_->stream);
-#endif
     }
 #endif
 }
