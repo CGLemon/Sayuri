@@ -16,6 +16,8 @@ namespace cuda {
 //      bool options...
 //      stream
 
+// TODO: Remove some unused kernels.
+
 template <typename T>
 void add_vectors(T *c, T *a, T *b,
                  int size, int asize, int bsize,
