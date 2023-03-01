@@ -77,8 +77,6 @@ bool SelfPlayPipe::SaveChunk(const int out_id,
         auto buf = oss.str();
         SaveGzip(out_name, buf);
     } catch (const char *err) {
-        LOGGING << err << "\n";
-
         auto file = std::ofstream{};
         file.open(out_name, std::ios_base::app);
 
@@ -109,6 +107,9 @@ void SelfPlayPipe::Loop() {
     if (max_games_ == 0) {
         LOGGING << "The number of self-play games must be greater than one." << std::endl;
         return;
+    }
+    if (!IsGzipValid()) {
+        LOGGING << "WARNING: There is no gzip tool. The output chunks may be very large." << std::endl;
     }
 
     // Dump some infomations.

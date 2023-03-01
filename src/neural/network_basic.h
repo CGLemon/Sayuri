@@ -34,8 +34,10 @@ struct OutputResult {
         wdl.fill(0.0f);
         probabilities.fill(0.f);
         ownership.fill(0.f);
+        fp16 = false;
     }
 
+    bool fp16;
     int board_size;
     float komi;
 

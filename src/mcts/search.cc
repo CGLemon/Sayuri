@@ -413,7 +413,8 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     // Fill best moves, root eval and score.
     result.best_move = root_node_->GetBestMove();
     result.random_move = root_node_->
-                             RandomizeFirstProportionally(
+                             RandomizeMoveWithGumbel(
+                                 root_state_,
                                  1, param_->random_min_visits);
     result.gumbel_move = root_node_->GetGumbelMove();
     result.root_final_score = root_node_->GetFinalScore(color);
