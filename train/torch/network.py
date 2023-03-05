@@ -91,7 +91,7 @@ class GlobalPool(nn.Module):
 
         return layer_pooled
 
-class SqueezeAndExcitation((nn.Module):
+class SqueezeAndExcitation(nn.Module):
     def __init__(self, channels,
                        se_size,
                        collector=None):
@@ -116,7 +116,7 @@ class SqueezeAndExcitation((nn.Module):
         self.squeeze.linear.weight.data *= fixup_scale
         self.excite.linear.weight.data *= fixup_scale
 
-    def forward(self, x, mask_buffers)
+    def forward(self, x, mask_buffers):
         b, c, _, _ = x.size()
         mask, _, _ = mask_buffers
 
@@ -137,15 +137,23 @@ class SpatialAttention(nn.Module):
         self.conv = Convolve(
             in_channels=2,
             out_channels=1,
-            kernel_size=7
+            kernel_size=7,
             relu=False,
-            collector=collector,
+            collector=collector
         )
 
     def forward(self, x, mask):
-        avg_out = torch.mean(x, dim=1, keepdim=True)
-        max_out = torch.max(x, dim=1, keepdim=True)[0]
-        sa = torch.cat([avg_out, max_out], dim=1) * mask
+        layer_raw_mean = torch.mean(x, dim=1, keepdim=True)
+        layer_raw_max = torch.max(x, dim=1, keepdim=True)[0]
+
+        # TODO: Should I add the board size information?
+        layer0 = layer_raw_mean
+        layer1 = layer_raw_max
+
+        # The out of board area is zero. Do not need to
+        # multiply the mask.
+        sa = torch.cat([layer0, layer1], dim=1)
+
         sa = self.conv(sa, mask)
         out = torch.sigmoid(sa) * x
         return out * mask
@@ -506,7 +514,6 @@ class ResBlock(nn.Module):
             relu=False,
             collector=collector
         )
-
         if self.use_btl:
             self.post_conv_btl = ConvBlock(
                 in_channels=self.inner_channels,
@@ -532,11 +539,14 @@ class ResBlock(nn.Module):
         if fixup:
             # re-scale the weights
             fixup_scale2 = 1.0 / math.sqrt(blocks)
-            self.conv1.conv.weight.data *= fixup_scale2
-            self.conv2.conv.weight.data *= 0
             if self.use_btl:
                 self.pre_conv_btl.conv.weight.data *= fixup_scale2
+                self.conv1.conv.weight.data *= fixup_scale2
+                self.conv2.conv.weight.data *= fixup_scale2
                 self.post_conv_btl.conv.weight.data *= 0
+            else:
+                self.conv1.conv.weight.data *= fixup_scale2
+                self.conv2.conv.weight.data *= 0
             if self.use_se:
                 fixup_scale4 = 1.0 / (blocks ** (1.0 / 4.0)) 
                 self.se_module.fixup_adjust(fixup_scale4)
@@ -555,9 +565,9 @@ class ResBlock(nn.Module):
             out = self.post_conv_btl(out, mask)
 
         if self.use_se:
-            out = self.se_module(out)
-        if self.sa_module:
-            out = self.sa_module(out)
+            out = self.se_module(out, mask_buffers)
+        if self.use_sa:
+            out = self.sa_module(out, mask)
         out = out + x
 
         return F.relu(out, inplace=True), mask_buffers
@@ -629,7 +639,7 @@ class Network(nn.Module):
             nn_stack.append(ResBlock(blocks=len(self.stack),
                                      channels=self.residual_channels,
                                      fixup=use_fixup,
-                                     bottleneck_channels=bottleneck_channels
+                                     bottleneck_channels=bottleneck_channels,
                                      se_size=se_size,
                                      use_sa=use_sa,
                                      collector=self.layers_collector))
@@ -840,10 +850,10 @@ class Network(nn.Module):
 
     def transfer_to_bin(self, filename):
         def write_stack(f, stack):
-            f.write("get stack\n")
+            f.write(str_to_bin("get stack\n"))
             for s in stack:
-                f.write(str_to_bin("{]\n".format(s)))
-            f.write("end stack\n")
+                f.write(str_to_bin("{}\n".format(s)))
+            f.write(str_to_bin("end stack\n"))
 
         def write_struct(f, layers_collector):
             f.write(str_to_bin("get struct\n"))
@@ -882,7 +892,7 @@ class Network(nn.Module):
         def write_stack(f, stack):
             f.write("get stack\n")
             for s in stack:
-                f.write("{]\n".format(s))
+                f.write("{}\n".format(s))
             f.write("end stack\n")
 
         def write_struct(f, layers_collector):
