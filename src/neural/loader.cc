@@ -234,7 +234,7 @@ void DNNLoder::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstr
     }
 
     if (!NotFound(netinfo, "NNType")) {
-        // Not used now.
+        // Not used.
     }
 
     // Build the stack if it is not in weights file. It only
@@ -294,11 +294,17 @@ void DNNLoder::DumpInfo(std::shared_ptr<DNNWeights> weights) const {
 
     for (int i = 0; i < weights->residual_blocks; ++i) {
         out << "  block " << i+1 << ':';
-        if (weights->tower[i].apply_se) {
-            out << " ResidualBlock-SE" << '\n';
-        } else {
-            out << " ResidualBlock" << '\n';
+        out << " ResidualBlock";
+        if (weights->tower[i].apply_btl) {
+            out << "-Bottleneck";
         }
+        if (weights->tower[i].apply_se) {
+            out << "-SE";
+        }
+        if (weights->tower[i].apply_sa) {
+            out << "-SA";
+        }
+        out << '\n';
     }
 
     out << "Policy Head Channels: " << weights->policy_extract_channels << '\n';
@@ -367,86 +373,183 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
 
     const auto residuals = weights->residual_blocks;
     auto se_cnt = 0;
+    auto sa_cnt = 0;
+    auto btl_cnt = 0;
+
     for (int b = 0; b < residuals; ++b) {
         const auto block_spt = Splitter(netstack[b]);
+
+        // Push the basic block.
         if (SplitterFound(block_spt, "ResidualBlock")) {
             weights->tower.emplace_back(ResidualBlock{});
         } else {
-            throw "Miss the ResidualBlock";
+            throw "Need the ResidualBlock";
+        }
+        auto tower_ptr = weights->tower.data() + b;
+        auto t_offset = 4 * b +
+                            4 * btl_cnt +
+                            2 * se_cnt +
+                            1 * sa_cnt +
+                            inputs_cnt;
+
+        const auto use_btl = SplitterFound(block_spt, "Bottleneck");
+        tower_ptr->apply_btl = use_btl;
+
+        const auto outer_channels = weights->residual_channels;
+        const auto inner_channels = use_btl ?
+                                        outer_channels/2 :
+                                        outer_channels;
+        if (use_btl) {
+            btl_cnt += 1;
+            const auto btl_pre_conv_shape = netstruct[t_offset++];
+            const auto btl_pre_bn_shape = netstruct[t_offset++];
+
+            // pre-bottleneck layers
+            FillConvolutionLayer(
+                tower_ptr->pre_btl_conv,
+                buffer,
+                btl_pre_conv_shape[0],
+                btl_pre_conv_shape[1],
+                btl_pre_conv_shape[2]);
+            FillBatchnormLayer(
+                tower_ptr->pre_btl_bn,
+                buffer,
+                btl_pre_bn_shape[0]);
+
+            if (outer_channels % 2 != 0) {
+                throw "Invalid residual channel size";
+            }
+            if (outer_channels != btl_pre_conv_shape[0] ||
+                    inner_channels != btl_pre_conv_shape[1] ||
+                    inner_channels != btl_pre_bn_shape[0] || 
+                    btl_pre_conv_shape[2] != 1) {
+                throw "The Pre-Bottleneck is wrong";
+            }
         }
 
-        const auto t_offset = 4 * b + 2 * se_cnt + inputs_cnt;
-        const auto res_conv1_shape = netstruct[t_offset];
-        const auto res_bn1_shape = netstruct[t_offset+1];
-        const auto res_conv2_shape = netstruct[t_offset+2];
-        const auto res_bn2_shape = netstruct[t_offset+3];
-        auto tower_ptr = weights->tower.data() + b;
-        
-        FillConvolutionLayer(tower_ptr->conv1,
-                             buffer,
-                             res_conv1_shape[0],
-                             res_conv1_shape[1],
-                             res_conv1_shape[2]);
+        const auto res_conv1_shape = netstruct[t_offset++];
+        const auto res_bn1_shape = netstruct[t_offset++];
 
-        FillBatchnormLayer(tower_ptr->bn1,
-                           buffer,
-                           res_bn1_shape[0]);
+        // 1st layers.
+        FillConvolutionLayer(
+            tower_ptr->conv1,
+            buffer,
+            res_conv1_shape[0],
+            res_conv1_shape[1],
+            res_conv1_shape[2]);
+        FillBatchnormLayer(
+            tower_ptr->bn1,
+            buffer,
+            res_bn1_shape[0]);
 
-        if (weights->residual_channels != res_conv1_shape[0] ||
-                weights->residual_channels != res_conv1_shape[1] ||
-                weights->residual_channels != res_bn1_shape[0] || 
+        if (inner_channels != res_conv1_shape[0] ||
+                inner_channels != res_conv1_shape[1] ||
+                inner_channels != res_bn1_shape[0] || 
                 res_conv1_shape[2] != 3) {
             throw "The Residual Block(1) is wrong";
         }
 
-        FillConvolutionLayer(tower_ptr->conv2,
-                             buffer,
-                             res_conv2_shape[0],
-                             res_conv2_shape[1],
-                             res_conv2_shape[2]);
+        const auto res_conv2_shape = netstruct[t_offset++];
+        const auto res_bn2_shape = netstruct[t_offset++];
 
-        FillBatchnormLayer(tower_ptr->bn2,
-                           buffer,
-                           res_bn2_shape[0]);
+        // 2nd layers.
+        FillConvolutionLayer(
+            tower_ptr->conv2,
+            buffer,
+            res_conv2_shape[0],
+            res_conv2_shape[1],
+            res_conv2_shape[2]);
+        FillBatchnormLayer(
+            tower_ptr->bn2,
+            buffer,
+            res_bn2_shape[0]);
 
-        if (weights->residual_channels != res_conv2_shape[0] ||
-                weights->residual_channels != res_conv2_shape[1] ||
-                weights->residual_channels != res_bn2_shape[0] ||
+        if (inner_channels != res_conv2_shape[0] ||
+                inner_channels != res_conv2_shape[1] ||
+                inner_channels != res_bn2_shape[0] ||
                 res_conv2_shape[2] != 3) {
             throw "The Residual Block(2) is wrong";
         }
 
-        if (SplitterFound(block_spt, "SE")) {
-            tower_ptr->apply_se = true;
-            se_cnt++;
-            const auto se_squeeze_shape = netstruct[t_offset+4];
-            const auto se_excite_shape = netstruct[t_offset+5];
-            FillFullyconnectLayer(tower_ptr->squeeze,
-                                  buffer,
-                                  se_squeeze_shape[0],
-                                  se_squeeze_shape[1]);
-            FillFullyconnectLayer(tower_ptr->excite,
-                                  buffer,
-                                  se_excite_shape[0],
-                                  se_excite_shape[1]);
+        if (use_btl) {
+            const auto btl_post_conv_shape = netstruct[t_offset++];
+            const auto btl_post_bn_shape = netstruct[t_offset++];
 
-            if (se_squeeze_shape[1] != se_excite_shape[0]) {
-                throw "The SE Unit size is wrong (1).";
+            // post-bottleneck layers
+            FillConvolutionLayer(
+                tower_ptr->post_btl_conv,
+                buffer,
+                btl_post_conv_shape[0],
+                btl_post_conv_shape[1],
+                btl_post_conv_shape[2]);
+            FillBatchnormLayer(
+                tower_ptr->post_btl_bn,
+                buffer,
+                btl_post_bn_shape[0]);
+            if (inner_channels != btl_post_conv_shape[0] ||
+                    outer_channels != btl_post_conv_shape[1] ||
+                    outer_channels != btl_post_bn_shape[0] || 
+                    btl_post_conv_shape[2] != 1) {
+                throw "The Post-Bottleneck is wrong";
             }
-            if (se_squeeze_shape[0] != 3 * weights->residual_channels) {
-                throw "The SE Unit size is wrong (2).";
+        }
+
+        if (SplitterFound(block_spt, "SE")) {
+            se_cnt += 1;
+            const auto se_squeeze_shape = netstruct[t_offset++];
+            const auto se_excite_shape = netstruct[t_offset++];
+
+            // squeeze-and-excitation module
+            FillFullyconnectLayer(
+                tower_ptr->squeeze,
+                buffer,
+                se_squeeze_shape[0],
+                se_squeeze_shape[1]);
+            FillFullyconnectLayer(
+                tower_ptr->excite,
+                buffer,
+                se_excite_shape[0],
+                se_excite_shape[1]);
+
+            if (se_squeeze_shape[0] != 3 * weights->residual_channels ||
+                    se_squeeze_shape[1] != se_excite_shape[0] ||
+                    se_excite_shape[1] != 2 * weights->residual_channels) {
+                throw "The SE Unit size is wrong.";
             }
-            if (se_excite_shape[1] != 2 * weights->residual_channels) {
-                throw "The SE Unit size is wrong (3).";
-            }
-                
+            tower_ptr->apply_se = true;
             tower_ptr->se_size = se_squeeze_shape[1];
         } else {
             tower_ptr->apply_se = false;
         }
-    }
 
-    const auto h_offset = 4 * residuals + 2 * se_cnt + inputs_cnt;
+        if (SplitterFound(block_spt, "SA")) {
+            sa_cnt += 1;
+            const auto sa_conv_shape = netstruct[t_offset++];
+
+            // spatial attention module
+            FillConvolutionLayer(
+                tower_ptr->sa_conv,
+                buffer,
+                sa_conv_shape[0],
+                sa_conv_shape[1],
+                sa_conv_shape[2]);
+
+            if (sa_conv_shape[0] != 2 ||
+                    sa_conv_shape[1] != 1 ||
+                    sa_conv_shape[2] != 7) {
+                throw "The SA size is wrong.";
+            }
+            tower_ptr->apply_sa = true;
+        } else {
+            tower_ptr->apply_sa = false;
+        }
+    } // end of for-loop
+
+    const auto h_offset = 4 * residuals +
+                              4 * btl_cnt +
+                              2 * se_cnt +
+                              1 * sa_cnt +
+                              inputs_cnt;
 
     // policy head
     const auto p_ex_conv_shape = netstruct[h_offset + 0];
@@ -555,81 +658,48 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
 }
 
 void DNNLoder::ProcessWeights(std::shared_ptr<DNNWeights> weights) const {
-    // input layer
-    for (auto idx = size_t{0}; idx < weights->input_conv.GetBiases().size(); ++idx) {
-        weights->input_conv.GetBiases()[idx] -= weights->input_bn.GetMeans()[idx];
-        weights->input_bn.GetMeans()[idx] = 0.0f;
+    const auto ProcessConvBlock = [](ConvLayer &conv, BatchNormLayer &bn) {
+        for (auto idx = size_t{0};
+                 idx < conv.GetBiases().size(); ++idx) {
+            conv.GetBiases()[idx] -= bn.GetMeans()[idx];
+            bn.GetMeans()[idx] = 0.0f;
 
-        size_t stride = weights->input_conv.GetWeights().size() /
-                            weights->input_conv.GetBiases().size();
-        auto scale = weights->input_bn.GetStddevs()[idx];
-        for (auto k = size_t{0}; k < stride; ++k) {
-            weights->input_conv.GetWeights()[stride * idx + k] *= scale;
+            const size_t stride = conv.GetWeights().size() /
+                                      conv.GetBiases().size();
+            const auto scale = bn.GetStddevs()[idx];
+            for (auto k = size_t{0}; k < stride; ++k) {
+                conv.GetWeights()[stride * idx + k] *= scale;
+            }
+            conv.GetBiases()[idx] *= scale;
+            bn.GetStddevs()[idx] = 1.0f;
         }
-        weights->input_conv.GetBiases()[idx] *= scale;
-        weights->input_bn.GetStddevs()[idx] = 1.0f;
-    }
+    };
+
+    // input layers
+    ProcessConvBlock(weights->input_conv, weights->input_bn);
 
     // residual tower
     for (auto &residual : weights->tower) {
-        // 1st layer
-        for (auto idx = size_t{0}; idx < residual.conv1.GetBiases().size(); ++idx) {
-            residual.conv1.GetBiases()[idx] -= residual.bn1.GetMeans()[idx];
-            residual.bn1.GetMeans()[idx] = 0.0f;
+        // 1st layers
+        ProcessConvBlock(residual.conv1, residual.bn1);
+        ProcessConvBlock(residual.conv2, residual.bn2);
 
-            size_t stride1 = residual.conv1.GetWeights().size() /
-                                residual.conv1.GetBiases().size();
-            auto scale1 = residual.bn1.GetStddevs()[idx];
-            for (auto k = size_t{0}; k < stride1; ++k) {
-                residual.conv1.GetWeights()[stride1 * idx + k] *= scale1;
-            }
-            residual.conv1.GetBiases()[idx] *= scale1;
-            residual.bn1.GetStddevs()[idx] = 1.0f;
-        }
-
-        // 2nd layer
-        for (auto idx = size_t{0}; idx < residual.conv2.GetBiases().size(); ++idx) {
-            residual.conv2.GetBiases()[idx] -= residual.bn2.GetMeans()[idx];
-            residual.bn2.GetMeans()[idx] = 0.0f;
-
-            size_t stride2 = residual.conv2.GetWeights().size() /
-                                residual.conv2.GetBiases().size();
-            auto scale2 = residual.bn2.GetStddevs()[idx];
-            for (auto k = size_t{0}; k < stride2; ++k) {
-                residual.conv2.GetWeights()[stride2 * idx + k] *= scale2;
-            }
-            residual.conv2.GetBiases()[idx] *= scale2;
-            residual.bn2.GetStddevs()[idx] = 1.0f;
+        // bottleneck layers
+        if (residual.apply_btl) {
+            ProcessConvBlock(
+                residual.pre_btl_conv, residual.pre_btl_bn);
+            ProcessConvBlock(
+                residual.post_btl_conv, residual.post_btl_bn);
         }
     }
+
     // policy head
-    for (auto idx = size_t{0}; idx < weights->p_ex_conv.GetBiases().size(); ++idx) {
-        weights->p_ex_conv.GetBiases()[idx] -= weights->p_ex_bn.GetMeans()[idx];
-        weights->p_ex_bn.GetMeans()[idx] = 0.0f;
+    ProcessConvBlock(
+        weights->p_ex_conv, weights->p_ex_bn);
 
-        size_t stride = weights->p_ex_conv.GetWeights().size() /
-                            weights->p_ex_conv.GetBiases().size();
-        auto scale = weights->p_ex_bn.GetStddevs()[idx];
-        for (auto k = size_t{0}; k < stride; ++k) {
-            weights->p_ex_conv.GetWeights()[stride * idx + k] *= scale;
-        }
-        weights->p_ex_conv.GetBiases()[idx] *= scale;
-        weights->p_ex_bn.GetStddevs()[idx] = 1.0f;
-    }
     // value head
-    for (auto idx = size_t{0}; idx < weights->v_ex_conv.GetBiases().size(); ++idx) {
-        weights->v_ex_conv.GetBiases()[idx] -= weights->v_ex_bn.GetMeans()[idx];
-        weights->v_ex_bn.GetMeans()[idx] = 0.0f;
-
-        size_t stride = weights->v_ex_conv.GetWeights().size() /
-                            weights->v_ex_conv.GetBiases().size();
-        auto scale = weights->v_ex_bn.GetStddevs()[idx];
-        for (auto k = size_t{0}; k < stride; ++k) {
-            weights->v_ex_conv.GetWeights()[stride * idx + k] *= scale;
-        }
-        weights->v_ex_conv.GetBiases()[idx] *= scale;
-        weights->v_ex_bn.GetStddevs()[idx] = 1.0f;
-    }
+    ProcessConvBlock(
+        weights->v_ex_conv, weights->v_ex_bn);
 }
 
 void DNNLoder::GetWeightsFromBuffer(std::vector<float> &weights, std::istream &buffer) const {
