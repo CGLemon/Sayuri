@@ -511,7 +511,7 @@ class ResBlock(nn.Module):
             kernel_size=3,
             use_gamma=False if self.use_btl else True,
             fixup=fixup,
-            relu=False,
+            relu=True if self.use_btl else False,
             collector=collector
         )
         if self.use_btl:
@@ -521,7 +521,7 @@ class ResBlock(nn.Module):
                 kernel_size=1,
                 use_gamma=True,
                 fixup=fixup,
-                relu=True,
+                relu=False,
                 collector=collector
             )
 
