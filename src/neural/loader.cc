@@ -523,6 +523,8 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
         }
 
         if (SplitterFound(block_spt, "SA")) {
+            throw "Do not support SA module";
+
             sa_cnt += 1;
             const auto sa_conv_shape = netstruct[t_offset++];
 

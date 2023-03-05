@@ -118,61 +118,121 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     // The residual tower.
     const auto residuals =  weights_->residual_blocks;
     for (int i = 0; i < residuals; ++i) {
-        const auto tower_channels = weights_->residual_channels;
         const auto tower_ptr = weights_->tower.data() + i;
-        std::swap(conv_in, conv_out);
+        const auto outer_channels = weights_->residual_channels;
+        const auto inner_channels = tower_ptr->apply_btl ?
+                                        outer_channels/2 :
+                                        outer_channels;
+        if (tower_ptr->apply_btl) {
+            std::swap(conv_out, conv_in);
+
+            // The pre-bottleneck conv1.
+            Convolution1::Forward(
+                board_size, outer_channels, inner_channels,
+                conv_in,
+                tower_ptr->pre_btl_conv.GetWeights(),
+                workspace0, conv_out);
+            AddSpatialBiases::Forward(
+                board_size, inner_channels,
+                conv_out,
+                tower_ptr->pre_btl_conv.GetBiases(), true);
+
+            std::swap(conv_in, res);
+        }
+        std::swap(conv_out, conv_in);
 
         // The first conv3.
         if (use_winograd) {
-            WinogradConvolution3::Forward(board_size, tower_channels, tower_channels,
-                                          conv_in,
-                                          tower_ptr->conv1.GetWeights(),
-                                          workspace0, workspace1, conv_out);
+            WinogradConvolution3::Forward(
+                board_size, inner_channels, inner_channels,
+                conv_in,
+                tower_ptr->conv1.GetWeights(),
+                workspace0, workspace1, conv_out);
         } else {
-            Convolution3::Forward(board_size, tower_channels, tower_channels,
-                                  conv_in,
-                                  tower_ptr->conv1.GetWeights(),
-                                  workspace0, conv_out);
+            Convolution3::Forward(
+                board_size, inner_channels, inner_channels,
+                conv_in,
+                tower_ptr->conv1.GetWeights(),
+                workspace0, conv_out);
         }
-        AddSpatialBiases::Forward(board_size, tower_channels,
-                                  conv_out,
-                                  tower_ptr->conv1.GetBiases(), true);
+        AddSpatialBiases::Forward(
+            board_size, inner_channels,
+            conv_out,
+            tower_ptr->conv1.GetBiases(), true);
 
-        std::swap(conv_in, res);
+        if (!(tower_ptr->apply_btl)) {
+            std::swap(conv_in, res);
+        }
         std::swap(conv_out, conv_in);
 
         // The second conv3.
         if (use_winograd) {
-            WinogradConvolution3::Forward(board_size, tower_channels, tower_channels,
-                                          conv_in,
-                                          tower_ptr->conv2.GetWeights(),
-                                          workspace0, workspace1, conv_out);
+            WinogradConvolution3::Forward(
+                board_size, inner_channels, inner_channels,
+                conv_in,
+                tower_ptr->conv2.GetWeights(),
+                workspace0, workspace1, conv_out);
         } else {
-            Convolution3::Forward(board_size, tower_channels, tower_channels,
-                                  conv_in,
-                                  tower_ptr->conv2.GetWeights(),
-                                  workspace0, conv_out);
+            Convolution3::Forward(
+                board_size, inner_channels, inner_channels,
+                conv_in,
+                tower_ptr->conv2.GetWeights(),
+                workspace0, conv_out);
         }
+
+        if (tower_ptr->apply_btl) {
+            AddSpatialBiases::Forward(
+                board_size, outer_channels,
+                conv_out,
+                tower_ptr->conv2.GetBiases(), true);
+
+            std::swap(conv_out, conv_in);
+
+            // The post-bottleneck conv1.
+            Convolution1::Forward(
+                board_size, inner_channels, outer_channels,
+                conv_in,
+                tower_ptr->post_btl_conv.GetWeights(),
+                workspace0, conv_out);
+        }
+
 
         // The SE process.
         if (tower_ptr->apply_se) {
-            AddSpatialBiases::Forward(board_size, tower_channels,
-                                      conv_out,
-                                      tower_ptr->conv2.GetBiases(), false);
-
+            if (tower_ptr->apply_btl) {
+                AddSpatialBiases::Forward(
+                    board_size, outer_channels,
+                    conv_out,
+                    tower_ptr->post_btl_conv.GetBiases(), false);
+            } else { 
+                AddSpatialBiases::Forward(
+                    board_size, outer_channels,
+                    conv_out,
+                    tower_ptr->conv2.GetBiases(), false);
+            }
             const size_t se_size = tower_ptr->se_size;
-            SEUnit::Forward(board_size, tower_channels, se_size,
-                            conv_out, res,
-                            tower_ptr->squeeze.GetWeights(),
-                            tower_ptr->squeeze.GetBiases(),
-                            tower_ptr->excite.GetWeights(),
-                            tower_ptr->excite.GetBiases());
+            SEUnit::Forward(
+                board_size, outer_channels, se_size,
+                conv_out, res,
+                tower_ptr->squeeze.GetWeights(),
+                tower_ptr->squeeze.GetBiases(),
+                tower_ptr->excite.GetWeights(),
+                tower_ptr->excite.GetBiases());
         
         } else {
-            AddSpatialBiases::Forward(board_size, tower_channels,
-                                      conv_out,
-                                      tower_ptr->conv2.GetBiases(),
-                                      res, true);
+            if (tower_ptr->apply_btl) {
+                AddSpatialBiases::Forward(
+                    board_size, outer_channels,
+                    conv_out,
+                    tower_ptr->post_btl_conv.GetBiases(),
+                    res, true);
+            } else {
+                AddSpatialBiases::Forward(
+                    board_size, outer_channels,
+                    conv_out,
+                    tower_ptr->conv2.GetBiases(),
+                    res, true);
+            }
         }
     }
 
@@ -180,81 +240,97 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     const auto policy_extract_channels = weights_->policy_extract_channels;
     auto policy_conv = std::vector<float>(policy_extract_channels * num_intersections);
 
-    Convolution1::Forward(board_size, output_channels, policy_extract_channels,
-                          conv_out,
-                          weights_->p_ex_conv.GetWeights(),
-                          workspace0, policy_conv);
+    Convolution1::Forward(
+        board_size, output_channels, policy_extract_channels,
+        conv_out,
+        weights_->p_ex_conv.GetWeights(),
+        workspace0, policy_conv);
 
-    AddSpatialBiases::Forward(board_size, policy_extract_channels,
-                              policy_conv,
-                              weights_->p_ex_conv.GetBiases(), true);
+    AddSpatialBiases::Forward(
+        board_size, policy_extract_channels,
+        policy_conv,
+        weights_->p_ex_conv.GetBiases(), true);
 
-    GlobalPooling<false>::Forward(board_size, policy_extract_channels,
-                                  policy_conv, pooling);
+    GlobalPooling<false>::Forward(
+        board_size, policy_extract_channels,
+        policy_conv, pooling);
 
-    FullyConnect::Forward(3 * policy_extract_channels, policy_extract_channels,
-                          pooling,
-                          weights_->p_inter_fc.GetWeights(),
-                          weights_->p_inter_fc.GetBiases(),
-                          intermediate, true);
+    FullyConnect::Forward(
+        3 * policy_extract_channels, policy_extract_channels,
+        pooling,
+        weights_->p_inter_fc.GetWeights(),
+        weights_->p_inter_fc.GetBiases(),
+        intermediate, true);
 
-    AddSpatialBiases::Forward(board_size, policy_extract_channels,
-                              policy_conv,
-                              intermediate, false);    
+    AddSpatialBiases::Forward(
+        board_size, policy_extract_channels,
+        policy_conv,
+        intermediate, false);    
 
     // The policy outs.
-    Convolution1::Forward(board_size, policy_extract_channels, kOuputProbabilitiesChannels,
-                          policy_conv,
-                          weights_->prob_conv.GetWeights(),
-                          workspace0, output_prob);
+    Convolution1::Forward(
+        board_size, policy_extract_channels, kOuputProbabilitiesChannels,
+        policy_conv,
+        weights_->prob_conv.GetWeights(),
+        workspace0, output_prob);
 
-    AddSpatialBiases::Forward(board_size, kOuputProbabilitiesChannels,
-                              output_prob,
-                              weights_->prob_conv.GetBiases(), false);
+    AddSpatialBiases::Forward(
+        board_size, kOuputProbabilitiesChannels,
+        output_prob,
+        weights_->prob_conv.GetBiases(), false);
 
-    FullyConnect::Forward(policy_extract_channels, kOuputPassProbability,
-                          intermediate,
-                          weights_->pass_fc.GetWeights(),
-                          weights_->pass_fc.GetBiases(),
-                          output_pass, false);
+    FullyConnect::Forward(
+        policy_extract_channels, kOuputPassProbability,
+        intermediate,
+        weights_->pass_fc.GetWeights(),
+        weights_->pass_fc.GetBiases(),
+        output_pass, false);
 
     // The value head.
     const auto value_extract_channels = weights_->value_extract_channels;
     auto value_conv = std::vector<float>(value_extract_channels * num_intersections);
     
-    Convolution1::Forward(board_size, output_channels, value_extract_channels,
-                          conv_out,
-                          weights_->v_ex_conv.GetWeights(),
-                          workspace0, value_conv);
+    Convolution1::Forward(
+        board_size, output_channels, value_extract_channels,
+        conv_out,
+        weights_->v_ex_conv.GetWeights(),
+        workspace0, value_conv);
 
-    AddSpatialBiases::Forward(board_size, value_extract_channels,
-                              value_conv,
-                              weights_->v_ex_conv.GetBiases(), true);
+    AddSpatialBiases::Forward(
+        board_size, value_extract_channels,
+        value_conv,
+        weights_->v_ex_conv.GetBiases(), true);
 
-    GlobalPooling<true>::Forward(board_size, value_extract_channels,
-                                 value_conv, pooling);
+    GlobalPooling<true>::Forward(
+        board_size, value_extract_channels,
+        value_conv, pooling);
 
-    FullyConnect::Forward(3 * value_extract_channels, 3 * value_extract_channels,
-                          pooling,
-                          weights_->v_inter_fc.GetWeights(),
-                          weights_->v_inter_fc.GetBiases(),
-                          intermediate, true);
+    FullyConnect::Forward(
+        3 * value_extract_channels, 3 * value_extract_channels,
+        pooling,
+        weights_->v_inter_fc.GetWeights(),
+        weights_->v_inter_fc.GetBiases(),
+        intermediate, true);
 
     // The value outs.
-    Convolution1::Forward(board_size, value_extract_channels, kOuputOwnershipChannels,
-                          value_conv,
-                          weights_->v_ownership.GetWeights(),
-                          workspace0, output_ownership);
+    Convolution1::Forward(
+        board_size, value_extract_channels, kOuputOwnershipChannels,
+        value_conv,
+        weights_->v_ownership.GetWeights(),
+        workspace0, output_ownership);
 
-    AddSpatialBiases::Forward(board_size, kOuputOwnershipChannels,
-                              output_ownership,
-                              weights_->v_ownership.GetBiases(), false);
+    AddSpatialBiases::Forward(
+        board_size, kOuputOwnershipChannels,
+        output_ownership,
+        weights_->v_ownership.GetBiases(), false);
 
-    FullyConnect::Forward(3 * value_extract_channels, kOuputValueMisc,
-                          intermediate,
-                          weights_->v_misc.GetWeights(),
-                          weights_->v_misc.GetBiases(),
-                          output_misc, false);
+    FullyConnect::Forward(
+        3 * value_extract_channels, kOuputValueMisc,
+        intermediate,
+        weights_->v_misc.GetWeights(),
+        weights_->v_misc.GetBiases(),
+        output_misc, false);
+
     // Now copy the result.
     auto result = OutputResult{};
 
