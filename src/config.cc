@@ -96,7 +96,10 @@ void ArgsParser::InitOptionsMap() const {
 
     kOptionsMap["num_games"] << Option::SetOption(0);
     kOptionsMap["parallel_games"] << Option::SetOption(1);
-    kOptionsMap["komi_variance"] << Option::SetOption(0.f);
+    kOptionsMap["komi_stddev"] << Option::SetOption(0.f);
+    kOptionsMap["komi_big_stddev"] << Option::SetOption(0.f);
+    kOptionsMap["komi_big_stddev_prob"] << Option::SetOption(0.f, 1.f, 0.f);
+    kOptionsMap["handicap_fair_komi_prob"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["target_directory"] << Option::SetOption(std::string{});
 }
 
@@ -158,6 +161,15 @@ void ArgsParser::InitBasicParameters() const {
         bool as_default = true;
         SetOption("fpu_root_reduction",
                       GetOption<float>("fpu_reduction"),
+                      as_default);
+    }
+
+    // Set the root temperature value.
+    bool already_set_root_temp = !IsOptionDefault("root_policy_temp");
+    if (!already_set_root_temp) {
+        bool as_default = true;
+        SetOption("root_policy_temp",
+                      GetOption<float>("policy_temp"),
                       as_default);
     }
 
@@ -686,9 +698,30 @@ void ArgsParser::Parse(Splitter &spt) {
         }
     }
 
-    if (const auto res = spt.FindNext("--komi-variance")) {
+    if (const auto res = spt.FindNext("--komi-stddev")) {
         if (IsParameter(res->Get<>())) {
-            SetOption("komi_variance", res->Get<float>());
+            SetOption("komi_stddev", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--komi-big-stddev")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("komi_big_stddev", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--komi-big-stddev-prob")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("komi_big_stddev_prob", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--handicap-fair-komi-prob")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("handicap_fair_komi_prob", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
