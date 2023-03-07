@@ -54,7 +54,6 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["resign_threshold"] << Option::SetOption(0.1f, 1.f, 0.f);
 
     kOptionsMap["ci_alpha"] << Option::SetOption(1e-5f, 1.f, 0.f);
-    kOptionsMap["lcb_utility_factor"] << Option::SetOption(0.1f);
     kOptionsMap["lcb_reduction"] << Option::SetOption(0.02f, 1.f, 0.f);
     kOptionsMap["fpu_reduction"] << Option::SetOption(0.25f);
     kOptionsMap["fpu_root_reduction"] << Option::SetOption(0.25f);
@@ -65,7 +64,6 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["score_utility_factor"] << Option::SetOption(0.1f);
     kOptionsMap["score_utility_div"] << Option::SetOption(20.f);
     kOptionsMap["expand_threshold"] << Option::SetOption(-1);
-    kOptionsMap["completed_q_utility_factor"] << Option::SetOption(0.0f);
 
     kOptionsMap["root_policy_temp"] << Option::SetOption(1.f, 1.f, 0.f);
     kOptionsMap["policy_temp"] << Option::SetOption(1.f, 1.f, 0.f);
@@ -579,23 +577,9 @@ void ArgsParser::Parse(Splitter &spt) {
         }
     }
 
-    if (const auto res = spt.FindNext("--completed-q-utility-factor")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("completed_q_utility_factor", res->Get<float>());
-            spt.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
-    }
-
     if (const auto res = spt.FindNext("--lcb-reduction")) {
         if (IsParameter(res->Get<>())) {
             SetOption("lcb_reduction", res->Get<float>());
-            spt.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--lcb-utility-factor")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("lcb_utility_factor", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

@@ -19,7 +19,6 @@ public:
         expand_threshold = GetOption<int>("expand_threshold");
 
         resign_threshold = GetOption<float>("resign_threshold");
-        lcb_utility_factor = GetOption<float>("lcb_utility_factor");
         lcb_reduction = GetOption<float>("lcb_reduction");
         fpu_reduction = GetOption<float>("fpu_reduction");
         fpu_root_reduction = GetOption<float>("fpu_root_reduction");
@@ -41,7 +40,6 @@ public:
         dirichlet_factor = GetOption<float>("dirichlet_factor");
         dirichlet_init = GetOption<float>("dirichlet_init");
 
-        completed_q_utility_factor = GetOption<float>("completed_q_utility_factor");
         score_utility_factor = GetOption<float>("score_utility_factor");
         score_utility_div = GetOption<float>("score_utility_div");
         resign_playouts = GetOption<int>("resign_playouts");
@@ -74,7 +72,6 @@ public:
 
     float resign_threshold;
 
-    float lcb_utility_factor;
     float lcb_reduction;
     float fpu_reduction;
     float fpu_root_reduction;
@@ -92,7 +89,6 @@ public:
     float dirichlet_factor;
     float dirichlet_init;
 
-    float completed_q_utility_factor;
     float score_utility_factor;
     float score_utility_div;
 

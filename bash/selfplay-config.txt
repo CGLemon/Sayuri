@@ -13,9 +13,7 @@
 --fpu-root-reduction 0.25
 
 --lcb-reduction 0
---score-utility-factor 0.05
---lcb-utility-factor 0.05
---completed-q-utility-factor 0.05
+--score-utility-factor 0.1
 --score-utility-div 20
 
 --selfplay-query bkp:19:7:0.54  --selfplay-query bhp:19:6:0.1
