@@ -267,10 +267,10 @@ Convolution::~Convolution() {
 }
 
 void Convolution::Forward(const int batch,
-                          void *input, void *output,
-                          const void *eltwise,
-                          const void *mask,
-                          void *scratch, void *scratch_other, size_t scratch_size) {
+                              void *output, void *input,
+                              const void *eltwise,
+                              const void *mask,
+                              void *scratch, void *scratch_other, size_t scratch_size) {
     if (!loaded_) {
         return;
     }
@@ -477,8 +477,8 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
 
 
 void Convolution::LoadingWeight(const std::vector<float> &weights,
-                                const std::vector<float> &biases,
-                                size_t &scratch_size, bool winpgrad) {
+                                    const std::vector<float> &biases,
+                                    size_t &scratch_size, bool winpgrad) {
     if (loaded_) {
         return;
     }
@@ -518,7 +518,7 @@ FullyConnect::~FullyConnect() {
 }
 
 void FullyConnect::LoadingWeight(const std::vector<float> &weights,
-                                 const std::vector<float> &biases) {
+                                     const std::vector<float> &biases) {
     if (loaded_) { 
         return;
     }
@@ -527,7 +527,7 @@ void FullyConnect::LoadingWeight(const std::vector<float> &weights,
     loaded_ = true;
 }
 
-void FullyConnect::Forward(const int batch, void *input, void *output) {
+void FullyConnect::Forward(const int batch, void *output, void *input) {
     if (!loaded_) {
         return;
     }
@@ -561,7 +561,8 @@ GlobalPooling::GlobalPooling(CudaHandles *handles,
     handles_ = handles;
 }
 
-void GlobalPooling::Forward(const int batch, void *input, void *output, void *mask, void *sqrt_mask) {
+void GlobalPooling::Forward(const int batch, void *output,
+                                void *input, void *mask, void *sqrt_mask) {
     if (is_value_head_) {
         HeadGlobalPooling(
             fp16_, output, input, sqrt_mask, batch,
@@ -603,8 +604,8 @@ void SEUnit::LoadingWeight(const std::vector<float> &weights_w1,
     MallocAndCopy(fp16_, &cuda_weights_w2_, weights_w2);
     MallocAndCopy(fp16_, &cuda_weights_b2_, weights_b2);
 
-    const size_t fc1_scratch_size = maxbatch_ * se_size_;
-    const size_t fc2_scratch_size = 2 * maxbatch_ * channels_;
+    const size_t fc1_scratch_size  = maxbatch_ * se_size_;
+    const size_t fc2_scratch_size  = maxbatch_ * 2 * channels_;
     const size_t pool_scratch_size = maxbatch_ * 3 * channels_;
 
     MallocCudaOp(fp16_, &(cuda_op_[0]), pool_scratch_size);
@@ -613,7 +614,7 @@ void SEUnit::LoadingWeight(const std::vector<float> &weights_w1,
     loaded_ = true;
 }
 
-void SEUnit::Forward(const int batch, void *input, void *ouput, void *mask) {
+void SEUnit::Forward(const int batch, void *ouput, void *input, void *mask) {
     if (!loaded_) {
         return;
     }
@@ -648,8 +649,9 @@ void SEUnit::Forward(const int batch, void *input, void *ouput, void *mask) {
          cuda_op_[2], fc2_output_size,
          handles_->cublas_handle, handles_->stream);
 
-    AddVectors(fp16_, cuda_op_[2], cuda_weights_b2_, cuda_op_[2],
-                fc2_output_size * batch, fc2_output_size, fc2_output_size * batch, fc2_relu, handles_->stream);
+    AddVectors(
+        fp16_, cuda_op_[2], cuda_weights_b2_, cuda_op_[2],
+        fc2_output_size * batch, fc2_output_size, fc2_output_size * batch, fc2_relu, handles_->stream);
     SeScale(
         fp16_, ouput, input, cuda_op_[2], mask,
         batch, channels_, spatial_size_, handles_->stream);

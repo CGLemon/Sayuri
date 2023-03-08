@@ -35,9 +35,9 @@ public:
                     bool ReLU = true);
     ~Convolution();
 
-    void Forward(const int batch, void *input, void *output,
-                     const void *eltwise,
-                     const void *mask,
+    void Forward(const int batch,
+                     void *output, void *input,
+                     const void *eltwise, const void *mask,
                      void *scratch, void *scratch_other, size_t scratch_size);
 
     void LoadingWeight(const std::vector<float> &weights,
@@ -50,7 +50,6 @@ public:
                        bool winograd);
 
 private:
-    bool relu_;
     int filter_dim_;
     int filters_;
     int in_channels_;
@@ -82,14 +81,11 @@ public:
                      bool ReLU);
     ~FullyConnect();
 
-    void Forward(const int batch,
-                     void *input,
-                     void *output);
+    void Forward(const int batch, void *output, void *input);
 
     void LoadingWeight(const std::vector<float> &weights,
                        const std::vector<float> &biases);
 private:
-    bool relu_;
     int inputs_;
     int outputs_;
 
@@ -107,16 +103,13 @@ public:
                       const int channels);
 
     void Forward(const int batch,
-                     void *input,
-                     void *output,
-                     void *mask,
-                     void *sqrt_mask);
+                     void *output, void *input,
+                     void *mask, void *sqrt_mask);
 
 private:
     int channels_;
     bool is_value_head_;
 };
-
 
 class SEUnit : public LayerBasic {
 public:
@@ -133,10 +126,7 @@ public:
                        const std::vector<float> &weights_w2,
                        const std::vector<float> &weights_b2);
 
-    void Forward(const int batch,
-                     void *input,
-                     void *output,
-                     void *mask);
+    void Forward(const int batch, void *output, void *input, void *mask);
  
 private:
     int se_size_;
