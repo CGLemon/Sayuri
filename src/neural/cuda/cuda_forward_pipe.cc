@@ -241,7 +241,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         );
 
         const bool second_use_relu =
-                       !(tower_ptr->apply_se || tower_ptr->apply_btl);
+                       tower_ptr->apply_btl || !(tower_ptr->apply_se);
         graph_->tower_conv[t_offset+1] = cuda::Convolution(
             &handles_,
             max_batch_,     // max batch size

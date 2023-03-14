@@ -274,7 +274,9 @@ void DNNLoder::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstr
         for (int i = 0; i < (int)spt.GetCount(); ++i) {
             const auto component = spt.GetWord(i)->Get<>();
 
-            if (component == "ResidualBlock" || component == "SE") {
+            if (component == "ResidualBlock" ||
+                    component == "Bottleneck" ||
+                    component == "SE") {
                 // do nothing...
             } else {
                 throw Format("Do not support this block type [%s].",
@@ -523,8 +525,6 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
         }
 
         if (SplitterFound(block_spt, "SA")) {
-            throw "Do not support SA module";
-
             sa_cnt += 1;
             const auto sa_conv_shape = netstruct[t_offset++];
 
