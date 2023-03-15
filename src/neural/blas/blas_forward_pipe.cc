@@ -7,6 +7,7 @@
 #include "neural/blas/winograd_convolution3.h"
 #include "neural/winograd_helper.h"
 
+#include <iostream>
 #include <algorithm>
 
 void BlasForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
@@ -30,13 +31,17 @@ void BlasForwardPipe::InitWinograd() {
 
     // The residual tower.
     for (auto &residual : weights_->tower) {
+        const auto outer_channels = residual_channels;
+        const auto inner_channels = residual.apply_btl ?
+                                        outer_channels/2 :
+                                        outer_channels;
         residual.conv1.GetWeights() =
             WinogradTransformF(residual.conv1.GetWeights(),
-                                   residual_channels, residual_channels);
+                                   inner_channels, inner_channels);
 
         residual.conv2.GetWeights() =
             WinogradTransformF(residual.conv2.GetWeights(),
-                                   residual_channels, residual_channels);
+                                   inner_channels, inner_channels);
     }
     weights_->winograd_initialized = true;
 }
@@ -88,8 +93,8 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     // Copy input plane to buffer. 
     auto planes = std::vector<float>(plane_size);
     std::copy(std::begin(inpnts.planes),
-              std::begin(inpnts.planes) + plane_size,
-              std::begin(planes));
+                  std::begin(inpnts.planes) + plane_size,
+                  std::begin(planes));
 
     // Allocate the output buffers. 
     auto output_prob = std::vector<float>(num_intersections);
@@ -141,6 +146,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
 
             std::swap(conv_in, res);
         }
+
         std::swap(conv_out, conv_in);
 
         // 1st conv3
@@ -157,6 +163,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                 tower_ptr->conv1.GetWeights(),
                 workspace0, conv_out);
         }
+
         AddSpatialBiases::Forward(
             board_size, inner_channels,
             conv_out,
