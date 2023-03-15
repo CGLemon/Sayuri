@@ -8,6 +8,12 @@
 #include <sstream>
 
 void Engine::Initialize() {
+    default_playouts_ = 400;
+    komi_stddev_ = GetOption<float>("komi_stddev");
+    komi_big_stddev_ = GetOption<float>("komi_big_stddev");
+    komi_big_stddev_prob_ = GetOption<float>("komi_big_stddev_prob");
+    handicap_fair_komi_prob_ = GetOption<float>("handicap_fair_komi_prob");
+
     parallel_games_ = GetOption<int>("parallel_games");
 
     if (!network_) {
@@ -149,16 +155,7 @@ void Engine::Selfplay(int g) {
 
 void Engine::SetNormalGame(int g) {
     Handel(g);
-    auto &state = game_pool_[g];
-
-    int boardsize = state.GetBoardSize();
-    float komi = state.GetKomi();
-
-    float variance = GetOption<float>("komi_variance");
-    auto dist = std::normal_distribution<float>(0.f, variance);
-    float bonus = dist(Random<>::Get());
-
-    game_pool_[g].Reset(boardsize, AdjustKomi<float>(komi + bonus));
+    SetUnfairKomi(g);
 }
 
 void Engine::SetHandicapGame(int g, int handicaps) {
@@ -166,19 +163,40 @@ void Engine::SetHandicapGame(int g, int handicaps) {
     auto &state = game_pool_[g];
 
     for (int i = 0; i < handicaps-1; ++i) {
-        auto result = search_pool_[g]->
-                          Computation(400, Search::kNoNoise);
+        auto result = search_pool_[g]->Computation(
+                          default_playouts_, Search::kNoNoise);
         state.AppendMove(result.random_move, kBlack);
     }
     state.SetHandicap(handicaps);
     SetFairKomi(g);
+
+    if (!Random<>::Get().Roulette<10000>(handicap_fair_komi_prob_)) {
+        SetUnfairKomi(g);
+    }
+}
+
+void Engine::SetUnfairKomi(int g) {
+    Handel(g);
+    auto &state = game_pool_[g];
+    float komi = state.GetKomi();
+
+    float stddev = komi_stddev_;
+    if (Random<>::Get().Roulette<10000>(komi_big_stddev_prob_)) {
+        stddev = komi_big_stddev_;
+    }
+
+    auto dist = std::normal_distribution<float>(0.f, stddev);
+    float bonus = dist(Random<>::Get());
+
+    state.SetKomi(AdjustKomi<int>(komi + bonus));
 }
 
 void Engine::SetFairKomi(int g) {
     Handel(g);
     auto &state = game_pool_[g];
 
-    auto result = search_pool_[g]->Computation(400, Search::kNoNoise);
+    auto result = search_pool_[g]->Computation(
+                      default_playouts_, Search::kNoNoise);
     auto komi = state.GetKomi();
     auto score_lead = result.root_final_score;
 
