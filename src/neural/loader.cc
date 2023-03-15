@@ -276,7 +276,8 @@ void DNNLoder::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstr
 
             if (component == "ResidualBlock" ||
                     component == "Bottleneck" ||
-                    component == "SE") {
+                    component == "SE" ||
+                    component == "FixUp") {
                 // do nothing...
             } else {
                 throw Format("Do not support this block type [%s].",
