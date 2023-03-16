@@ -812,7 +812,8 @@ void CudaForwardPipe::Worker(int gpu) {
     const auto gpu_waittime_base = GetOption<int>("gpu_waittime");
     waittime_.store(gpu_waittime_base, std::memory_order_relaxed);
 
-    const auto gether_batches = [this, gpu_waittime_base](){
+    const auto GatherBatches = [this, gpu_waittime_base](){
+        const auto max_waittime = std::max(10 * gpu_waittime_base, 100);
         auto entries = std::vector<std::shared_ptr<ForwawrdEntry>>{};
 
         // Running the loop until there is enough entry size.
@@ -821,11 +822,15 @@ void CudaForwardPipe::Worker(int gpu) {
                 return entries;
             }
 
-            bool narrow_pipe = narrow_pipe_.exchange(false, std::memory_order_relaxed);
+            bool should_be_fast = fast_pipe_.exchange(false, std::memory_order_relaxed);
             int waittime = waittime_.load(std::memory_order_relaxed);
 
             if ((int)entry_queue_.size() >= max_batch_) {
-                break; // Finish the loop.
+                // Threre are enough batches. Finish the loop.
+                waittime_.store(
+                    std::min(waittime, gpu_waittime_base),
+                    std::memory_order_relaxed);
+                break;
             }
 
             // Wait for some time in order to avoid busy waiting.
@@ -838,9 +843,10 @@ void CudaForwardPipe::Worker(int gpu) {
             if (!entry_queue_.empty()) {
                 waittime = std::min(waittime, gpu_waittime_base);
 
-                if (timeout && narrow_pipe) {
-                    // Set zero if there are still some (smaller than max batch size)
-                    // entries in the queue.
+                if (timeout && should_be_fast) {
+                    // We wait two times and there are always not enough batches.
+                    // Simply assume threre still are not next time so set the
+                    // waiting time as zero.
                     waittime = 0;
                 } else if (waittime > 0) {
                     // Decrease the waiting time if it is time out.
@@ -855,7 +861,7 @@ void CudaForwardPipe::Worker(int gpu) {
             } else {
                 if (waittime < gpu_waittime_base) {
                     waittime_.store(waittime+1, std::memory_order_relaxed);
-                } else if (waittime < 20 * gpu_waittime_base) {
+                } else if (waittime < max_waittime) {
                     waittime_.store(waittime+10, std::memory_order_relaxed);
                 }
             }
@@ -864,7 +870,7 @@ void CudaForwardPipe::Worker(int gpu) {
         // Gather the entries.
         std::lock_guard<std::mutex> queue_lock(queue_mutex_);
         auto count = entry_queue_.size();
-        if (count > (size_t)max_batch_) {
+        if ((int)count > max_batch_) {
             count = max_batch_;
         }
 
@@ -879,7 +885,7 @@ void CudaForwardPipe::Worker(int gpu) {
     while (true) {
         if (!worker_running_.load(std::memory_order_relaxed)) return;
 
-        auto entries = gether_batches();
+        auto entries = GatherBatches();
         const auto batch_size = entries.size();
 
         if (batch_size == 0) {
@@ -900,8 +906,8 @@ void CudaForwardPipe::Worker(int gpu) {
             }
         }
 
-        if (batch_size <= (size_t)max_batch_) {
-            narrow_pipe_.store(false, std::memory_order_relaxed);
+        if ((int)batch_size <= max_batch_) {
+            fast_pipe_.store(true, std::memory_order_relaxed);
         }
     }
 }

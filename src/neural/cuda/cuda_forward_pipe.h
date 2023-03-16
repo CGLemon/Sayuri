@@ -127,7 +127,7 @@ private:
 
     std::atomic<int> waittime_{0};
     std::atomic<bool> worker_running_;
-    std::atomic<bool> narrow_pipe_;
+    std::atomic<bool> fast_pipe_{false};
 
     std::vector<std::unique_ptr<NNGraph>> nngraphs_;
     std::vector<std::thread> workers_;
