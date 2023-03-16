@@ -9,12 +9,12 @@
         "ValueMisc": 5,
 
         "Stack" : [
-            "ResidualBlock",
-            "ResidualBlock",
-            "ResidualBlock-SE",
-            "ResidualBlock",
-            "ResidualBlock",
-            "ResidualBlock-SE"
+            "ResidualBlock-Bottleneck",
+            "ResidualBlock-Bottleneck",
+            "ResidualBlock-Bottleneck-SE",
+            "ResidualBlock-Bottleneck",
+            "ResidualBlock-Bottleneck",
+            "ResidualBlock-Bottleneck-SE"
         ]
     },
 

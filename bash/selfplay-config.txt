@@ -53,4 +53,4 @@
 --dirichlet-init 0.03
 --dirichlet-factor 361
 
---num-games 10000
+--num-games 5000
