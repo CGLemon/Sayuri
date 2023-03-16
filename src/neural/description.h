@@ -85,15 +85,22 @@ class ResidualBlock {
 public:
     ConvLayer conv1;
     BatchNormLayer bn1;
-
     ConvLayer conv2;
     BatchNormLayer bn2;
 
     LinearLayer squeeze;
     LinearLayer excite;
-
     int se_size{0};
-    int apply_se{false};
+    bool apply_se{false};
+
+    ConvLayer pre_btl_conv;
+    BatchNormLayer pre_btl_bn;
+    ConvLayer post_btl_conv;
+    BatchNormLayer post_btl_bn;
+    bool apply_btl{false};
+
+    ConvLayer sa_conv;
+    bool apply_sa{false};
 };
 
 class DNNWeights {

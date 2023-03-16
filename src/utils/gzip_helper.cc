@@ -30,3 +30,12 @@ void SaveGzip(std::string /* filename */, std::string & /* buffer */ ) {
 }
 
 #endif
+
+
+bool IsGzipValid() {
+#ifdef USE_ZLIB
+    return true;
+#else
+    return false;
+#endif
+}

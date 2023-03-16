@@ -431,9 +431,9 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
         }
 
         // Apply First Play Urgency (FPU). We should think the value of the 
-        // unvisited nodes are same as parent. But the NN-based MCTS tends to
-        // search the visited node. So give the unvisited node a little bad
-        // value (FPU reduction).
+        // unvisited nodes are same as parent's. The NN-based MCTS favors
+        // the visited node. So give the unvisited node a little bad favour
+        // (FPU reduction) in order to reduce the priority.
         float q_value = fpu_value;
 
         float denom = 1.0f;
@@ -486,7 +486,6 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
 
     int parentvisits = 0;
     const float cpuct = param_->cpuct_init;
-    const float parent_qvalue = GetWL(color, false);
 
     std::vector<Edge*> edge_buf;
 
@@ -507,7 +506,7 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
     int width = std::max(ComputeWidth(parentvisits), 1);
     int i = 0;
 
-    //TODO: Sort the 'edge_buf' according to priority value.
+    //TODO: Sort the 'edge_buf' according to dynamic priority value.
 
     for (auto edge_ptr : edge_buf) {
         auto &child = *edge_ptr;
@@ -528,7 +527,7 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
             continue;
         }
 
-        float q_value = parent_qvalue;
+        float q_value = 5.0f; // fpu
         int visits = 0;
 
         if (is_pointer) {
@@ -610,8 +609,8 @@ int Node::RandomizeMoveWithGumbel(GameState &state, int temp, int min_visits) {
         int idx = num_intersections; // pass move
 
         // Do not need to prune the low visits move because
-        // the Q value reduce will reduce the bad moves
-        // probabilities. 
+        // the Q value will reduce the probabilities of
+        // bad moves. 
         if (vtx != kPass) {
             idx = state.GetIndex(
                       state.GetX(vtx), state.GetY(vtx));
@@ -630,8 +629,8 @@ int Node::RandomizeMoveWithGumbel(GameState &state, int temp, int min_visits) {
     }
     MixLogitsCompletedQ(state, prob);
 
-    auto int_prob_acc_table = std::vector<int>(num_intersections+1, 0);
     constexpr int int_factor = 100000;
+    auto int_prob_acc_table = std::vector<int>(num_intersections+1, 0);
     int int_prob_acc = 0;
 
     for (int idx = 0; idx < num_intersections+1; ++idx) {
@@ -644,8 +643,8 @@ int Node::RandomizeMoveWithGumbel(GameState &state, int temp, int min_visits) {
     }
 
     if (int_prob_acc == 0) {
-        // All possible moves are pruned or the valid probabilities
-        // are too small. Use the traditional random move.
+        // All possible moves are pruned or the probabilities of
+        // valid moves are too small. Use the traditional random move.
         return RandomizeFirstProportionally(temp, min_visits);
     }
 
@@ -667,6 +666,7 @@ void Node::Update(const NodeEvals *evals) {
     auto WelfordDelta = [](double eval,
                                double old_acc_eval,
                                int old_visits) {
+        // Welford's online algorithm for calculating variance.
         const double old_delta = old_visits > 0 ? eval - old_acc_eval / old_visits : 0.0f;
         const double new_delta = eval - (old_acc_eval + eval) / (old_visits+1);
         const double delta = old_delta * new_delta;
@@ -684,7 +684,6 @@ void Node::Update(const NodeEvals *evals) {
     // TODO: According to Kata Go, It is not necessary to use
     //       Welford's online algorithm. The accuracy of simplify
     //       algorithm is enough.
-    // Welford's online algorithm for calculating variance.
     const double delta = WelfordDelta(eval, old_acc_eval, old_visits);
 
     visits_.fetch_add(1, std::memory_order_relaxed);
@@ -750,6 +749,9 @@ float Node::GetLcb(const int color) const {
 
     const auto mean = GetWL(color, false);
     const auto variance = GetLcbVariance(1.0f, visits);
+
+    // The variance divide the visits inorder to empirically
+    // make the bound decrease slower.
     const auto stddev = std::sqrt(variance / float(visits));
     const auto z = LcbEntries::Get().CachedTQuantile(visits - 1);
 
@@ -991,11 +993,11 @@ std::vector<std::pair<float, int>> Node::GetLcbUtilityList(const int color) {
     WaitExpanded();
     assert(HaveChildren());
 
-    const auto lcb_utility_factor = std::max(0.f, param_->lcb_utility_factor);
     const auto lcb_reduction = std::min(
                                    std::max(0.f, param_->lcb_reduction), 1.f);
     int parentvisits = 0;
-    const auto score = GetFinalScore(color);
+    const auto parent_score = GetFinalScore(color);
+    const auto score_utility_factor = param_->score_utility_factor;
     const auto score_utility_div = param_->score_utility_div;
 
     auto list = std::vector<std::pair<float, int>>{};
@@ -1013,7 +1015,7 @@ std::vector<std::pair<float, int>> Node::GetLcbUtilityList(const int color) {
         const auto node = child.Get();
         const bool is_pointer = node != nullptr;
 
-        // The node is uninflated, pruned or invalid. Skip it.
+        // The node is unvisited, pruned or invalid. Skip it.
         if (!is_pointer || !node->IsActive()) {
             continue;
         }
@@ -1021,9 +1023,9 @@ std::vector<std::pair<float, int>> Node::GetLcbUtilityList(const int color) {
         const auto visits = node->GetVisits();
         if (visits > 0) {
             auto lcb = node->GetLcb(color);
-            auto utility = lcb_utility_factor *
+            auto utility = score_utility_factor *
                                node->GetScoreUtility(
-                                   color, score_utility_div, score);
+                                   color, score_utility_div, parent_score);
             const auto ulcb = (lcb + utility) * (1.f - lcb_reduction) + 
                                   lcb_reduction * ((float)visits/parentvisits);
             list.emplace_back(ulcb, node->GetVertex());
@@ -1320,14 +1322,13 @@ void Node::ComputeNodeCount(size_t &nodes, size_t &edges) {
 float Node::GetGumbelQValue(int color, float parent_score) const {
     // Get non-normalized complete Q value. In the original
     // paper, it is Q value. We mixe Q value and score lead
-    // in order to optimize the move probabilities if one side
-    // has won the game.
+    // in order to optimize the move probabilities.
     const auto score_utility_div = param_->score_utility_div;
-    const auto completed_q_utility_factor = param_->completed_q_utility_factor;
-    const auto mixed_q = GetWL(color, false) +
-                             completed_q_utility_factor *
+    const auto score_utility_factor = param_->score_utility_factor;
+    const auto utility = score_utility_factor *
                                  GetScoreUtility(
                                      color, score_utility_div, parent_score);
+    const auto mixed_q = GetWL(color, false) + utility;
     return mixed_q;
 }
 
@@ -1476,7 +1477,7 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
                                    const int considered_moves, const float mval,
                                    bool only_max_visit) {
 
-    // The Variant of Sequential Halving algorithm. The input N playous
+    // The Variant of Sequential Halving algorithm. The input N playouts
     // is always log2(considered moves) * (considered moves) for each
     // epoch. It is same as Sequential Halving with Gumbel algorithm if 
     // the playous is low.

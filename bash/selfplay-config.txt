@@ -1,12 +1,20 @@
---noise
 --random-moves-factor 0.08
---komi-variance 2.5
+--komi-stddev 2.5
+--komi-big-stddev-prob 0.06
+--komi-big-stddev 12
+
+--handicap-fair-komi-prob 0.5
 
 --cpuct-init 1.25
+--cpuct-base 19652
+--cpuct-base-factor 1
+
+--fpu-reduction 0.25
+--fpu-root-reduction 0.25
+
 --lcb-reduction 0
---score-utility-factor 0.05
---lcb-utility-factor 0.05
---completed-q-utility-factor 0.05
+--score-utility-factor 0.1
+--score-utility-div 20
 
 --selfplay-query bkp:19:7:0.54  --selfplay-query bhp:19:6:0.1
 --selfplay-query bkp:18:7:0.08  --selfplay-query bhp:18:6:0.1
@@ -22,16 +30,16 @@
 --selfplay-query bkp:8:10:0.01
 --selfplay-query bkp:7:9:0.01
 
---playouts 150
+--playouts 100
 
 --gumbel
 --gumbel-playouts 50
 --always-completed-q-policy
 
---reduce-playouts 100
+--reduce-playouts 80
 --reduce-playouts-prob 0.75
 
---resign-playouts 85
+--resign-playouts 75
 --resign-threshold 0.02
 
 --parallel-games 128
@@ -39,5 +47,10 @@
 --cache-memory-mib 400
 --early-symm-cache
 --first-pass-bonus
+
+--dirichlet-noise
+--dirichlet-epsilon 0.25
+--dirichlet-init 0.03
+--dirichlet-factor 361
 
 --num-games 10000

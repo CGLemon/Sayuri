@@ -15,16 +15,19 @@ public:
 
 private:
     using LayerShape = std::vector<int>;
+    using NetStack = std::vector<std::string>;
     using NetStruct = std::vector<LayerShape>;
     using NetInfo = std::unordered_map<std::string, std::string>;
 
     void Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer);
     void ParseInfo(NetInfo &netinfo, std::istream &buffer) const;
+    void ParseStack(NetStack &netstack, std::istream &buffer) const;
     void ParseStruct(NetStruct &netstruct, std::istream &buffer) const;
-    void CkeckMisc(NetInfo &netinfo);
+    void CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstruct);
     void DumpInfo(std::shared_ptr<DNNWeights> weights) const;
 
     void FillWeights(NetInfo &netinfo,
+                         NetStack &netstack,
                          NetStruct &netstruct,
                          std::shared_ptr<DNNWeights> weights,
                          std::istream &buffer) const;

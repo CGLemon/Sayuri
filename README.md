@@ -40,21 +40,21 @@ or
 
     $ cmake .. -DBLAS_BACKEND=EIGEN
 
-Accelerate the network forwarding pipe by GPUs. CUDA is required. It is recommand backend.
+Accelerate the network forwarding pipe by GPUs. CUDA is required. It is the faster backend.
 
     $ cmake .. -DBLAS_BACKEND=CUDA
 
-Accelerate the network forwarding pipe by GPUs. CUDA and cuDNN are both required. This backend is much steady.
+Accelerate the network forwarding pipe by GPUs. CUDA and cuDNN are both required. This backend is much steady buf may be slower than CUDA-only.
 
     $ cmake .. -DBLAS_BACKEND=CUDNN
 
-Accelerate to load the network file. Fast Float library is required.
-
-    $ cmake .. -DUSE_FAST_PARSER=1
-
-Compile a bigger board size version.
+Compile a bigger board size version. It will use the default size if we set it as 0. 
 
     $ cmake .. -DBOARD_SIZE=25
+
+Disable the FP16 CUDA code if your CUDA version doesn't support for it.
+
+    $ cmake .. -DDISABLE_FP16=1
 
 ## Weights
 
@@ -91,6 +91,7 @@ Here are some useful arguments which you may need.
 |  --friendly-pass        | None   | Do pass move if the engine wins the game.      |
 |  --reuse-tree           | None   | Will reuse the sub-tree.                       |
 |  --no-dcnn              | None   | Disable network, very weak.                    |
+|  --no-fp16              | None   | Disable FP16 computation.                      |
 |  --help, -h             | None   | Show the more arguments.                       |
     
 <br/>
@@ -162,15 +163,9 @@ Please see this [section](./bash/RL.md).
 
 ## Misc
 
-### What's the Deep Learning technology?
-
-The Deep Convolutional Neural Network (DCNN) is a special technique to provide the human-like thinking. It significantly improves the prediction accuracy of next moves and current winrate. Thanks for deep learning and MCTS, the modern computer Go can beat the top level players on the full size board. Sayuri is anthor Go engine with this technology.
-
-### Why do we need a GPU card?
-
-There are too many matrix operations in the Neural Network forwarding pipe. It is not efficiently to run it on the CPU. Normally, the GPU is 10~20 times faster than the CPU.
-
 ### About the ancient technology
+
+(August, 2022)
 
 Before the AlphaGo (2016s), the most of state-of-the-art computer Go combine the MCTS and MM (Minorization-Maximization). Crazy Stone and Zen use that. Or combining the MCTS and SB (Simulation Balancing). The Eric (predecessor of AlphaGo) and Leela use that. Ray, one of the strongest open source Go engine before AlphaGo, writed by Yuki Kobayashi which is based on the MM algorithm. I am surprised that it can play the game well without much human knowledge and Neural Network. What's more, it can beat high level Go player on 9x9 if we provide it enough computation. But thanks for deep learning technique, the computer Go engine is significantly stronger than before. Sayuri can beat the Ray (v10.0) on 19x19 with only policy network. This result shows the advantage of Neural Network technology.
 
@@ -180,14 +175,29 @@ Although the Neural Network based engines are more powerful, I still recommend y
 * [Pachi](https://github.com/pasky/pachi), need to add the option ```--nodcnn``` to disable DCNN.
 * [Ray](https://github.com/kobanium/Ray), may be strongest open source engine before the 2016s.
 
-I am trying to implement this ancient technique currently. Merge the MM patterns based and the DCNN based technique to provide widely dynamic strength. It should be fun.
+I am trying to implement this ancient technique. Merge the MM patterns based and the DCNN based technique to provide widely dynamic strength. It should be fun.
 
 ### The Gumbel learning
+
+(November, 2022)
 
 On the 2022 CGF Open, the Ray author, Yuki Kobayashi, implemented a new algorithm called Gumbel learning. it is a effective trick for AlphaZero and it guarantees to improve policy with low playouts. As far as I know, Ray is the first successful superhuman level engine with Gumbel learning on 19x19. Inspired by Ray, I decide to implement this ideal in my project. Hope that this project would become another successful Gumbel learning engine.
 
 * [Policy improvement by planning with Gumbel](https://www.deepmind.com/publications/policy-improvement-by-planning-with-gumbel)
 * [Ray's apeal letter for UEC 14](https://drive.google.com/file/d/1yLjGboOLMOryhHT-aWG_0zAF-G7LDcTH/view)
+
+### Improve the network performance
+
+(February, 2023)
+
+The Ray author, Yuki Kobayashi, proposed three points which may improve my network performance. Here are list.
+
+* The half floating-point.
+* The NHWC format.
+* Bottleneck network, It may improve 30% speed without losing accuracy.
+
+KataGo also used the variant bottleneck and said it could significantly improve the performance. This result shows the advance of these kinds of structure.
+
 
 ## Features
 
@@ -205,9 +215,9 @@ On the 2022 CGF Open, the Ray author, Yuki Kobayashi, implemented a new algorith
 ## Todo
 
 * Support Windows platform.
-* Support half-float.
 * Support NHWC format.
 * Support distributed computation.
+* Support the bottleneck network.
 
 ## Other Linkings
 

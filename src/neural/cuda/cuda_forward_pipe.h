@@ -39,6 +39,7 @@ private:
             cuda::Convolution input_conv;
 
             // residual towers
+            std::vector<cuda::Convolution> btl_conv;
             std::vector<cuda::Convolution> tower_conv;
             std::vector<cuda::SEUnit> tower_se;
 
@@ -91,7 +92,7 @@ private:
         void *cuda_output_ownership_;
 
         std::array<void*, 2> cuda_scratch_op_;
-        std::array<void*, 3> cuda_conv_op_;
+        std::array<void*, 4> cuda_conv_op_;
         std::array<void*, 3> cuda_pol_op_;
         std::array<void*, 3> cuda_val_op_;
         std::array<void*, 2> cuda_mask_op_;

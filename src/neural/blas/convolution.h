@@ -25,7 +25,6 @@ private:
                        std::vector<float> &col);
 };
 
-
 template<unsigned int FILTERS>
 void Convolution<FILTERS>::Forward(const size_t board_size,
                                    const size_t input_channels,
