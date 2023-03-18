@@ -64,10 +64,10 @@ private:
         NNGraph(std::mutex &mtx) : io_mutex_(mtx) {}
         ~NNGraph();
         void BuildGraph(bool dump_gpu_info,
-                            const int gpu,
-                            const int max_batch_size,
-                            const int board_size,
-                            std::shared_ptr<DNNWeights> weights);
+                        const int gpu,
+                        const int max_batch_size,
+                        const int board_size,
+                        std::shared_ptr<DNNWeights> weights);
 
         std::vector<OutputResult> BatchForward(const std::vector<InputData> &input);
 
@@ -85,11 +85,19 @@ private:
 
         std::unique_ptr<Graph> graph_{nullptr};
 
+        void *host_input_planes_;
+        void *host_output_prob_;
+        void *host_output_prob_pass_;
+        void *host_output_val_;
+        void *host_output_ownership_;
+
         void *cuda_input_planes_;
         void *cuda_output_prob_;
         void *cuda_output_prob_pass_;
         void *cuda_output_val_;
         void *cuda_output_ownership_;
+
+        std::array<void*, 2> host_mask_op_;
 
         std::array<void*, 2> cuda_scratch_op_;
         std::array<void*, 4> cuda_conv_op_;

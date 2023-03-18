@@ -177,10 +177,10 @@ void CudaForwardPipe::Destroy() {
 }
 
 void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
-                                              const int gpu,
-                                              const int max_batch_size,
-                                              const int board_size,
-                                              std::shared_ptr<DNNWeights> weights) {
+                                          const int gpu,
+                                          const int max_batch_size,
+                                          const int board_size,
+                                          std::shared_ptr<DNNWeights> weights) {
     if (graph_ != nullptr) {
         return;
     }
@@ -472,7 +472,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
 
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_scratch_op_[0], scratch_size_));
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_scratch_op_[1], scratch_size_));
-    cuda::ReportCUDAErrors(cudaMalloc(&cuda_input_planes_, planes_size));
 
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_conv_op_[0], conv_op_size));
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_conv_op_[1], conv_op_size));
@@ -490,10 +489,21 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_mask_op_[0], mask_op1_size));
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_mask_op_[1], mask_op2_size));
 
+    cuda::ReportCUDAErrors(cudaMalloc(&cuda_input_planes_, planes_size));
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_prob_pass_, factor));
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_prob_, spatia_size));
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_ownership_, spatia_size));
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_val_, val_size));
+
+    // Locked-page memory.
+    cuda::ReportCUDAErrors(cudaMallocHost(&host_mask_op_[0], mask_op1_size));
+    cuda::ReportCUDAErrors(cudaMallocHost(&host_mask_op_[1], mask_op2_size));
+
+    cuda::ReportCUDAErrors(cudaMallocHost(&host_input_planes_, planes_size));
+    cuda::ReportCUDAErrors(cudaMallocHost(&host_output_prob_pass_, factor));
+    cuda::ReportCUDAErrors(cudaMallocHost(&host_output_prob_, spatia_size));
+    cuda::ReportCUDAErrors(cudaMallocHost(&host_output_ownership_, spatia_size));
+    cuda::ReportCUDAErrors(cudaMallocHost(&host_output_val_, val_size));
 }
 
 void CudaForwardPipe::NNGraph::SetComputationMode(cuda::CudaHandles *handles) {
@@ -534,6 +544,9 @@ bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData> &inputs) {
     }
 
     if (should_apply_mask) {
+        // There are at least two different board size
+        // inputs planes. We should do the mask operation
+        // for each NN layers.
         auto spat_mask = std::vector<float>(batch_size * num_intersections);
         auto sqrt_mask = std::vector<float>(batch_size);
 
@@ -556,8 +569,12 @@ bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData> &inputs) {
             std::lock_guard<std::mutex> lock(io_mutex_);
             cuda::SetDevice(handles_.gpu_id);
 
-            cuda::CopyToCudaOp(handles_.fp16, &(cuda_mask_op_[0]), spat_mask);
-            cuda::CopyToCudaOp(handles_.fp16, &(cuda_mask_op_[1]), sqrt_mask);
+            cuda::CopyToCudaOp(
+                handles_.fp16, &(cuda_mask_op_[0]),
+                spat_mask, &(host_mask_op_[0]));
+            cuda::CopyToCudaOp(
+                handles_.fp16, &(cuda_mask_op_[1]),
+                sqrt_mask, &(host_mask_op_[1]));
         }
     }
 
@@ -590,7 +607,9 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     {
         std::lock_guard<std::mutex> lock(io_mutex_);
         cuda::SetDevice(handles_.gpu_id);
-        cuda::CopyToCudaOp(handles_.fp16, &cuda_input_planes_, batch_planes);
+        cuda::CopyToCudaOp(
+            handles_.fp16, &cuda_input_planes_,
+            batch_planes, &host_input_planes_);
     }
 
     // input layer
@@ -729,10 +748,18 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         // copy the results to host memory
         cuda::SetDevice(handles_.gpu_id);
 
-        cuda::CopyToHostOp(handles_.fp16, batch_prob, &cuda_output_prob_);
-        cuda::CopyToHostOp(handles_.fp16, batch_prob_pass, &cuda_output_prob_pass_);
-        cuda::CopyToHostOp(handles_.fp16, batch_value_misc, &cuda_output_val_);
-        cuda::CopyToHostOp(handles_.fp16, batch_ownership, &cuda_output_ownership_);
+        cuda::CopyToHostOp(
+            handles_.fp16, batch_prob,
+            &cuda_output_prob_, &host_output_prob_);
+        cuda::CopyToHostOp(
+            handles_.fp16, batch_prob_pass,
+            &cuda_output_prob_pass_, &host_output_prob_pass_);
+        cuda::CopyToHostOp(
+            handles_.fp16, batch_value_misc,
+            &cuda_output_val_, &host_output_val_);
+        cuda::CopyToHostOp(
+            handles_.fp16, batch_ownership,
+            &cuda_output_ownership_, &host_output_ownership_);
     }
 
     auto batch_output_result = std::vector<OutputResult>(batch_size);
@@ -767,12 +794,6 @@ void CudaForwardPipe::NNGraph::DestroyGraph() {
     cuda::ReportCUDAErrors(cudaFree(cuda_scratch_op_[0]));
     cuda::ReportCUDAErrors(cudaFree(cuda_scratch_op_[1]));
 
-    cuda::ReportCUDAErrors(cudaFree(cuda_input_planes_));
-    cuda::ReportCUDAErrors(cudaFree(cuda_output_prob_));
-    cuda::ReportCUDAErrors(cudaFree(cuda_output_prob_pass_));
-    cuda::ReportCUDAErrors(cudaFree(cuda_output_val_));
-    cuda::ReportCUDAErrors(cudaFree(cuda_output_ownership_));
-
     cuda::ReportCUDAErrors(cudaFree(cuda_conv_op_[0]));
     cuda::ReportCUDAErrors(cudaFree(cuda_conv_op_[1]));
     cuda::ReportCUDAErrors(cudaFree(cuda_conv_op_[2]));
@@ -788,6 +809,21 @@ void CudaForwardPipe::NNGraph::DestroyGraph() {
 
     cuda::ReportCUDAErrors(cudaFree(cuda_mask_op_[0]));
     cuda::ReportCUDAErrors(cudaFree(cuda_mask_op_[1]));
+
+    cuda::ReportCUDAErrors(cudaFree(cuda_input_planes_));
+    cuda::ReportCUDAErrors(cudaFree(cuda_output_prob_));
+    cuda::ReportCUDAErrors(cudaFree(cuda_output_prob_pass_));
+    cuda::ReportCUDAErrors(cudaFree(cuda_output_val_));
+    cuda::ReportCUDAErrors(cudaFree(cuda_output_ownership_));
+
+    cuda::ReportCUDAErrors(cudaFreeHost(host_mask_op_[0]));
+    cuda::ReportCUDAErrors(cudaFreeHost(host_mask_op_[1]));
+
+    cuda::ReportCUDAErrors(cudaFreeHost(host_input_planes_));
+    cuda::ReportCUDAErrors(cudaFreeHost(host_output_prob_));
+    cuda::ReportCUDAErrors(cudaFreeHost(host_output_prob_pass_));
+    cuda::ReportCUDAErrors(cudaFreeHost(host_output_val_));
+    cuda::ReportCUDAErrors(cudaFreeHost(host_output_ownership_));
 
     handles_.Release();
 
