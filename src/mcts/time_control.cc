@@ -15,9 +15,9 @@ TimeControl::TimeControl() {
 }
 
 void TimeControl::TimeSettings(const int main_time,
-                                   const int byo_yomi_time,
-                                   const int byo_yomi_stones,
-                                   const int byo_yomi_periods) {
+                               const int byo_yomi_time,
+                               const int byo_yomi_stones,
+                               const int byo_yomi_periods) {
     // We store the time as centisecond. If the input seconds is greater
     // than 248 days, we set infinite time.
     int max_value = 248 * 24 * 60 * 60;

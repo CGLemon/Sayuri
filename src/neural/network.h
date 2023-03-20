@@ -43,8 +43,6 @@ public:
     void SetCacheSize(size_t MiB);
     void ClearCache();
 
-    static std::vector<float> Softmax(std::vector<float> &input, const float temperature);
-
 private:
     void ActivatePolicy(Result &result, const float temperature) const;
 

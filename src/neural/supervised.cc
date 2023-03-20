@@ -25,8 +25,8 @@ Supervised &Supervised::Get() {
 }
 
 void Supervised::FromSgfs(bool general,
-                              std::string sgf_name,
-                              std::string out_name_prefix) {
+                          std::string sgf_name,
+                          std::string out_name_prefix) {
     // Init all status.
     file_cnt_.store(0, std::memory_order_relaxed);
     worker_cnt_.store(0, std::memory_order_relaxed);
@@ -136,7 +136,7 @@ void Supervised::FromSgfs(bool general,
 }
 
 bool Supervised::SaveChunk(std::string out_name_prefix,
-                               std::vector<Training> &chunk) {
+                           std::vector<Training> &chunk) {
     auto out_name = Format("%s_%d.txt", 
                                out_name_prefix.c_str(),
                                file_cnt_.fetch_add(1));
@@ -171,7 +171,7 @@ bool Supervised::SaveChunk(std::string out_name_prefix,
 }
 
 bool Supervised::GeneralSgfProcess(std::string &sgfstring,
-                                       std::vector<Training> &chunk) const {
+                                   std::vector<Training> &chunk) const {
     GameState state;
 
     try {
@@ -262,7 +262,7 @@ bool Supervised::GeneralSgfProcess(std::string &sgfstring,
 }
 
 bool Supervised::SgfProcess(std::string &sgfstring,
-                                std::vector<Training> &chunk) const {
+                            std::vector<Training> &chunk) const {
     GameState state;
 
     try {

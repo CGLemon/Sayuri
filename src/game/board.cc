@@ -209,7 +209,7 @@ bool Board::IsLegalMove(const int vtx, const int color) const {
 }
 
 bool Board::IsLegalMove(const int vtx, const int color,
-                            std::function<bool(int, int)> AvoidToMove) const {
+                        std::function<bool(int, int)> AvoidToMove) const {
     if (vtx == kPass || vtx == kResign) {
         return true;
     }
@@ -273,7 +273,7 @@ int Board::ComputeReachGroup(int start_vertex, int spread_color, std::vector<boo
 }
 
 int Board::ComputeReachGroup(int start_vertex, int spread_color,
-                                 std::vector<bool> &buf, std::function<int(int)> Peek) const {
+                             std::vector<bool> &buf, std::function<int(int)> Peek) const {
     if (buf.size() != (size_t)num_vertices_) {
         buf.resize(num_vertices_);
     }
@@ -312,8 +312,8 @@ int Board::ComputeReachColor(int color) const {
 }
 
 int Board::ComputeReachColor(int color, int spread_color,
-                                 std::vector<bool> &buf,
-                                 std::function<int(int)> Peek) const {
+                             std::vector<bool> &buf,
+                             std::function<int(int)> Peek) const {
     if (buf.size() != (size_t)num_vertices_) {
         buf.resize(num_vertices_);
     }
@@ -402,9 +402,9 @@ int Board::CountPliberties(const int vtx) const {
 }
 
 void Board::FindStringSurround(const int vtx,
-                                   const int color,
-                                   std::vector<int>& lib_buf,
-                                   std::vector<int>& index_buf) const {
+                               const int color,
+                               std::vector<int>& lib_buf,
+                               std::vector<int>& index_buf) const {
     const auto set_insert = [](std::vector<int> &buf, int element){
         auto begin = std::begin(buf);
         auto end = std::end(buf);
@@ -526,8 +526,8 @@ std::pair<int, int> Board::GetLadderLiberties(const int vtx, const int color) co
 }
 
 LadderType Board::PreySelections(const int prey_color,
-                                     const int ladder_vtx,
-                                     std::vector<int>& selections, bool think_ko) const {
+                                 const int ladder_vtx,
+                                 std::vector<int>& selections, bool think_ko) const {
     assert(selections.empty());
 
     const int libs = strings_.GetLiberty(strings_.GetParent(ladder_vtx));
@@ -582,8 +582,8 @@ LadderType Board::PreySelections(const int prey_color,
 }
 
 LadderType Board::HunterSelections(const int prey_color,
-                                       const int ladder_vtx,
-                                       std::vector<int>& selections) const {
+                                   const int ladder_vtx,
+                                   std::vector<int>& selections) const {
     assert(selections.empty());
 
     const int libs = strings_.GetLiberty(strings_.GetParent(ladder_vtx));
@@ -654,8 +654,8 @@ LadderType Board::HunterSelections(const int prey_color,
 }
 
 LadderType Board::PreyMove(Board* board,
-                               const int hunter_vtx, const int prey_color,
-                               const int ladder_vtx, size_t& ladder_nodes, bool fork) const {
+                           const int hunter_vtx, const int prey_color,
+                           const int ladder_vtx, size_t& ladder_nodes, bool fork) const {
 
     if ((++ladder_nodes) >= kMaxLadderNodes) {
         // If hit the limit, assume prey have escaped. 
@@ -715,8 +715,8 @@ LadderType Board::PreyMove(Board* board,
 }
 
 LadderType Board::HunterMove(Board* board,
-                                 const int prey_vtx, const int prey_color,
-                                 const int ladder_vtx, size_t& ladder_nodes, bool fork) const {
+                             const int prey_vtx, const int prey_color,
+                             const int ladder_vtx, size_t& ladder_nodes, bool fork) const {
     if ((++ladder_nodes) >= kMaxLadderNodes) {
         // If hit the limit, assume prey have escaped. 
         return LadderType::kGoodForPrey;
@@ -1158,7 +1158,7 @@ bool Board::IsKillableSekiEyeShape(const int vtx,
     }
 
     const auto GetEmptySideCount = [this](const int eye_vtx,
-                                              std::vector<bool> &eye_region) {
+                                          std::vector<bool> &eye_region) {
         int side_cnt = 0;
         for (int k = 0; k < 4; ++k) {
             if (eye_region[eye_vtx + directions_[k]]) {
@@ -1701,9 +1701,9 @@ void Board::ComputeSafeArea(std::vector<bool> &result, bool mark_seki) const {
 }
 
 void Board::ComputePassAliveArea(std::vector<bool> &result,
-                                     const int color,
-                                     bool mark_vitals,
-                                     bool mark_pass_dead) const {
+                                 const int color,
+                                 bool mark_vitals,
+                                 bool mark_pass_dead) const {
     auto ocupied = std::vector<int>(num_vertices_, kInvalid);
 
     // Mark the color.
@@ -1879,13 +1879,13 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
 }
 
 bool Board::IsPassAliveString(const int vtx,
-                                  bool allow_sucide,
-                                  const std::vector<bool> &vitals,
-                                  const std::vector<int> &features,
-                                  const std::vector<int> &regions_index,
-                                  const std::vector<int> &regions_next,
-                                  const std::vector<int> &strings_index,
-                                  const std::vector<int> &strings_next) const {
+                              bool allow_sucide,
+                              const std::vector<bool> &vitals,
+                              const std::vector<int> &features,
+                              const std::vector<int> &regions_index,
+                              const std::vector<int> &regions_next,
+                              const std::vector<int> &strings_index,
+                              const std::vector<int> &strings_next) const {
     auto vitals_list = std::set<int>{};
     int my_index = strings_index[vtx];
     int pos = vtx;
@@ -1932,15 +1932,15 @@ bool Board::IsPassAliveString(const int vtx,
 }
 
 bool Board::IsPassDeadRegion(const int vtx,
-                                 const int color,
-                                 bool allow_sucide,
-                                 std::vector<int> &features,
-                                 const std::vector<int> &regions_next) const {
+                             const int color,
+                             bool allow_sucide,
+                             std::vector<int> &features,
+                             const std::vector<int> &regions_next) const {
     const auto IsPotentialEye = [this](const int vertex,
-                                           const int color,
-                                           bool allow_sucide,
-                                           std::vector<int> &features,
-                                           std::vector<bool> &inner_regions) {
+                                       const int color,
+                                       bool allow_sucide,
+                                       std::vector<int> &features,
+                                       std::vector<bool> &inner_regions) {
         // This is greedy algorithm, we only promise that the position is not
         // potential eye if it return false. It is possible that the position
         // is fake eye even if it return true. 
@@ -2028,9 +2028,9 @@ bool Board::IsPassDeadRegion(const int vtx,
 }
 
 void Board::ComputeInnerRegions(const int vtx,
-                                    const int color,
-                                    const std::vector<int> &regions_next,
-                                    std::vector<bool> &inner_regions) const {
+                                const int color,
+                                const std::vector<int> &regions_next,
+                                std::vector<bool> &inner_regions) const {
     auto surround = std::vector<int>(num_vertices_, kInvalid);
 
     std::fill(std::begin(inner_regions), std::end(inner_regions), false);
@@ -2085,9 +2085,9 @@ void Board::ComputeInnerRegions(const int vtx,
 }
 
 std::vector<int> Board::ClassifyGroups(const int target,
-                                           std::vector<int> &features,
-                                           std::vector<int> &regions_index,
-                                           std::vector<int> &regions_next) const {
+                                       std::vector<int> &features,
+                                       std::vector<int> &regions_index,
+                                       std::vector<int> &regions_next) const {
     // Set -1 is out of border area.
     std::fill(std::begin(regions_index), std::end(regions_index), -1);
 

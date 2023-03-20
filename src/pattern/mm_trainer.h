@@ -23,8 +23,8 @@ private:
     using FeatureConuter = std::vector<int>;
 
     bool PatternMatch(const Board& board,
-                          int feature, int dist,
-                          int vertex, int color, std::uint64_t &mhash) const;
+                      int feature, int dist,
+                      int vertex, int color, std::uint64_t &mhash) const;
 
     void FillPatterns(std::string sgfstring);
     void FillMmParticipant(std::string sgfstring);

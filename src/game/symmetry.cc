@@ -98,8 +98,8 @@ std::string Symmetry::GetDebugString(int boardsize) const {
 }
 
 std::pair<int, int> Symmetry::GetSymmetry(const int x, const int y,
-                                              const int symmetry,
-                                              const int boardsize)  const {
+                                          const int symmetry,
+                                          const int boardsize)  const {
     assert(x >= 0 && x < boardsize);
     assert(y >= 0 && y < boardsize);
     assert(symmetry >= 0 && symmetry < kNumSymmetris);

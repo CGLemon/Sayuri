@@ -24,7 +24,7 @@ private:
     void PartInitialize(int boardsize);
 
     std::pair<int, int> GetSymmetry(const int x, const int y,
-                                        const int symmetry, const int boardsize) const;
+                                    const int symmetry, const int boardsize) const;
 
     int symmetry_nn_vtx_tables_[kTableSize][kNumSymmetris][kNumVertices];
     int symmetry_nn_idx_tables_[kTableSize][kNumSymmetris][kNumIntersections];

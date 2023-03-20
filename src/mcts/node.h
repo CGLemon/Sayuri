@@ -93,16 +93,16 @@ public:
 
     // Expand this node.
     bool ExpandChildren(Network &network,
-                            GameState &state,
-                            NodeEvals& node_evals,
-                            AnalysisConfig &config,
-                            const bool is_root);
+                        GameState &state,
+                        NodeEvals& node_evals,
+                        AnalysisConfig &config,
+                        const bool is_root);
 
     // Expand root node children before starting tree search.
     bool PrepareRootNode(Network &network,
-                             GameState &state,
-                             NodeEvals& node_evals,
-                             AnalysisConfig &config);
+                         GameState &state,
+                         NodeEvals& node_evals,
+                         AnalysisConfig &config);
 
     // Select the best policy node.
     Node *ProbSelectChild();
@@ -204,8 +204,8 @@ public:
 
 private:
     void ApplyNoDcnnPolicy(GameState &state,
-                               const int color,
-                               Network::Result &raw_netlist) const;
+                           const int color,
+                           Network::Result &raw_netlist) const;
     void ApplyDirichletNoise(const float alpha);
     void ApplyNetOutput(GameState &state,
                         const Network::Result &raw_netlist,
@@ -229,14 +229,14 @@ private:
 
     float GetGumbelQValue(int color, float parent_score) const;
     float NormalizeCompletedQ(const float completed_q,
-                                  const int max_visits) const;
+                              const int max_visits) const;
     void ComputeNodeCount(size_t &nodes, size_t &edges);
     void ProcessGumbelLogits(std::vector<float> &gumbel_logits,
-                                 const int color,
-                                 const int root_visits,
-                                 const int max_visists,
-                                 const int considered_moves, const float mval,
-                                 bool only_max_visit);
+                             const int color,
+                             const int root_visits,
+                             const int max_visists,
+                             const int considered_moves, const float mval,
+                             bool only_max_visit);
     Node *GumbelSelectChild(int color, bool only_max_visit);
     void MixLogitsCompletedQ(GameState &state, std::vector<float> &prob);
 

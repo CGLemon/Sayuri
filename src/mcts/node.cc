@@ -4,6 +4,7 @@
 #include "utils/atomic.h"
 #include "utils/random.h"
 #include "utils/format.h"
+#include "utils/logits.h"
 #include "game/symmetry.h"
 
 #include <cassert>
@@ -26,9 +27,9 @@ Node::~Node() {
 }
 
 bool Node::PrepareRootNode(Network &network,
-                               GameState &state,
-                               NodeEvals &node_evals,
-                               AnalysisConfig &config) {
+                           GameState &state,
+                           NodeEvals &node_evals,
+                           AnalysisConfig &config) {
     const auto is_root = true;
     const auto success = ExpandChildren(network, state, node_evals, config, is_root);
     assert(HaveChildren());
@@ -65,10 +66,10 @@ bool Node::PrepareRootNode(Network &network,
 }
 
 bool Node::ExpandChildren(Network &network,
-                              GameState &state,
-                              NodeEvals &node_evals,
-                              AnalysisConfig &config,
-                              const bool is_root) {
+                          GameState &state,
+                          NodeEvals &node_evals,
+                          AnalysisConfig &config,
+                          const bool is_root) {
     // The node must be the first time to expand and is not the terminate node.
     assert(state.GetPasses() < 2);
     if (HaveChildren()) {
@@ -210,8 +211,8 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
 }
 
 void Node::ApplyNetOutput(GameState &state,
-                              const Network::Result &raw_netlist,
-                              NodeEvals& node_evals, const int color) {
+                          const Network::Result &raw_netlist,
+                          NodeEvals& node_evals, const int color) {
     auto black_ownership = std::array<float, kNumIntersections>{};
     auto black_fs = float(0.f);
     auto draw =raw_netlist.wdl[1];
@@ -269,7 +270,7 @@ void Node::ApplyNetOutput(GameState &state,
 }
 
 void Node::ApplyNoDcnnPolicy(GameState &state, const int color,
-                                 Network::Result &raw_netlist) const {
+                             Network::Result &raw_netlist) const {
     const auto num_intersections = state.GetNumIntersections();
     auto policy = state.GetGammasPolicy(color);
 
@@ -1333,7 +1334,7 @@ float Node::GetGumbelQValue(int color, float parent_score) const {
 }
 
 float Node::NormalizeCompletedQ(const float completed_q,
-                                    const int max_visits) const {
+                                const int max_visits) const {
     // The transformation progressively increases the scale for
     // Q value and reduces the effect of the prior policy.
     return (50.f + max_visits) * 0.1f * completed_q;
@@ -1374,7 +1375,7 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
     }
 
     const auto parent_score = GetFinalScore(color);
-    auto logits_q = std::vector<float>(num_intersections+1, -1e6f);
+    auto logits_q = GetZeroLogits<float>(num_intersections+1);
 
     int max_visits = 0;
     int parentvisits = 0;
@@ -1446,12 +1447,12 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
                       state.GetX(vtx), state.GetY(vtx));
         }
 
-        const float logits = std::log((double)prob[idx] + 1e-8f);
+        const float logits = SafeLog(prob[idx]);
         const float completed_q = completed_q_list[completed_q_idx++];
         logits_q[idx] = logits + NormalizeCompletedQ(
                                      completed_q, max_visits);
     }
-    prob = Network::Softmax(logits_q, 1.f);
+    prob = Softmax(logits_q, 1.f);
 
     // Prune the bad policy.
     double psize = prob.size();
@@ -1576,7 +1577,7 @@ Node *Node::GumbelSelectChild(int color, bool only_max_visit) {
     assert(HaveChildren());
 
     auto gumbel_type1 = std::extreme_value_distribution<float>(0, 1);
-    auto gumbel_logits = std::vector<float>(kNumVertices+10, -1e6f);
+    auto gumbel_logits = GetZeroLogits<float>(kNumVertices+10);
     int parentvisits = 0;
     int max_visits = 0;
 
@@ -1586,8 +1587,7 @@ Node *Node::GumbelSelectChild(int color, bool only_max_visit) {
         const bool is_pointer = node != nullptr;
 
         gumbel_logits[child.GetVertex()] =
-            gumbel_type1(Random<>::Get()) +
-                std::log((double)(child.GetPolicy()) + 1e-8f);
+            gumbel_type1(Random<>::Get()) + SafeLog(child.GetPolicy());
 
         if (is_pointer && node->IsValid()) {
             // The node status is pruned or active.
@@ -1601,7 +1601,7 @@ Node *Node::GumbelSelectChild(int color, bool only_max_visit) {
         std::min(param_->gumbel_considered_moves, (int)children_.size());
     ProcessGumbelLogits(gumbel_logits, color,
                             parentvisits, max_visits,
-                            considered_moves, -1e6f,
+                            considered_moves, LOGIT_ZERO,
                             only_max_visit);
 
     Edge* best_node = nullptr;
