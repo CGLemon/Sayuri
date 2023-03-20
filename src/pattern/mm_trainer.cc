@@ -164,9 +164,9 @@ void MmTrainer::FilterPatterns(int select_min_count) {
 }
 
 bool MmTrainer::PatternMatch(const Board& board,
-                                 int feature, int dist,
-                                 int vertex, int color,
-                                 std::uint64_t &mhash) const {
+                             int feature, int dist,
+                             int vertex, int color,
+                             std::uint64_t &mhash) const {
     const FeatureSpatDict &spat_dict = feature_spat_dicts_[feature];
     bool matched = false;
 

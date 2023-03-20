@@ -10,9 +10,9 @@ public:
     TimeControl();
 
     void TimeSettings(const int main_time,
-                          const int byo_yomi_time,
-                          const int byo_yomi_stones,
-                          const int byo_yomi_periods);
+                      const int byo_yomi_time,
+                      const int byo_yomi_stones,
+                      const int byo_yomi_periods);
 
     void TimeLeft(const int color, const int time, const int stones);
 

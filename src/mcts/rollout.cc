@@ -2,8 +2,8 @@
 #include "game/types.h"
 
 float GetBlackRolloutResult(GameState &state,
-                                float *mcowner,
-                                float &black_score) {
+                            float *mcowner,
+                            float &black_score) {
     auto fork_state = state;
     const int num_intersections = fork_state.GetNumIntersections();
     int num_curr_moves = 0;

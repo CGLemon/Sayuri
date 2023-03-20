@@ -54,11 +54,11 @@ inline int ComputeWidth(int visits) {
 }
 
 float GetBlackRolloutResult(GameState &state,
-                                // The MC ownermap value. Set 1 if the final position is
-                                // black. Set -1 if it is white. The another is 0.
-                                // 
-                                // [ black ~ white ]
-                                // [ 1     ~    -1 ]
-                                float *mcowner,
-                                float &black_score
+                            // The MC ownermap value. Set 1 if the final position is
+                            // black. Set -1 if it is white. The another is 0.
+                            // 
+                            // [ black ~ white ]
+                            // [ 1     ~    -1 ]
+                            float *mcowner,
+                            float &black_score
                            );

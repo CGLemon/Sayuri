@@ -19,7 +19,7 @@ Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network a
 * Optional: Eigen or OpenBLAS library
 * Optional: CUDA 10.x or 11.x library (GCC 7.x passed)
 * Optional: cuDNN 7.x or 8.x library
-* Optional: Fast Float library
+* Optional: gzip
 
 ## Default Compiling (Ubuntu or MacOS)
 
@@ -44,7 +44,7 @@ Accelerate the network forwarding pipe by GPUs. CUDA is required. It is the fast
 
     $ cmake .. -DBLAS_BACKEND=CUDA
 
-Accelerate the network forwarding pipe by GPUs. CUDA and cuDNN are both required. This backend is much steady buf may be slower than CUDA-only.
+Accelerate the network forwarding pipe by GPUs. CUDA and cuDNN are both required. This backend is much steady but may be slower than CUDA-only.
 
     $ cmake .. -DBLAS_BACKEND=CUDNN
 
@@ -56,19 +56,23 @@ Disable the FP16 CUDA code if your CUDA version doesn't support for it.
 
     $ cmake .. -DDISABLE_FP16=1
 
-## Weights
+Save the compressed training data file. It can save many memory usage in the self-play.
+
+    $ cmake .. -DUSE_ZLIB=1
+
+## Weights and Others.
 
 You may download the SL weights file, opening book and patterns from my [google drive](https://drive.google.com/drive/folders/1cXAoOghgkUfNVZWRzEyvfB4uY_TTbaVH?usp=share_link). Here is the description list. Because I may update the network format or encoder, be sure that you download the correspond weights for the last engine. I do not promise the any file is backward compatible.
 
 | File                    | Description                                    |
 | :---------------------- | :--------------------------------------------- |
 | Network Weights         | The main weights file, trained on KataGo self-play games. The ```.bin``` postfix is binary version. |
-| Opening Book            | It is human-like book, gather from profession games. Force Sayuri to play variable opening moves. It is just fun for playing. |
+| Opening Book            | It is human-like book, gathering from profession games. Force Sayuri to play variable opening moves. It is just fun for playing. |
 | MM Patterns             | It is for no-dcnn mode, trained on the games of high level players from KGS. |
 
 <br/>
 
-Download last RL weights file from [zero](https://drive.google.com/drive/folders/1PlPTOH1amP3J7HR5uxi9Q_Dd_CL9rEX8?usp=share_link) directory. The file name ```zero-10k.bin.txt```, ```10k``` means it played 10000 self-play games. The self-play note is [here](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJew5OFci).
+Download last RL weights file from [zero](https://drive.google.com/drive/folders/1PlPTOH1amP3J7HR5uxi9Q_Dd_CL9rEX8?usp=share_link) directory. The file name looks like  ```zero-10k.bin.txt```. The ```10k``` means it played 10000 self-play games. The self-play note is [here](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJew5OFci).
 
 ## Engine Arguments
 
@@ -92,6 +96,7 @@ Here are some useful arguments which you may need.
 |  --reuse-tree           | None   | Will reuse the sub-tree.                       |
 |  --no-dcnn              | None   | Disable network, very weak.                    |
 |  --no-fp16              | None   | Disable FP16 computation.                      |
+|  --no-winograd          | None   | Disable WinoGrad algorithm.                    |
 |  --help, -h             | None   | Show the more arguments.                       |
     
 <br/>
@@ -217,7 +222,6 @@ KataGo also used the variant bottleneck and said it could significantly improve 
 * Support Windows platform.
 * Support NHWC format.
 * Support distributed computation.
-* Support the bottleneck network.
 
 ## Other Linkings
 

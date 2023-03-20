@@ -45,8 +45,6 @@ public:
     void SetCacheSize(size_t MiB);
     void ClearCache();
 
-    static std::vector<float> Softmax(std::vector<float> &input, const float temperature);
-
 private:
     bool SelfCheck(Network::Result other, const Network::Inputs &inputs, int &type) const;
 

@@ -9,8 +9,8 @@ void ClearVector2D(std::vector<std::vector<float>> &vec2d) {
 }
 
 void WinogradConvolution3::TransformIn(const int board_size,
-                                           const std::vector<float>& in,
-                                           std::vector<float>& V, const int C) {
+                                       const std::vector<float>& in,
+                                       std::vector<float>& V, const int C) {
     const int W = board_size;
     const int H = board_size;
     const int WTILES = GetWinogradWTiles(board_size);
@@ -139,10 +139,10 @@ void WinogradConvolution3::TransformIn(const int board_size,
 }
 
 void WinogradConvolution3::Sgemm(const int board_size,
-                                     const std::vector<float>& U,
-                                     const std::vector<float>& V,
-                                     std::vector<float>& M,
-                                     const int C, const int K) {
+                                 const std::vector<float>& U,
+                                 const std::vector<float>& V,
+                                 std::vector<float>& M,
+                                 const int C, const int K) {
     //    [C, K, P] are [input_channels, output_channels, Ptiles]
     // U dimensions are [36,  input_channels, output_channels].
     // V dimensions are [36,  input_channels, p_tiles].
@@ -164,8 +164,8 @@ void WinogradConvolution3::Sgemm(const int board_size,
 }
 
 void WinogradConvolution3::TransformOut(const int board_size,
-                                            const std::vector<float>& M,
-                                            std::vector<float>& Y, const int K) {
+                                        const std::vector<float>& M,
+                                        std::vector<float>& Y, const int K) {
     const int W = board_size;
     const int H = board_size;
     const int WTILES = GetWinogradWTiles(board_size);
@@ -241,13 +241,13 @@ void WinogradConvolution3::TransformOut(const int board_size,
 }
 
 void WinogradConvolution3::Forward(const size_t board_size,
-                                       const size_t input_channels,
-                                       const size_t output_channels,
-                                       const std::vector<float>& input,
-                                       const std::vector<float>& U,
-                                       std::vector<float>& V,
-                                       std::vector<float>& M,
-                                       std::vector<float>& output) {
+                                   const size_t input_channels,
+                                   const size_t output_channels,
+                                   const std::vector<float>& input,
+                                   const std::vector<float>& U,
+                                   std::vector<float>& V,
+                                   std::vector<float>& M,
+                                   std::vector<float>& output) {
     TransformIn(board_size, input, V, input_channels);
     Sgemm(board_size, U, V, M, input_channels, output_channels);
     TransformOut(board_size, M, output, output_channels);

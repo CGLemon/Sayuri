@@ -85,14 +85,12 @@ The ```selfplay-config.txt``` controls the self-play process. Here are the param
 --random-moves-factor 0.08   # Do the random move if the move number is
                              # below the (X * intersections).
 
---komi-variance 2.5          # Apply the random komi in the self-play
+--komi-stddev 2.5            # Apply the random komi in the self-play
                              # games.
 
 --cpuct-init 1.25
 --lcb-reduction 0
 --score-utility-factor 0.05
---lcb-utility-factor 0.05
---completed-q-utility-factor 0.05
 
 --selfplay-query bkp:9:7:0.9 # The format is boardsize-komi-prob.
                              # It means 90% games are 9x9 with komi 7.

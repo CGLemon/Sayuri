@@ -10,8 +10,8 @@ int GetWinogradP(const int board_size) {
 }
 
 std::vector<float> WinogradTransformF(const std::vector<float>& f,
-                                          const int outputs,
-                                          const int channels) {
+                                      const int outputs,
+                                      const int channels) {
     constexpr auto SQ2 = kSqrt2;
 
     // F(4x4, 3x3) Winograd filter transformation

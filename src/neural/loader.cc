@@ -317,10 +317,10 @@ void DNNLoder::DumpInfo(std::shared_ptr<DNNWeights> weights) const {
 }
 
 void DNNLoder::FillWeights(NetInfo &netinfo,
-                               NetStack &netstack,
-                               NetStruct &netstruct,
-                               std::shared_ptr<DNNWeights> weights,
-                               std::istream &buffer) const {
+                           NetStack &netstack,
+                           NetStruct &netstruct,
+                           std::shared_ptr<DNNWeights> weights,
+                           std::istream &buffer) const {
 
     weights->input_channels = std::stoi(netinfo["InputChannels"]);
 
@@ -769,9 +769,9 @@ void DNNLoder::GetWeightsFromBuffer(std::vector<float> &weights, std::istream &b
 }
 
 void DNNLoder::FillFullyconnectLayer(LinearLayer &layer,
-                                         std::istream &buffer,
-                                         const int in_size,
-                                         const int out_size) const {
+                                     std::istream &buffer,
+                                     const int in_size,
+                                     const int out_size) const {
     auto weights = std::vector<float>{};
     layer.Set(in_size, out_size);    
 
@@ -783,8 +783,8 @@ void DNNLoder::FillFullyconnectLayer(LinearLayer &layer,
 }
 
 void DNNLoder::FillBatchnormLayer(BatchNormLayer &layer,
-                                      std::istream &buffer,
-                                      const int channels) const {
+                                  std::istream &buffer,
+                                  const int channels) const {
     auto weights = std::vector<float>{};
     layer.Set(channels);
 
@@ -796,10 +796,10 @@ void DNNLoder::FillBatchnormLayer(BatchNormLayer &layer,
 }
 
 void DNNLoder::FillConvolutionLayer(ConvLayer &layer,
-                                        std::istream &buffer,
-                                        const int in_channels,
-                                        const int out_channels,
-                                        const int kernel_size) const {
+                                    std::istream &buffer,
+                                    const int in_channels,
+                                    const int out_channels,
+                                    const int kernel_size) const {
     auto weights = std::vector<float>{};    
     layer.Set(in_channels, out_channels, kernel_size);
 

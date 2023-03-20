@@ -44,14 +44,14 @@ private:
                    >
     >
     Option(Type t, T val,
-               bool use_max, std::string max,
-               bool use_min, std::string min) :
-                   type_(t),
-                   use_max_(use_max), max_(max),
-                   use_min_(use_min), min_(min) {
-                       FancyPush(val);
-                       Adjust();
-                   }
+           bool use_max, std::string max,
+           bool use_min, std::string min) :
+               type_(t),
+               use_max_(use_max), max_(max),
+               use_min_(use_min), min_(min) {
+                   FancyPush(val);
+                   Adjust();
+               }
 
     Option(Type t, std::string val)
                : type_(t)

@@ -9,9 +9,9 @@
 namespace cuda {
 
 void AddSpatial(bool fp16, void *data, const void *biases,
-                    const void *eltwise, const void *mask,
-                    int bsize, int batch, int channels, int spatial,
-                    bool relu, cudaStream_t stream);
+                const void *eltwise, const void *mask,
+                int bsize, int batch, int channels, int spatial,
+                bool relu, cudaStream_t stream);
 
 class LayerBasic {
 protected:
@@ -30,15 +30,15 @@ class Convolution : public LayerBasic {
 public:
     Convolution() = default;
     Convolution(CudaHandles *handles, const int batch,
-                    const int board_size, const int filter,
-                    const int in_channels, const int out_channels,
-                    bool ReLU = true);
+                const int board_size, const int filter,
+                const int in_channels, const int out_channels,
+                bool ReLU = true);
     ~Convolution();
 
     void Forward(const int batch,
-                     void *output, void *input,
-                     const void *eltwise, const void *mask,
-                     void *scratch, void *scratch_other, size_t scratch_size);
+                 void *output, void *input,
+                 const void *eltwise, const void *mask,
+                 void *scratch, void *scratch_other, size_t scratch_size);
 
     void LoadingWeight(const std::vector<float> &weights,
                        size_t &scratch_size,
@@ -75,10 +75,10 @@ class FullyConnect : public LayerBasic {
 public:
     FullyConnect() = default;
     FullyConnect(CudaHandles *handles,
-                     const int batch,
-                     const int inputs, 
-                     const int outputs,
-                     bool ReLU);
+                 const int batch,
+                 const int inputs, 
+                 const int outputs,
+                 bool ReLU);
     ~FullyConnect();
 
     void Forward(const int batch, void *output, void *input);
@@ -97,14 +97,14 @@ class GlobalPooling : public LayerBasic {
 public:
     GlobalPooling() = default; 
     GlobalPooling(CudaHandles *handles,
-                      bool is_value_head,
-                      const int batch,
-                      const int board_size,
-                      const int channels);
+                  bool is_value_head,
+                  const int batch,
+                  const int board_size,
+                  const int channels);
 
     void Forward(const int batch,
-                     void *output, void *input,
-                     void *mask, void *sqrt_mask);
+                 void *output, void *input,
+                 void *mask, void *sqrt_mask);
 
 private:
     int channels_;
@@ -115,10 +115,10 @@ class SEUnit : public LayerBasic {
 public:
     SEUnit() = default;
     SEUnit(CudaHandles *handles,
-               const int batch,
-               const int board_size,
-               const int channels,
-               const int se_size);
+           const int batch,
+           const int board_size,
+           const int channels,
+           const int se_size);
     ~SEUnit();
 
     void LoadingWeight(const std::vector<float> &weights_w1,

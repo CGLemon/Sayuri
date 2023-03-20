@@ -66,14 +66,27 @@ std::string GetBackendInfo();
 std::string GetCurrentDeviceInfo(CudaHandles *handles);
 
 void MallocAndCopy(bool fp16, void **cude_op,
-                       const std::vector<float> &weights);
+                   const std::vector<float> &weights);
 
 void MallocCudaOp(bool fp16, void **cude_op, size_t size);
 
-void CopyToCudaOp(bool fp16, void **cude_op,
-                      const std::vector<float> &inputs);
+void ZeroCopyToCuda(bool fp16, void **host_op,
+                    const std::vector<float> &inputs);
 
-void CopyToHostOp(bool fp16, std::vector<float> &output, void **cude_op);
+void ZeroCopyToHost(bool fp16, std::vector<float> &outputs, void **host_op);
+
+// Copy the 'inputs' data to 'cude_op'. Use the
+// pinned memory if we provide the 'pinned_op'.
+// Otherwise, set it as null pointer.
+void CopyToCudaOp(bool fp16, void **cude_op,
+                  const std::vector<float> &inputs,
+                  void **pinned_op = nullptr);
+
+// Copy the 'cude_op' data to 'outputs'. Use the
+// pinned memory if we provide the 'pinned_op'.
+// Otherwise, set it as null pointer.
+void CopyToHostOp(bool fp16, std::vector<float> &outputs,
+                  void **cude_op, void **pinned_op = nullptr);
 
 } // namespace cuda
 

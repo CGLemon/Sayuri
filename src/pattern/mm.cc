@@ -6,7 +6,7 @@
 #include <fstream>
 
 void MinorizationMaximization::Initialize(std::vector<int> features,
-                                              std::vector<std::string> names) {
+                                          std::vector<std::string> names) {
     features_ = features;
     num_features_ = (int)features.size();
     features_acc_.resize(num_features_);
