@@ -16,7 +16,7 @@ private:
     void Loop();
 
     bool SaveChunk(const int out_id,
-                       std::vector<Training> &chunk);
+                   std::vector<Training> &chunk);
 
     std::mutex data_mutex_;
     std::mutex log_mutex_;

@@ -287,8 +287,8 @@ std::uint16_t Board::GetPattern3Hash(const int vtx) const {
 }
 
 std::uint16_t Board::GetSymmetryPattern3Hash(const int vtx,
-                                                 const int color,
-                                                 const int symmetry) const {
+                                             const int color,
+                                             const int symmetry) const {
     int size = letter_box_size_;
     int buf[9];
 
@@ -390,7 +390,7 @@ std::uint64_t Board::GetPatternHash(const int vtx, const int color, const int di
 }
 
 std::uint64_t Board::GetSymmetryPatternHash(const int vtx, const int color, 
-                                                      const int dist, const int symmetry) const {
+                                            const int dist, const int symmetry) const {
     std::uint64_t hash = PatternHash[0][kInvalid][0];
 
     constexpr int kColorMap[2][4] = {
@@ -419,9 +419,9 @@ std::uint64_t Board::GetSymmetryPatternHash(const int vtx, const int color,
 
 
 std::uint64_t Board::GetSurroundPatternHash(std::uint64_t hash,
-                                                      const int vtx,
-                                                      const int color,
-                                                      const int dist) const {
+                                            const int vtx,
+                                            const int color,
+                                            const int dist) const {
     if (dist == 2) {
         hash = PatternHash[0][kInvalid][0];
     }
@@ -664,7 +664,7 @@ bool Board::GetSelfAtariLevel(const int vtx, const int color, std::uint64_t &has
 }
 
 bool Board::GetFeatureWrapper(const int f, const int vtx,
-                                  const int color, std::uint64_t &hash) const {
+                              const int color, std::uint64_t &hash) const {
     switch (f) {
         case 0: return GetBorderLevel(vtx, color, hash);
         case 1: return GetDistLevel(vtx, color, hash);

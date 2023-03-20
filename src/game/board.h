@@ -96,7 +96,7 @@ public:
     // Reture true if the move is legal.
     bool IsLegalMove(const int vertex, const int color) const;
     bool IsLegalMove(const int vertex, const int color,
-                         std::function<bool(int, int)> AvoidToMove) const;
+                     std::function<bool(int, int)> AvoidToMove) const;
 
     // Return true if the move is self-atari. Notice that
     // it is not full implement. We do not consider the 
@@ -145,14 +145,12 @@ public:
     std::uint64_t GetMoveHash(const int vtx, const int color) const;
 
     int ComputeReachGroup(int start_vertex, int spread_color,
-                              std::vector<bool> &buf,
-                              std::function<int(int)> Peek) const;
+                          std::vector<bool> &buf,
+                          std::function<int(int)> Peek) const;
     int ComputeReachGroup(int start_vertex, int spread_color, std::vector<bool> &buf) const;
-
 
     // Remove the marked strings from board.
     void RemoveMarkedStrings(std::vector<int> &marked);
-
 
     // Compute final score with Tromp Taylor rule.
     float ComputeFinalScore(float komi) const;
@@ -185,17 +183,17 @@ public:
     static void InitPattern3();
     std::uint16_t GetPattern3Hash(const int vtx) const;
     std::uint16_t GetSymmetryPattern3Hash(const int vtx,
-                                              const int color,
-                                              const int symmetry) const;
+                                          const int color,
+                                          const int symmetry) const;
     bool MatchPattern3(const int vtx) const;
     std::string GetPatternSpat(const int vtx, const int color, const int dist) const;
     std::uint64_t GetPatternHash(const int vtx, const int color, const int dist) const;
     std::uint64_t GetSymmetryPatternHash(const int vtx, const int color,
-                                             const int dist, const int symmetry) const;
+                                         const int dist, const int symmetry) const;
     std::uint64_t GetSurroundPatternHash(std::uint64_t hash,
-                                             const int vtx,
-                                             const int color,
-                                             const int dist) const;
+                                         const int vtx,
+                                         const int color,
+                                         const int dist) const;
 
     // For board features...
     bool GetBorderLevel(const int vtx, const int color, std::uint64_t &hash) const;
@@ -298,9 +296,9 @@ private:
 
     // Find the liberties of the string and the surrounded strings.
     void FindStringSurround(const int vtx,
-                                const int color,
-                                std::vector<int>& lib_buf,
-                                std::vector<int>& index_buf) const;
+                            const int color,
+                            std::vector<int>& lib_buf,
+                            std::vector<int>& index_buf) const;
 
     // Find the liberties of the string.
     int FindStringLiberties(const int vtx, std::vector<int>& buf) const;
@@ -387,29 +385,29 @@ private:
     // Mark all vital regions of pass-alive string if 'mark_vitals' is true.
     // Mark all pass-dead regions if 'mark_pass_dead' is true.
     void ComputePassAliveArea(std::vector<bool> &result,
-                                  const int color,
-                                  bool mark_vitals,
-                                  bool mark_pass_dead) const;
+                              const int color,
+                              bool mark_vitals,
+                              bool mark_pass_dead) const;
 
     // Compute black area and white area.
     void ComputeReachArea(std::vector<int> &result) const;
 
     // Reture true if string is pass-alive (unconditional life).
     bool IsPassAliveString(const int vertex,
-                               bool allow_sucide,
-                               const std::vector<bool> &vitals,
-                               const std::vector<int> &features,
-                               const std::vector<int> &regions_index,
-                               const std::vector<int> &regions_next,
-                               const std::vector<int> &strings_index,
-                               const std::vector<int> &strings_next) const;
+                           bool allow_sucide,
+                           const std::vector<bool> &vitals,
+                           const std::vector<int> &features,
+                           const std::vector<int> &regions_index,
+                           const std::vector<int> &regions_next,
+                           const std::vector<int> &strings_index,
+                           const std::vector<int> &strings_next) const;
 
     // Reture true if string is pass-dead (unconditional death).
     bool IsPassDeadRegion(const int vertex,
-                               const int color,
-                               bool allow_sucide,
-                               std::vector<int> &features,
-                               const std::vector<int> &regions_next) const;
+                           const int color,
+                           bool allow_sucide,
+                           std::vector<int> &features,
+                           const std::vector<int> &regions_next) const;
 
     // Gather the vertex if it is true on the buffer.
     std::vector<int> GatherVertices(std::vector<bool> &buf) const;
@@ -419,14 +417,14 @@ private:
     // vertex postion in the 'regions_next'. Becare that the string (group) index
     // is from 1.
     std::vector<int> ClassifyGroups(const int target,
-                                        std::vector<int> &features,
-                                        std::vector<int> &regions_index,
-                                        std::vector<int> &regions_next) const;
+                                    std::vector<int> &features,
+                                    std::vector<int> &regions_index,
+                                    std::vector<int> &regions_next) const;
 
     void ComputeInnerRegions(const int vtx,
-                                 const int color,
-                                 const std::vector<int> &regions_next,
-                                 std::vector<bool> &inner_regions) const;
+                             const int color,
+                             const std::vector<int> &regions_next,
+                             std::vector<bool> &inner_regions) const;
 };
 
 inline int Board::GetX(const int vtx) const {
@@ -454,8 +452,8 @@ inline int Board::GetIndex(const int x, const int y) const {
 }
 
 inline void Board::UpdateZobrist(const int vtx,
-                                     const int new_color,
-                                     const int old_color) {
+                                 const int new_color,
+                                 const int old_color) {
     hash_ ^= Zobrist::kState[old_color][vtx];
     hash_ ^= Zobrist::kState[new_color][vtx];
     ko_hash_ ^= Zobrist::kState[old_color][vtx];
@@ -463,27 +461,27 @@ inline void Board::UpdateZobrist(const int vtx,
 }
 
 inline void Board::UpdateZobristPrisoner(const int color,
-                                             const int new_pris,
-                                             const int old_pris) {
+                                         const int new_pris,
+                                         const int old_pris) {
     hash_ ^= Zobrist::kPrisoner[color][old_pris];
     hash_ ^= Zobrist::kPrisoner[color][new_pris];
 }
 
 inline void Board::UpdateZobristToMove(const int new_color,
-                                           const int old_color) {
+                                       const int old_color) {
     if (old_color != new_color) {
         hash_ ^= Zobrist::kBlackToMove;
     }
 }
 
 inline void Board::UpdateZobristKo(const int new_komove,
-                                       const int old_komove) {
+                                   const int old_komove) {
     hash_ ^= Zobrist::kKoMove[old_komove];
     hash_ ^= Zobrist::kKoMove[new_komove];
 }
 
 inline void Board::UpdateZobristPass(const int new_pass,
-                                         const int old_pass) {
+                                     const int old_pass) {
     hash_ ^= Zobrist::KPass[old_pass];
     hash_ ^= Zobrist::KPass[new_pass];
 }

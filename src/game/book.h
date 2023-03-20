@@ -30,7 +30,7 @@ private:
     std::unordered_map<std::uint64_t, VertexProbabilityList> data_;
 
     void BookDataProcess(std::string sgfstring,
-                             std::unordered_map<std::uint64_t, VertexFrequencyList> &book_data) const;
+                         std::unordered_map<std::uint64_t, VertexFrequencyList> &book_data) const;
 
 
     static constexpr int kBookBoardSize = 19;

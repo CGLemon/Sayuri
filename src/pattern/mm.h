@@ -30,7 +30,7 @@ public:
 
     MmGamma &GetMmGamma(int feature, int index);
     void Initialize(std::vector<int> features,
-                        std::vector<std::string> names = std::vector<std::string>{});
+                    std::vector<std::string> names = std::vector<std::string>{});
     void AppendParticipantGroup(ParticipantGroup &p);
     void StartTraining();
     void SaveMmFIle(std::string filename);

@@ -26,6 +26,7 @@
 #include "utils/random.h"
 #include "utils/format.h"
 #include "utils/option.h"
+#include "utils/logits.h"
 
 #include <random>
 #include <sstream>
@@ -285,26 +286,6 @@ std::string Network::GetOutputString(const GameState &state,
     out << std::endl;
 
     return out.str();
-}
-
-std::vector<float> Network::Softmax(std::vector<float> &input, const float temperature) {
-    auto output = std::vector<float>{};
-    output.reserve(input.size());
-
-    const auto alpha = *std::max_element(std::begin(input), std::end(input));
-    auto denom = 0.0f;
-
-    for (const auto in_val : input) {
-        auto val = std::exp((in_val - alpha) / temperature);
-        denom += val;
-        output.emplace_back(val);
-    }
-
-    for (auto &out : output) {
-        out /= denom;
-    }
-
-    return output;
 }
 
 void Network::ActivatePolicy(Result &result, const float temperature) const {

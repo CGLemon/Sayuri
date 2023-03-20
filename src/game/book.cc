@@ -73,7 +73,7 @@ void Book::GenerateBook(std::string sgf_name, std::string filename) const {
 }
 
 void Book::BookDataProcess(std::string sgfstring,
-                               std::unordered_map<std::uint64_t, VertexFrequencyList> &book_data) const {
+                           std::unordered_map<std::uint64_t, VertexFrequencyList> &book_data) const {
 
     GameState state;
     try {

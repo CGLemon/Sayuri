@@ -14,5 +14,5 @@ int GetWinogradWTiles(const int board_size);
 int GetWinogradP(const int board_size);
 
 std::vector<float> WinogradTransformF(const std::vector<float>& f,
-                                          const int out_channels,
-                                          const int in_channels);
+                                      const int out_channels,
+                                      const int in_channels);
