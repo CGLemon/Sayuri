@@ -614,8 +614,10 @@ class Network(nn.Module):
         )
 
         # residual tower
+        main_channels = self.residual_channels
         nn_stack = []
         for s in self.stack:
+            has_basic_block = False
             use_fixup = self.fixup
             use_sa = False
             se_size = None
@@ -623,26 +625,33 @@ class Network(nn.Module):
 
             for component in s.strip().split('-'):
                 if component == "ResidualBlock":
-                    pass
+                    has_basic_block = True
+                elif component == "BottleneckBlock":
+                    bottleneck_channels = main_channels//2
+                    assert main_channels%2 == 0, ""
+                    has_basic_block = True
                 elif component == "SE":
-                    se_size = self.residual_channels
+                    se_size = main_channels
                 elif component == "SA":
                     use_sa = True
                 elif component == "FixUp":
                     use_fixup = True
-                elif component == "Bottleneck":
-                    bottleneck_channels = self.residual_channels//2
-                    assert self.residual_channels%2 == 0, ""
                 else:
                     raise Exception("Invalid NN structure.")
 
+            if not has_basic_block:
+                raise Exception("There is no basic block.")
+
             nn_stack.append(ResBlock(blocks=len(self.stack),
-                                     channels=self.residual_channels,
+                                     channels=main_channels,
                                      fixup=use_fixup,
                                      bottleneck_channels=bottleneck_channels,
                                      se_size=se_size,
                                      use_sa=use_sa,
                                      collector=self.layers_collector))
+
+        if main_channels != self.residual_channels:
+            raise Exception("Invalid block stack.")
 
         self.residual_tower = nn.Sequential(*nn_stack)
 

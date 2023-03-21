@@ -275,7 +275,7 @@ void DNNLoder::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstr
             const auto component = spt.GetWord(i)->Get<>();
 
             if (component == "ResidualBlock" ||
-                    component == "Bottleneck" ||
+                    component == "BottleneckBlock" ||
                     component == "SE" ||
                     component == "FixUp") {
                 // do nothing...
@@ -297,9 +297,10 @@ void DNNLoder::DumpInfo(std::shared_ptr<DNNWeights> weights) const {
 
     for (int i = 0; i < weights->residual_blocks; ++i) {
         out << "  block " << i+1 << ':';
-        out << " ResidualBlock";
         if (weights->tower[i].apply_btl) {
-            out << "-Bottleneck";
+            out << "BottleneckBlock";
+        } else {
+            out << "ResidualBlock";
         }
         if (weights->tower[i].apply_se) {
             out << "-SE";
@@ -379,14 +380,17 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
     auto sa_cnt = 0;
     auto btl_cnt = 0;
 
+    auto main_channels = weights->residual_channels;
+
     for (int b = 0; b < residuals; ++b) {
         const auto block_spt = Splitter(netstack[b]);
 
         // Push the basic block.
-        if (SplitterFound(block_spt, "ResidualBlock")) {
+        if (SplitterFound(block_spt, "ResidualBlock") ||
+                SplitterFound(block_spt, "BottleneckBlock")) {
             weights->tower.emplace_back(ResidualBlock{});
         } else {
-            throw "Need the ResidualBlock";
+            throw "Need the ResidualBlock or BottleneckBlock";
         }
         auto tower_ptr = weights->tower.data() + b;
         auto t_offset = 4 * b +
@@ -395,10 +399,10 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
                             1 * sa_cnt +
                             inputs_cnt;
 
-        const auto use_btl = SplitterFound(block_spt, "Bottleneck");
+        const auto use_btl = SplitterFound(block_spt, "BottleneckBlock");
         tower_ptr->apply_btl = use_btl;
 
-        const auto outer_channels = weights->residual_channels;
+        const auto outer_channels = main_channels;
         const auto inner_channels = use_btl ?
                                         outer_channels/2 :
                                         outer_channels;
@@ -514,9 +518,9 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
                 se_excite_shape[0],
                 se_excite_shape[1]);
 
-            if (se_squeeze_shape[0] != 3 * weights->residual_channels ||
+            if (se_squeeze_shape[0] != 3 * main_channels ||
                     se_squeeze_shape[1] != se_excite_shape[0] ||
-                    se_excite_shape[1] != 2 * weights->residual_channels) {
+                    se_excite_shape[1] != 2 * main_channels) {
                 throw "The SE Unit size is wrong.";
             }
             tower_ptr->apply_se = true;
