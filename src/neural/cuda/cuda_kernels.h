@@ -8,16 +8,6 @@
 
 namespace cuda {
 
-//TODO: Reorder the functions parameters. The order
-//      should be like
-//
-//      in_ptr, out_ptr, other ptrs...
-//      N, C, others...
-//      bool options...
-//      stream
-
-// TODO: Remove some unused kernels.
-
 template <typename T>
 void add_vectors(T *c, T *a, T *b,
                  int size, int asize, int bsize,
@@ -25,45 +15,35 @@ void add_vectors(T *c, T *a, T *b,
 
 template <typename T>
 void add_spatial(T *data, const T *biases,
-                 const T *eltwise, const T *mask,
+                 const T *residual, const T *mask,
                  int bsize, int batch, int channels, int spatial,
                  bool relu, cudaStream_t stream);
 
 template <typename T>
-void batchnorm(T *data, const T *means, const T *stddevs,
-               const T *eltwise, const T *mask,
-               int batch, int channels, int spatial,
-               bool relu, cudaStream_t stream);
+void im2col_batched(T *data_col, T *data_im,
+                    int filter_size, int batch,
+                    int channels, int height, int width,
+                    cudaStream_t stream);
 
 template <typename T>
-void im2col(int filter_size, int C, int H, int W,
-            T *data_im, T *data_col, cudaStream_t stream);
-
-template <typename T>
-void im2col_batched(int filter_size, int N, int C, int H, int W,
-                    T *data_im, T *data_col, cudaStream_t stream);
-
-template <typename T>
-void global_pooling(T *input, T *output, const T *mask,
-                    int batch, int channels, int spatial, cudaStream_t stream);
+void global_pooling(T *output, T *input, const T *mask, int batch,
+                    int channels, int spatial, cudaStream_t stream);
 
 template <typename T>
 void head_global_pooling(T *input, T *output, const T *sqrt_mask,
                          int batch, int channels, int spatial, cudaStream_t stream);
 
 template <typename T>
-void se_scale(const T *input, const T *se_bias,
-              const T *mask, T *output,
+void se_scale(T *output, const T *input, const T *se_bias, const T *mask,
               int batch, int channels, int spatial, cudaStream_t stream);
 
 template <typename T>
-void winograd3_transform_in(const T *in, T *V,
-                            int batch, int channels, int board_size, cudaStream_t stream);
+void winograd3_transform_in(T *V, const T *in, int batch,
+                            int channels, int board_size, cudaStream_t stream);
 
 template <typename T>
-void winograd3_transform_out(const T *M, const T *biases,
-                             const T *eltwise, const T *mask,
-                             T *out,
+void winograd3_transform_out(T *out, const T *M, const T *biases,
+                             const T *residual, const T *mask,
                              int batch, int channels, int board_size,
                              bool relu, cudaStream_t stream);
 

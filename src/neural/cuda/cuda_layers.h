@@ -9,7 +9,7 @@
 namespace cuda {
 
 void AddSpatial(bool fp16, void *data, const void *biases,
-                const void *eltwise, const void *mask,
+                const void *residual, const void *mask,
                 int bsize, int batch, int channels, int spatial,
                 bool relu, cudaStream_t stream);
 
@@ -37,7 +37,7 @@ public:
 
     void Forward(const int batch,
                  void *output, void *input,
-                 const void *eltwise, const void *mask,
+                 const void *residual, const void *mask,
                  void *scratch, void *scratch_other, size_t scratch_size);
 
     void LoadingWeight(const std::vector<float> &weights,

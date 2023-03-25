@@ -29,7 +29,7 @@ void AddSpatialBiases::Forward(const size_t board_size,
                                const size_t channels,
                                std::vector<float> &input,
                                const std::vector<float> &biases,
-                               std::vector<float> &eltwise,
+                               std::vector<float> &residual,
                                bool ReLU) {
     const auto width = board_size;
     const auto height = board_size;
@@ -40,13 +40,13 @@ void AddSpatialBiases::Forward(const size_t board_size,
     };
 
     float *input_ptr = input.data();
-    float *eltwise_ptr = eltwise.data();
+    float *residual_ptr = residual.data();
     for (auto c = size_t{0}; c < channels; ++c) {
         for (auto b = size_t{0}; b < spatial_size; b++) {
-            float val = *input_ptr + biases[c] + *eltwise_ptr;
+            float val = *input_ptr + biases[c] + *residual_ptr;
             *input_ptr = lambda_ReLU(val);
             input_ptr++;
-            eltwise_ptr++;
+            residual_ptr++;
         }
     }
 }

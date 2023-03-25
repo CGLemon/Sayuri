@@ -29,20 +29,20 @@ void AddVectors(bool fp16, void *c, void *a, void *b,
 }
 
 void AddSpatial(bool fp16, void *data, const void *biases,
-                const void *eltwise, const void *mask,
+                const void *residual, const void *mask,
                 int bsize, int batch, int channels, int spatial,
                 bool relu, cudaStream_t stream) {
     if (fp16) {
 #ifdef ENABLE_FP16
         add_spatial(
             (half *)data, (const half *)biases,
-            (const half *)eltwise, (const half *)mask,
+            (const half *)residual, (const half *)mask,
             bsize, batch, channels, spatial, relu, stream);
 #endif
     } else {
         add_spatial(
             (float *)data, (const float *)biases,
-            (const float *)eltwise, (const float *)mask,
+            (const float *)residual, (const float *)mask,
             bsize, batch, channels, spatial, relu, stream);
     }
 }
@@ -53,13 +53,13 @@ void Im2ColBatched(bool fp16, void *data_col, void *data_im,
     if (fp16) {
 #ifdef ENABLE_FP16
         im2col_batched(
-            filter_size, batch, channels, height, width,
-            (half *)data_im, (half *)data_col, stream);
+            (half *)data_col, (half *)data_im, filter_size,
+            batch, channels, height, width, stream);
 #endif
     } else {
         im2col_batched(
-            filter_size, batch, channels, height, width,
-            (float *)data_im, (float *)data_col, stream);
+            (float *)data_col, (float *)data_im, filter_size,
+            batch, channels, height, width, stream);
     }
 }
 
@@ -68,12 +68,12 @@ void NormalGlobalPooling(bool fp16, void *output, void *input, const void *mask,
     if (fp16) {
 #ifdef ENABLE_FP16
         global_pooling(
-            (half *)input, (half *)output, (const half *)mask,
+            (half *)output, (half *)input, (const half *)mask,
             batch, channels, spatial, stream);
 #endif
     } else {
         global_pooling(
-            (float *)input, (float *)output, (const float *)mask,
+            (float *)output, (float *)input, (const float *)mask,
             batch, channels, spatial, stream);
     }
 }
@@ -83,31 +83,30 @@ void HeadGlobalPooling(bool fp16, void *output, void *input, const void *sqrt_ma
     if (fp16) {
 #ifdef ENABLE_FP16
         head_global_pooling(
-            (half *)input, (half *)output, (const half *)sqrt_mask,
+            (half *)output, (half *)input, (const half *)sqrt_mask,
             batch, channels, spatial, stream);
 #endif
     } else {
         head_global_pooling(
-            (float *)input, (float *)output, (const float *)sqrt_mask,
+            (float *)output, (float *)input, (const float *)sqrt_mask,
             batch, channels, spatial, stream);
     }
 }
 
 void SeScale(bool fp16, void *output, const void *input,
              const void *se_bias, const void *mask,
-                 int batch, int channels,
-                 int spatial, cudaStream_t stream) {
+             int batch, int channels, int spatial, cudaStream_t stream) {
     if (fp16) {
 #ifdef ENABLE_FP16
         se_scale(
-            (const half *)input, (const half*)se_bias,
-            (const half *)mask, (half *)output,
+            (half *)output, (const half *)input,
+            (const half*)se_bias, (const half *)mask,
             batch, channels, spatial, stream);
 #endif
     } else {
         se_scale(
-            (const float *)input, (const float*)se_bias,
-            (const float *)mask, (float *)output,
+            (float *)output, (const float *)input,
+            (const float*)se_bias, (const float *)mask,
             batch, channels, spatial, stream);
     }
 }
@@ -117,30 +116,30 @@ void Winograd3TransformIn(bool fp16, void *output, const void *input,
     if (fp16) {
 #ifdef ENABLE_FP16
         winograd3_transform_in(
-            (const half *)input, (half *)output,
+            (half *)output, (const half *)input,
             batch, channels, board_size, stream);
 #endif
     } else {
         winograd3_transform_in(
-            (const float *)input, (float *)output,
+            (float *)output, (const float *)input,
             batch, channels, board_size, stream);
     }
 }
 
 void Winograd3TransformOut(bool fp16, void *output, const void *input,
-                           const void *biases, const void *eltwise, const void *mask,
+                           const void *biases, const void *residual, const void *mask,
                            int batch, int channels, int board_size, bool relu, cudaStream_t stream) {
     if (fp16) {
 #ifdef ENABLE_FP16
         winograd3_transform_out(
-            (const half *)input, (const half *)biases,
-            (const half *)eltwise, (const half *)mask, (half *)output,
+            (half *)output, (const half *)input, (const half *)biases,
+            (const half *)residual, (const half *)mask,
             batch, channels, board_size, relu, stream);
 #endif
     } else {
         winograd3_transform_out(
-            (const float *)input, (const float *)biases,
-            (const float *)eltwise, (const float *)mask, (float *)output,
+            (float *)output, (const float *)input, (const float *)biases,
+            (const float *)residual, (const float *)mask,
             batch, channels, board_size, relu, stream);
     }
 }
@@ -268,7 +267,7 @@ Convolution::~Convolution() {
 
 void Convolution::Forward(const int batch,
                           void *output, void *input,
-                          const void *eltwise,
+                          const void *residual,
                           const void *mask,
                           void *scratch, void *scratch_other, size_t scratch_size) {
     if (!loaded_) {
@@ -301,7 +300,7 @@ void Convolution::Forward(const int batch,
 
     AddSpatial(
         fp16_, output, cuda_biases_,
-        eltwise, mask,
+        residual, mask,
         out_channels_,
         batch, out_channels_, spatial_size_, relu_,
         handles_->stream);
@@ -313,7 +312,6 @@ void Convolution::Forward(const int batch,
     const int board_size = (width_ + height_) / 2;
 
     if (winograd_) {
-        // TODO: Merge batch norm layer with Winograd.
         auto scratch_op_other = reinterpret_cast<void *>(scratch_other);
         const int batch_ptiles = batch * GetWinogradP(board_size);
 
@@ -332,7 +330,7 @@ void Convolution::Forward(const int batch,
             handles_->cublas_handle, handles_->stream);
         Winograd3TransformOut(
             fp16_, output, scratch_op_other,
-            cuda_biases_, eltwise, mask,
+            cuda_biases_, residual, mask,
             batch, out_channels_, board_size, relu_, handles_->stream);
     } else {
         if (filters_ != 1) {
@@ -363,7 +361,7 @@ void Convolution::Forward(const int batch,
         }
         AddSpatial(
             fp16_, output, cuda_biases_,
-            eltwise, mask,
+            residual, mask,
             out_channels_,
             batch, out_channels_, spatial_size_, relu_,
             handles_->stream);

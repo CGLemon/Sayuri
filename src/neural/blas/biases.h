@@ -15,7 +15,7 @@ public:
                         const size_t channels,
                         std::vector<float> &input,
                         const std::vector<float> &biases,
-                        std::vector<float> &eltwise,
+                        std::vector<float> &residual,
                         bool ReLU);
 };
 
