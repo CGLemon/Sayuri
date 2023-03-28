@@ -14,7 +14,6 @@
 
 #include "neural/blas/sgemm.h"
 
-
 class Blas {
 public:
     // This is interface for convolution. It is not the real general

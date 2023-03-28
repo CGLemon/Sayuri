@@ -179,8 +179,37 @@ if(_USE_CUDA)
     aux_source_directory(${NEURAL_SOURCES_DIR}/cuda CUDA_SOURCES)
 
     set(CUDA_STANDARD 14)
-
-    if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 11.0)
+    if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.0)
+        set(CMAKE_CUDA_FLAGS
+            " \
+            -gencode arch=compute_50,code=sm_50       \
+            -gencode arch=compute_50,code=compute_50  \
+            -gencode arch=compute_53,code=sm_53       \
+            -gencode arch=compute_53,code=compute_53  \
+            -gencode arch=compute_60,code=sm_60       \
+            -gencode arch=compute_60,code=compute_60  \
+            -gencode arch=compute_61,code=sm_61       \
+            -gencode arch=compute_61,code=compute_61  \
+            -gencode arch=compute_62,code=sm_62       \
+            -gencode arch=compute_62,code=compute_62  \
+            -gencode arch=compute_70,code=sm_70       \
+            -gencode arch=compute_70,code=compute_70  \
+            -gencode arch=compute_72,code=sm_72       \
+            -gencode arch=compute_72,code=compute_72  \
+            -gencode arch=compute_75,code=sm_75       \
+            -gencode arch=compute_75,code=compute_75  \
+            -gencode arch=compute_80,code=sm_80       \
+            -gencode arch=compute_80,code=compute_80  \
+            -gencode arch=compute_86,code=sm_86       \
+            -gencode arch=compute_86,code=compute_86  \
+            -gencode arch=compute_89,code=sm_89       \
+            -gencode arch=compute_89,code=compute_89  \
+            -gencode arch=compute_90,code=sm_90       \
+            -gencode arch=compute_90,code=compute_90  \
+            -Wno-deprecated-gpu-targets \
+            "
+            )
+    elseif (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 11.0)
         set(CMAKE_CUDA_FLAGS
             " \
             -gencode arch=compute_35,code=sm_35       \

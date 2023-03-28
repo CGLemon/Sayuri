@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <cassert>
+#include <cstddef>
 #include "neural/blas/blas.h"
 
 template<unsigned int FILTERS>

@@ -1,6 +1,7 @@
 #include "neural/blas/se_unit.h"
 #include "neural/blas/fullyconnect.h"
 
+#include <cstddef>
 #include <cmath>
 #include <cassert>
 

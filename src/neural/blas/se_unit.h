@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <cstddef>
 
 template<bool kIsValueHead>
 class GlobalPooling {
