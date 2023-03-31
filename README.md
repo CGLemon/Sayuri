@@ -17,9 +17,9 @@ Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network a
 * GCC, Clang, must support C++14 or higher
 * CMake 3.15 or later
 * Optional: Eigen or OpenBLAS library
-* Optional: CUDA 10.x or 11.x library (GCC 7.x passed)
+* Optional: CUDA 10.x - 12.x library
 * Optional: cuDNN 7.x or 8.x library
-* Optional: gzip
+* Optional: Gzip library
 
 ## Default Compiling (Ubuntu or MacOS)
 
@@ -95,8 +95,6 @@ Here are some useful arguments which you may need.
 |  --friendly-pass        | None   | Do pass move if the engine wins the game.      |
 |  --reuse-tree           | None   | Will reuse the sub-tree.                       |
 |  --no-dcnn              | None   | Disable network, very weak.                    |
-|  --no-fp16              | None   | Disable FP16 computation.                      |
-|  --no-winograd          | None   | Disable WinoGrad algorithm.                    |
 |  --help, -h             | None   | Show the more arguments.                       |
     
 <br/>
@@ -164,7 +162,7 @@ The analysis Commands are useful on the modern GTP interface tool, like Sabaki. 
 
 ## Reinforcement Learning
 
-Please see this [section](./bash/RL.md).
+Please see this [section](./bash/README.md).
 
 ## Misc
 
@@ -201,8 +199,7 @@ The Ray author, Yuki Kobayashi, proposed three points which may improve my netwo
 * The NHWC format.
 * Bottleneck network, It may improve 30% speed without losing accuracy.
 
-KataGo also used the variant bottleneck and said it could significantly improve the performance. This result shows the advance of these kinds of structure.
-
+KataGo also proposed a variant bottleneck and said it could significantly improve the performance. This result shows the advance of these kinds of structure. However in my recent testing (March, 2023), bottleneck is not effective on the 10x128 network. Maybe it is not a good ideal if the network size is small?
 
 ## Features
 

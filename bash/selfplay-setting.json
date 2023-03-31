@@ -11,7 +11,7 @@
         "Stack" : [
             "ResidualBlock",
             "ResidualBlock",
-            "ResidualBlock--SE",
+            "ResidualBlock-SE",
             "ResidualBlock",
             "ResidualBlock",
             "ResidualBlock-SE"
