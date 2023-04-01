@@ -1156,8 +1156,8 @@ AnalysisConfig GtpLoop::ParseAnalysisConfig(Splitter &spt, int &color) {
         using MoveToAvoid = AnalysisConfig::MoveToAvoid;
 
         if (token->Lower() == "avoid" || token->Lower() == "allow") {
-            int moves_color;
-            int moves_movenum;
+            int moves_color = kInvalid;
+            int moves_movenum = -1;
             auto moves = std::vector<int>{};
 
             if (auto color_token = spt.GetWord(curr_idx)) {
@@ -1188,21 +1188,22 @@ AnalysisConfig GtpLoop::ParseAnalysisConfig(Splitter &spt, int &color) {
                 }
             }
 
-            for (const auto vtx : moves) {
-                MoveToAvoid avoid_move;
-                avoid_move.vertex     = vtx;
-                avoid_move.color      = moves_color;
-                avoid_move.until_move = moves_movenum +
-                                            agent_->GetState().GetMoveNumber() - 1;
-                if (avoid_move.Valid()) {
-                    if (token->Lower() == "allow") {
-                        config.allow_moves.emplace_back(avoid_move);
-                    } else {
-                        config.avoid_moves.emplace_back(avoid_move);
+            if (moves_color != kInvalid && moves_movenum >= 0) {
+                for (const auto vtx : moves) {
+                    MoveToAvoid avoid_move;
+                    avoid_move.vertex     = vtx;
+                    avoid_move.color      = moves_color;
+                    avoid_move.until_move = moves_movenum +
+                                                agent_->GetState().GetMoveNumber() - 1;
+                    if (avoid_move.Valid()) {
+                        if (token->Lower() == "allow") {
+                            config.allow_moves.emplace_back(avoid_move);
+                        } else {
+                            config.avoid_moves.emplace_back(avoid_move);
+                        }
                     }
                 }
             }
-
             continue;
         }
     }
