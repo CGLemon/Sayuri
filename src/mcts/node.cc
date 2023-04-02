@@ -374,6 +374,20 @@ Node *Node::ProbSelectChild() {
     return best_node->Get();
 }
 
+float Node::GetDynmaicCpuctFactor(Node *node, const int visits) {
+    if (node == nullptr || visits <= 1) {
+        return 1.0f;
+    }
+
+    double k = 4 * std::sqrt(node->GetLcbVariance(1.0f, visits));
+    k = std::max(0.5, k);
+    k = std::min(1.4, k);
+
+    double alpha = 1.0f / (1.0f+std::sqrt((double)visits/10000.0f));
+    k = alpha*k + (1.0f-alpha)*1.0f;
+    return k;
+}
+
 Node *Node::PuctSelectChild(const int color, const bool is_root) {
     WaitExpanded();
     assert(HaveChildren());
@@ -439,6 +453,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
 
         float denom = 1.0f;
         float utility = 0.0f; // the utility value
+        float cpuct_factor = 1.0f;
 
         if (is_pointer) {
             const auto visits = node->GetVisits();
@@ -458,13 +473,14 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
                                node->GetScoreUtility(
                                    color, score_utility_div, parent_score);
             }
+            cpuct_factor = GetDynmaicCpuctFactor(node, visits);
             denom += visits;
         }
 
 
         // PUCT algorithm
         const float psa = GetSearchPolicy(child, noise);
-        const float puct = cpuct * psa * (numerator / denom);
+        const float puct = cpuct_factor * cpuct * psa * (numerator / denom);
         const float value = q_value + puct + utility;
         assert(value > std::numeric_limits<float>::lowest());
 
