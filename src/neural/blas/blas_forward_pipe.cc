@@ -2,6 +2,7 @@
 #include "neural/blas/convolution.h"
 #include "neural/blas/batchnorm.h"
 #include "neural/blas/se_unit.h"
+#include "neural/blas/sa_unit.h"
 #include "neural/blas/fullyconnect.h"
 #include "neural/blas/biases.h"
 #include "neural/blas/winograd_convolution3.h"
@@ -66,6 +67,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     const auto plane_size = kInputChannels * num_intersections;
     const auto max_intermediates = std::max(weights_->policy_extract_channels,
                                                 weights_->value_extract_channels);
+    const auto zero_vec = std::vector<float>{};
 
     // Allocate the forward pipe buffers.
     bool use_winograd = weights_->winograd;
@@ -206,44 +208,49 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                 workspace0, conv_out);
         }
 
+        bool already_skip = false;
+        auto &last_biases = tower_ptr->apply_btl ?
+                                tower_ptr->post_btl_conv.GetBiases() :
+                                tower_ptr->conv2.GetBiases();
+        AddSpatialBiases::Forward(
+            board_size, outer_channels,
+            conv_out,
+            last_biases, false);
+
         // The SE process.
         if (tower_ptr->apply_se) {
-            if (tower_ptr->apply_btl) {
-                AddSpatialBiases::Forward(
-                    board_size, outer_channels,
-                    conv_out,
-                    tower_ptr->post_btl_conv.GetBiases(), false);
-            } else {
-                // The 'outer_channels' is equal to 'inner_channels'.
-                AddSpatialBiases::Forward(
-                    board_size, outer_channels,
-                    conv_out,
-                    tower_ptr->conv2.GetBiases(), false);
-            }
+            bool se_relu = !(tower_ptr->apply_sa);
+            auto &se_skip = se_relu ? res : zero_vec;
+            already_skip = se_relu;
+
             const size_t se_size = tower_ptr->se_size;
             SEUnit::Forward(
                 board_size, outer_channels, se_size,
-                conv_out, res,
+                conv_out, se_skip,
                 tower_ptr->squeeze.GetWeights(),
                 tower_ptr->squeeze.GetBiases(),
                 tower_ptr->excite.GetWeights(),
-                tower_ptr->excite.GetBiases());
-        
-        } else {
-            if (tower_ptr->apply_btl) {
-                AddSpatialBiases::Forward(
-                    board_size, outer_channels,
-                    conv_out,
-                    tower_ptr->post_btl_conv.GetBiases(),
-                    res, true);
-            } else {
-                // The 'outer_channels' is equal to 'inner_channels'.
-                AddSpatialBiases::Forward(
-                    board_size, outer_channels,
-                    conv_out,
-                    tower_ptr->conv2.GetBiases(),
-                    res, true);
-            }
+                tower_ptr->excite.GetBiases(),
+                se_relu);
+        }
+        if (tower_ptr->apply_sa) {
+            bool sa_relu = !(tower_ptr->apply_sa);
+            auto &sa_skip = res;
+            already_skip = sa_relu;
+
+            SAUnit::Forward(
+                board_size, outer_channels,
+                conv_out, sa_skip,
+                tower_ptr->sa_conv.GetWeights(),
+                tower_ptr->sa_conv.GetBiases(),
+                workspace0, sa_relu);
+        }
+        if (!already_skip) {
+            AddSpatialBiases::Forward(
+                board_size, outer_channels,
+                conv_out,
+                zero_vec,
+                res, true);
         }
     }
 

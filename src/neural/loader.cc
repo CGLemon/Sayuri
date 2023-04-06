@@ -277,6 +277,7 @@ void DNNLoder::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstr
             if (component == "ResidualBlock" ||
                     component == "BottleneckBlock" ||
                     component == "SE" ||
+                    component == "SA" ||
                     component == "FixUp") {
                 // do nothing...
             } else {

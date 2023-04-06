@@ -135,24 +135,29 @@ class SpatialAttention(nn.Module):
     def __init__(self, collector=None):
         super(SpatialAttention, self).__init__()
         self.conv = Convolve(
-            in_channels=2,
+            in_channels=3,
             out_channels=1,
             kernel_size=7,
             relu=False,
             collector=collector
         )
 
-    def forward(self, x, mask):
+    def forward(self, x, mask_buffers):
+        mask, mask_sum_hw, mask_sum_hw_sqrt = mask_buffers
+        div = torch.reshape(mask_sum_hw, (-1,1))
+        div_sqrt = torch.reshape(mask_sum_hw_sqrt, (-1,1))
+        b_diff = div_sqrt - self.b_avg
+
         layer_raw_mean = torch.mean(x, dim=1, keepdim=True)
         layer_raw_max = torch.max(x, dim=1, keepdim=True)[0]
 
-        # TODO: Should I add the board size information?
         layer0 = layer_raw_mean
-        layer1 = layer_raw_max
+        layer1 = layer_raw_mean * (b_diff / 10.0)
+        layer2 = layer_raw_max
 
         # The out of board area is zero. Do not need to
         # multiply the mask.
-        sa = torch.cat([layer0, layer1], dim=1)
+        sa = torch.cat([layer0, layer1, layer2], dim=1)
 
         sa = self.conv(sa, mask)
         out = torch.sigmoid(sa) * x
@@ -567,7 +572,7 @@ class ResBlock(nn.Module):
         if self.use_se:
             out = self.se_module(out, mask_buffers)
         if self.use_sa:
-            out = self.sa_module(out, mask)
+            out = self.sa_module(out, mask_buffers)
         out = out + x
 
         return F.relu(out, inplace=True), mask_buffers
