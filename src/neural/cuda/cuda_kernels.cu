@@ -388,16 +388,14 @@ __device__ __forceinline__ void multiply_bt(
     float * o0, float * o1, float * o2, float * o3, float * o4, float * o5,
     float i0,   float i1,   float i2,   float i3,   float i4,   float i5
 ) {
-    const float SQ2 = kSqrt2;
-
-    float i3m1 = i1 * -SQ2 + i3 * (SQ2 / 2.0f);
+    float i3m1 = i1 * -kSqrt2 + i3 * (kSqrt2 / 2.0f);
     float i4m2 = i2 * -2.0f + i4 * 1.0f;
 
     *o0 = i0 + i2 * (-5.0f/2.0f) + i4;
     *o1 = i3m1 + i4m2;
     *o2 = -i3m1 + i4m2;
 
-    float i3m1_2 = i3 * (SQ2) + i1 * (-SQ2/2.0f);
+    float i3m1_2 = i3 * (kSqrt2) + i1 * (-kSqrt2/2.0f);
     float i4m2_2 = i2 * (-1.0f/2.0f) + i4;
 
     *o3 = i3m1_2 + i4m2_2;
@@ -410,12 +408,10 @@ __device__ __forceinline__ void multiply_atv(
     float * o,
     float i0, float i1, float i2, float i3, float i4, float i5
 ) {
-    const float SQ2 = kSqrt2;
-
     float t1p2 = (i1 + i2) * (1.0f / 2.0f);
-    float t1m2 = (i1 - i2) * (SQ2/4.0f);
+    float t1m2 = (i1 - i2) * (kSqrt2/4.0f);
     float t3p4 = i3 + i4;
-    float t3m4 = (i3 - i4) * (SQ2);
+    float t3m4 = (i3 - i4) * (kSqrt2);
 
     o[0] = i0 + t1p2 + t1p2 + t3p4;
     o[1] = t1m2 + t1m2 + t3m4;
