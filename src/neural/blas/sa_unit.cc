@@ -14,18 +14,16 @@ void ChannelPooling::Forward(const size_t board_size,
     const auto height = board_size;
     const auto spatial_size = width * height;
     const float b_coeff = ((float)board_size - kAvgBSize) / 10.f;
-    const float *input_ptr = input.data();
 
     for (auto b = size_t{0}; b < spatial_size; ++b) {
         float sum = 0.0f;
         float max = 0.0f;
         for (auto c = size_t{0}; c < channels; ++c) {
-            float val = input_ptr[b + c * spatial_size];
+            float val = input[b + c * spatial_size];
             sum += val;
             max = std::max(val, max);
         }
-        input_ptr++;
-        const float mean = sum / (float)spatial_size;
+        const float mean = sum / (float)channels;
 
         output[b + 0 * spatial_size] = mean;
         output[b + 1 * spatial_size] = mean * b_coeff;
@@ -87,13 +85,17 @@ void SAUnit::SAProcess(const size_t board_size,
     for (auto i = size_t{0}; i < spatial_size; ++i) {
         float gamma = lambda_sigmoid(scale[i]);
         for (auto c = size_t{0}; c < channels; ++c) {
-            float val = input_ptr[i + c * spatial_size];
+            auto offset = c * spatial_size;
+            float val = input_ptr[offset];
             val *= gamma;
             if (residual_ptr) {
-                val += *residual_ptr;
-                residual_ptr++;
+                val += residual_ptr[offset];
             }
-            input_ptr[i + c * spatial_size] = lambda_ReLU(val);
+            input_ptr[offset] = lambda_ReLU(val);
+        }
+
+        if (residual_ptr) {
+            residual_ptr++;
         }
         input_ptr++;
     }

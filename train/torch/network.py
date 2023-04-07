@@ -134,6 +134,7 @@ class SqueezeAndExcitation(nn.Module):
 class SpatialAttention(nn.Module):
     def __init__(self, collector=None):
         super(SpatialAttention, self).__init__()
+        self.b_avg = (19 + 9) / 2
         self.conv = Convolve(
             in_channels=3,
             out_channels=1,
@@ -148,6 +149,8 @@ class SpatialAttention(nn.Module):
         div_sqrt = torch.reshape(mask_sum_hw_sqrt, (-1,1))
         b_diff = div_sqrt - self.b_avg
 
+        b, c = b_diff.size()
+        b_diff = b_diff.view(b, c, 1, 1)
         layer_raw_mean = torch.mean(x, dim=1, keepdim=True)
         layer_raw_max = torch.max(x, dim=1, keepdim=True)[0]
 
@@ -158,8 +161,8 @@ class SpatialAttention(nn.Module):
         # The out of board area is zero. Do not need to
         # multiply the mask.
         sa = torch.cat([layer0, layer1, layer2], dim=1)
-
         sa = self.conv(sa, mask)
+
         out = torch.sigmoid(sa) * x
         return out * mask
 
