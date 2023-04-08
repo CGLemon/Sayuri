@@ -63,18 +63,19 @@ void Im2ColBatched(bool fp16, void *data_col, void *data_im,
     }
 }
 
-void NormalGlobalPooling(bool fp16, void *output, void *input, const void *mask,
+void NormalGlobalPooling(bool fp16, void *output, void *input,
+                         const void *mask, const void *sqrt_mask,
                          int batch, int channels, int spatial, cudaStream_t stream) {
     if (fp16) {
 #ifdef ENABLE_FP16
         global_pooling(
             (half *)output, (half *)input, (const half *)mask,
-            batch, channels, spatial, stream);
+            (const half *)sqrt_mask, batch, channels, spatial, stream);
 #endif
     } else {
         global_pooling(
             (float *)output, (float *)input, (const float *)mask,
-            batch, channels, spatial, stream);
+            (const float *)sqrt_mask, batch, channels, spatial, stream);
     }
 }
 
@@ -94,20 +95,55 @@ void HeadGlobalPooling(bool fp16, void *output, void *input, const void *sqrt_ma
 }
 
 void SeScale(bool fp16, void *output, const void *input,
-             const void *se_bias, const void *mask,
-             int batch, int channels, int spatial, cudaStream_t stream) {
+             const void *residual, const void *se_biases,
+             const void *mask, int batch, int channels,
+             int spatial, bool relu, cudaStream_t stream) {
     if (fp16) {
 #ifdef ENABLE_FP16
         se_scale(
             (half *)output, (const half *)input,
-            (const half*)se_bias, (const half *)mask,
-            batch, channels, spatial, stream);
+            (const half*)residual, (const half *)se_biases,
+            (const half *)mask, batch, channels, spatial, relu, stream);
 #endif
     } else {
         se_scale(
             (float *)output, (const float *)input,
-            (const float*)se_bias, (const float *)mask,
+            (const float*)residual, (const float *)se_biases,
+            (const float *)mask, batch, channels, spatial, relu, stream);
+    }
+}
+
+void ChannelPooling(bool fp16, void *output, void *input, const void *sqrt_mask,
+                    int batch, int channels, int spatial, cudaStream_t stream) {
+    if (fp16) {
+#ifdef ENABLE_FP16
+        channel_pooling(
+            (half *)output, (half *)input, (const half *)sqrt_mask,
             batch, channels, spatial, stream);
+#endif
+    } else {
+        channel_pooling(
+            (float *)output, (float *)input, (const float *)sqrt_mask,
+            batch, channels, spatial, stream);
+    }
+}
+
+void SaScale(bool fp16, void *output, const void *input,
+             const void *residual, const void *sa_biases,
+             int batch, int channels, int spatial,
+             bool relu, cudaStream_t stream) {
+    if (fp16) {
+#ifdef ENABLE_FP16
+        sa_scale(
+            (half *)output, (const half *)input, 
+            (const half*)residual, (const half *)sa_biases,
+            batch, channels, spatial, relu, stream);
+#endif
+    } else {
+        sa_scale(
+            (float *)output, (const float *)input, 
+            (const float*)residual, (const float *)sa_biases,
+            batch, channels, spatial, relu, stream);
     }
 }
 
@@ -369,8 +405,8 @@ void Convolution::Forward(const int batch,
 #endif
 }
 
-void Convolution::LoadingWeight(const std::vector<float> &weights,
-                                size_t &scratch_size, bool winograd) {
+void Convolution::LoadWeights(const std::vector<float> &weights,
+                              size_t &scratch_size, bool winograd) {
     if (loaded_) {
         return;
     }
@@ -474,9 +510,9 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
 }
 
 
-void Convolution::LoadingWeight(const std::vector<float> &weights,
-                                const std::vector<float> &biases,
-                                size_t &scratch_size, bool winpgrad) {
+void Convolution::LoadWeights(const std::vector<float> &weights,
+                              const std::vector<float> &biases,
+                              size_t &scratch_size, bool winpgrad) {
     if (loaded_) {
         return;
     }
@@ -490,7 +526,7 @@ void Convolution::LoadingWeight(const std::vector<float> &weights,
                                                  cudnn_data_type,
                                                  1, out_channels_, 1, 1));
 #endif
-    LoadingWeight(weights, scratch_size, winpgrad);
+    LoadWeights(weights, scratch_size, winpgrad);
 }
 
 
@@ -515,8 +551,8 @@ FullyConnect::~FullyConnect() {
     }
 }
 
-void FullyConnect::LoadingWeight(const std::vector<float> &weights,
-                                 const std::vector<float> &biases) {
+void FullyConnect::LoadWeights(const std::vector<float> &weights,
+                               const std::vector<float> &biases) {
     if (loaded_) { 
         return;
     }
@@ -567,7 +603,7 @@ void GlobalPooling::Forward(const int batch, void *output,
             channels_, spatial_size_, handles_->stream);
     } else {
         NormalGlobalPooling(
-            fp16_, output, input, mask, batch,
+            fp16_, output, input, mask, sqrt_mask, batch,
             channels_, spatial_size_, handles_->stream);
     }
 }
@@ -577,10 +613,12 @@ SEUnit::SEUnit(CudaHandles *handles,
                const int max_batch,
                const int board_size,
                const int channels,
-               const int se_size) {
+               const int se_size,
+               bool ReLU) {
     width_ = board_size;
     height_ = board_size;
     spatial_size_ = width_ * height_;
+    relu_ = ReLU;
 
     fp16_ = handles->fp16;
     se_size_ = se_size;
@@ -590,10 +628,10 @@ SEUnit::SEUnit(CudaHandles *handles,
     handles_ = handles;
 }
 
-void SEUnit::LoadingWeight(const std::vector<float> &weights_w1,
-                           const std::vector<float> &weights_b1,
-                           const std::vector<float> &weights_w2,
-                           const std::vector<float> &weights_b2) {
+void SEUnit::LoadWeights(const std::vector<float> &weights_w1,
+                         const std::vector<float> &weights_b1,
+                         const std::vector<float> &weights_w2,
+                         const std::vector<float> &weights_b2) {
     if (loaded_) { 
         return;
     }
@@ -612,12 +650,13 @@ void SEUnit::LoadingWeight(const std::vector<float> &weights_w1,
     loaded_ = true;
 }
 
-void SEUnit::Forward(const int batch, void *ouput, void *input, void *mask) {
+void SEUnit::Forward(const int batch, void *ouput, void *input,
+                     void *residual, void *mask, void *sqrt_mask) {
     if (!loaded_) {
         return;
     }
     NormalGlobalPooling(
-        fp16_, cuda_op_[0], input, mask,
+        fp16_, cuda_op_[0], input, mask, sqrt_mask,
         batch, channels_, spatial_size_, handles_->stream);
 
     const size_t fc1_input_size = 3 * channels_;
@@ -651,8 +690,8 @@ void SEUnit::Forward(const int batch, void *ouput, void *input, void *mask) {
         fp16_, cuda_op_[2], cuda_weights_b2_, cuda_op_[2],
         fc2_output_size * batch, fc2_output_size, fc2_output_size * batch, fc2_relu, handles_->stream);
     SeScale(
-        fp16_, ouput, input, cuda_op_[2], mask,
-        batch, channels_, spatial_size_, handles_->stream);
+        fp16_, ouput, input, residual, cuda_op_[2], mask,
+        batch, channels_, spatial_size_, relu_, handles_->stream);
 }
 
 SEUnit::~SEUnit() {
@@ -665,6 +704,66 @@ SEUnit::~SEUnit() {
         ReportCUDAErrors(cudaFree(cuda_op_[0]));
         ReportCUDAErrors(cudaFree(cuda_op_[1]));
         ReportCUDAErrors(cudaFree(cuda_op_[2]));
+    }
+}
+
+SAUnit::SAUnit(CudaHandles *handles,
+               const int max_batch,
+               const int board_size,
+               const int channels,
+               bool ReLU) {
+    width_ = board_size;
+    height_ = board_size;
+    spatial_size_ = width_ * height_;
+    relu_ = ReLU;
+
+    fp16_ = handles->fp16;
+    maxbatch_ = max_batch;
+    channels_ = channels;
+    loaded_ = false;
+    handles_ = handles;
+
+    conv_ = Convolution(
+        handles, maxbatch_, board_size,
+        7, 3, 1, false);
+}
+
+void SAUnit::LoadWeights(const std::vector<float> &weights,
+                         const std::vector<float> &biases,
+                         size_t &scratch_size, bool winograd) {
+    if (loaded_) { 
+        return;
+    }
+
+    const size_t pool_scratch_size  = maxbatch_ * 3 * spatial_size_;
+    const size_t conv_out_size  = maxbatch_ * 1 * spatial_size_;
+
+    MallocCudaOp(fp16_, &(cuda_op_[0]), pool_scratch_size);
+    MallocCudaOp(fp16_, &(cuda_op_[1]), conv_out_size);
+
+    conv_.LoadWeights(weights, biases, scratch_size, winograd);
+    loaded_ = true;
+}
+
+void SAUnit::Forward(const int batch, void *output, void *input,
+                     void *residual, void *mask, void *sqrt_mask,
+                     void *scratch, void *scratch_other, size_t scratch_size) {
+    ChannelPooling(
+        fp16_, cuda_op_[0], input, sqrt_mask, batch,
+        channels_, spatial_size_, handles_->stream);
+    void *null_op = nullptr;
+    conv_.Forward(
+        batch, cuda_op_[1], cuda_op_[0], null_op, mask,
+        scratch, scratch_other, scratch_size);
+    SaScale(
+        fp16_, output, input, residual, cuda_op_[1],
+        batch, channels_, spatial_size_, relu_, handles_->stream);
+}
+
+SAUnit::~SAUnit() {
+    if (loaded_) {
+        ReportCUDAErrors(cudaFree(cuda_op_[0]));
+        ReportCUDAErrors(cudaFree(cuda_op_[1]));
     }
 }
 

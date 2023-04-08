@@ -241,7 +241,7 @@ void im2col_batched(T *data_col, T *data_im,
 
 template <typename T>
 __global__ void global_pooling_kernel(T *output, T *input, const T *mask,
-                                      int N, int C, int spatial) {
+                                      const T *sqrt_mask, int N, int C, int spatial) {
     int total_elements = N * C;
     int index = threadIdx.x + blockDim.x * blockIdx.x; // index = [0 ~ batch * channels]
     if (index < total_elements) {
@@ -251,7 +251,10 @@ __global__ void global_pooling_kernel(T *output, T *input, const T *mask,
         T *input_ptr = input + index * spatial;
         float vsum = 0;
         float vmax = -5000.0f; // crazy negative value
-        float vspat = 0.f;
+        float vsqrt = sqrt((float)spatial);
+        if (sqrt_mask) {
+            vsqrt = (float)(sqrt_mask[n]);
+        }
 
         #pragma unroll
         for (int i = 0; i < spatial; ++i) {
@@ -262,32 +265,31 @@ __global__ void global_pooling_kernel(T *output, T *input, const T *mask,
                 vmask = (float)(mask[n * spatial + i]);
             }
 
-            vspat += vmask;
             vsum += val;
             if ((1.0f-vmask) * (-5000.0f) + val > vmax) {
                 vmax = val;
             }
         }
 
-        float vmean = vsum / vspat;
+        float vmean = vsum / (vsqrt*vsqrt);
 
         int offset = c + n * 3 * C;
 
         output[offset + 0 * C] = (T)(vmean);
-        output[offset + 1 * C] = (T)(vmean * (sqrt(vspat) - 14.f) * 0.1f);
+        output[offset + 1 * C] = (T)(vmean * (vsqrt - 14.f) * 0.1f);
         output[offset + 2 * C] = (T)(vmax);
     }
 }
 
 template <typename T>
-void global_pooling(T *output, T *input, const T *mask,
+void global_pooling(T *output, T *input, const T *mask, const T *sqrt_mask,
                     int batch, int channels, int spatial, cudaStream_t stream) {
     const int total_elements = batch * channels;
     const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(total_elements, block_size);
 
     global_pooling_kernel<<<blocks, block_size, 0, stream>>>(
-        output, input, mask, batch, channels, spatial);
+        output, input, mask, sqrt_mask, batch, channels, spatial);
 
     ReportCUDAErrors(cudaGetLastError());
 }
@@ -341,30 +343,35 @@ void head_global_pooling(T *output, T *input, const T *sqrt_mask,
 template <typename T>
 __global__ void se_scale_kernel(T *output,
                                 const T *input,
-                                const T *se_bias,
+                                const T *residual,
+                                const T *se_biases,
                                 const T *mask,
-                                int N, int C, int spatial) {
+                                int N, int C, int spatial,
+                                bool relu) {
     int index = threadIdx.x + blockDim.x * blockIdx.x;
     int total_elements = N * C * spatial;
     if (index < total_elements) {
         int c = (index / spatial) % C;
         int n = (index / spatial) / C;
-        int s_index = index % spatial;
+        int s = index % spatial;
         int start_idx = n * 2 * C;
 
         float val = (float)(input[index]);
-        float gamma = (float)(se_bias[start_idx + c]);
+        float gamma = (float)(se_biases[start_idx + c]);
         gamma = 1.0f / (1.0f + exp(-gamma));
 
-        float beta = (float)(se_bias[start_idx + c + C]);
-        float res = output[index];
+        float beta = (float)(se_biases[start_idx + c + C]);
+        float res = 0.0f;
+        if (residual) {
+            res = (float)(residual[index]);
+        }
 
         val = gamma * val + beta + res;
 
         if (mask) {
-            val *= (float)(mask[n * spatial + s_index]);
+            val *= (float)(mask[n * spatial + s]);
         }
-        if (val < 0) {
+        if (relu && val < 0) {
             val = 0;
         }
         output[index] = (T)val;
@@ -372,14 +379,111 @@ __global__ void se_scale_kernel(T *output,
 }
 
 template <typename T>
-void se_scale(T *output, const T *input, const T *se_bias, const T *mask,
-              int batch, int channels, int spatial, cudaStream_t stream) {
+void se_scale(T *output, const T *input, const T *residual,
+              const T *se_biases, const T *mask, int batch,
+              int channels, int spatial, bool relu, cudaStream_t stream) {
     const int total_elements = channels * spatial * batch;
     const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(total_elements, block_size);
 
     se_scale_kernel<<<blocks, block_size, 0, stream>>>(
-        output, input, se_bias, mask, batch, channels, spatial);
+        output, input, residual, se_biases, mask, batch, channels, spatial, relu);
+
+    ReportCUDAErrors(cudaGetLastError());
+}
+
+template <typename T>
+__global__ void channel_pooling_kernel(T *output, T *input,
+                                       const T *sqrt_mask,
+                                       int N, int C, int spatial) {
+    int total_elements = N * spatial;
+    int index = threadIdx.x + blockDim.x * blockIdx.x; // index = [0 ~ batch * spatial]
+    if (index < total_elements) {
+        int n = index / spatial;
+        int s = index % spatial;
+
+        T *input_ptr = input + n * C * spatial + s;
+        float vsum = 0;
+        float vmax = 0.0f; // crazy negative value
+
+        float vsqrt = sqrt((float)spatial);
+        if (sqrt_mask) {
+            vsqrt = (float)(sqrt_mask[n]);
+        }
+
+        #pragma unroll
+        for (int i = 0; i < C; ++i) {
+            float val = (float)(input_ptr[i * spatial]);
+
+            vsum += val;
+            if (val > vmax) {
+                vmax = val;
+            }
+        }
+
+        float vmean = vsum / C;
+        int offset = s + n * 3 * spatial;
+
+        output[offset + 0 * spatial] = (T)(vmean);
+        output[offset + 1 * spatial] = (T)(vmean * (vsqrt - 14.f) * 0.1f);
+        output[offset + 2 * spatial] = (T)(vmax);
+    }
+}
+
+template <typename T>
+void channel_pooling(T *output, T *input, const T *sqrt_mask,
+                     int batch, int channels, int spatial, cudaStream_t stream) {
+    const int total_elements = batch * spatial;
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(total_elements, block_size);
+
+    channel_pooling_kernel<<<blocks, block_size, 0, stream>>>(
+        output, input, sqrt_mask, batch, channels, spatial);
+
+    ReportCUDAErrors(cudaGetLastError());
+}
+
+template <typename T>
+__global__ void sa_scale_kernel(T *output,
+                                const T *input,
+                                const T *residual,
+                                const T *sa_biases,
+                                int N, int C, int spatial,
+                                bool relu) {
+    int index = threadIdx.x + blockDim.x * blockIdx.x;
+    int total_elements = N * C * spatial;
+    if (index < total_elements) {
+        int n = (index / spatial) / C;
+        int s = index % spatial;
+        int start_idx = n * spatial;
+
+        float val = (float)(input[index]);
+        float gamma = (float)(sa_biases[start_idx + s]);
+        gamma = 1.0f / (1.0f + exp(-gamma));
+
+        float res = 0.0f;
+        if (residual) {
+            res = (float)(residual[index]);
+        }
+
+        val = gamma * val + res;
+        if (relu && val < 0) {
+            val = 0;
+        }
+        output[index] = (T)val;
+    }
+}
+
+template <typename T>
+void sa_scale(T *output, const T *input, const T *residual,
+              const T *sa_biases, int batch, int channels,
+              int spatial, bool relu, cudaStream_t stream) {
+    const int total_elements = channels * spatial * batch;
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(total_elements, block_size);
+
+    sa_scale_kernel<<<blocks, block_size, 0, stream>>>(
+        output, input, residual, sa_biases, batch, channels, spatial, relu);
 
     ReportCUDAErrors(cudaGetLastError());
 }
@@ -738,27 +842,28 @@ template void add_spatial<float>(float *data, const float *biases,
                                  int bsize, int batch, int channels, int spatial,
                                  bool relu, cudaStream_t stream);
 
-// template void batchnorm<float>(float *data, const float *means, const float *stddevs,
-//                                const float *eltwise, const float *mask,
-//                                int batch, int channels, int spatial,
-//                                bool relu, cudaStream_t stream);
-//
-// template void im2col<float>(int filter_size, int C, int H, int W,
-//                             float *data_im, float *data_col, cudaStream_t stream);
-
 template void im2col_batched<float>(float *data_col, float *data_im,
                                     int filter_size, int N, int C, int H, int W,
                                     cudaStream_t stream);
 
 template void global_pooling<float>(float *output, float *input, const float *mask,
-                                    int batch, int channels, int spatial, cudaStream_t stream);
+                                    const float *sqrt_mask, int batch, int channels,
+                                    int spatial, cudaStream_t stream);
 
 template void head_global_pooling<float>(float *output, float *input, const float *sqrt_mask,
                                          int batch, int channels, int spatial, cudaStream_t stream);
 
 template void se_scale<float>(float *output, const float *input,
-                              const float *se_bias, const float *mask,
-                              int batch, int channels, int spatial, cudaStream_t stream);
+                              const float *residual, const float *se_biases,
+                              const float *mask, int batch, int channels,
+                              int spatial, bool relu, cudaStream_t stream);
+
+template void channel_pooling<float>(float *output, float *input, const float *sqrt_mask,
+                                     int batch, int channels, int spatial, cudaStream_t stream);
+
+template void sa_scale<float>(float *output, const float *input, const float *residual,
+                              const float *sa_biases, int batch, int channels, int spatial,
+                              bool relu, cudaStream_t stream);
 
 template void winograd3_transform_in<float>(float *V, const float *in, int batch,
                                             int channels, int board_size, cudaStream_t stream);
@@ -777,27 +882,28 @@ template void add_spatial<half>(half *data, const half *biases,
                                 int bsize, int batch, int channels, int spatial,
                                 bool relu, cudaStream_t stream);
 
-// template void batchnorm<half>(half *data, const half *means, const half *stddevs,
-//                               const half *eltwise, const half *mask,
-//                               int batch, int channels, int spatial,
-//                               bool relu, cudaStream_t stream);
-//
-// template void im2col<half>(int filter_size, int C, int H, int W,
-//                           half *data_im, half *data_col, cudaStream_t stream);
-
 template void im2col_batched<half>(half *data_col, half *data_im,
                                    int filter_size, int N, int C, int H, int W,
                                    cudaStream_t stream);
 
 template void global_pooling<half>(half *output, half *input, const half *mask,
-                                   int batch, int channels, int spatial, cudaStream_t stream);
+                                   const half *sqrt_mask, int batch, int channels,
+                                   int spatial, cudaStream_t stream);
 
 template void head_global_pooling<half>(half *output, half *input, const half *sqrt_mask,
                                         int batch, int channels, int spatial, cudaStream_t stream);
 
 template void se_scale<half>(half *output, const half *input,
-                             const half *se_bias, const half *mask,
-                             int batch, int channels, int spatial, cudaStream_t stream);
+                             const half *residual, const half *se_biases,
+                             const half *mask, int batch, int channels,
+                             int spatial, bool relu, cudaStream_t stream);
+
+template void channel_pooling<half>(half *output, half *input, const half *sqrt_mask,
+                                    int batch, int channels, int spatial, cudaStream_t stream);
+
+template void sa_scale<half>(half *output, const half *input, const half *residual,
+                             const half *sa_biases, int batch, int channels, int spatial,
+                             bool relu, cudaStream_t stream);
 
 template void winograd3_transform_in<half>(half *V, const half *in, int batch,
                                            int channels, int board_size, cudaStream_t stream);
