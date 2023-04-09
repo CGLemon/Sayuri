@@ -404,7 +404,7 @@ __global__ void channel_pooling_kernel(T *output, T *input,
 
         T *input_ptr = input + n * C * spatial + s;
         float vsum = 0;
-        float vmax = 0.0f; // crazy negative value
+        float vmax = 0.0f;
 
         float vsqrt = sqrt((float)spatial);
         if (sqrt_mask) {

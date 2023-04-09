@@ -338,7 +338,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         max_batch_,               // max batch size
         policy_extract_channels,  // input sizes
         kOuputPassProbability,    // outpur size
-        false
+        false                     // relu
     );
 
     // value head
@@ -637,9 +637,20 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         nullptr, mask_buf[0],
         cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
 
-    // residual tower
+    //   The Residual tower. The forwarding order of
+    //   each block is
+    // [
+    //      (pre-bottleneck)
+    //   -> 1st conv layer
+    //   -> 2nd conv layer
+    //   -> (post-bottleneck)
+    //   -> (squeeze-and-excitation module)
+    //   -> (spatial attention module)
+    // ]
     const auto residuals = weights_->residual_blocks;
     for (int i = 0; i < residuals; ++i) {
+        // TODO: Remove one of cuda_conv_op_. Make it more
+        //       clear.
         const auto t_offset = 2 * i;
         const auto tower_ptr = weights_->tower.data() + i;
 
@@ -652,17 +663,16 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
                 cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
         }
 
+        // 1st conv layer
         void *first_in = tower_ptr->apply_btl ?
                              cuda_conv_op_[1] : cuda_conv_op_[0];
-
-        // 1st layer
         graph_->tower_conv[t_offset+0].Forward(
             batch_size,
             cuda_conv_op_[2], first_in,
             nullptr, mask_buf[0],
             cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
 
-        // 2nd layer
+        // 2nd conv layer
         void *second_skip = (tower_ptr->apply_se ||
                                  tower_ptr->apply_sa ||
                                  tower_ptr->apply_btl) ?
@@ -692,15 +702,17 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
             // squeeze-and-excitation module
             void *se_skip = tower_ptr->apply_sa ?
                                 nullptr : cuda_conv_op_[0];
+            void *se_outs = tower_ptr->apply_sa ?
+                                cuda_conv_op_[2] : cuda_conv_op_[0];
             graph_->tower_se[i].Forward(
                 batch_size,
-                cuda_conv_op_[0], cuda_conv_op_[3],
+                se_outs, cuda_conv_op_[3],
                 se_skip, mask_buf[0], mask_buf[1]);
 
             if (se_skip) {
                 module_skip = true;
             } else {
-                std::swap(cuda_conv_op_[3], cuda_conv_op_[0]);
+                std::swap(cuda_conv_op_[3], cuda_conv_op_[2]);
             }
         }
 
