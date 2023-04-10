@@ -26,16 +26,27 @@ void im2col_batched(T *data_col, T *data_im,
                     cudaStream_t stream);
 
 template <typename T>
-void global_pooling(T *output, T *input, const T *mask, int batch,
-                    int channels, int spatial, cudaStream_t stream);
+void global_pooling(T *output, T *input, const T *mask,
+                    const T *sqrt_mask, int batch, int channels,
+                    int spatial, cudaStream_t stream);
 
 template <typename T>
 void head_global_pooling(T *input, T *output, const T *sqrt_mask,
                          int batch, int channels, int spatial, cudaStream_t stream);
 
 template <typename T>
-void se_scale(T *output, const T *input, const T *se_bias, const T *mask,
-              int batch, int channels, int spatial, cudaStream_t stream);
+void se_scale(T *output, const T *input, const T *residual,
+              const T *se_biases, const T *mask, int batch,
+              int channels, int spatial, bool relu, cudaStream_t stream);
+
+template <typename T>
+void channel_pooling(T *output, T *input, const T *sqrt_mask,
+                     int batch, int channels, int spatial, cudaStream_t stream);
+
+template <typename T>
+void sa_scale(T *output, const T *input, const T *residual,
+              const T *sa_biases, int batch, int channels,
+              int spatial, bool relu, cudaStream_t stream);
 
 template <typename T>
 void winograd3_transform_in(T *V, const T *in, int batch,

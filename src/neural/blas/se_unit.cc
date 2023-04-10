@@ -74,28 +74,30 @@ void SEUnit::Forward(const size_t board_size,
                      const std::vector<float> &weights_w1,
                      const std::vector<float> &weights_b1,
                      const std::vector<float> &weights_w2,
-                     const std::vector<float> &weights_b2) {
-    using pooling = GlobalPooling<false>;
+                     const std::vector<float> &weights_b2,
+                     bool ReLU) {
+    using Pooling = GlobalPooling<false>;
     auto pool = std::vector<float>(3 * channels);
     auto fc_out = std::vector<float>(se_size);
 
-    pooling::Forward(board_size, channels, input, pool);
+    Pooling::Forward(board_size, channels, input, pool);
     FullyConnect::Forward(3*channels, se_size, pool, weights_w1, weights_b1, fc_out, true);
     FullyConnect::Forward(se_size, 2*channels, fc_out, weights_w2, weights_b2, pool, false);
-    SEProcess(board_size, channels, input, residual, pool);
+    SEProcess(board_size, channels, input, residual, pool, ReLU);
 }
 
 void SEUnit::SEProcess(const size_t board_size,
                        const size_t channels,
                        std::vector<float> &input,
                        const std::vector<float> &residual,
-                       const std::vector<float> &scale) {
+                       const std::vector<float> &scale,
+                       bool ReLU) {
     const auto width = board_size;
     const auto height = board_size;
     const auto spatial_size = width * height;
 
-    const auto lambda_ReLU = [](const auto val) {
-        return (val > 0.0f) ? val : 0;
+    const auto lambda_ReLU = [ReLU](const auto val) {
+        return (val > 0.0f || (!ReLU)) ? val : 0.0f;
     };
 
     const auto lambda_sigmoid = [](const auto val) {
@@ -105,8 +107,8 @@ void SEUnit::SEProcess(const size_t board_size,
     auto gamma_ptr = scale.data();
     auto beta_ptr = scale.data() + channels;
     auto input_ptr = input.data();
-    auto res_ptr = residual.data();
-
+    const float *residual_ptr = residual.empty() ?
+                                    nullptr : residual.data();
     for (auto c = size_t{0}; c < channels; ++c) {
         const auto gamma = lambda_sigmoid(*gamma_ptr);
         const auto beta = *beta_ptr;
@@ -115,10 +117,14 @@ void SEUnit::SEProcess(const size_t board_size,
         beta_ptr++;
 
         for (auto i = size_t{0}; i < spatial_size; ++i) {
-            float value = *input_ptr;
-            *input_ptr = lambda_ReLU(gamma * value + beta + *res_ptr);
+            float val = *input_ptr;
+            val = gamma * val + beta;
+            if (residual_ptr) {
+                val += *residual_ptr;
+                residual_ptr++;
+            }
+            *input_ptr = lambda_ReLU(val);
             input_ptr++;
-            res_ptr++;
         }
     }
 }
