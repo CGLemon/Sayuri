@@ -1,4 +1,7 @@
+#pragma once
+
 #include <vector>
+#include <cstddef>
 
 class FullyConnect {
 public:

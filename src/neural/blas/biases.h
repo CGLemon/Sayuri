@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <cstddef>
 
 class AddSpatialBiases {
 public:
@@ -15,7 +16,7 @@ public:
                         const size_t channels,
                         std::vector<float> &input,
                         const std::vector<float> &biases,
-                        std::vector<float> &eltwise,
+                        const std::vector<float> &residual,
                         bool ReLU);
 };
 

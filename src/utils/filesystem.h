@@ -9,7 +9,7 @@ std::string ConcatPath(std::initializer_list<std::string> list);
 
 // Creates directory at a given path. Throws exception if cannot.
 // Returns silently if already exists.
-void CreateDirectory(const std::string& path);
+void TryCreateDirectory(const std::string& path);
 
 // Returns true if the directory already exists.
 bool IsDirectoryExist(const std::string& directory);

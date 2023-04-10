@@ -4,7 +4,7 @@
 
 * Be sure that you had built the engine. The engine should be in the ```build``` directory.
 * PyTorch 1.x (for python)
-* Numpy (for python)
+* NumPy (for python)
 
 ## Simple Usage
 
@@ -17,7 +17,7 @@ There three bash files. The ```setup.sh``` will do the initialization. The ```se
 
 The ```selfplay.sh``` will do the inifinite loop. If you want to stop the loop, you need to create a kill file.
 
-    $ vim kill.txt
+    $ touch kill.txt
 
 ## The Training Setting
 
@@ -57,11 +57,15 @@ The ```selfplay-setting.json``` controls the training process. Here are the para
         "MaxStepsPerRunning": 4000,  # Will stop the training after this steps.
         "Workers": 4,                # Number of data loader worker.
         "BatchSize": 256,
-        "BufferSize" : 524288,
-        "DownSampleRate": 16,
+        "BufferSize" : 524288,       # Bigger is better but it will use more memory. This
+                                     # size with 4 workers will use around 17 ~ 20 GB
+                                     # memory.
+
+        "DownSampleRate": 16,        # Bigger is better but may be slow down.
         "MacroFactor": 1,
         "WeightDecay": 1e-4,
-        "NumberChunks" : 20000,      # Will load last X chunks.
+        "NumberChunks" : 20000,      # Will load last X chunks. Default is 25 games for
+                                     # each chunk.
 
         "LearningRateSchedule": [
             [0,       1e-2]          # The format is [X, lr]. Will use the lr rate

@@ -56,7 +56,7 @@ private:
 
 template<typename NodeType>
 inline NodePointer<NodeType>::NodePointer(std::int16_t vertex, float policy) {
-    std::uint64_t buf;
+    std::uint64_t buf = 0ULL;
 
     std::memcpy((std::uint32_t *)(&buf) + 1, &policy, sizeof(float));
     std::memcpy((std::int16_t *)(&buf) + 1, &vertex, sizeof(std::int16_t));

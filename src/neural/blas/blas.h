@@ -14,11 +14,10 @@
 
 #include "neural/blas/sgemm.h"
 
-
 class Blas {
 public:
     // This is interface for convolution. It is not the real general
-    // matrix multiply. Some parameters will invalid.
+    // matrix multiply. Some parameters may be invalid.
     static void ConvolutionSgemm(const int M, const int N, const int K,
                                  const float alpha, 
                                  const float *A, const int lda,
@@ -28,7 +27,7 @@ public:
 
 
     // This is interface for Winograd. It is not the real general
-    // matrix multiply. Some parameters will invalid.
+    // matrix multiply. Some parameters may be invalid.
     static void WinogradSgemm(const int offset_u, const int offset_v, const int offset_m,
                               const int M, const int N, const int K,
                               const float alpha,
@@ -39,7 +38,7 @@ public:
 
 
     // This is interface for fullyconnet. It is not the real general
-    // matrix multiply. Some parameters will invalid.
+    // matrix multiply. Some parameters may be invalid.
     static void DenseSgemm(const int inputs,
                            const int outputs,
                            const int batch_size,

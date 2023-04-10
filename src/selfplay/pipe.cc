@@ -120,13 +120,13 @@ void SelfPlayPipe::Loop() {
     LOGGING << "Starting time is: " << CurrentDateTime()  << std::endl;
 
     if (!IsDirectoryExist(data_directory_)) {
-        CreateDirectory(data_directory_);
+        TryCreateDirectory(data_directory_);
     }
     if (!IsDirectoryExist(data_directory_hash_)) {
-        CreateDirectory(data_directory_hash_);
+        TryCreateDirectory(data_directory_hash_);
     }
     if (!IsDirectoryExist(sgf_directory_)) {
-        CreateDirectory(sgf_directory_);
+        TryCreateDirectory(sgf_directory_);
     }
 
     constexpr int kGamesPerChunk = 25;

@@ -134,27 +134,35 @@ class SqueezeAndExcitation(nn.Module):
 class SpatialAttention(nn.Module):
     def __init__(self, collector=None):
         super(SpatialAttention, self).__init__()
+        self.b_avg = (19 + 9) / 2
         self.conv = Convolve(
-            in_channels=2,
+            in_channels=3,
             out_channels=1,
             kernel_size=7,
             relu=False,
             collector=collector
         )
 
-    def forward(self, x, mask):
+    def forward(self, x, mask_buffers):
+        mask, mask_sum_hw, mask_sum_hw_sqrt = mask_buffers
+        div = torch.reshape(mask_sum_hw, (-1,1))
+        div_sqrt = torch.reshape(mask_sum_hw_sqrt, (-1,1))
+        b_diff = div_sqrt - self.b_avg
+
+        b, c = b_diff.size()
+        b_diff = b_diff.view(b, c, 1, 1)
         layer_raw_mean = torch.mean(x, dim=1, keepdim=True)
         layer_raw_max = torch.max(x, dim=1, keepdim=True)[0]
 
-        # TODO: Should I add the board size information?
         layer0 = layer_raw_mean
-        layer1 = layer_raw_max
+        layer1 = layer_raw_mean * (b_diff / 10.0)
+        layer2 = layer_raw_max
 
         # The out of board area is zero. Do not need to
         # multiply the mask.
-        sa = torch.cat([layer0, layer1], dim=1)
-
+        sa = torch.cat([layer0, layer1, layer2], dim=1)
         sa = self.conv(sa, mask)
+
         out = torch.sigmoid(sa) * x
         return out * mask
 
@@ -567,7 +575,7 @@ class ResBlock(nn.Module):
         if self.use_se:
             out = self.se_module(out, mask_buffers)
         if self.use_sa:
-            out = self.sa_module(out, mask)
+            out = self.sa_module(out, mask_buffers)
         out = out + x
 
         return F.relu(out, inplace=True), mask_buffers
@@ -614,8 +622,10 @@ class Network(nn.Module):
         )
 
         # residual tower
+        main_channels = self.residual_channels
         nn_stack = []
         for s in self.stack:
+            has_basic_block = False
             use_fixup = self.fixup
             use_sa = False
             se_size = None
@@ -623,26 +633,33 @@ class Network(nn.Module):
 
             for component in s.strip().split('-'):
                 if component == "ResidualBlock":
-                    pass
+                    has_basic_block = True
+                elif component == "BottleneckBlock":
+                    bottleneck_channels = main_channels//2
+                    assert main_channels%2 == 0, ""
+                    has_basic_block = True
                 elif component == "SE":
-                    se_size = self.residual_channels
+                    se_size = main_channels
                 elif component == "SA":
                     use_sa = True
                 elif component == "FixUp":
                     use_fixup = True
-                elif component == "Bottleneck":
-                    bottleneck_channels = self.residual_channels//2
-                    assert self.residual_channels%2 == 0, ""
                 else:
                     raise Exception("Invalid NN structure.")
 
+            if not has_basic_block:
+                raise Exception("There is no basic block.")
+
             nn_stack.append(ResBlock(blocks=len(self.stack),
-                                     channels=self.residual_channels,
+                                     channels=main_channels,
                                      fixup=use_fixup,
                                      bottleneck_channels=bottleneck_channels,
                                      se_size=se_size,
                                      use_sa=use_sa,
                                      collector=self.layers_collector))
+
+        if main_channels != self.residual_channels:
+            raise Exception("Invalid block stack.")
 
         self.residual_tower = nn.Sequential(*nn_stack)
 

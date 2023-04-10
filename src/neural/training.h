@@ -32,7 +32,7 @@ struct Training {
 
     float final_score;
  /*
-    Output format is here. EEvery data package are 45 lines .
+    Output format is here. Every data package are 45 lines.
 
     ------- claiming -------
      L1       : Version
