@@ -35,7 +35,7 @@ std::string ConcatPath(std::initializer_list<std::string> list) {
     return path;
 }
 
-void CreateDirectory(const std::string& path) {
+void TryCreateDirectory(const std::string& path) {
 #ifdef WIN32
     if (CreateDirectoryA(path.c_str(), nullptr)) return;
     if (GetLastError() != ERROR_ALREADY_EXISTS) {

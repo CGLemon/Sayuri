@@ -13,13 +13,13 @@ Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network a
 
 ## Requirements
 
-* Ubuntu or MacOS only
+* Ubuntu, MacOS or Windows
 * GCC, Clang, must support C++14 or higher
 * CMake 3.15 or later
 * Optional: Eigen or OpenBLAS library
 * Optional: CUDA 10.x - 12.x library
 * Optional: cuDNN 7.x or 8.x library
-* Optional: Gzip library
+* Optional: zlib library
 
 ## Default Compiling (Ubuntu or MacOS)
 
@@ -30,9 +30,9 @@ Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network a
     $ cmake ..
     $ make -j
 
-## Optional Compiling
+## Cmake Option
 
-Accelerate the network forwarding pipe by CPU. OpenBlas or Eigen are required. OpenBlas and Eigen are significantly faster than built-in blas. OpenBlas is recommended on MacOS.
+Accelerate the network forwarding pipe by CPU. OpenBLAS or Eigen are required. OpenBLAS and Eigen are significantly faster than built-in blas. OpenBLAS is recommended on MacOS.
 
     $ cmake .. -DBLAS_BACKEND=OPENBLAS
 
@@ -60,9 +60,22 @@ Save the compressed training data file. It can save many memory usage in the sel
 
     $ cmake .. -DUSE_ZLIB=1
 
+## Windows Version (Experiment)
+
+1. Download the Visual Studio.
+2. Download the MinGW.
+3. Clone the github repo and compile it.
+
+        $ git clone https://github.com/CGLemon/Sayuri
+        $ cd Sayuri
+        $ git submodule update --init --recursive
+        $ cd src
+        $ g++ -std=c++14 -ffast-math -I . -Wall -Wextra -lpthread *.cc utils/*.cc accuracy/*.cc game/*.cc mcts/*.cc neural/*.cc neural/blas/*.cc neural/cuda/*.cc pattern/*.cc selfplay/*.cc -o Sayuri -O3 -DNDEBUG -DWIN32 -I ../third_party/Eigen -DUSE_BLAS -DUSE_EIGEN
+
+
 ## Weights and Others.
 
-You may download the SL weights file, opening book and patterns from my [google drive](https://drive.google.com/drive/folders/1cXAoOghgkUfNVZWRzEyvfB4uY_TTbaVH?usp=share_link). Here is the description list. Because I may update the network format or encoder, be sure that you download the correspond weights for the last engine. I do not promise the any file is backward compatible.
+You may download the SL weights file, opening book and patterns from [v0.3](https://drive.google.com/drive/folders/1cXAoOghgkUfNVZWRzEyvfB4uY_TTbaVH?usp=share_link) or fixed weights from [v0.4](https://drive.google.com/drive/folders/1LMHYDHefa_E439X1GZkyIoWm7gFyTVCS?usp=share_link). Here is the description list. Because I may update the network format or encoder, be sure that you download the correspond weights for the last engine. I do not promise the any file is backward compatible.
 
 | File                    | Description                                    |
 | :---------------------- | :--------------------------------------------- |
@@ -82,7 +95,7 @@ Here are some useful arguments which you may need.
 | :---------------------- | :----- | :--------------------------------------------- |
 |  --weights, -w          | string | File with network weights.                     |
 |  --patterns             | string | File with patterns.                            |
-|  --book, -b             | string | File with opening book.                        |
+|  --book                 | string | File with opening book.                        |
 |  --playouts, -p         | int    | The number of maximum playouts.                |
 |  --const-time           | int    | Const time of search in seconds.               |
 |  --threads, -t          | int    | The number of threads used.                    |
@@ -109,7 +122,7 @@ Example setting 1: 4 threads, 2 batches and 12800 playouts
 
 Example setting 2: quickly and friendly pass game
     
-    $ ./Sayuri -w <weights file> -t 1 -b 1 --const-time 1 --friendly-pass --reuse-tree
+    $ ./Sayuri -w <weights file> -t 1 -b 1 --const-time 1 --friendly-pass
 
 Example setting 3: set 0 playouts, directly policy output 
 
@@ -172,7 +185,7 @@ Please see this [section](./bash/README.md).
 
 Before the AlphaGo (2016s), the most of state-of-the-art computer Go combine the MCTS and MM (Minorization-Maximization). Crazy Stone and Zen use that. Or combining the MCTS and SB (Simulation Balancing). The Eric (predecessor of AlphaGo) and Leela use that. Ray, one of the strongest open source Go engine before AlphaGo, writed by Yuki Kobayashi which is based on the MM algorithm. I am surprised that it can play the game well without much human knowledge and Neural Network. What's more, it can beat high level Go player on 9x9 if we provide it enough computation. But thanks for deep learning technique, the computer Go engine is significantly stronger than before. Sayuri can beat the Ray (v10.0) on 19x19 with only policy network. This result shows the advantage of Neural Network technology.
 
-Although the Neural Network based engines are more powerful, I still recommend you to try some engine with non Neural Network and feel the power of ancient technology. Here is the list.
+Although the Neural Network based engines are more powerful, I still recommend that you try some engine with non Neural Network and feel the power of ancient technology. Here is the list.
 
 * [Leela](https://www.sjeng.org/leela.html), need to add the option ```--nonets``` to disable DCNN.
 * [Pachi](https://github.com/pasky/pachi), need to add the option ```--nodcnn``` to disable DCNN.
@@ -216,7 +229,7 @@ KataGo also proposed a variant bottleneck and said it could significantly improv
 
 ## Todo
 
-* Support Windows platform.
+* Support Windows platform (CUDA version).
 * Support NHWC format.
 * Support distributed computation.
 

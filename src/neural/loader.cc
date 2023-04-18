@@ -277,6 +277,7 @@ void DNNLoder::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstr
             if (component == "ResidualBlock" ||
                     component == "BottleneckBlock" ||
                     component == "SE" ||
+                    component == "SA" ||
                     component == "FixUp") {
                 // do nothing...
             } else {
@@ -541,7 +542,7 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
                 sa_conv_shape[1],
                 sa_conv_shape[2]);
 
-            if (sa_conv_shape[0] != 2 ||
+            if (sa_conv_shape[0] != 3 ||
                     sa_conv_shape[1] != 1 ||
                     sa_conv_shape[2] != 7) {
                 throw "The SA size is wrong.";

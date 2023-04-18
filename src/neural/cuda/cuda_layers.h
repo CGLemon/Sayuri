@@ -40,14 +40,14 @@ public:
                  const void *residual, const void *mask,
                  void *scratch, void *scratch_other, size_t scratch_size);
 
-    void LoadingWeight(const std::vector<float> &weights,
-                       size_t &scratch_size,
-                       bool winograd);
+    void LoadWeights(const std::vector<float> &weights,
+                     size_t &scratch_size,
+                     bool winograd);
 
-    void LoadingWeight(const std::vector<float> &weights,
-                       const std::vector<float> &biases,
-                       size_t &scratch_size,
-                       bool winograd);
+    void LoadWeights(const std::vector<float> &weights,
+                     const std::vector<float> &biases,
+                     size_t &scratch_size,
+                     bool winograd);
 
 private:
     int filter_dim_;
@@ -83,8 +83,8 @@ public:
 
     void Forward(const int batch, void *output, void *input);
 
-    void LoadingWeight(const std::vector<float> &weights,
-                       const std::vector<float> &biases);
+    void LoadWeights(const std::vector<float> &weights,
+                     const std::vector<float> &biases);
 private:
     int inputs_;
     int outputs_;
@@ -118,15 +118,17 @@ public:
            const int batch,
            const int board_size,
            const int channels,
-           const int se_size);
+           const int se_size,
+           bool ReLU);
     ~SEUnit();
 
-    void LoadingWeight(const std::vector<float> &weights_w1,
-                       const std::vector<float> &weights_b1,
-                       const std::vector<float> &weights_w2,
-                       const std::vector<float> &weights_b2);
+    void LoadWeights(const std::vector<float> &weights_w1,
+                     const std::vector<float> &weights_b1,
+                     const std::vector<float> &weights_w2,
+                     const std::vector<float> &weights_b2);
 
-    void Forward(const int batch, void *output, void *input, void *mask);
+    void Forward(const int batch, void *output, void *input,
+                 void *residual, void *mask, void *sqrt_mask);
  
 private:
     int se_size_;
@@ -139,6 +141,31 @@ private:
     void *cuda_weights_w2_;
     void *cuda_weights_b2_;
 };
+
+class SAUnit : public LayerBasic {
+public:
+    SAUnit() = default;
+    SAUnit(CudaHandles *handles,
+           const int batch,
+           const int board_size,
+           const int channels,
+           bool ReLU);
+    ~SAUnit();
+
+    void LoadWeights(const std::vector<float> &weights,
+                     const std::vector<float> &biases,
+                     size_t &scratch_size, bool winograd);
+
+    void Forward(const int batch, void *output, void *input,
+                 void *residual, void *mask, void *sqrt_mask,
+                 void *scratch, void *scratch_other, size_t scratch_size);
+private:
+    int channels_;
+    Convolution conv_;
+
+    std::array<void *, 3> cuda_op_;
+};
+
 } // namespace cuda
 
 #endif

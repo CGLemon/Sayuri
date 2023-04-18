@@ -30,13 +30,15 @@ public:
                         const std::vector<float> &weights_w1,
                         const std::vector<float> &weights_b1,
                         const std::vector<float> &weights_w2,
-                        const std::vector<float> &weights_b2);
+                        const std::vector<float> &weights_b2,
+                        bool ReLU);
 
 private:
     static void SEProcess(const size_t board_size,
                           const size_t channels,
                           std::vector<float> &input,
                           const std::vector<float> &residual,
-                          const std::vector<float> &scale);
+                          const std::vector<float> &scale,
+                          bool ReLU);
 
 };
