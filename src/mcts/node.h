@@ -203,7 +203,7 @@ public:
     std::string GetPvString(GameState &state);
 
 private:
-    float GetDynmaicCpuctFactor(Node *node, const int visits);
+    float GetDynamicCpuctFactor(Node *node, const int visits);
     void ApplyNoDcnnPolicy(GameState &state,
                            const int color,
                            Network::Result &raw_netlist) const;

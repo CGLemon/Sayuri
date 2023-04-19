@@ -374,17 +374,28 @@ Node *Node::ProbSelectChild() {
     return best_node->Get();
 }
 
-float Node::GetDynmaicCpuctFactor(Node *node, const int visits) {
-    if (node == nullptr || visits <= 1) {
+float Node::GetDynamicCpuctFactor(Node *node, const int visits) {
+    // Imported form http://www.yss-aya.com/bbs/patio.cgi?read=33&ukey=0
+
+    bool cpuct_dynamic = param_->cpuct_dynamic;
+    if (!cpuct_dynamic ||
+            node == nullptr ||
+            visits <= 1) {
         return 1.0f;
     }
 
-    double k = 4 * std::sqrt(node->GetLcbVariance(1.0f, visits));
+    double cpuct_dynamic_k_factor = param_->cpuct_dynamic_k_factor;
+    double cpuct_dynamic_k_base = param_->cpuct_dynamic_k_base;
+
+    double variance = node->GetLcbVariance(1.0f, visits);
+    double stddev = std::sqrt(variance / visits);
+    double k = cpuct_dynamic_k_factor * stddev;
+
     k = std::max(0.5, k);
     k = std::min(1.4, k);
 
-    double alpha = 1.0f / (1.0f+std::sqrt((double)visits/10000.0f));
-    k = alpha*k + (1.0f-alpha)*1.0f;
+    double alpha = 1.0 / (1.0 + std::sqrt(visits/cpuct_dynamic_k_base));
+    k = alpha*k + (1.0-alpha) * 1.0;
     return k;
 }
 
@@ -426,8 +437,8 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     const auto noise                = is_root ? param_->dirichlet_noise  : false;
     const auto fpu_reduction_factor = is_root ? param_->fpu_root_reduction : param_->fpu_reduction;
 
-    const float cpuct         = cpuct_init + cpuct_base_factor *
-                                                 std::log((float(parentvisits) + cpuct_base + 1) / cpuct_base);
+    const float raw_cpuct     = cpuct_init + cpuct_base_factor *
+                                    std::log((float(parentvisits) + cpuct_base + 1) / cpuct_base);
     const float numerator     = std::sqrt(float(parentvisits));
     const float fpu_reduction = fpu_reduction_factor * std::sqrt(total_visited_policy);
     const float fpu_value     = GetNetWL(color) - fpu_reduction;
@@ -453,7 +464,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
 
         float denom = 1.0f;
         float utility = 0.0f; // the utility value
-        float cpuct_factor = 1.0f;
+        float cpuct = raw_cpuct;
 
         if (is_pointer) {
             const auto visits = node->GetVisits();
@@ -473,14 +484,14 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
                                node->GetScoreUtility(
                                    color, score_utility_div, parent_score);
             }
-            cpuct_factor = GetDynmaicCpuctFactor(node, visits);
+            cpuct *= GetDynamicCpuctFactor(node, visits);
             denom += visits;
         }
 
 
         // PUCT algorithm
         const float psa = GetSearchPolicy(child, noise);
-        const float puct = cpuct_factor * cpuct * psa * (numerator / denom);
+        const float puct = cpuct * psa * (numerator / denom);
         const float value = q_value + puct + utility;
         assert(value > std::numeric_limits<float>::lowest());
 
@@ -1488,13 +1499,13 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
 }
 
 void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
-                                   const int color,
-                                   const int root_visits,
-                                   const int max_visists,
-                                   const int considered_moves, const float mval,
-                                   bool only_max_visit) {
+                               const int color,
+                               const int root_visits,
+                               const int max_visists,
+                               const int considered_moves, const float mval,
+                               bool only_max_visit) {
 
-    // The Variant of Sequential Halving algorithm. The input N playouts
+    // The variant of Sequential Halving algorithm. The input N playouts
     // is always log2(considered moves) * (considered moves) for each
     // epoch. It is same as Sequential Halving with Gumbel algorithm if 
     // the playous is low.

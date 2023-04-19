@@ -60,6 +60,9 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["cpuct_init"] << Option::SetOption(0.5f);
     kOptionsMap["cpuct_base_factor"] << Option::SetOption(1.0f);
     kOptionsMap["cpuct_base"] << Option::SetOption(19652.f);
+    kOptionsMap["cpuct_dynamic"] << Option::SetOption(true);
+    kOptionsMap["cpuct_dynamic_k_factor"] << Option::SetOption(4.f);
+    kOptionsMap["cpuct_dynamic_k_base"] << Option::SetOption(10000.f);
     kOptionsMap["draw_factor"] << Option::SetOption(0.f);
     kOptionsMap["score_utility_factor"] << Option::SetOption(0.1f);
     kOptionsMap["score_utility_div"] << Option::SetOption(20.f);
@@ -422,6 +425,11 @@ void ArgsParser::Parse(Splitter &spt) {
         spt.RemoveWord(res->Index());
     }
 
+    if (const auto res = spt.Find("--no-cpuct-dynamic")) {
+        SetOption("cpuct_dynamic", false);
+        spt.RemoveWord(res->Index());
+    }
+
     if (const auto res = spt.FindNext("--dirichlet-epsilon")) {
         if (IsParameter(res->Get<>())) {
             SetOption("dirichlet_epsilon", res->Get<float>());
@@ -615,6 +623,20 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--cpuct-base")) {
         if (IsParameter(res->Get<>())) {
             SetOption("cpuct_base", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--cpuct-dynamic-k-factor")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("cpuct_dynamic_k_factor", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--cpuct-dynamic-k-base")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("cpuct_dynamic_k_base", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
