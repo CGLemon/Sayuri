@@ -81,16 +81,19 @@ bool Node::ExpandChildren(Network &network,
         return false;
     }
 
-    // Get network computation result.
-    const float temp = is_root ? param_->root_policy_temp : param_->policy_temp;
-
     auto raw_netlist = Network::Result{};
     color_ = state.GetToMove();
 
+    // Get network or MM computation result.
     if (param_->no_dcnn &&
             !(param_->root_dcnn && is_root)) {
         ApplyNoDcnnPolicy(state, color_, raw_netlist);
     } else {
+        // Policy softmax temperature. If t is greater than 1,
+        // policy is broader. If t is greater less 1, policy is
+        // sharper.
+        const float temp = is_root ?
+                        param_->root_policy_temp : param_->policy_temp;
         raw_netlist = network.GetOutput(state, Network::kRandom, temp);
     }
 
@@ -192,7 +195,7 @@ bool Node::ExpandChildren(Network &network,
     // Extend the nodes.
     LinkNodeList(nodelist);
 
-    // Release the owner.
+    // Release the lock owner.
     ExpandDone();
 
     return true;

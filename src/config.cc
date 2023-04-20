@@ -68,8 +68,8 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["score_utility_div"] << Option::SetOption(20.f);
     kOptionsMap["expand_threshold"] << Option::SetOption(-1);
 
-    kOptionsMap["root_policy_temp"] << Option::SetOption(1.f, 1.f, 0.f);
-    kOptionsMap["policy_temp"] << Option::SetOption(1.f, 1.f, 0.f);
+    kOptionsMap["root_policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
+    kOptionsMap["policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["lag_buffer"] << Option::SetOption(0);
     kOptionsMap["early_symm_cache"] << Option::SetOption(false);
     kOptionsMap["symm_pruning"] << Option::SetOption(false);

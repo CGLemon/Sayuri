@@ -930,6 +930,13 @@ bool Search::AdvanceToNewRootState() {
         return false;
     }
 
+    const auto temp_diff = param_->policy_temp -
+                               param_->root_policy_temp;
+    if (std::abs(temp_diff) > 1e-4f) {
+        // The tree shape is different if the temperature is different.
+        return false;
+    }
+
     const auto depth =
         int(root_state_.GetMoveNumber() - last_state_.GetMoveNumber());
 
