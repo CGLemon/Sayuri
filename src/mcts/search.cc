@@ -204,9 +204,11 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     // the search.
     int num_passes = 0;
     if (tag & kForced) {
-        while (root_state_.GetLastMove() == kPass) {
+        while (root_state_.GetPasses() >= 2) {
+            // Remove double pass move.
             root_state_.UndoMove();
-            num_passes++;
+            root_state_.UndoMove();
+            num_passes+=2;
         }
     }
 
@@ -214,7 +216,8 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     const bool gumbel = param_->gumbel;
     const bool dirichlet_noise = param_->dirichlet_noise;
     if (tag & kNoNoise) {
-        param_->gumbel = param_->dirichlet_noise = false;
+        param_->gumbel =
+            param_->dirichlet_noise = false;
     }
 
     // Prepare some basic information.

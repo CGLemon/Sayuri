@@ -293,11 +293,11 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
 
         auto ss = std::ostringstream{};
         if (color == kEmpty) {
-            ss << "draw";
+            ss << "0";
         } else if (color == kBlack) {
-            ss << "b+" << final_score;
+            ss << "B+" << final_score;
         } else if (color == kWhite) {
-            ss << "w+" << final_score;
+            ss << "W+" << final_score;
         }
         out << GtpSuccess(ss.str());
     } else if (const auto res = spt.Find("genmove", 0)) {
@@ -930,14 +930,11 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
 
             if (result[idx] == LadderType::kLadderAtari) {
                 map_color = 0.2f;
-            }
-            if (result[idx] == LadderType::kLadderTake) {
+            } else if (result[idx] == LadderType::kLadderTake) {
                 map_color = 0.4f;
-            }
-            if (result[idx] == LadderType::kLadderEscapable) {
+            } else if (result[idx] == LadderType::kLadderEscapable) {
                 map_color = 0.8f;
-            }
-            if (result[idx] == LadderType::kLadderDeath) {
+            } else if (result[idx] == LadderType::kLadderDeath) {
                 map_color = 1.0f;
             }
             ladder_map << GoguiColor(map_color, agent_->GetState().VertexToText(vtx));
@@ -1027,11 +1024,11 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         auto score = agent_->GetState().GetFinalScore();
 
         if (std::abs(score) < 1e-4f) {
-            out << GtpSuccess("draw"); 
+            out << GtpSuccess("0"); 
         } else if (score < 0.f) {
-            out << GtpSuccess(Format("w+%f", -score));
+            out << GtpSuccess(Format("W+%f", -score));
         } else {
-            out << GtpSuccess(Format("b+%f", score));
+            out << GtpSuccess(Format("B+%f", score));
         }
     }  else {
         try_ponder = prev_pondering_;
