@@ -81,6 +81,7 @@ private:
 struct ComputationResult {
     int board_size;
     int best_move{kNullVertex};
+    int best_no_pass_move{kNullVertex};
     int random_move{kNullVertex};
     int gumbel_move{kNullVertex};
 

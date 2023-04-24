@@ -414,7 +414,8 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     const auto board_size = root_state_.GetBoardSize(); 
 
     // Fill best moves, root eval and score.
-    result.best_move = root_node_->GetBestMove();
+    result.best_move = root_node_->GetBestMove(true);
+    result.best_no_pass_move = root_node_->GetBestMove(false);
     result.random_move = root_node_->
                              RandomizeMoveWithGumbel(
                                  root_state_,
@@ -687,6 +688,22 @@ int Search::ThinkBestMove() {
     return result.best_move;
 }
 
+bool ShouldForbidPass(GameState &state, ComputationResult &result) {
+    int to_move = result.to_move;
+
+    for (const auto &string : result.dead_strings) {
+        // All vertex in a string should be same color.
+        const auto vtx = string[0];
+
+        // Some opp's strings are death. Forbid the pass
+        // move. Keep to eat all opp's dead strings.
+        if (state.GetState(vtx) == (!to_move)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 int Search::GetSelfPlayMove() {
     auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
 
@@ -721,6 +738,12 @@ int Search::GetSelfPlayMove() {
 
     auto result = Computation(playouts, tag);
     int move = result.best_move;
+
+    // The game is not end. Don't play the pass move.
+    if (ShouldForbidPass(root_state_, result)) {
+        move = result.best_no_pass_move;
+    }
+
     int random_moves_cnt = param_->random_moves_factor *
                                result.board_size * result.board_size;
 

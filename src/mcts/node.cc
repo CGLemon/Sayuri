@@ -306,7 +306,7 @@ bool Node::SetTerminal() {
 }
 
 float Node::ComputeKlDivergence() {
-    const auto vtx = GetBestMove();
+    const auto vtx = GetBestMove(true);
     int parentvisits = 0;
     int best_visits = 0;
 
@@ -609,7 +609,7 @@ int Node::RandomizeFirstProportionally(float temp, int min_visits) {
             return RandomizeFirstProportionally(temp, 0);
         } else {
             // There is no visits. Reture the best policy move.
-            return GetBestMove();
+            return GetBestMove(true);
         }
     }
 
@@ -653,7 +653,7 @@ int Node::RandomizeMoveWithGumbel(GameState &state, int temp, int min_visits) {
 
     if (acc_visists == 0) {
         // There is no visits. Reture the best policy move.
-        return GetBestMove();
+        return GetBestMove(true);
     }
     for (float &p : prob) {
         p /= (float)acc_visists;
@@ -981,7 +981,7 @@ std::string Node::GetPvString(GameState &state) {
     auto pvlist = std::vector<int>{};
     auto *next = this;
     while (next->HaveChildren()) {
-        const auto vtx = next->GetBestMove();
+        const auto vtx = next->GetBestMove(true);
         pvlist.emplace_back(vtx);
         next = next->GetChild(vtx);
     }
@@ -1067,7 +1067,7 @@ std::vector<std::pair<float, int>> Node::GetLcbUtilityList(const int color) {
     return list;
 }
 
-int Node::GetBestMove() {
+int Node::GetBestMove(bool allow_pass) {
     WaitExpanded();
     assert(HaveChildren());
 
@@ -1079,13 +1079,21 @@ int Node::GetBestMove() {
         const auto lcb = entry.first;
         const auto vtx = entry.second;
         if (lcb > best_value) {
+            if (!allow_pass && vtx == kPass) {
+                continue;
+            }
             best_value = lcb;
             best_move = vtx;
         }
     }
 
-    if (lcblist.empty() && HaveChildren()) {
-        best_move = ProbSelectChild()->GetVertex();
+    if (best_move == kNullVertex) {
+        if (!allow_pass && lcblist.size() == 1) {
+            // only pass move...
+            return kPass;
+        } else {
+            best_move = ProbSelectChild()->GetVertex();
+        }
     }
 
     assert(best_move != kNullVertex);

@@ -126,7 +126,7 @@ public:
     std::vector<std::pair<float, int>> GetLcbUtilityList(const int color);
 
     // Get best move(vertex) with LCB value.
-    int GetBestMove();
+    int GetBestMove(bool allow_pass);
 
     // Get best move(vertex) with Gumbel-Top-k trick.
     int GetGumbelMove();
