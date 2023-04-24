@@ -702,7 +702,7 @@ bool ShouldForbidPass(GameState &state, ComputationResult &result) {
         // Some opp's strings are death. Forbid the pass
         // move. Keep to eat all opp's dead strings.
         if (state.GetState(vtx) == (!to_move) &&
-                safe_ownership[idx] == kEmpty) {
+                safe_ownership[idx] != to_move) {
             return true;
         }
     }
