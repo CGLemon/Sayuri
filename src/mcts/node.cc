@@ -22,7 +22,6 @@ Node::Node(std::int16_t vertex, float policy) {
 }
 
 Node::~Node() {
-    assert(GetThreads() == 0);
     ReleaseAllChildren();
 }
 
