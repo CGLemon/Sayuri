@@ -690,14 +690,19 @@ int Search::ThinkBestMove() {
 
 bool ShouldForbidPass(GameState &state, ComputationResult &result) {
     int to_move = result.to_move;
+    auto safe_ownership = state.GetOwnership();
 
     for (const auto &string : result.dead_strings) {
         // All vertex in a string should be same color.
         const auto vtx = string[0];
+        const auto x = state.GetX(vtx);
+        const auto y = state.GetY(vtx);
+        const auto idx = state.GetIndex(x, y);
 
         // Some opp's strings are death. Forbid the pass
         // move. Keep to eat all opp's dead strings.
-        if (state.GetState(vtx) == (!to_move)) {
+        if (state.GetState(vtx) == (!to_move) &&
+                safe_ownership[idx] == kEmpty) {
             return true;
         }
     }
