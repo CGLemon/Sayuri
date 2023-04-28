@@ -39,7 +39,7 @@ void TimeControl::TimeSettings(const int main_time,
 
     if ((byo_stones_ <= 0 && byo_periods_ <= 0) ||
             (byo_stones_ > 0 && byo_periods_ > 0)) {
-        // The byo yomi_stones and byo periods should not be greater or
+        // The byo yomi stones and byo periods should not be greater or
         // smaller than zero at the same time.
         byo_time_ = byo_periods_ = 0;
     }
@@ -131,7 +131,6 @@ void TimeControl::SetLagBuffer(int lag_buffer) {
 
     lag_buffer *= 100; // second to centisecond
     lag_buffer_ = lag_buffer < kMinLag ? kMinLag : lag_buffer;
-
 }
 
 void TimeControl::Reset() {
@@ -236,18 +235,13 @@ float TimeControl::GetThinkingTime(int color, int boardsize, int move_num) const
             extra_time_per_move = byo_extra;
         }
 
-        moves_remaining = EstimateMovesExpected(boardsize, move_num, 0);
+        moves_remaining = EstimateMovesExpected(boardsize, move_num);
         time_remaining = maintime_left_[color] + byo_extra;
     }
 
     int base_time = std::max(time_remaining - lag_buffer_, 0) / std::max(moves_remaining, 1);
     int inc_time = std::max(extra_time_per_move - lag_buffer_, 0);
 
-
-    // Output value may loss littel precision due to ieee754. We may ignore it
-    // because the precision is much smaller than one second. If it is greater
-    // than one second, the output value is very large. We don't care the little
-    // error.
     return (float)(base_time + inc_time) / 100.f; // centisecond to second
 }
 
@@ -267,26 +261,34 @@ bool TimeControl::IsInfiniteTime(int /* color */) const {
                byo_periods_ == 0;
 }
 
-int TimeControl::EstimateMovesExpected(int boardsize, int move_num, int delta) const {
-    // The estimated number of moves is conservative. Avoid some extreme
-    // case that someone refuses to resign.
-
-    delta = std::max(0, delta);
-
+int TimeControl::EstimateMovesExpected(int boardsize, int move_num) const {
     const int num_intersections = boardsize * boardsize;
     const int side_move_num = move_num/2;
-    const int base_remaining = num_intersections / (3 + delta);
-    const int fast_moves = num_intersections / (boardsize + delta);
-    const int moves_buffer = num_intersections / (2 * boardsize + delta);
 
-    int estimated_moves = 0;
+    // The 'base_move_num' is 145 on 19x19.
+    // The 'base_move_num' is  72 on 13x13.
+    // The 'base_move_num' is  37 on 9x9.
+    const int base_move_num = (0.7f * num_intersections + 1.5f * boardsize)/2;
+    const int base_remaining = base_move_num- side_move_num;
+    const int opening_move_num = (0.2f * num_intersections) / 2;
 
-    if (side_move_num < fast_moves) {
-        // Play fast in the opening step.
-        estimated_moves = base_remaining + fast_moves - side_move_num;
-    } else {
-        estimated_moves = base_remaining - side_move_num;
-    }
+    // The formula is base from this
+    //     https://www.remi-coulom.fr/Publications/TimeManagement.pdf
+    //
+    // We should reduce the time used in the opening stage. And leave
+    // more time for middle game. Because the engine should spend more
+    // time on complicated and undecided semeai and life-and-death
+    // conditions.
+    float opening_factor = 2.5f;
+    int estimated_moves =
+        base_remaining +
+        opening_factor * std::max(opening_move_num - side_move_num, 0);
 
-    return std::max(estimated_moves, moves_buffer);
+    // Be sure that the moves left is not too low.
+    // Minimal moves left is 43 on 19x19. 
+    // Minimal moves left is 21 on 13x13.
+    // Minimal moves left is 15 on 9x9.
+    estimated_moves = std::max(estimated_moves,
+                          std::max((int)(0.3f * base_move_num), 15));
+    return estimated_moves;
 }

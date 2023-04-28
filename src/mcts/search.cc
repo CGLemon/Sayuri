@@ -289,7 +289,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         }
         LOGGING << Format("Reuse %d nodes\n", root_node_->GetVisits()-1);
         LOGGING << Format("Use %d threads for search\n", param_->threads);
-        LOGGING << Format("Max thinking time: %.0f(sec)\n", thinking_time);
+        LOGGING << Format("Max thinking time: %.2f(sec)\n", thinking_time);
         LOGGING << Format("Max playouts number: %d\n", playouts);
     }
 

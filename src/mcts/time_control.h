@@ -51,5 +51,5 @@ private:
 
     Timer timer_;
 
-    int EstimateMovesExpected(int boardsize, int move_num, int delta) const;
+    int EstimateMovesExpected(int boardsize, int move_num) const;
 };
