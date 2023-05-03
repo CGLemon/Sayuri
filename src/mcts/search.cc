@@ -317,6 +317,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         }
 
         if ((tag & kAnalysis) &&
+                analysis_config_.interval > 0 &&
                 analysis_config_.interval * 10 <
                     analysis_timer.GetDurationMilliseconds()) {
             // Output the analysis string for GTP interface, like sabaki...
@@ -790,10 +791,9 @@ void Search::TryPonder() {
 }
 
 int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
-    // Do not dump the analysis string if we do not
-    // send the interval value.
-    auto analysis_tag = analysis_config.interval > 0 ?
-                            kAnalysis : kNullTag;
+    // Analysis mode.
+    auto analysis_tag = kAnalysis;
+
     // Ponder mode always reuse the tree.
     auto reuse_tag = (param_->reuse_tree || ponder) ? kNullTag : kUnreused;
     auto ponder_tag = ponder ? kPonder : kThinking;

@@ -694,8 +694,8 @@ int Node::RandomizeMoveWithGumbel(GameState &state, int temp, int min_visits) {
 
 void Node::Update(const NodeEvals *evals) {
     auto WelfordDelta = [](double eval,
-                               double old_acc_eval,
-                               int old_visits) {
+                           double old_acc_eval,
+                           int old_visits) {
         // Welford's online algorithm for calculating variance.
         const double old_delta = old_visits > 0 ? eval - old_acc_eval / old_visits : 0.0f;
         const double new_delta = eval - (old_acc_eval + eval) / (old_visits+1);
@@ -879,8 +879,8 @@ std::string Node::OwnershipToString(GameState &state, const int color, std::stri
 }
 
 std::string Node::ToAnalysisString(GameState &state,
-                                       const int color,
-                                       AnalysisConfig &config) {
+                                   const int color,
+                                   AnalysisConfig &config) {
     // Gather the analysis string. You can see the detail here
     // https://github.com/SabakiHQ/Sabaki/blob/master/docs/guides/engine-analysis-integration.md
 
