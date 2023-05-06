@@ -7,7 +7,7 @@ from network import Network
 from data import Data, FIXED_DATA_VERSION
 
 from torch.nn import DataParallel
-from lazy_loader import LazyLoader
+from lazy_loader import LazyLoader, LoaderFlag
 
 def gather_filenames(root, num_chunks=None, sort_key_fn=None):
     def gather_recursive_files(root):
@@ -90,7 +90,7 @@ class BatchGenerator:
         self.nn_num_intersections = self.nn_board_size * self.nn_board_size
         self.input_channels = input_channels
 
-    def __wrap_data(self, data):
+    def _wrap_data(self, data):
         nn_board_size = self.nn_board_size
         nn_num_intersections = self.nn_num_intersections
 
@@ -167,7 +167,7 @@ class BatchGenerator:
         batch_score = list()
 
         for data in data_list:
-            bsize, planes, prob, aux_prob, ownership, wdl, stm, score = self.__wrap_data(data)
+            bsize, planes, prob, aux_prob, ownership, wdl, stm, score = self._wrap_data(data)
 
             batch_bsize.append(bsize)
             batch_planes.append(planes)
@@ -241,9 +241,9 @@ class TrainingPipe():
         # The Store root dir
         self.store_path = cfg.store_path
 
-        self.__setup()
+        self._setup()
 
-    def __setup(self):
+    def _setup(self):
         self.module = self.net # linking
 
         if self.use_gpu:
@@ -251,7 +251,7 @@ class TrainingPipe():
             self.net = DataParallel(self.net) 
             self.module  = self.net.module
 
-        init_lr = self.__get_lr_schedule(0)
+        init_lr = self._get_lr_schedule(0)
 
         # We may fail to load the optimizer. So init
         # it before loading it.
@@ -285,7 +285,7 @@ class TrainingPipe():
         with open(info_file, 'w') as f:
             f.write(self.module.simple_info())
 
-    def __get_lr_schedule(self, num_steps):
+    def _get_lr_schedule(self, num_steps):
         # Get the current learning rate with schedule.
         curr_lr = 0.2
         for s, lr in self.lr_schedule:
@@ -295,7 +295,7 @@ class TrainingPipe():
                 break
         return curr_lr
 
-    def __load_current_status(self):
+    def _load_current_status(self):
         #TODO: Merge optimizer status and model into one file.
         last_steps = 0
 
@@ -323,17 +323,17 @@ class TrainingPipe():
             print("load optimizer: {}".format(opt_name))
 
         # update to current learning rate...
-        curr_lr = self.__get_lr_schedule(last_steps)
+        curr_lr = self._get_lr_schedule(last_steps)
 
         for param in self.opt.param_groups:
             param["lr"] = curr_lr
             param["weight_decay"] = self.weight_decay
 
-        print("Current steps is {}, learning rate is {}".format(last_steps, curr_lr))
+        print("Current steps is {}, learning rate is {}.".format(last_steps, curr_lr))
 
         return last_steps
 
-    def __store_current_status(self, steps):
+    def _store_current_status(self, steps):
         steps_name = os.path.join(self.store_path, "last_steps.txt")
         with open(steps_name, 'w') as f:
             f.write(str(steps))
@@ -348,23 +348,27 @@ class TrainingPipe():
         opt_name = os.path.join(opt_path, "s{}.pt".format(steps))
         torch.save(self.opt.state_dict(), opt_name)
 
-    def __init_loader(self):
-        self.__stream_loader = StreamLoader()
-        self.__stream_parser = StreamParser(self.down_sample_rate)
-        self.__batch_gen = BatchGenerator(self.cfg.boardsize, self.cfg.input_channels)
+    def _init_loader(self):
+        self._stream_loader = StreamLoader()
+        self._stream_parser = StreamParser(self.down_sample_rate)
+        self._batch_gen = BatchGenerator(self.cfg.boardsize, self.cfg.input_channels)
 
         sort_fn = os.path.getmtime
         chunks = gather_filenames(self.train_dir, self.num_chunks, sort_fn)
 
+        print("Load the last {} chunks...".format(len(chunks)))
+
+        self.flag = LoaderFlag()
         self.train_lazy_loader = LazyLoader(
             filenames = chunks,
-            stream_loader = self.__stream_loader,
-            stream_parser = self.__stream_parser,
-            batch_generator = self.__batch_gen,
+            stream_loader = self._stream_loader,
+            stream_parser = self._stream_parser,
+            batch_generator = self._batch_gen,
             down_sample_rate = 0,
             num_workers = self.num_workers,
             buffer_size = self.train_buffer_size,
-            batch_size = self.macrobatchsize
+            batch_size = self.macrobatchsize,
+            flag = self.flag
         )
 
         # Try to get the first batch, be sure that the loader is ready.
@@ -373,13 +377,14 @@ class TrainingPipe():
         if self.validation_dir is not None:
             self.validation_lazy_loader = LazyLoader(
                 filenames = gather_filenames(self.validation_dir, len(chunks)//10, sort_fn),
-                stream_loader = self.__stream_loader,
-                stream_parser = self.__stream_parser,
-                batch_generator = self.__batch_gen,
+                stream_loader = self._stream_loader,
+                stream_parser = self._stream_parser,
+                batch_generator = self._batch_gen,
                 down_sample_rate = 0,
                 num_workers = self.num_workers,
                 buffer_size = self.validation_buffer_size,
-                batch_size = self.macrobatchsize
+                batch_size = self.macrobatchsize,
+                flag = self.flag
             )
             batch = next(self.validation_lazy_loader)
         else:
@@ -467,10 +472,10 @@ class TrainingPipe():
         self.module.trainable(True)
 
     def fit_and_store(self):
-        init_steps = self.__load_current_status()
+        init_steps = self._load_current_status()
 
         print("init loader...")
-        self.__init_loader()
+        self._init_loader()
         print("start training...")
 
         running_loss_dict = self.get_new_running_loss_dict()
@@ -524,10 +529,7 @@ class TrainingPipe():
                     self.opt.step()
                     self.opt.zero_grad()
 
-                    # update learning rate
                     num_steps += 1
-                    for param in self.opt.param_groups:
-                        param["lr"] = self.__get_lr_schedule(num_steps) 
 
                     # dump the verbose
                     if num_steps % self.verbose_steps == 0:
@@ -556,11 +558,16 @@ class TrainingPipe():
 
                         running_loss_dict = self.get_new_running_loss_dict()
 
+                    # update learning rate
+                    for param in self.opt.param_groups:
+                        param["lr"] = self._get_lr_schedule(num_steps) 
+
                 # should we stop it?
                 if num_steps >= self.max_steps + init_steps:
                     keep_running = False
                     break
 
             # store the last network
-            self.__store_current_status(num_steps)
+            self._store_current_status(num_steps)
+        self.flag.set_stop_flag()
         print("Training is over.")
