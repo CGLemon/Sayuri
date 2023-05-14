@@ -68,26 +68,28 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
             const auto visits = node->GetVisits();
             if (param_->no_dcnn &&
                     visits < GetExpandThreshold(currstate)) {
-                // Do the rollout only if we do not expand this child.
+                // Do the rollout only if the visits is below threshold
+                // in the no dcnn mode.
                 search_result.FromRollout(currstate);
             } else {
-                const bool have_children = node->HaveChildren();
+                const bool has_children = node->HasChildren();
 
                 // If we can not expand the node, it means that another thread
-                // is expanding this node. Skip the simulation this time.
+                // is under this node. Skip the simulation stage this time. However,
+                // it still has a chance do PUCT/UCT.
                 auto node_evals = NodeEvals{};
-                const bool success = node->ExpandChildren(network_, currstate,
-                                                              node_evals, analysis_config_, false);
+                const bool success = node->ExpandChildren(
+                    network_, currstate, node_evals, analysis_config_, false);
 
-                if (!have_children && success) {
+                if (!has_children && success) {
                     search_result.FromNetEvals(node_evals);
                 }
             }
         }
     }
 
-    // Not the terminate node, search the next node.
-    if (node->HaveChildren() && !search_result.IsValid()) {
+    // Not the terminated node, search the next node.
+    if (node->HasChildren() && !search_result.IsValid()) {
         auto color = currstate.GetToMove();
         Node *next = nullptr;
 
@@ -98,12 +100,13 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
             next = node->PuctSelectChild(color, depth == 0);
         }
         auto vtx = next->GetVertex();
-
         currstate.PlayMove(vtx, color);
+
+        // Recursive calls.
         PlaySimulation(currstate, next, depth+1, search_result);
     }
 
-    // Now Update this node.
+    // Now Update this node if it valid.
     if (search_result.IsValid()) {
         node->Update(search_result.GetEvals());
     }
@@ -118,8 +121,7 @@ void Search::PrepareRootNode() {
         ReleaseTree();
 
         // Do not reuse the tree, allocate new root node.
-        root_node_ = std::make_unique<Node>(kPass, 1.0f);
-        root_node_->SetParameters(param_.get());
+        root_node_ = std::make_unique<Node>(param_.get(), kPass, 1.0f);
     }
 
     playouts_.store(0, std::memory_order_relaxed);
@@ -1012,7 +1014,7 @@ bool Search::AdvanceToNewRootState() {
         return false;
     }
 
-    if (!root_node_->HaveChildren()) {
+    if (!root_node_->HasChildren()) {
         // If the root node does not have children, that means
         // it is equal to edge. We discard it.
         return false;

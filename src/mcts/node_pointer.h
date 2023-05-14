@@ -6,6 +6,8 @@
 #include <thread>
 #include <cstring>
 
+#include "mcts/parameters.h"
+
 #define POINTER_MASK (3ULL)
 
 static constexpr std::uint64_t kUninflated = 2ULL;
@@ -35,7 +37,7 @@ public:
 
     NodeType *Get() const;
 
-    bool Inflate();
+    bool Inflate(Parameters *param);
     bool Release();
 
     int GetVertex() const;
@@ -134,7 +136,7 @@ inline NodeType *NodePointer<NodeType>::Get() const {
 }
 
 template<typename NodeType>
-inline bool NodePointer<NodeType>::Inflate() {
+inline bool NodePointer<NodeType>::Inflate(Parameters *param) {
 
 inflate_loop: // Try to allocate new memory for the pointer.
 
@@ -160,7 +162,8 @@ inflate_loop: // Try to allocate new memory for the pointer.
 
     // Success to get the owner. Now allocate new memory.
     auto new_pointer =
-             reinterpret_cast<std::uint64_t>(new NodeType(vertex, policy)) | kPointer;
+             reinterpret_cast<std::uint64_t>(
+                 new NodeType(param, vertex, policy)) | kPointer;
     auto old_pointer = pointer_.exchange(new_pointer);
 #ifdef NDEBUG
     (void) old_pointer;

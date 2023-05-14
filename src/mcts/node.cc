@@ -16,7 +16,8 @@
 
 #define VIRTUAL_LOSS_COUNT (3)
 
-Node::Node(std::int16_t vertex, float policy) {
+Node::Node(Parameters *param, std::int16_t vertex, float policy) {
+    param_ = param;
     vertex_ = vertex;
     policy_ = policy;
 }
@@ -31,7 +32,7 @@ bool Node::PrepareRootNode(Network &network,
                            AnalysisConfig &config) {
     const auto is_root = true;
     const auto success = ExpandChildren(network, state, node_evals, config, is_root);
-    assert(HaveChildren());
+    assert(HasChildren());
 
     InflateAllChildren();
     if (param_->dirichlet_noise) {
@@ -71,9 +72,6 @@ bool Node::ExpandChildren(Network &network,
                           const bool is_root) {
     // The node must be the first time to expand and is not the terminate node.
     assert(state.GetPasses() < 2);
-    if (HaveChildren()) {
-        return false;
-    }
 
     // Try to acquire the owner.
     if (!AcquireExpanding()) {
@@ -88,8 +86,8 @@ bool Node::ExpandChildren(Network &network,
             !(param_->root_dcnn && is_root)) {
         ApplyNoDcnnPolicy(state, color_, raw_netlist);
     } else {
-        // Policy softmax temperature. If t is greater than 1,
-        // policy is broader. If t is greater less 1, policy is
+        // Policy softmax temperature. If 't' is greater than 1,
+        // policy is broader. If 't' is greater less 1, policy is
         // sharper.
         const float temp = is_root ?
                         param_->root_policy_temp : param_->policy_temp;
@@ -131,7 +129,7 @@ bool Node::ExpandChildren(Network &network,
         if (!state.IsLegalMove(vtx, color_,
                 [movenum, &config](int vtx, int color){
                     return !config.IsLegal(vtx, color, movenum);
-                }) 
+                })
                     || safe_area[idx]) {
             continue;
         }
@@ -149,8 +147,8 @@ bool Node::ExpandChildren(Network &network,
             }
 
             if (!hash_found) {
-                // Get next game state hash. Is is not correct if the
-                // move is capture move. It is ok because we only need
+                // Get next game state hash. Is is not always correct
+                // if move is capture. It is ok because we only need
                 // move hash in the opening stage. The capture move is
                 // unusual in the opening stage.
                 moves_hash.emplace_back(
@@ -209,6 +207,7 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
         const auto policy = node.first;
         children_.emplace_back(vertex, policy);
     }
+    children_.shrink_to_fit();
     assert(!children_.empty());
 }
 
@@ -284,7 +283,7 @@ void Node::ApplyNoDcnnPolicy(GameState &state, const int color,
     raw_netlist.board_size = state.GetBoardSize();
     raw_netlist.komi = state.GetKomi();
 
-    // Give the pass move a little value in order to avoid the 
+    // Give the pass move a little value in order to avoid the
     // bug if there is no legal moves.
     raw_netlist.pass_probability = 0.1f/num_intersections;
     raw_netlist.final_score = 0.f; // set zeros...
@@ -345,7 +344,7 @@ float Node::ComputeTreeComplexity() {
 
 Node *Node::ProbSelectChild() {
     WaitExpanded();
-    assert(HaveChildren());
+    assert(HasChildren());
 
     Edge* best_node = nullptr;
     float best_prob = std::numeric_limits<float>::lowest();
@@ -403,7 +402,7 @@ float Node::GetDynamicCpuctFactor(Node *node, const int visits) {
 
 Node *Node::PuctSelectChild(const int color, const bool is_root) {
     WaitExpanded();
-    assert(HaveChildren());
+    assert(HasChildren());
     // assert(color == color_);
 
     // Apply the Gumbel-Top-k trick here. Mix it with PUCT
@@ -458,7 +457,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
             continue;
         }
 
-        // Apply First Play Urgency (FPU). We should think the value of the 
+        // Apply First Play Urgency (FPU). We should think the value of the
         // unvisited nodes are same as parent's. The NN-based MCTS favors
         // the visited node. So give the unvisited node a little bad favour
         // (FPU reduction) in order to reduce the priority.
@@ -509,7 +508,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
 
 Node *Node::UctSelectChild(const int color, const bool is_root, const GameState &state) {
     WaitExpanded();
-    assert(HaveChildren());
+    assert(HasChildren());
     // assert(color == color_);
 
     (void) is_root;
@@ -554,6 +553,7 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
 
         // The node is pruned or invalid. Skip it.
         if (is_pointer && !node->IsActive()) {
+            width += 1;
             continue;
         }
 
@@ -640,7 +640,7 @@ int Node::RandomizeMoveWithGumbel(GameState &state, int temp, int min_visits) {
 
         // Do not need to prune the low visits move because
         // the Q value will reduce the probabilities of
-        // bad moves. 
+        // bad moves.
         if (vtx != kPass) {
             idx = state.GetIndex(
                       state.GetX(vtx), state.GetY(vtx));
@@ -678,7 +678,7 @@ int Node::RandomizeMoveWithGumbel(GameState &state, int temp, int min_visits) {
         return RandomizeFirstProportionally(temp, min_visits);
     }
 
-    int select_vertex = kNullVertex; 
+    int select_vertex = kNullVertex;
     int pick = Random<>::Get().RandFix<int_factor>();
 
     for (int idx = 0; idx < num_intersections+1; ++idx) {
@@ -794,7 +794,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     const auto parentvisits = GetVisits() - 1; // One is root visit.
 
     if (lcblist.empty()) {
-         out << " * Search List: N/A" << std::endl;
+        out << " * Search List: N/A" << std::endl;
         return out.str();
     }
 
@@ -846,9 +846,9 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     const auto node_mem = sizeof(Node) + sizeof(Edge);
     const auto edge_mem = sizeof(Edge);
 
-    // There is some error to compute memory used. It is because that
-    // we may not collect all node conut. 
-    const auto mem_used = static_cast<double>(nodes * node_mem + edges * edge_mem) / (1024.f * 1024.f);
+    // Here are some errors to compute memory used. 
+    const auto mem_used = static_cast<double>(
+        nodes * node_mem + edges * edge_mem) / (1024.f * 1024.f);
 
     const auto space2 = 10;
     out << " * Tree Status:" << std::endl
@@ -979,12 +979,11 @@ std::string Node::ToAnalysisString(GameState &state,
 std::string Node::GetPvString(GameState &state) {
     auto pvlist = std::vector<int>{};
     auto *next = this;
-    while (next->HaveChildren()) {
+    while (next->HasChildren()) {
         const auto vtx = next->GetBestMove(true);
         pvlist.emplace_back(vtx);
         next = next->GetChild(vtx);
     }
-  
     auto res = std::string{};
     for (const auto &vtx : pvlist) {
         res += state.VertexToText(vtx);
@@ -1021,7 +1020,7 @@ Node *Node::PopChild(const int vertex) {
 
 std::vector<std::pair<float, int>> Node::GetLcbUtilityList(const int color) {
     WaitExpanded();
-    assert(HaveChildren());
+    assert(HasChildren());
 
     const auto lcb_reduction = std::min(
                                    std::max(0.f, param_->lcb_reduction), 1.f);
@@ -1056,7 +1055,7 @@ std::vector<std::pair<float, int>> Node::GetLcbUtilityList(const int color) {
             auto utility = score_utility_factor *
                                node->GetScoreUtility(
                                    color, score_utility_div, parent_score);
-            const auto ulcb = (lcb + utility) * (1.f - lcb_reduction) + 
+            const auto ulcb = (lcb + utility) * (1.f - lcb_reduction) +
                                   lcb_reduction * ((float)visits/parentvisits);
             list.emplace_back(ulcb, node->GetVertex());
         }
@@ -1068,7 +1067,7 @@ std::vector<std::pair<float, int>> Node::GetLcbUtilityList(const int color) {
 
 int Node::GetBestMove(bool allow_pass) {
     WaitExpanded();
-    assert(HaveChildren());
+    assert(HasChildren());
 
     auto lcblist = GetLcbUtilityList(color_);
     float best_value = std::numeric_limits<float>::lowest();
@@ -1101,10 +1100,6 @@ int Node::GetBestMove(bool allow_pass) {
 
 const std::vector<Node::Edge> &Node::GetChildren() const {
     return children_;
-}
-
-void Node::SetParameters(Parameters * param) {
-    param_ = param;
 }
 
 int Node::GetVirtualLoss() const {
@@ -1148,7 +1143,7 @@ float Node::GetWL(const int color, const bool use_virtual_loss) const {
     auto virtual_loss = 0;
 
     if (use_virtual_loss) {
-        // Punish the node if there are some threads in this 
+        // Punish the node if there are some threads under this
         // sub-tree.
         virtual_loss = GetVirtualLoss();
     }
@@ -1179,8 +1174,8 @@ void Node::ReleaseAllChildren() {
 }
 
 void Node::Inflate(Edge& child) {
-    if (child.Inflate()) {
-        child.Get()->SetParameters(param_);
+    if (child.Inflate(param_)) {
+        // do nothing...
     }
 }
 
@@ -1190,8 +1185,8 @@ void Node::Release(Edge& child) {
     }
 }
 
-bool Node::HaveChildren() const { 
-    return color_ != kInvalid;
+bool Node::HasChildren() const {
+    return IsExpanded() && color_ != kInvalid;
 }
 
 void Node::IncrementThreads() {
@@ -1390,7 +1385,7 @@ std::vector<float> Node::GetProbLogitsCompletedQ(GameState &state) {
                       state.GetX(vtx), state.GetY(vtx));
         }
         acc += child.GetPolicy();
-        prob[idx] = child.GetPolicy(); 
+        prob[idx] = child.GetPolicy();
     }
 
     for (auto &v : prob) {
@@ -1432,7 +1427,7 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
         max_visits = std::max(max_visits, visits);
 
        if (visits > 0) {
-           weighted_q += child.GetPolicy() * 
+           weighted_q += child.GetPolicy() *
                              node->GetGumbelQValue(color, parent_score);
            weighted_pi += child.GetPolicy();
        }
@@ -1517,7 +1512,7 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
 
     // The variant of Sequential Halving algorithm. The input N playouts
     // is always log2(considered moves) * (considered moves) for each
-    // epoch. It is same as Sequential Halving with Gumbel algorithm if 
+    // epoch. It is same as Sequential Halving with Gumbel algorithm if
     // the playous is low.
     //
     // Round 1.
@@ -1575,7 +1570,7 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
     const int considered_visists =
         only_max_visit ?
             max_visists :
-            table[idx] * rounds + height + 
+            table[idx] * rounds + height +
                 (visits_this_round - m*adj_considered_moves)/width;
 
     for (auto &child : children_) {
@@ -1589,7 +1584,7 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
         auto visits = node->GetVisits();
         if (visits == considered_visists) {
             if (visits > 0) {
-                gumbel_logits[node->GetVertex()] += 
+                gumbel_logits[node->GetVertex()] +=
                     NormalizeCompletedQ(
                         node->GetGumbelQValue(color, parent_score), max_visists);
             }
@@ -1611,7 +1606,7 @@ bool Node::ShouldApplyGumbel() const {
 
 Node *Node::GumbelSelectChild(int color, bool only_max_visit) {
     WaitExpanded();
-    assert(HaveChildren());
+    assert(HasChildren());
 
     auto gumbel_type1 = std::extreme_value_distribution<float>(0, 1);
     auto gumbel_logits = GetZeroLogits<float>(kNumVertices+10);
@@ -1657,7 +1652,7 @@ Node *Node::GumbelSelectChild(int color, bool only_max_visit) {
 
 int Node::GetGumbelMove() {
     WaitExpanded();
-    assert(HaveChildren());
+    assert(HasChildren());
     return GumbelSelectChild(color_, true)->GetVertex();
 }
 

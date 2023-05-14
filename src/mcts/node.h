@@ -88,7 +88,7 @@ class Node {
 public:
     using Edge = NodePointer<Node>;
 
-    explicit Node(std::int16_t vertex, float policy);
+    explicit Node(Parameters *param, std::int16_t vertex, float policy);
     ~Node();
 
     // Expand this node.
@@ -133,10 +133,8 @@ public:
 
     const std::vector<Edge> &GetChildren() const;
 
-    bool HaveChildren() const;
+    bool HasChildren() const;
     bool SetTerminal();
-
-    void SetParameters(Parameters * param);
 
     // Get the pointer of this node.
     Node *Get();
@@ -242,8 +240,6 @@ private:
     void MixLogitsCompletedQ(GameState &state, std::vector<float> &prob);
 
     void KillRootSuperkos(GameState &state);
-
-    Parameters *GetParameters();
 
     enum class StatusType : std::uint8_t {
         kInvalid, // kInvalid means that this node is illegal, like
