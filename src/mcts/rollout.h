@@ -61,4 +61,4 @@ float GetBlackRolloutResult(GameState &state,
                             // [ 1     ~    -1 ]
                             float *mcowner,
                             float &black_score
-                           );
+);

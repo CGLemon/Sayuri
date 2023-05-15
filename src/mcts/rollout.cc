@@ -9,7 +9,7 @@ float GetBlackRolloutResult(GameState &state,
     int num_curr_moves = 0;
     const int max_move_len = 2*num_intersections+1;
 
-    // Do the random move util the game is ending.
+    // Do the random moves until the game is ending.
     while (fork_state.GetPasses() < 2 &&
                num_curr_moves < max_move_len) {
         fork_state.PlayRandomMove();

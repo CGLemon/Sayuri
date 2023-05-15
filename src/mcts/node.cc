@@ -250,17 +250,17 @@ void Node::ApplyNetOutput(GameState &state,
     // support the ownership.
     if (param_->use_rollout || param_->no_dcnn) {
         float mc_black_rollout_score;
-        float mc_black_rollout_res = GetBlackRolloutResult(
-                                         state,
-                                         black_ownership.data(),
-                                         mc_black_rollout_score);
+        float mc_black_rollout_result = GetBlackRolloutResult(
+                                            state,
+                                            black_ownership.data(),
+                                            mc_black_rollout_score);
         if (param_->no_dcnn) {
-            black_wl_ = mc_black_rollout_res;
+            black_wl_ = mc_black_rollout_result;
             black_fs = mc_black_rollout_score;
         }
     }
 
-    // Store the network evals.
+    // Store the network or rollout evals.
     node_evals.black_wl = black_wl_;
     node_evals.draw = draw;
     node_evals.black_final_score = black_fs;
@@ -535,6 +535,8 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
     int width = std::max(ComputeWidth(parentvisits), 1);
     int i = 0;
 
+    const float parent_score = GetFinalScore(color);
+
     //TODO: Sort the 'edge_buf' according to dynamic priority value.
 
     for (auto edge_ptr : edge_buf) {
@@ -557,7 +559,8 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
             continue;
         }
 
-        float q_value = 5.0f; // fpu
+        float q_value = 5.0f; // FPU value
+        float score_diff = 0.f;
         int visits = 0;
 
         if (is_pointer) {
@@ -568,14 +571,19 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
             } else if (visits > 0) {
                 q_value = node->GetWL(color);
             }
+            if (visits >= 1) {
+                score_diff = node->GetFinalScore(color) - parent_score;
+            }
         }
 
         // UCT algorithm
         const float denom = 1.0f + visits;
         const float psa = child.GetPolicy();
-        const float bouns = 1.0f * std::sqrt(1000.f / ((float)parentvisits + 1000.f)) * psa;
+        const float prior = 1.0f * std::sqrt(1000.f / ((float)parentvisits + 1000.f)) * psa;
+        const float bonus = 0.01f * std::sqrt(
+                                1.f - 1000.f / ((float)parentvisits + 1000.f)) * score_diff;
         const float uct = cpuct * std::sqrt(numerator / denom);
-        float value = q_value + uct + bouns;
+        float value = q_value + uct + prior + bonus;
         assert(value > std::numeric_limits<float>::lowest());
 
         if (value > best_value) {
@@ -891,8 +899,6 @@ std::string Node::ToAnalysisString(GameState &state,
         return std::string{};
     }
 
-    const auto root_visits = static_cast<float>(GetVisits() - 1);
-
     bool is_sayuri = config.is_sayuri;
     bool is_kata = config.is_kata;
     bool use_ownership = config.ownership;
@@ -913,11 +919,6 @@ std::string Node::ToAnalysisString(GameState &state,
         const auto visits = child->GetVisits();
         const auto prior = child->GetPolicy();
         const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
-
-        if (param_->no_dcnn &&
-                visits/root_visits < 0.01f) { // cut off < 1% children...
-            continue;
-        }
 
         if (is_sayuri) {
             const auto kl = child->ComputeKlDivergence();
