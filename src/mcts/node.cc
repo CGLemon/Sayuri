@@ -99,7 +99,7 @@ bool Node::ExpandChildren(Network &network,
 
     // For children...
     auto nodelist = std::vector<Network::PolicyVertexPair>{};
-    auto allow_pass = true;
+    auto allow_pass = false;
     auto legal_accumulate = 0.0f;
 
     const auto board_size = state.GetBoardSize();

@@ -335,12 +335,8 @@ bool GameState::IsGameOver() const {
 }
 
 bool GameState::IsSuperko() const {
-    auto first = std::crbegin(ko_hash_history_);
-    auto last = std::crend(ko_hash_history_);
-
-    auto res = std::find(++first, last, GetKoHash());
-
-    return res != last;
+    // this function is for go game, do nothing special in othello game
+    return false;
 }
 
 bool GameState::IsLegalMove(const int vertex) const {
@@ -357,60 +353,19 @@ bool GameState::IsLegalMove(const int vertex, const int color,
 }
 
 bool GameState::SetFixdHandicap(int handicap) {
-    const auto ValidHandicap = [](int bsize, int handicap) {
-        if (handicap < 2 || handicap > 9) {
-            return false;
-        }
-        if (bsize % 2 == 0 && handicap > 4) {
-            return false;
-        }
-        if (bsize == 7 && handicap > 4) {
-            return false;
-        }
-        if (bsize < 7 && handicap > 0) {
-            return false;
-        }
-        return true;
-    };
-
-    const int board_size = GetBoardSize();
-    const int high = board_size >= 13 ? 3 : 2;
-    const int mid = board_size / 2;
-    const int low = board_size - 1 - high;
-
-    if (!ValidHandicap(board_size, handicap)) {
+    if (handicap > 4 || handicap <= 0) {
         return false;
     }
 
-    if (handicap >= 2) {
-        AppendMove(GetVertex(low, low),  kBlack);
-        AppendMove(GetVertex(high, high),  kBlack);
-    }
+    int board_size = GetBoardSize();
 
-    if (handicap >= 3) {
-        AppendMove(GetVertex(high, low), kBlack);
+    switch (handicap) {
+        case 4: AppendMove(GetVertex(0,board_size-1), kBlack);
+        case 3: AppendMove(GetVertex(board_size-1,0), kBlack);
+        case 2: AppendMove(GetVertex(board_size-1,board_size-1), kBlack);
+        case 1: AppendMove(GetVertex(0,0), kBlack);
+        default: ;
     }
-
-    if (handicap >= 4) {
-        AppendMove(GetVertex(low, high), kBlack);
-    }
-
-    if (handicap >= 5 && handicap % 2 == 1) {
-        AppendMove(GetVertex(mid, mid), kBlack);
-    }
-
-    if (handicap >= 6) {
-        AppendMove(GetVertex(low, mid), kBlack);
-        AppendMove(GetVertex(high, mid), kBlack);
-    }
-
-    if (handicap >= 8) {
-        AppendMove(GetVertex(mid, low), kBlack);
-        AppendMove(GetVertex(mid, high), kBlack);
-    }
-
-    SetHandicap(handicap);
-    SetToMove(kWhite);
 
     return true;
 }
@@ -460,175 +415,33 @@ std::vector<int> GameState::GetOwnership() const {
 }
 
 void GameState::FillRandomMove() {
-    const int color = GetToMove();
-    const int empty_cnt = board_.GetEmptyCount();
-    const int rand = Random<>::Get().Generate() % empty_cnt;
-    int select_move = kPass;
-
-    auto filled_area = std::vector<int>(GetNumIntersections(), kInvalid);
-    auto safe_area = std::vector<bool>(GetNumIntersections(), false);
-
-    board_.ComputeScoreArea(filled_area);
-    board_.ComputeSafeArea(safe_area, true);
-
-    for (int i = 0; i < empty_cnt; ++i) {
-        const auto rand_pick = (rand + i) % empty_cnt;
-        const auto vtx = board_.GetEmpty(rand_pick);
-
-        if (!IsLegalMove(vtx, color)) {
-            continue;
-        }
-        auto x = GetX(vtx);
-        auto y = GetY(vtx);
-
-        if (safe_area[GetIndex(x, y)]) {
-            continue;
-        }
-
-        if (board_.IsCaptureMove(vtx, color)) {
-            select_move = vtx;
-            break;
-        }
-    }
-
-    for (int i = 0; i < empty_cnt; ++i) {
-        if (select_move != kPass) break;
-
-        const auto rand_pick = (rand + i) % empty_cnt;
-        const auto vtx = board_.GetEmpty(rand_pick);
-
-        if (!IsLegalMove(vtx, color)) {
-            continue;
-        }
-
-        if (board_.IsRealEye(vtx, color)) {
-            continue;
-        }
-
-        auto x = GetX(vtx);
-        auto y = GetY(vtx);
-
-        if (safe_area[GetIndex(x, y)]) {
-            continue;
-        }
-
-        if (board_.IsSimpleEye(vtx, color) &&
-                !board_.IsCaptureMove(vtx, color) &&
-                !board_.IsEscapeMove(vtx, color)) {
-            continue;
-        }
-
-        if (filled_area[GetIndex(x, y)] != kEmpty) {
-            continue;
-        }
-
-        select_move = vtx;
-    }
-
-    PlayMoveFast(select_move, color);
+    // this function is for go game, do nothing special in othello game
+    PlayRandomMove();
 }
 
 void GameState::PlayRandomMove() {
-    auto candidate_moves = std::vector<int>{};
-    const int color = GetToMove();
+    // this function is for go game, do nothing special in othello game
 
-    board_.GenerateCandidateMoves(candidate_moves, color);
-    std::shuffle(std::begin(candidate_moves),
-                     std::end(candidate_moves),
-                     Random<>::Get());
+    auto list = std::vector<int>{};
+    auto board_size = GetBoardSize();
 
-    if (Random<>::Get().Roulette<10000>(0.90f)) {
-        // ~90%: capture
-        for (const auto vtx : candidate_moves) {
-            if (board_.IsCaptureMove(vtx, color)) {
-                PlayMoveFast(vtx, color);
-                return;
-            }
-        }
-    }
-    if (Random<>::Get().Roulette<10000>(0.95f)) {
-        // ~95%: pattern3
-        for (const auto vtx : candidate_moves) {
-            if (board_.MatchPattern3(vtx) &&
-                    !board_.IsSelfAtariMove(vtx, color)) {
-                PlayMoveFast(vtx, color);
-                return;
-            }
-        }
-    }
-    if (Random<>::Get().Roulette<10000>(0.90f)) {
-        // ~90%: atari
-        for (const auto vtx : candidate_moves) {
-            if (board_.IsAtariMove(vtx, color) &&
-                    !board_.IsSelfAtariMove(vtx, color)) {
-                PlayMoveFast(vtx, color);
-                return;
-            }
-        }
-    }
-    if (Random<>::Get().Roulette<10000>(0.90f)) {
-        // ~90%: escape
-        for (const auto vtx : candidate_moves) {
-            if (board_.IsEscapeMove(vtx, color) &&
-                    !board_.IsSelfAtariMove(vtx, color)) {
-                PlayMoveFast(vtx, color);
-                return;
+    for (int y = 0; y < board_size; ++y) {
+        for (int x = 0; x < board_size; ++x) {
+            int vtx = GetVertex(x,y);
+            if (IsLegalMove(vtx)) {
+                list.emplace_back(vtx);
             }
         }
     }
 
-    // gather the legal moves
-    const int empty_cnt = board_.GetEmptyCount();
-    auto legal_moves = std::vector<int>{};
+    auto vtx = list[ Random<kXoroShiro128Plus>::Get().Generate() % list.size() ];
 
-    for (int i = 0; i < empty_cnt; ++i) {
-        const auto vtx = board_.GetEmpty(i);
-
-        if (IsLegalMove(vtx, color) &&
-                !(board_.IsSimpleEye(vtx, color) &&
-                     !board_.IsCaptureMove(vtx, color)&&
-                     !board_.IsEscapeMove(vtx, color))) {
-            legal_moves.emplace_back(vtx);
-        }
-    }
-
-    // there is no legal moves
-    if (legal_moves.empty()) {
-        PlayMoveFast(kPass, color);
-        return;
-    }
-
-    int selected = Random<>::Get().Generate() % legal_moves.size();
-    PlayMoveFast(legal_moves[selected], color);
+    PlayMoveFast(vtx, GetToMove());
 }
 
-float GameState::GetGammaValue(const int vtx, const int color) const {
-    if (board_.GetState(vtx) != kEmpty) {
-        return 0.f;
-    }
-
-    float val = 1.f;
-
-    std::uint64_t hash = 0ULL;
-    float gamma = 0.f;
-
-    for (int d = 2; d < kMaxPatternDist+1; ++d) {
-        hash = board_.GetSurroundPatternHash(hash, vtx, color, d);
-
-        if (GammasDict::Get().ProbePattern(hash, gamma)) {
-            val *= gamma;
-        }
-    }
-
-    for (int i = 0; i < Board::GetMaxFeatures(); ++i) {
-        if (board_.GetFeatureWrapper(i, vtx, color, hash)) {
-            if (GammasDict::Get().ProbeFeature(hash, gamma)) {
-                val *= gamma;
-            }
-        }
-    }
-
-    return val;
+float GameState::GetGammaValue(const int, const int) const {
+    // this function is for go game, do nothing special in othello game
+    return 1.0f;
 }
 
 std::vector<float> GameState::GetGammasPolicy(const int color) const {
@@ -636,6 +449,7 @@ std::vector<float> GameState::GetGammasPolicy(const int color) const {
     auto board_size = GetBoardSize();
 
     auto policy = std::vector<float>(num_intersections, 0);
+    auto acc = 0.f;
 
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto x = idx % board_size;
@@ -643,99 +457,33 @@ std::vector<float> GameState::GetGammasPolicy(const int color) const {
         const auto vtx = GetVertex(x,y);
 
         const auto gval = GetGammaValue(vtx, color);
-        policy[idx] = std::log(gval);
+        policy[idx] = gval;
+        acc += gval;
     }
-
-    return Softmax(policy, 1.f);
-}
-
-std::vector<int> GameState::GetOwnershipAndRemovedDeadStrings(int playouts) const {
-    auto fork_state = *this;
-    fork_state.RemoveDeadStrings(playouts);
-    return fork_state.GetOwnership();
-}
-
-std::vector<int> GameState::MarKDeadStrings(int playouts) const {
-    auto num_intersections = GetNumIntersections();
-    auto buffer = std::vector<int>(num_intersections, 0);
-
-    static constexpr int kMaxPlayoutsCount = 32 * 16384;
-
-    playouts = std::min(playouts, kMaxPlayoutsCount);
-    bool already_removed = false;
-
-    for (int p = 0; p < playouts; ++p) {
-        int moves = 0;
-        auto fork_state = *this;
-        if (p%2==0) {
-            fork_state.board_.SetToMove(!GetToMove());
-        }
-        while(true) {
-            fork_state.FillRandomMove();
-
-            if (p == 0 &&
-                    moves == 0 &&
-                    fork_state.GetLastMove() == kPass) {
-                // The first move is pass. That means all dead strings
-                // are removed.
-                p = kMaxPlayoutsCount+1; // stop the playouts
-                already_removed = true;
-                break;
-            }
-
-            if (fork_state.GetPasses() >= 4) {
-                break;
-            }
-
-            if (moves++ >= 2 * num_intersections) {
-                // too many moves
-                break;
-            }
-        }
-
-        auto final_ownership = fork_state.GetOwnership();
-
-        for (int idx = 0; idx < num_intersections; ++idx) {
-            auto owner = final_ownership[idx];
-            if (owner == kBlack) {
-                buffer[idx] += 1;
-            } else if (owner == kWhite) {
-                buffer[idx] -= 1;
-            }
-        }
-    }
-
-    if (already_removed) {
-        playouts = 1; // in order to resize the thes
-    }
-
-    const auto board_size = GetBoardSize();
-    const auto thes = (int)(0.7 * playouts);
-    auto dead = std::vector<int>{};
 
     for (int idx = 0; idx < num_intersections; ++idx) {
-        const auto x = idx % board_size;
-        const auto y = idx / board_size;
-        const auto state = GetState(x, y);
-        if (buffer[idx] >= thes) {
-            // It means that this point belongs to black.
-            if (state == kWhite) dead.emplace_back(GetVertex(x, y));
-        } else if (buffer[idx] <= -thes) {
-            // It means that this point belongs to white.
-            if (state == kBlack) dead.emplace_back(GetVertex(x, y));
-        } 
-    }
+        policy[idx] /= acc;
+    } 
 
-    return dead;
+    return policy;
 }
 
-void GameState::RemoveDeadStrings(int playouts) {
-    auto dead = MarKDeadStrings(playouts);
-    board_.RemoveMarkedStrings(dead);
+std::vector<int> GameState::GetOwnershipAndRemovedDeadStrings(int) const {
+    // this function is for go game, do nothing special in othello game
+    return GetOwnership();
 }
 
-void GameState::RemoveDeadStrings(std::vector<int> &dead_list) {
-    board_.RemoveMarkedStrings(dead_list);
+std::vector<int> GameState::MarKDeadStrings(int) const {
+    // this function is for go game, do nothing special in othello game
+    return std::vector<int>{};
+}
+
+void GameState::RemoveDeadStrings(int) {
+    // this function is for go game, do nothing special in othello game
+}
+
+void GameState::RemoveDeadStrings(std::vector<int> &) {
+    // this function is for go game, do nothing special in othello game
 }
 
 float GameState::GetFinalScore(float bonus) const {
@@ -775,8 +523,9 @@ int GameState::GetHandicap() const {
     return handicap_;
 }
 
-int GameState::GetPrisoner(const int color) const {
-    return board_.GetPrisoner(color);
+int GameState::GetPrisoner(const int) const {
+    // this function is for go game, do nothing special in othello game
+    return 0;
 }
 
 int GameState::GetMoveNumber() const {
@@ -800,7 +549,8 @@ int GameState::GetLastMove() const {
 }
 
 int GameState::GetKoMove() const {
-    return board_.GetKoMove();
+    // this function is for go game, do nothing special in othello game
+    return kNullVertex;
 }
 
 int GameState::GetPasses() const {
@@ -808,7 +558,8 @@ int GameState::GetPasses() const {
 }
 
 std::uint64_t GameState::GetKoHash() const {
-    return board_.GetKoHash();
+    // this function is for go game, do nothing special in othello game
+    return board_.GetHash();
 }
 
 std::uint64_t GameState::GetHash() const {
@@ -827,8 +578,9 @@ int GameState::GetState(const int x, const int y) const {
     return board_.GetState(x, y);
 }
 
-int GameState::GetLiberties(const int vtx) const {
-    return board_.GetLiberties(vtx);
+int GameState::GetLiberties(const int) const {
+    // this function is for go game, do nothing special in othello game
+    return 0;
 }
 
 std::vector<int> GameState::GetAppendMoves(int color) const {
@@ -849,13 +601,13 @@ const std::vector<std::shared_ptr<const Board>>& GameState::GetHistory() const {
 }
 
 std::vector<int> GameState::GetStringList(const int vtx) const {
-    return board_.GetStringList(vtx);
+    // this function is for go game, do nothing special in othello game
+    return std::vector<int>{vtx};
 }
 
 std::vector<bool> GameState::GetStrictSafeArea() const {
-    auto result = std::vector<bool>(GetNumIntersections(), false);
-    board_.ComputeSafeArea(result, false);
-    return result;
+    // this function is for go game, do nothing special in othello game
+    return std::vector<bool>(GetNumIntersections(), false);
 }
 
 int GameState::GetFirstPassColor() const {
@@ -868,11 +620,11 @@ int GameState::GetFirstPassColor() const {
 }
 
 std::uint64_t GameState::ComputeSymmetryHash(const int symm) const {
-    return board_.ComputeSymmetryHash(board_.GetKoMove(), symm) ^ komi_hash_;
+    return board_.ComputeSymmetryHash(symm) ^ komi_hash_;
 }
 
 std::uint64_t GameState::ComputeSymmetryKoHash(const int symm) const {
-    return board_.ComputeKoHash(symm);
+    return ComputeSymmetryHash(symm);
 }
 
 void GameState::SetComment(std::string c) {

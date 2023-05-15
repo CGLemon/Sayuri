@@ -22,10 +22,10 @@ public:
      * Get the Network input planes.
      *
      * planes 1 -24 : last 8 history moves
-     * plane     25 : ko move
-     * plane     26 : pass-alive and pass-dead area
-     * planes 27-30 : strings with 1, 2, 3 and 4 liberties 
-     * planes 31-34 : ladder features
+     * plane     25 :
+     * plane     26 :
+     * planes 27-30 :
+     * planes 31-34 :
      * plane     35 : komi/20
      * plane     36 : -komi/20
      * plane     37 : intersections/361
@@ -50,17 +50,9 @@ private:
                             int counter,
                             std::vector<float>::iterator it) const;
 
-    void FillKoMove(const Board* board,
-                    std::vector<float>::iterator ko_it) const;
-
-    void FillSafeArea(const Board* board,
-                      std::vector<float>::iterator safearea_it) const;
-
-    void FillLiberties(const Board* board,
-                       std::vector<float>::iterator liberties_it) const;
-
-    void FillLadder(const Board* board,
-                    std::vector<float>::iterator ladder_it) const;
+    void FillFeatures(const Board* board,
+                      const int to_move,
+                      std::vector<float>::iterator feat_it) const;
 
     void FillMisc(const Board* board,
                   const int color,

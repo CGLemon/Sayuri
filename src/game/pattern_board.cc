@@ -448,218 +448,33 @@ std::uint64_t Board::GetSurroundPatternHash(std::uint64_t hash,
     return hash;
 }
 
-bool Board::GetBorderLevel(const int vtx, const int /* color */, std::uint64_t &hash) const {
-    if (vtx == kPass) {
-        return false;
-    }
-
-    const int center = board_size_/2 + board_size_%2;
-
-    int x_dist = GetX(vtx) + 1;
-    if (x_dist > center) {
-        x_dist = board_size_ + 1 - x_dist;
-    }
-
-    int y_dist = GetY(vtx) + 1;
-    if (y_dist > center) {
-        y_dist = board_size_ + 1 - y_dist;
-    }
-
-    const int dist = std::min(x_dist, y_dist);
-    if (dist >= 6) {
-        return false;
-    }
-
-    hash = 0ULL << 32 | (std::uint64_t)dist;
-
+bool Board::GetBorderLevel(const int, const int, std::uint64_t &) const {
+    // this function is for go game, do nothing special in othello game
     return true;
 }
 
-bool Board::GetDistLevel(const int vtx, const int /* color */, std::uint64_t &hash) const {
-    if (vtx == kPass) {
-        return false;
-    }
-
-    int dist;
-
-    if (last_move_ == kNullVertex) {
-        dist = 0;
-    } else if (last_move_ == kPass) {
-        dist = 1;
-    } else {
-        const int dx = std::abs(GetX(last_move_) - GetX(vtx));
-        const int dy = std::abs(GetY(last_move_) - GetY(vtx));
-
-        dist = dx + dy + std::max(dx, dy);
-        if (dist >= 17) {
-            dist = 17;
-        }
-    }
-
-    hash = 1ULL << 32 | (std::uint64_t)dist;
-
+bool Board::GetDistLevel(const int, const int, std::uint64_t &) const {
+    // this function is for go game, do nothing special in othello game
     return true;
 }
 
-bool Board::GetDistLevel2(const int vtx, const int /* color */, std::uint64_t &hash) const {
-    if (vtx == kPass) {
-        return false;
-    }
-
-    int dist;
-
-    if (last_move_2_ == kNullVertex) {
-        dist = 0;
-    } else if (last_move_2_ == kPass) {
-        dist = 1;
-    } else {
-        const int dx = std::abs(GetX(last_move_2_) - GetX(vtx));
-        const int dy = std::abs(GetY(last_move_2_) - GetY(vtx));
-
-        dist = dx + dy + std::max(dx, dy);
-        if (dist >= 17) {
-            dist = 17;
-        }
-    }
-
-    hash = 2ULL << 32 | (std::uint64_t)dist;
-
+bool Board::GetDistLevel2(const int, const int, std::uint64_t &) const {
+    // this function is for go game, do nothing special in othello game
     return true;
 }
 
-bool Board::GetCapureLevel(const int vtx, const int color, std::uint64_t &hash) const {
-    if (vtx == kPass) {
-        return false;
-    }
-    if (!IsCaptureMove(vtx, color)) {
-        return false;
-    }
-
-    int opp_color = !color;
-    int num_cap_stones = 0;
-    auto pset = std::vector<int>{};
-    bool is_ladder = false;
-
-    for (int k = 0; k < 4; ++k) {
-        const auto avtx = vtx + directions_[k];
-
-        if (state_[avtx] == opp_color && GetLiberties(avtx) == 1) {
-            const auto parent = strings_.GetParent(avtx);
-
-            if (std::end(pset) ==
-                    std::find(std::begin(pset), std::end(pset), parent)) {
-                pset.emplace_back(parent);
-                num_cap_stones += GetStones(avtx);
-
-                auto vital_moves = std::vector<int>{};
-                if (IsLadder(avtx, vital_moves)) {
-                    if (std::end(vital_moves) !=
-                            std::find(std::begin(vital_moves),
-                                          std::end(vital_moves), vtx)) {
-                        // The vtx is in the vital_moves.
-                        is_ladder = true;
-                    }
-                }
-            }
-        }
-    }
-
-    int level = 0;
-    assert(num_cap_stones >= 1);
-
-    if (IsAtariMove(vtx, color)) {
-        // string contiguous to new string in atari
-        level = 1;
-    } else if (is_ladder) {
-        // string in a ladder
-        level = 2;
-    } else {
-        // string not in a ladder
-        if (num_cap_stones <= 6) {
-            level = 3;
-        } else {
-            level = 4;
-        }
-    }
-
-    hash = 3ULL << 32 | (std::uint64_t)level;
+bool Board::GetCapureLevel(const int, const int, std::uint64_t &) const {
+    // this function is for go game, do nothing special in othello game
     return true;
 }
 
-bool Board::GetAtariLevel(const int vtx, const int color, std::uint64_t &hash) const {
-    if (vtx == kPass) {
-        return false;
-    }
-    if (!IsAtariMove(vtx, color)) {
-        return false;
-    }
-
-    int opp_color = !color;
-    int num_atari_stones = 0;
-    bool is_ladder = false;
-
-    auto pset = std::vector<int>{};
-
-    for (int k = 0; k < 4; ++k) {
-        const auto avtx = vtx + directions_[k];
-
-        if (state_[avtx] == opp_color && GetLiberties(avtx) == 2) {
-            const auto parent = strings_.GetParent(avtx);
-
-            if (std::end(pset) ==
-                    std::find(std::begin(pset),
-                                  std::end(pset), parent)) {
-                pset.emplace_back(parent);
-                num_atari_stones += GetStones(avtx);
-
-                auto vital_moves = std::vector<int>{};
-                if (IsLadder(avtx, vital_moves)) {
-                    if (std::end(vital_moves) !=
-                            std::find(std::begin(vital_moves),
-                                          std::end(vital_moves), vtx)) {
-                        // The vtx is in the vital_moves.
-                        is_ladder = true;
-                    }
-                }
-            }
-        }
-
-    }
-
-    int level = 0;
-    assert(num_atari_stones >= 1);
-
-    if (ko_move_ != kNullVertex) {
-        // atari when there is a ko
-        level = 1;
-    } else if (is_ladder) {
-        // ladder atari
-        level = 2;
-    } else {
-        if (pset.size() == 1) {
-            // simple atari
-            level = 3;
-        } else {
-            // double atari
-            level = 4;
-        }
-    }
-
-    hash = 4ULL << 32 | (std::uint64_t)level;
+bool Board::GetAtariLevel(const int, const int, std::uint64_t &) const {
+    // this function is for go game, do nothing special in othello game
     return true;
 }
 
-bool Board::GetSelfAtariLevel(const int vtx, const int color, std::uint64_t &hash) const {
-    if (vtx == kPass) {
-        return false;
-    }
-    if (!IsSelfAtariMove(vtx, color)) {
-        return false;
-    }
-
-    int level = 1;
-    hash = 5ULL << 32 | (std::uint64_t)level;
-
+bool Board::GetSelfAtariLevel(const int, const int, std::uint64_t &) const {
+    // this function is for go game, do nothing special in othello game
     return true;
 }
 

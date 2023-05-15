@@ -7,6 +7,7 @@
 
 #include "game/board.h"
 
+
 class GameState {
 public:
     Board board_;

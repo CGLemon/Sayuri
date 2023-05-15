@@ -693,9 +693,10 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         gogui_cmds << "\ngfx/MCTS Ownership Heatmap/gogui-ownership_heatmap 400";
         gogui_cmds << "\ngfx/MCTS Ownership Influence/gogui-ownership_influence 400";
         gogui_cmds << "\ngfx/Book Rating/gogui-book_rating";
-        gogui_cmds << "\ngfx/Gammas Heatmap/gogui-gammas_heatmap";
-        gogui_cmds << "\ngfx/Ladder Map/gogui-ladder_map";
-        gogui_cmds << "\ngfx/Rollout Candidate Moves/gogui-rollout_candidate_moves";
+        gogui_cmds << "\ngfx/Show Legals/gogui-show_legals";
+        // gogui_cmds << "\ngfx/Gammas Heatmap/gogui-gammas_heatmap";
+        // gogui_cmds << "\ngfx/Ladder Map/gogui-ladder_map";
+        // gogui_cmds << "\ngfx/Rollout Candidate Moves/gogui-rollout_candidate_moves";
 
         out << GtpSuccess(gogui_cmds.str());
     } else if (const auto res = spt.Find("gogui-wdl_rating", 0)) {
@@ -883,7 +884,31 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         }
 
         out << GtpSuccess(book_rating.str());
-    } else if (const auto res = spt.Find("gogui-gammas_heatmap", 0)) {
+    } else if (const auto res = spt.Find("gogui-show_legals", 0)) {
+        const auto board_size = agent_->GetState().GetBoardSize();
+        const auto num_intersections = board_size * board_size;
+        const auto color = agent_->GetState().GetToMove();
+        auto legal_map = std::ostringstream{};
+
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            if (idx != 0) {
+                legal_map << '\n';
+            }
+
+            const auto x = idx % board_size;
+            const auto y = idx / board_size;
+            const auto vtx = agent_->GetState().GetVertex(x,y);
+            auto legal_val = 0;
+
+            if (agent_->GetState().IsLegalMove(vtx)) {
+                legal_val = 1;
+            }
+            legal_map << GoguiGray(
+                legal_val, agent_->GetState().VertexToText(vtx), color==kWhite);
+        }
+        out << GtpSuccess(legal_map.str());
+    }
+/* else if (const auto res = spt.Find("gogui-gammas_heatmap", 0)) {
         const auto board_size = agent_->GetState().GetBoardSize();
         const auto num_intersections = board_size * board_size;
         const auto color = agent_->GetState().GetToMove();
@@ -970,8 +995,10 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         }
 
         out << GtpSuccess(candidate_map.str());
-    } else if (const auto res = spt.Find("gogui-rules_game_id", 0)) {
-        out << GtpSuccess("Go");
+    } 
+*/
+    else if (const auto res = spt.Find("gogui-rules_game_id", 0)) {
+        out << GtpSuccess("Othello");
     } else if (const auto res = spt.Find("gogui-rules_board", 0)) {
         const auto board_size = agent_->GetState().GetBoardSize();
         auto board_oss = std::ostringstream{};
@@ -997,7 +1024,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             out << GtpSuccess("");
         } else {
             const auto board_size = agent_->GetState().GetBoardSize();
-            auto legal_list = std::vector<int>{kPass};
+            auto legal_list = std::vector<int>();
 
             for (int y = board_size-1; y >= 0; --y) {
                 for (int x = 0; x < board_size; ++x) {
@@ -1006,6 +1033,10 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
                         legal_list.emplace_back(vtx);
                     }
                 }
+            }
+
+            if (legal_list.empty()) {
+                legal_list.emplace_back(kPass);
             }
 
             auto legal_oss = std::ostringstream{};

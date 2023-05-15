@@ -3,11 +3,11 @@
 #include <cstdint>
 
 #ifndef MAX_BOARD_SIZE
-#define MAX_BOARD_SIZE (19)
+#define MAX_BOARD_SIZE (8)
 #endif
 
 static constexpr int kDefaultBoardSize = MAX_BOARD_SIZE;
-static constexpr float kDefaultKomi = 7.5f;
+static constexpr float kDefaultKomi = 0.f;
 
 static constexpr int kBoardSize = MAX_BOARD_SIZE;
 static constexpr int kLetterBoxSize = kBoardSize+2;
