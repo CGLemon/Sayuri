@@ -265,10 +265,10 @@ int TimeControl::EstimateMovesExpected(int boardsize, int move_num) const {
     const int num_intersections = boardsize * boardsize;
     const int side_move_num = move_num/2;
 
-    // The 'base_move_num' is 145 on 19x19.
-    // The 'base_move_num' is  72 on 13x13.
-    // The 'base_move_num' is  37 on 9x9.
-    const int base_move_num = (0.7f * num_intersections + 1.5f * boardsize)/2;
+    // The 'base_move_num' is 153 on 19x19.
+    // The 'base_move_num' is  71 on 13x13.
+    // The 'base_move_num' is  32 on 9x9.
+    const int base_move_num = (0.8f * num_intersections + 1.75f * (boardsize - 9))/2;
     const int base_remaining = base_move_num- side_move_num;
     const int opening_move_num = (0.2f * num_intersections) / 2;
 
