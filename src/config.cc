@@ -71,6 +71,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["root_policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["lag_buffer"] << Option::SetOption(0);
+    kOptionsMap["no_cache"] << Option::SetOption(false); 
     kOptionsMap["early_symm_cache"] << Option::SetOption(false);
     kOptionsMap["symm_pruning"] << Option::SetOption(false);
     kOptionsMap["use_stm_winrate"] << Option::SetOption(false);
@@ -325,6 +326,11 @@ void ArgsParser::Parse(Splitter &spt) {
 
     if (const auto res = spt.Find("--friendly-pass")) {
         SetOption("friendly_pass", true);
+        spt.RemoveWord(res->Index());
+    }
+
+    if (const auto res = spt.Find("--no-cache")) {
+        SetOption("no_cache", true);
         spt.RemoveWord(res->Index());
     }
 

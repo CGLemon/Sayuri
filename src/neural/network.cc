@@ -55,23 +55,33 @@ void Network::Initialize(const std::string &weightsfile) {
 #endif
 
 #ifdef USE_CUDA
-    using backend = CudaForwardPipe;
+    using Backend = CudaForwardPipe;
 #else
-    using backend = BlasForwardPipe;
+    using Backend = BlasForwardPipe;
 #endif
 
-    pipe_ = std::make_unique<backend>();
+    // Initialize the parameters.
+    no_cache_ = GetOption<bool>("no_cache");
+    early_symm_cache_ = GetOption<bool>("early_symm_cache");
+    cache_memory_mib_ = GetOption<int>("cache_memory_mib");
+
+    pipe_ = std::make_unique<Backend>();
     auto dnn_weights = std::make_shared<DNNWeights>();
 
+    // Parse the NN weights file.
     DNNLoder::Get().FromFile(dnn_weights, weightsfile);
 
+    // There is no weighs. Will disable the NN forward pipe. 
     if (!dnn_weights->loaded) {
         dnn_weights.reset();
         dnn_weights = nullptr;
+        no_cache_ = false; // Disable cache because it is not
+                           // effect on dummy forwarding pipe.
     }
 
+    // Initialize the NN forward pipe.
     pipe_->Initialize(dnn_weights);
-    SetCacheSize(GetOption<int>("cache_memory_mib"));
+    SetCacheSize(cache_memory_mib_);
 }
 
 void Network::SetCacheSize(size_t MiB) {
@@ -87,7 +97,11 @@ void Network::SetCacheSize(size_t MiB) {
     nn_cache_.SetCapacity(num_entries);
 
     const double mem_used = static_cast<double>(num_entries * entry_byte) / (1024.f * 1024.f); 
-    LOGGING << Format("Allocated %.2f MiB memory for NN cache (%zu entries). \n", mem_used, num_entries);
+    if (no_cache_) {
+        LOGGING << "Disable the NN cache.\n";
+    } else {
+        LOGGING << Format("Allocated %.2f MiB memory for NN cache (%zu entries).\n", mem_used, num_entries);
+    }
 }
 
 void Network::ClearCache() {
@@ -179,8 +193,7 @@ bool Network::ProbeCache(const GameState &state,
         }
     }
 
-    if (state.GetBoardSize() >= state.GetMoveNumber() &&
-            GetOption<bool>("early_symm_cache")) {
+    if (state.GetBoardSize() >= state.GetMoveNumber() && early_symm_cache_) {
         for (int symm = Symmetry::kIdentitySymmetry+1; symm < Symmetry::kNumSymmetris; ++symm) {
             if (LookupCache(nn_cache_, state.ComputeSymmetryHash(symm), result)) {
                 if (result.board_size != state.GetBoardSize()) {
@@ -231,8 +244,8 @@ Network::GetOutput(const GameState &state,
 
     bool probed = false;
 
-    // Get result from cache, if it is in the cache memory.
-    if (read_cache) {
+    // Try to get forwarding result from cache.
+    if (read_cache && !no_cache_) {
         if (ProbeCache(state, result)) {
             probed = true;
         }
@@ -241,8 +254,8 @@ Network::GetOutput(const GameState &state,
     if (!probed) {
         result = GetOutputInternal(state, symmetry);
 
-        // Write result to cache, if it is not in the cache memory.
-        if (write_cache) {
+        // Write forwarding result to cache.
+        if (write_cache && !no_cache_) {
             nn_cache_.Insert(state.GetHash(), result);
         }
     }

@@ -297,7 +297,7 @@ void DNNLoder::DumpInfo(std::shared_ptr<DNNWeights> weights) const {
     out << "Residual Channels: " << weights->residual_channels << '\n';
 
     for (int i = 0; i < weights->residual_blocks; ++i) {
-        out << "  block " << i+1 << ':';
+        out << "  block " << i+1 << ": ";
         if (weights->tower[i].apply_btl) {
             out << "BottleneckBlock";
         } else {

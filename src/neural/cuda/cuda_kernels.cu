@@ -536,7 +536,7 @@ __device__ __forceinline__ void multiply_at(
     *o3 = o[3];
 }
 
-// This kernel is from Leela Zero.
+// This kernel is imported from Leela Zero.
 template <typename T>
 __global__ void transform_in_kernel(T *V, const T *in,
                                     const int C,
@@ -618,7 +618,7 @@ __global__ void transform_in_kernel(T *V, const T *in,
     }
 }
 
-// This kernel is from Leela Zero.
+// This kernel is imported from Leela Zero.
 template <typename T>
 __global__ void transform_out_kernel(T *Y, const T *M,
                                      const T *biases,
