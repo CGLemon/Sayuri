@@ -242,53 +242,80 @@ void im2col_batched(T *data_col, T *data_im,
 template <typename T>
 __global__ void global_pooling_kernel(T *output, T *input, const T *mask,
                                       const T *sqrt_mask, int N, int C, int spatial) {
-    int total_elements = N * C;
-    int index = threadIdx.x + blockDim.x * blockIdx.x; // index = [0 ~ batch * channels]
-    if (index < total_elements) {
-        int n = index / C;
-        int c = index % C;
+    extern __shared__ float pool_shared[];
 
-        T *input_ptr = input + index * spatial;
-        float vsum = 0;
-        float vmax = -5000.0f; // crazy negative value
-        float vsqrt = sqrt((float)spatial);
-        if (sqrt_mask) {
-            vsqrt = (float)(sqrt_mask[n]);
+    int index = threadIdx.x + blockDim.x * blockIdx.x;
+    int shared_size = blockDim.x;
+    int s = threadIdx.x; // 0 ~ shared_size-1
+
+    int nc_index = index / shared_size;
+    int n = nc_index / C;
+    int c = nc_index % C;
+
+    // the pools
+    float *sum_pool_shared = pool_shared;
+    float *max_pool_shared = pool_shared + shared_size;
+
+    // clear the pool shared
+    sum_pool_shared[s] = 0.f;
+    max_pool_shared[s] = -5000.f; // crazy negative value
+
+    __syncthreads();
+
+    if (s < spatial && n < N) {
+        float vmask = 1.0f;
+        if (mask) {
+            vmask = (float)(mask[n * spatial + s]);
+        }
+        float val = (float)(input[
+                        (n * C + c) * spatial + s]);
+
+        sum_pool_shared[s] = val;
+        max_pool_shared[s] = (1.0f-vmask) * (-5000.0f) + val;
+
+         __syncthreads();
+
+        for (int shift = shared_size >> 1; shift > 0; shift >>= 1) {
+             if (s < shift) {
+                 sum_pool_shared[s] += sum_pool_shared[s + shift];
+                 max_pool_shared[s] = fmaxf(
+                     max_pool_shared[s], max_pool_shared[s + shift]);
+             }
+             __syncthreads();
         }
 
-        #pragma unroll
-        for (int i = 0; i < spatial; ++i) {
-            float val = (float)(input_ptr[i]);
-            float vmask = 1.0f;
-
-            if (mask) {
-                vmask = (float)(mask[n * spatial + i]);
+        if (s == 0) {
+            float vsqrt = sqrt((float)spatial);
+            if (sqrt_mask) {
+                vsqrt = (float)(sqrt_mask[n]);
             }
+            float vsum = sum_pool_shared[s];
+            float vmax = max_pool_shared[s];
+            float vmean = vsum / (vsqrt*vsqrt);
 
-            vsum += val;
-            if ((1.0f-vmask) * (-5000.0f) + val > vmax) {
-                vmax = val;
-            }
+            int offset = n * 3 * C + c;
+
+            output[offset + 0 * C] = (T)(vmean);
+            output[offset + 1 * C] = (T)(vmean * (vsqrt - 14.f) * 0.1f);
+            output[offset + 2 * C] = (T)(vmax);
         }
-
-        float vmean = vsum / (vsqrt*vsqrt);
-
-        int offset = c + n * 3 * C;
-
-        output[offset + 0 * C] = (T)(vmean);
-        output[offset + 1 * C] = (T)(vmean * (vsqrt - 14.f) * 0.1f);
-        output[offset + 2 * C] = (T)(vmax);
     }
 }
 
 template <typename T>
 void global_pooling(T *output, T *input, const T *mask, const T *sqrt_mask,
                     int batch, int channels, int spatial, cudaStream_t stream) {
-    const int total_elements = batch * channels;
-    const int block_size = KBLOCKSIZE;
-    const int blocks = DivUp(total_elements, block_size);
+    int shared_size_base = 1;
+    while (shared_size_base < spatial) {
+        shared_size_base *= 2;
+    }
 
-    global_pooling_kernel<<<blocks, block_size, 0, stream>>>(
+    const int total_elements = batch * channels * shared_size_base;
+    const int block_size = shared_size_base;
+    const int blocks = DivUp(total_elements, block_size);
+    const int shared_size = sizeof(float) * shared_size_base * 2;
+
+    global_pooling_kernel<<<blocks, block_size, shared_size, stream>>>(
         output, input, mask, sqrt_mask, batch, channels, spatial);
 
     ReportCUDAErrors(cudaGetLastError());
@@ -298,43 +325,65 @@ template <typename T>
 __global__ void head_global_pooling_kernel(T *output, T *input,
                                            const T *sqrt_mask,
                                            int N, int C, int spatial) {
-    int total_elements = N * C;
-    int index = threadIdx.x + blockDim.x * blockIdx.x; // index = [0 ~ batch * channels]
-    if (index < total_elements) {
-        int n = index / C;
-        int c = index % C;
+    extern __shared__ float pool_shared[];
 
-        T *input_ptr = input + index * spatial;
-        float vsum = 0;
+    int index = threadIdx.x + blockDim.x * blockIdx.x;
+    int shared_size = blockDim.x;
+    int s = threadIdx.x; // 0 ~ shared_size-1
 
-        float vsqrt = sqrt((float)spatial);
-        if (sqrt_mask) {
-            vsqrt = (float)(sqrt_mask[n]);
+    int nc_index = index / shared_size;
+    int n = nc_index / C;
+    int c = nc_index % C;
+
+    // clear the pool shared
+    pool_shared[s] = 0.f;
+
+    __syncthreads();
+
+    if (s < spatial && n < N) {
+        float val = (float)(input[
+                        (n * C + c) * spatial + s]);
+        pool_shared[s] = val;
+         __syncthreads();
+
+        for (int shift = shared_size >> 1; shift > 0; shift >>= 1) {
+             if (s < shift) {
+                 pool_shared[s] += pool_shared[s + shift];
+             }
+             __syncthreads();
         }
 
-        #pragma unroll
-        for (int i = 0; i < spatial; ++i) {
-            vsum += (float)(input_ptr[i]);
+        if (s == 0) {
+            float vsqrt = sqrt((float)spatial);
+            if (sqrt_mask) {
+                vsqrt = (float)(sqrt_mask[n]);
+            }
+            float vsum = pool_shared[s];
+            float vmean = vsum / (vsqrt*vsqrt);
+
+            int offset = n * 3 * C + c;
+
+            output[offset + 0 * C] = (T)(vmean);
+            output[offset + 1 * C] = (T)(vmean * (vsqrt - 14.f) * 0.1f);
+            output[offset + 2 * C] = (T)(vmean * ((vsqrt - 14.f) * (vsqrt - 14.f) * 0.01f - 0.1f));
         }
-
-        float vmean = vsum / (vsqrt * vsqrt);
-
-        int offset = c + n * 3 * C;
-
-        output[offset + 0 * C] = (T)(vmean);
-        output[offset + 1 * C] = (T)(vmean * (vsqrt - 14.f) * 0.1f);
-        output[offset + 2 * C] = (T)(vmean * ((vsqrt - 14.f) * (vsqrt - 14.f) * 0.01f - 0.1f));
     }
 }
 
 template <typename T>
 void head_global_pooling(T *output, T *input, const T *sqrt_mask,
                          int batch, int channels, int spatial, cudaStream_t stream) {
-    const int total_elements = batch * channels;
-    const int block_size = KBLOCKSIZE;
-    const int blocks = DivUp(total_elements, block_size);
+    int shared_size_base = 1;
+    while (shared_size_base < spatial) {
+        shared_size_base *= 2;
+    }
 
-    head_global_pooling_kernel<<<blocks, block_size, 0, stream>>>(
+    const int total_elements = batch * channels * shared_size_base;
+    const int block_size = shared_size_base;
+    const int blocks = DivUp(total_elements, block_size);
+    const int shared_size = sizeof(float) * shared_size_base;
+
+    head_global_pooling_kernel<<<blocks, block_size, shared_size, stream>>>(
         output, input, sqrt_mask, batch, channels, spatial);
 
     ReportCUDAErrors(cudaGetLastError());
