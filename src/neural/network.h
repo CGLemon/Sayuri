@@ -64,5 +64,8 @@ private:
 #ifdef SELF_CHECK
     std::unique_ptr<NetworkForwardPipe> self_check_pipe_{nullptr};
 #endif
-};
 
+    bool no_cache_;
+    bool early_symm_cache_;
+    size_t cache_memory_mib_;
+};

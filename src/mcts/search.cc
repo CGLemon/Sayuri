@@ -68,26 +68,28 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
             const auto visits = node->GetVisits();
             if (param_->no_dcnn &&
                     visits < GetExpandThreshold(currstate)) {
-                // Do the rollout only if we do not expand this child.
+                // Do the rollout only if the visits is below threshold
+                // in the no dcnn mode.
                 search_result.FromRollout(currstate);
             } else {
-                const bool have_children = node->HaveChildren();
+                const bool has_children = node->HasChildren();
 
                 // If we can not expand the node, it means that another thread
-                // is expanding this node. Skip the simulation this time.
+                // is under this node. Skip the simulation stage this time. However,
+                // it still has a chance do PUCT/UCT.
                 auto node_evals = NodeEvals{};
-                const bool success = node->ExpandChildren(network_, currstate,
-                                                              node_evals, analysis_config_, false);
+                const bool success = node->ExpandChildren(
+                    network_, currstate, node_evals, analysis_config_, false);
 
-                if (!have_children && success) {
+                if (!has_children && success) {
                     search_result.FromNetEvals(node_evals);
                 }
             }
         }
     }
 
-    // Not the terminate node, search the next node.
-    if (node->HaveChildren() && !search_result.IsValid()) {
+    // Not the terminated node, search the next node.
+    if (node->HasChildren() && !search_result.IsValid()) {
         auto color = currstate.GetToMove();
         Node *next = nullptr;
 
@@ -98,12 +100,13 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
             next = node->PuctSelectChild(color, depth == 0);
         }
         auto vtx = next->GetVertex();
-
         currstate.PlayMove(vtx, color);
+
+        // Recursive calls.
         PlaySimulation(currstate, next, depth+1, search_result);
     }
 
-    // Now Update this node.
+    // Now Update this node if it valid.
     if (search_result.IsValid()) {
         node->Update(search_result.GetEvals());
     }
@@ -118,8 +121,7 @@ void Search::PrepareRootNode() {
         ReleaseTree();
 
         // Do not reuse the tree, allocate new root node.
-        root_node_ = std::make_unique<Node>(kPass, 1.0f);
-        root_node_->SetParameters(param_.get());
+        root_node_ = std::make_unique<Node>(param_.get(), kPass, 1.0f);
     }
 
     playouts_.store(0, std::memory_order_relaxed);
@@ -204,9 +206,11 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     // the search.
     int num_passes = 0;
     if (tag & kForced) {
-        while (root_state_.GetLastMove() == kPass) {
+        while (root_state_.GetPasses() >= 2) {
+            // Remove double pass move.
             root_state_.UndoMove();
-            num_passes++;
+            root_state_.UndoMove();
+            num_passes+=2;
         }
     }
 
@@ -214,7 +218,8 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     const bool gumbel = param_->gumbel;
     const bool dirichlet_noise = param_->dirichlet_noise;
     if (tag & kNoNoise) {
-        param_->gumbel = param_->dirichlet_noise = false;
+        param_->gumbel =
+            param_->dirichlet_noise = false;
     }
 
     // Prepare some basic information.
@@ -286,7 +291,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         }
         LOGGING << Format("Reuse %d nodes\n", root_node_->GetVisits()-1);
         LOGGING << Format("Use %d threads for search\n", param_->threads);
-        LOGGING << Format("Max thinking time: %.0f(sec)\n", thinking_time);
+        LOGGING << Format("Max thinking time: %.2f(sec)\n", thinking_time);
         LOGGING << Format("Max playouts number: %d\n", playouts);
     }
 
@@ -314,6 +319,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         }
 
         if ((tag & kAnalysis) &&
+                analysis_config_.interval > 0 &&
                 analysis_config_.interval * 10 <
                     analysis_timer.GetDurationMilliseconds()) {
             // Output the analysis string for GTP interface, like sabaki...
@@ -411,7 +417,8 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     const auto board_size = root_state_.GetBoardSize(); 
 
     // Fill best moves, root eval and score.
-    result.best_move = root_node_->GetBestMove();
+    result.best_move = root_node_->GetBestMove(true);
+    result.best_no_pass_move = root_node_->GetBestMove(false);
     result.random_move = root_node_->
                              RandomizeMoveWithGumbel(
                                  root_state_,
@@ -684,6 +691,27 @@ int Search::ThinkBestMove() {
     return result.best_move;
 }
 
+bool ShouldForbidPass(GameState &state, ComputationResult &result) {
+    int to_move = result.to_move;
+    auto safe_ownership = state.GetOwnership();
+
+    for (const auto &string : result.dead_strings) {
+        // All vertex in a string should be same color.
+        const auto vtx = string[0];
+        const auto x = state.GetX(vtx);
+        const auto y = state.GetY(vtx);
+        const auto idx = state.GetIndex(x, y);
+
+        // Some opp's strings are death. Forbid the pass
+        // move. Keep to eat all opp's dead strings.
+        if (state.GetState(vtx) == (!to_move) &&
+                safe_ownership[idx] != to_move) {
+            return true;
+        }
+    }
+    return false;
+}
+
 int Search::GetSelfPlayMove() {
     auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
 
@@ -718,6 +746,12 @@ int Search::GetSelfPlayMove() {
 
     auto result = Computation(playouts, tag);
     int move = result.best_move;
+
+    // The game is not end. Don't play the pass move.
+    if (ShouldForbidPass(root_state_, result)) {
+        move = result.best_no_pass_move;
+    }
+
     int random_moves_cnt = param_->random_moves_factor *
                                result.board_size * result.board_size;
 
@@ -759,10 +793,9 @@ void Search::TryPonder() {
 }
 
 int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
-    // Do not dump the analysis string if we do not
-    // send the interval value.
-    auto analysis_tag = analysis_config.interval > 0 ?
-                            kAnalysis : kNullTag;
+    // Analysis mode.
+    auto analysis_tag = kAnalysis;
+
     // Ponder mode always reuse the tree.
     auto reuse_tag = (param_->reuse_tree || ponder) ? kNullTag : kUnreused;
     auto ponder_tag = ponder ? kPonder : kThinking;
@@ -930,6 +963,13 @@ bool Search::AdvanceToNewRootState() {
         return false;
     }
 
+    const auto temp_diff = param_->policy_temp -
+                               param_->root_policy_temp;
+    if (std::abs(temp_diff) > 1e-4f) {
+        // The tree shape is different if the temperature is different.
+        return false;
+    }
+
     const auto depth =
         int(root_state_.GetMoveNumber() - last_state_.GetMoveNumber());
 
@@ -974,7 +1014,7 @@ bool Search::AdvanceToNewRootState() {
         return false;
     }
 
-    if (!root_node_->HaveChildren()) {
+    if (!root_node_->HasChildren()) {
         // If the root node does not have children, that means
         // it is equal to edge. We discard it.
         return false;

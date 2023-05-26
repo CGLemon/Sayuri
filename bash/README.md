@@ -105,7 +105,7 @@ The ```selfplay-config.txt``` controls the self-play process. Here are the param
 
 --selfplay-query bkp:7:9:0.1 # It means 10% games are 7x7 with komi 9.
 
---playouts 150               # The default playouts.
+--playouts 150               # The main playouts.
 
 --gumbel                     # Enable Gumbel search.
 
@@ -119,6 +119,7 @@ The ```selfplay-config.txt``` controls the self-play process. Here are the param
 
 --resign-playouts 85         # Use this playout if someone's winrate below
                              # threshold.
+
 --resign-threshold 0.02      # If someone's winrate is below this value,
                              # will use the resign-playouts.
 

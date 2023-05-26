@@ -81,6 +81,7 @@ private:
 struct ComputationResult {
     int board_size;
     int best_move{kNullVertex};
+    int best_no_pass_move{kNullVertex};
     int random_move{kNullVertex};
     int gumbel_move{kNullVertex};
 
@@ -115,7 +116,7 @@ public:
         kThinking = 1 << 1, // use time control
         kPonder   = 1 << 2, // thinking on opponent's time
         kAnalysis = 1 << 3, // use the analysis mode
-        kForced   = 1 << 4, // remove all pass move before search
+        kForced   = 1 << 4, // remove double pass move before search
         kUnreused = 1 << 5, // don't reuse the tree
         kNoNoise  = 1 << 6  // disable any noise
     };

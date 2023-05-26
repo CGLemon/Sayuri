@@ -10,6 +10,7 @@
 Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. She is strongly inspired by Leela Zero and KataGo. The board data structure, search algorithm and network format are borrowed from Leela Zero in the beginning. Current version follows the KataGo research, the engine supports variable komi and board size now. Some methods you may see my HackMD article (in chinese).
 
 * [開發日誌](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/BJgfay0Yc)
+* [AlphaZero 之加速演算法實作](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJI9_p70i)
 
 ## Requirements
 
@@ -63,14 +64,14 @@ Save the compressed training data file. It can save many memory usage in the sel
 ## Windows Version (Experiment)
 
 1. Download the Visual Studio.
-2. Download the MinGW.
+2. Download the MinGW from [here](https://github.com/mstorsjo/llvm-mingw).
 3. Clone the github repo and compile it.
 
         $ git clone https://github.com/CGLemon/Sayuri
         $ cd Sayuri
         $ git submodule update --init --recursive
         $ cd src
-        $ g++ -std=c++14 -ffast-math -I . -Wall -Wextra -lpthread *.cc utils/*.cc accuracy/*.cc game/*.cc mcts/*.cc neural/*.cc neural/blas/*.cc neural/cuda/*.cc pattern/*.cc selfplay/*.cc -o Sayuri -O3 -DNDEBUG -DWIN32 -I ../third_party/Eigen -DUSE_BLAS -DUSE_EIGEN
+        $ g++ -std=c++14 -ffast-math -I . -lpthread *.cc utils/*.cc accuracy/*.cc game/*.cc mcts/*.cc neural/*.cc neural/blas/*.cc neural/cuda/*.cc pattern/*.cc selfplay/*.cc -o Sayuri -O3 -DNDEBUG -DWIN32 -I ../third_party/Eigen -DUSE_BLAS -DUSE_EIGEN
 
 
 ## Weights and Others.
@@ -197,10 +198,12 @@ I am trying to implement this ancient technique. Merge the MM patterns based and
 
 (November, 2022)
 
-On the 2022 CGF Open, the Ray author, Yuki Kobayashi, implemented a new algorithm called Gumbel learning. it is a effective trick for AlphaZero and it guarantees to improve policy with low playouts. As far as I know, Ray is the first successful superhuman level engine with Gumbel learning on 19x19. Inspired by Ray, I decide to implement this ideal in my project. Hope that this project would become another successful Gumbel learning engine.
+On the 2022 CGF Open, the Ray author, Yuki Kobayashi, implemented a new algorithm called Gumbel learning. it is a effective trick for AlphaZero and it guarantees to improve policy with low playouts. As far as I know, Ray is the first successful superhuman level engine with Gumbel learning on 19x19. Inspired by Ray, I decide to implement this ideal in my project.
 
 * [Policy improvement by planning with Gumbel](https://www.deepmind.com/publications/policy-improvement-by-planning-with-gumbel)
 * [Ray's apeal letter for UEC 14](https://drive.google.com/file/d/1yLjGboOLMOryhHT-aWG_0zAF-G7LDcTH/view)
+
+After playing two million games (May, 2023), the strengh reached pro level player. I believe that Sayuri's performance successfully approaches the early KataGo's (g65).
 
 ### Improve the network performance
 
@@ -212,7 +215,7 @@ The Ray author, Yuki Kobayashi, proposed three points which may improve my netwo
 * The NHWC format.
 * Bottleneck network, It may improve 30% speed without losing accuracy.
 
-KataGo also proposed a variant bottleneck and said it could significantly improve the performance. This result shows the advance of these kinds of structure. However in my recent testing (March, 2023), bottleneck is not effective on the 10x128 network. Maybe it is not a good ideal if the network size is small?
+KataGo also proposed a variant bottleneck and said it could significantly improve the performance. This result shows the advance of these kinds of structure. However in my recent testing (March, 2023), bottleneck is not effective on the 10x128 and 15x192 network. And seem that there are more blind spots in bottleneck because the 1x1 kernel may compress the board information. I will check it again.
 
 ## Features
 

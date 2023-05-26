@@ -188,7 +188,7 @@ void Engine::SetUnfairKomi(int g) {
     auto dist = std::normal_distribution<float>(0.f, stddev);
     float bonus = dist(Random<>::Get());
 
-    state.SetKomi(AdjustKomi<int>(komi + bonus));
+    state.SetKomi(AdjustKomi<float>(komi + bonus));
 }
 
 void Engine::SetFairKomi(int g) {
@@ -204,7 +204,7 @@ void Engine::SetFairKomi(int g) {
         score_lead = 0.0f - score_lead;
     }
 
-    state.SetKomi(AdjustKomi<int>(komi + score_lead));
+    state.SetKomi(AdjustKomi<float>(komi + score_lead));
 }
 
 int Engine::GetHandicaps(int g) {

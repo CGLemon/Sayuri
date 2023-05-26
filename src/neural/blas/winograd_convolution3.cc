@@ -15,7 +15,6 @@ void WinogradConvolution3::TransformIn(const int board_size,
     const int H = board_size;
     const int WTILES = GetWinogradWTiles(board_size);
     const int P = GetWinogradP(board_size);
-    constexpr auto SQ2 = kSqrt2;
 
     const auto Wpad = 2 + kWinogradM * WTILES;
     constexpr auto buffersize = 32;
@@ -33,24 +32,24 @@ void WinogradConvolution3::TransformIn(const int board_size,
 
     // multiple vector [i0..i5] by Bt and produce [o0..o5]
     // const auto Bt = std::array<float, kWinogradTile>{
-    //     1.0f,  0.0f,       -5.0f / 2.0f,  0.0f,        1.0f, 0.0f,
-    //     0.0f, -SQ2,        -2.0f,         SQ2 / 2.0f,  1.0f, 0.0f,
-    //     0.0f,  SQ2,        -2.0f,        -SQ2 / 2.0f,  1.0f, 0.0f,
-    //     0.0f, -SQ2 / 2.0f, -1.0f / 2.0f,  SQ2,         1.0f, 0.0f,
-    //     0.0f,  SQ2 / 2.0f, -1.0f / 2.0f, -SQ2,         1.0f, 0.0f,
-    //     0.0f,  1.0f,        0.0f,        -5.0f / 2.0f, 0.0f, 1.0f};
+    //     1.0f,  0.0f,          -5.0f / 2.0f,  0.0f,           1.0f, 0.0f,
+    //     0.0f, -kSqrt2,        -2.0f,         kSqrt2 / 2.0f,  1.0f, 0.0f,
+    //     0.0f,  kSqrt2,        -2.0f,        -kSqrt2 / 2.0f,  1.0f, 0.0f,
+    //     0.0f, -kSqrt2 / 2.0f, -1.0f / 2.0f,  kSqrt2,         1.0f, 0.0f,
+    //     0.0f,  kSqrt2 / 2.0f, -1.0f / 2.0f, -kSqrt2,         1.0f, 0.0f,
+    //     0.0f,  1.0f,           0.0f,        -5.0f / 2.0f,    0.0f, 1.0f};
     const auto multiply_bt = [](float& o0, float& o1, float& o2,
                                 float& o3, float& o4, float& o5,
                                 const float i0, const float i1, const float i2,
                                 const float i3, const float i4, const float i5) {
-        auto i3m1 = i1 * -SQ2 + i3 * (SQ2 / 2.0f);
+        auto i3m1 = i1 * -kSqrt2 + i3 * (kSqrt2 / 2.0f);
         auto i4m2 = i2 * -2.0f + i4 * 1.0f;
 
         o0 = i0 + i2 * (-5.0f / 2.0f) + i4;
         o1 = i3m1 + i4m2;
         o2 = -i3m1 + i4m2;
 
-        auto i3m1_2 = i3 * (SQ2) + i1 * (-SQ2 / 2.0f);
+        auto i3m1_2 = i3 * (kSqrt2) + i1 * (-kSqrt2 / 2.0f);
         auto i4m2_2 = i2 * (-1.0f / 2.0f) + i4;
 
         o3 = i3m1_2 + i4m2_2;
@@ -144,9 +143,9 @@ void WinogradConvolution3::Sgemm(const int board_size,
                                  std::vector<float>& M,
                                  const int C, const int K) {
     //    [C, K, P] are [input_channels, output_channels, Ptiles]
-    // U dimensions are [36,  input_channels, output_channels].
-    // V dimensions are [36,  input_channels, p_tiles].
-    // M dimensions are [36, output_channels, p_tiles].
+    // U dimensions is [36,  input_channels, output_channels].
+    // V dimensions is [36,  input_channels, p_tiles].
+    // M dimensions is [36, output_channels, p_tiles].
 
     const int P = GetWinogradP(board_size);
     for (int b = 0; b < kWinogradTile; b++) {
@@ -171,22 +170,20 @@ void WinogradConvolution3::TransformOut(const int board_size,
     const int WTILES = GetWinogradWTiles(board_size);
     const int P = GetWinogradP(board_size);
 
-    constexpr auto SQ2 = kSqrt2;
-
     // multiple vector [i0..i5] by At and produce [o0..o3]
     // const auto At = std::array<float, kWinogradAlpha * kWinogradM>{
-    //     1.0f, 1.0f,        1.0f,        1.0f,        1.0f,       0.0f,
-    //     0.0f, SQ2 / 2.0f, -SQ2 / 2.0f,  SQ2,        -SQ2,        0.0f,
-    //     0.0f, 1.0f / 2.0f, 1.0f / 2.0f, 2.0f,        2.0f,       0.0f,
-    //     0.0f, SQ2 / 4.0f, -SQ2 / 4.0f,  2.0f * SQ2, -2.0f * SQ2, 1.0f};
+    //     1.0f, 1.0f,           1.0f,           1.0f,           1.0f,          0.0f,
+    //     0.0f, kSqrt2 / 2.0f, -kSqrt2 / 2.0f,  kSqrt2,        -kSqrt2,        0.0f,
+    //     0.0f, 1.0f / 2.0f,    1.0f / 2.0f,    2.0f,           2.0f,          0.0f,
+    //     0.0f, kSqrt2 / 4.0f, -kSqrt2 / 4.0f,  2.0f * kSqrt2, -2.0f * kSqrt2, 1.0f};
     const auto multiply_at = [](float& o0, float& o1, float& o2, float& o3,
                                 const float i0, const float i1,
                                 const float i2, const float i3,
                                 const float i4, const float i5) {
         auto t1p2 = (i1 + i2) * (1.0f / 2.0f);
-        auto t1m2 = (i1 - i2) * (SQ2 / 4.0f);
+        auto t1m2 = (i1 - i2) * (kSqrt2 / 4.0f);
         auto t3p4 = i3 + i4;
-        auto t3m4 = (i3 - i4) * (SQ2);
+        auto t3m4 = (i3 - i4) * (kSqrt2);
 
         o0 = i0 + t1p2 + t1p2 + t3p4;
         o1 = t1m2 + t1m2 + t3m4;

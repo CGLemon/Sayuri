@@ -25,6 +25,9 @@ public:
         cpuct_init = GetOption<float>("cpuct_init");
         cpuct_base_factor = GetOption<float>("cpuct_base_factor");
         cpuct_base = GetOption<float>("cpuct_base");
+        cpuct_dynamic = GetOption<bool>("cpuct_dynamic");
+        cpuct_dynamic_k_factor = GetOption<float>("cpuct_dynamic_k_factor");
+        cpuct_dynamic_k_base = GetOption<float>("cpuct_dynamic_k_base");
         draw_factor = GetOption<float>("draw_factor");
 
         random_min_visits = GetOption<int>("random_min_visits");
@@ -78,6 +81,8 @@ public:
     float cpuct_init;
     float cpuct_base_factor;
     float cpuct_base;
+    float cpuct_dynamic_k_factor;
+    float cpuct_dynamic_k_base;
     float draw_factor;
 
     int gumbel_considered_moves;
@@ -112,6 +117,7 @@ public:
     bool use_stm_winrate;
     bool analysis_verbose;
     bool always_completed_q_policy;
+    bool cpuct_dynamic;
 
     std::array<float, kNumVertices + 10> dirichlet_buffer;
 };

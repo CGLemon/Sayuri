@@ -4,6 +4,7 @@
 #include "utils/log.h"
 #include "utils/random.h"
 #include "utils/komi.h"
+#include "utils/logits.h"
 #include "pattern/pattern.h"
 #include "pattern/gammas_dict.h"
 
@@ -635,7 +636,6 @@ std::vector<float> GameState::GetGammasPolicy(const int color) const {
     auto board_size = GetBoardSize();
 
     auto policy = std::vector<float>(num_intersections, 0);
-    auto acc = 0.f;
 
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto x = idx % board_size;
@@ -643,15 +643,10 @@ std::vector<float> GameState::GetGammasPolicy(const int color) const {
         const auto vtx = GetVertex(x,y);
 
         const auto gval = GetGammaValue(vtx, color);
-        policy[idx] = gval;
-        acc += gval;
+        policy[idx] = std::log(gval);
     }
 
-    for (int idx = 0; idx < num_intersections; ++idx) {
-        policy[idx] /= acc;
-    } 
-
-    return policy;
+    return Softmax(policy, 1.f);
 }
 
 std::vector<int> GameState::GetOwnershipAndRemovedDeadStrings(int playouts) const {

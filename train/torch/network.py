@@ -68,8 +68,8 @@ class GlobalPool(nn.Module):
 
         if self.is_value_head:
             # According to KataGo, we compute three orthogonal values. There
-            # are 1, (x-14)/10, and (x-14)^2/100 - 0.1. They may the value head
-            # performance. That because the winrate and score lead heads consist
+            # are 1, (x-14)/10, and (x-14)^2/100 - 0.1. They may improve the value
+            # head performance. That because the win-rate and score lead heads consist
             # of komi and intersections.
 
             layer0 = layer_raw_mean
@@ -78,7 +78,7 @@ class GlobalPool(nn.Module):
 
             layer_pooled = torch.cat((layer0, layer1, layer2), 1)
         else:
-            # Apply CRAZY_NEGATIVE_VALUE to out of board area. We guess that 
+            # Apply CRAZY_NEGATIVE_VALUE to out of board area. I guess that 
             # -5000 is large enough.
             raw_x = x + (1.0-mask) * CRAZY_NEGATIVE_VALUE
 
@@ -133,6 +133,8 @@ class SqueezeAndExcitation(nn.Module):
 
 class SpatialAttention(nn.Module):
     def __init__(self, collector=None):
+        # The idead of Spatial Attention is from the paper, "CBAM:
+        # Convolutional Block Attention Module".
         super(SpatialAttention, self).__init__()
         self.b_avg = (19 + 9) / 2
         self.conv = Convolve(
@@ -174,8 +176,7 @@ class BatchNorm2d(nn.Module):
                        fixup=False):
         # According to the paper "Batch Renormalization: Towards Reducing Minibatch Dependence
         # in Batch-Normalized Models", Batch-Renormalization is much faster and steady than 
-        # traditional Batch-Normalized. Will improve the performance in the small batch size
-        # case.
+        # traditional Batch-Normalized when it is small batch size.
 
         super(BatchNorm2d, self).__init__()
         self.register_buffer(
@@ -207,9 +208,9 @@ class BatchNorm2d(nn.Module):
         self.momentum = self.__clamp(momentum)
 
         # Fix up Batch Normalization layer. According to kata Go, Batch Normalization may cause
-        # some wierd reuslts that becuse the inference and training computation results are different.
-        # Fix up also speeds up the performance. May improve around x1.6 ~ x1.8 that becuse we use
-        # customized Batch Normalization layer. The performance of customized layer is very slow.
+        # some wierd reuslts becuse the inference and training computation results are different.
+        # Fix up can avoid the weird forwarding result. Fix up also speeds up the performance. May
+        # improve around x1.6 ~ x1.8.
         self.fixup = fixup
 
     def __clamp(self, x):
@@ -441,7 +442,7 @@ class ConvBlock(nn.Module):
         out += tensor_to_text(self.conv.weight, use_bin)
         out += tensor_to_text(torch.zeros(self.out_channels), use_bin) # fill zero
 
-        # Merge four tensors(mean, variance, gamma, beta) into two tensors (
+        # Merge four tensors (mean, variance, gamma, beta) into two tensors (
         # mean, variance).
         bn_mean[:] = self.bn.running_mean[:]
         bn_std[:] = torch.sqrt(self.bn.eps + self.bn.running_var)[:]
@@ -452,7 +453,7 @@ class ConvBlock(nn.Module):
         # Solve the following equation:
         #     gamma * ((x-mean) / std) + beta = (x-tgt_mean) / tgt_std
         #
-        # We get:
+        # We will get:
         #     tgt_std = std / gamma
         #     tgt_mean = mean - beta * (std / gamma)
 

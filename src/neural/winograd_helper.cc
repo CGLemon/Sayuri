@@ -12,19 +12,17 @@ int GetWinogradP(const int board_size) {
 std::vector<float> WinogradTransformF(const std::vector<float>& f,
                                       const int outputs,
                                       const int channels) {
-    constexpr auto SQ2 = kSqrt2;
-
     // F(4x4, 3x3) Winograd filter transformation
     // transpose(G.dot(f).dot(G.transpose()))
     // U matrix is transposed for better memory layout in SGEMM
     auto U = std::vector<float>(kWinogradTile * outputs * channels);
     const auto G = std::array<float, 3 * kWinogradAlpha>{
-         1.0f,         0.0f,        0.0f,
-        -2.0f / 3.0f, -SQ2 / 3.0f, -1.0f / 3.0f,
-        -2.0f / 3.0f,  SQ2 / 3.0f, -1.0f / 3.0f,
-         1.0f / 6.0f,  SQ2 / 6.0f,  1.0f / 3.0f,
-         1.0f / 6.0f, -SQ2 / 6.0f,  1.0f / 3.0f,
-         0.0f,         0.0f,        1.0f};
+         1.0f,         0.0f,           0.0f,
+        -2.0f / 3.0f, -kSqrt2 / 3.0f, -1.0f / 3.0f,
+        -2.0f / 3.0f,  kSqrt2 / 3.0f, -1.0f / 3.0f,
+         1.0f / 6.0f,  kSqrt2 / 6.0f,  1.0f / 3.0f,
+         1.0f / 6.0f, -kSqrt2 / 6.0f,  1.0f / 3.0f,
+         0.0f,         0.0f,           1.0f};
 
     auto temp = std::array<float, 3 * kWinogradAlpha>{};
 

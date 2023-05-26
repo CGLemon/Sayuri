@@ -88,7 +88,7 @@ class Node {
 public:
     using Edge = NodePointer<Node>;
 
-    explicit Node(std::int16_t vertex, float policy);
+    explicit Node(Parameters *param, std::int16_t vertex, float policy);
     ~Node();
 
     // Expand this node.
@@ -126,17 +126,15 @@ public:
     std::vector<std::pair<float, int>> GetLcbUtilityList(const int color);
 
     // Get best move(vertex) with LCB value.
-    int GetBestMove();
+    int GetBestMove(bool allow_pass);
 
     // Get best move(vertex) with Gumbel-Top-k trick.
     int GetGumbelMove();
 
     const std::vector<Edge> &GetChildren() const;
 
-    bool HaveChildren() const;
+    bool HasChildren() const;
     bool SetTerminal();
-
-    void SetParameters(Parameters * param);
 
     // Get the pointer of this node.
     Node *Get();
@@ -203,6 +201,7 @@ public:
     std::string GetPvString(GameState &state);
 
 private:
+    float GetDynamicCpuctFactor(Node *node, const int visits);
     void ApplyNoDcnnPolicy(GameState &state,
                            const int color,
                            Network::Result &raw_netlist) const;
@@ -241,8 +240,6 @@ private:
     void MixLogitsCompletedQ(GameState &state, std::vector<float> &prob);
 
     void KillRootSuperkos(GameState &state);
-
-    Parameters *GetParameters();
 
     enum class StatusType : std::uint8_t {
         kInvalid, // kInvalid means that this node is illegal, like
