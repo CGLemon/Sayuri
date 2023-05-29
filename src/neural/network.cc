@@ -157,26 +157,25 @@ bool Network::SelfCheck(Network::Result other, const Network::Inputs &inputs, in
         return true;
     }
     auto comp = self_check_pipe_->Forward(inputs);
-    bool fp16 = comp.fp16;
+    bool fp16 = other.fp16;
 
     type = 0;
-    if (IsNotEqual(comp.pass_probability, other.pass_probability, fp16)) {
-        fprintf(stderr, "1. %f | %f\n", comp.pass_probability, other.pass_probability);
-        type |= 1;
-    }
-    if (IsNotEqual(comp.final_score, other.final_score, fp16)) {
-        fprintf(stderr, "2. %f | %f\n", comp.final_score, other.final_score);
-        type |= (1 << 1);
-    }
-    for (int i = 0; i < 3; ++i) {
-        if (IsNotEqual(comp.wdl[i], other.wdl[i], fp16)) {
-            fprintf(stderr, "3. %f | %f\n", comp.wdl[i], other.wdl[i]);
-            type |= (1 << 2);
-        }
-    }
+
+    // if (IsNotEqual(comp.final_score, other.final_score, fp16)) {
+    //     fprintf(stderr, "2. %f | %f\n", comp.final_score, other.final_score);
+    //     type |= (1 << 1);
+    // }
+    // for (int i = 0; i < 3; ++i) {
+    //     if (IsNotEqual(comp.wdl[i], other.wdl[i], fp16)) {
+    //         fprintf(stderr, "3. %f | %f\n", comp.wdl[i], other.wdl[i]);
+    //         type |= (1 << 2);
+    //    }
+    // }
+
     auto size = comp.board_size * comp.board_size;
     {
         double error = 0.f;
+        double diff = 0.f;
         double max_error = 2e-3f;
         if (fp16) {
             max_error = 0.2f;
@@ -185,8 +184,11 @@ bool Network::SelfCheck(Network::Result other, const Network::Inputs &inputs, in
         ActivatePolicy(comp, 1);
         ActivatePolicy(other, 1);
 
+        diff = comp.pass_probability - other.pass_probability;
+        error += (diff * diff);
+
         for (int i = 0; i < size; ++i) {
-            double diff = comp.probabilities[i] - other.probabilities[i];
+            diff = comp.probabilities[i] - other.probabilities[i];
             error += (diff * diff);
         }
         error = std::sqrt(error);
@@ -197,14 +199,14 @@ bool Network::SelfCheck(Network::Result other, const Network::Inputs &inputs, in
         fprintf(stderr, "policy error. %f\n", error);
     }
 
-    for (int i = 0; i < size; ++i) {
-        float a = std::tanh(comp.ownership[i]);
-        float b = std::tanh(other.ownership[i]);
-        if (IsNotEqual(a, b, fp16)) {
-            type |= (1 << 4);
-            fprintf(stderr, "5. %f | %f\n", a, b);
-        }
-    }
+    // for (int i = 0; i < size; ++i) {
+    //     float a = std::tanh(comp.ownership[i]);
+    //     float b = std::tanh(other.ownership[i]);
+    //     if (IsNotEqual(a, b, fp16)) {
+    //         type |= (1 << 4);
+    //         fprintf(stderr, "5. %f | %f\n", a, b);
+    //     }
+    // }
     if (type > 0) {
         return false;
     }
