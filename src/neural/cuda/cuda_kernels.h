@@ -40,15 +40,6 @@ void se_scale(T *output, const T *input, const T *residual,
               int channels, int spatial, bool relu, cudaStream_t stream);
 
 template <typename T>
-void channel_pooling(T *output, T *input, const T *sqrt_mask,
-                     int batch, int channels, int spatial, cudaStream_t stream);
-
-template <typename T>
-void sa_scale(T *output, const T *input, const T *residual,
-              const T *sa_biases, int batch, int channels,
-              int spatial, bool relu, cudaStream_t stream);
-
-template <typename T>
 void winograd3_transform_in(T *V, const T *in, int batch,
                             int channels, int board_size, cudaStream_t stream);
 
