@@ -35,6 +35,9 @@ void head_global_pooling(T *input, T *output, const T *sqrt_mask,
                          int batch, int channels, int spatial, cudaStream_t stream);
 
 template <typename T>
+void copy_on_device(T *dest, const T *src, int size, cudaStream_t stream);
+
+template <typename T>
 void se_scale(T *output, const T *input, const T *residual,
               const T *se_biases, const T *mask, int batch,
               int channels, int spatial, bool relu, cudaStream_t stream);

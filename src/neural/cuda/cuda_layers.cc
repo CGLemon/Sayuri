@@ -113,6 +113,18 @@ void SeScale(bool fp16, void *output, const void *input,
     }
 }
 
+void CopyOnDevice(bool fp16, void *dest,
+          const void *src,
+          int size, cudaStream_t stream) {
+    if (fp16) {
+#ifdef ENABLE_FP16
+        copy_on_device((half *)dest, (half *)src, size, stream);
+#endif
+    } else {
+        copy_on_device((float *)dest, (float *)src, size, stream);
+    }
+}
+
 void Winograd3TransformIn(bool fp16, void *output, const void *input,
                           int batch, int channels, int board_size, cudaStream_t stream) {
     if (fp16) {

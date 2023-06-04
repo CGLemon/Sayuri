@@ -98,6 +98,8 @@ public:
     ConvLayer post_btl_conv;
     BatchNormLayer post_btl_bn;
     bool apply_btl{false};
+
+    bool apply_lss{false};
 };
 
 class DNNWeights {

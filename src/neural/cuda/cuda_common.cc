@@ -348,6 +348,17 @@ void CopyToHostOp(bool fp16, std::vector<float> &outputs,
     }
 }
 
+void DeviceToDevice(bool fp16, void **cude_dest, void **cude_src, size_t size) {
+    size_t op_size = size;
+    if (fp16) {
+        op_size *= sizeof(half_float_t);
+    } else {
+        op_size *= sizeof(float);
+    }
+    ReportCUDAErrors(cudaMemcpy(
+        *cude_dest, *cude_src, op_size, cudaMemcpyDeviceToDevice));
+}
+
 } // namespace cuda
 
 #endif

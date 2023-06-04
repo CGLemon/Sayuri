@@ -131,43 +131,6 @@ class SqueezeAndExcitation(nn.Module):
         out = torch.sigmoid(gammas) * x + betas
         return out * mask
 
-class SpatialAttention(nn.Module):
-    def __init__(self, collector=None):
-        # The idead of Spatial Attention is from the paper, "CBAM:
-        # Convolutional Block Attention Module".
-        super(SpatialAttention, self).__init__()
-        self.b_avg = (19 + 9) / 2
-        self.conv = Convolve(
-            in_channels=3,
-            out_channels=1,
-            kernel_size=7,
-            relu=False,
-            collector=collector
-        )
-
-    def forward(self, x, mask_buffers):
-        mask, mask_sum_hw, mask_sum_hw_sqrt = mask_buffers
-        div = torch.reshape(mask_sum_hw, (-1,1))
-        div_sqrt = torch.reshape(mask_sum_hw_sqrt, (-1,1))
-        b_diff = div_sqrt - self.b_avg
-
-        b, c = b_diff.size()
-        b_diff = b_diff.view(b, c, 1, 1)
-        layer_raw_mean = torch.mean(x, dim=1, keepdim=True)
-        layer_raw_max = torch.max(x, dim=1, keepdim=True)[0]
-
-        layer0 = layer_raw_mean
-        layer1 = layer_raw_mean * (b_diff / 10.0)
-        layer2 = layer_raw_max
-
-        # The out of board area is zero. Do not need to
-        # multiply the mask.
-        sa = torch.cat([layer0, layer1, layer2], dim=1)
-        sa = self.conv(sa, mask)
-
-        out = torch.sigmoid(sa) * x
-        return out * mask
-
 class BatchNorm2d(nn.Module):
     def __init__(self, num_features,
                        eps=1e-5,
@@ -492,7 +455,7 @@ class ResBlock(nn.Module):
 
         self.use_btl = bottleneck_channels is not None
         self.use_se = se_size is not None
-        self.use_sa = kwargs.get("use_sa", False)
+        self.use_lss = kwargs.get("use_lss", False)
 
         if self.use_btl:
             self.inner_channels = bottleneck_channels
@@ -540,10 +503,6 @@ class ResBlock(nn.Module):
                 se_size=se_size,
                 collector=collector
             )
-        if self.use_sa:
-            self.sa_module = SpatialAttention(
-                collector=collector
-            )
 
         if fixup:
             # re-scale the weights
@@ -561,7 +520,7 @@ class ResBlock(nn.Module):
                 self.se_module.fixup_adjust(fixup_scale4)
 
     def forward(self, inputs):
-        x, mask_buffers = inputs
+        x, skip, mask_buffers = inputs
 
         mask, _, _ = mask_buffers
 
@@ -575,11 +534,17 @@ class ResBlock(nn.Module):
 
         if self.use_se:
             out = self.se_module(out, mask_buffers)
-        if self.use_sa:
-            out = self.sa_module(out, mask_buffers)
+
         out = out + x
 
-        return F.relu(out, inplace=True), mask_buffers
+        if self.use_lss:
+            out = out + skip
+            out = F.relu(out, inplace=True)
+            skip = out
+        else:
+            out = F.relu(out, inplace=True)
+
+        return out, skip, mask_buffers
 
 class Network(nn.Module):
     def __init__(self, cfg):
@@ -628,8 +593,8 @@ class Network(nn.Module):
         for s in self.stack:
             has_basic_block = False
             use_fixup = self.fixup
-            use_sa = False
             se_size = None
+            use_lss = False
             bottleneck_channels = None
 
             for component in s.strip().split('-'):
@@ -641,8 +606,8 @@ class Network(nn.Module):
                     has_basic_block = True
                 elif component == "SE":
                     se_size = main_channels
-                elif component == "SA":
-                    use_sa = True
+                elif component == "LSS":
+                    use_lss = True
                 elif component == "FixUp":
                     use_fixup = True
                 else:
@@ -656,7 +621,7 @@ class Network(nn.Module):
                                      fixup=use_fixup,
                                      bottleneck_channels=bottleneck_channels,
                                      se_size=se_size,
-                                     use_sa=use_sa,
+                                     use_lss=use_lss,
                                      collector=self.layers_collector))
 
         if main_channels != self.residual_channels:
@@ -754,9 +719,10 @@ class Network(nn.Module):
 
         # input layer
         x = self.input_conv(planes, mask)
+        skip = x
 
         # residual tower
-        x, _ = self.residual_tower((x, mask_buffers))
+        x, _, _ = self.residual_tower((x, skip, mask_buffers))
 
         # policy head
         pol = self.policy_conv(x, mask)

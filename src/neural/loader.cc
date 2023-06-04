@@ -277,6 +277,7 @@ void DNNLoder::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstr
             if (component == "ResidualBlock" ||
                     component == "BottleneckBlock" ||
                     component == "SE" ||
+                    component == "LSS" ||
                     component == "FixUp") {
                 // do nothing...
             } else {
@@ -304,6 +305,9 @@ void DNNLoder::DumpInfo(std::shared_ptr<DNNWeights> weights) const {
         }
         if (weights->tower[i].apply_se) {
             out << "-SE";
+        }
+        if (weights->tower[i].apply_lss) {
+            out << "-LSS";
         }
         out << '\n';
     }
@@ -522,6 +526,12 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
             tower_ptr->se_size = se_squeeze_shape[1];
         } else {
             tower_ptr->apply_se = false;
+        }
+
+        if (SplitterFound(block_spt, "LSS")) {
+            tower_ptr->apply_lss = true;
+        } else {
+            tower_ptr->apply_lss = false;
         }
     } // end of for-loop
 

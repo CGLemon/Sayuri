@@ -242,7 +242,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
 
         const bool second_use_relu =
                        tower_ptr->apply_btl ||
-                       !tower_ptr->apply_se;
+                       !(tower_ptr->apply_se);
         graph_->tower_conv[t_offset+1] = cuda::Convolution(
             &handles_,
             max_batch_,     // max batch size
@@ -475,10 +475,9 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_scratch_op_[0], scratch_size_));
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_scratch_op_[1], scratch_size_));
 
-    cuda::ReportCUDAErrors(cudaMalloc(&cuda_conv_op_[0], conv_op_size));
-    cuda::ReportCUDAErrors(cudaMalloc(&cuda_conv_op_[1], conv_op_size));
-    cuda::ReportCUDAErrors(cudaMalloc(&cuda_conv_op_[2], conv_op_size));
-    cuda::ReportCUDAErrors(cudaMalloc(&cuda_conv_op_[3], conv_op_size));
+    for (int i = 0; i < (int)cuda_conv_op_.size(); ++i) {
+        cuda::ReportCUDAErrors(cudaMalloc(&cuda_conv_op_[i], conv_op_size));
+    }
 
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_pol_op_[0], pol_op1_size));
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_pol_op_[1], pol_op2_size));
@@ -621,6 +620,20 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         nullptr, mask_buf[0],
         cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
 
+    void *null_op = nullptr;
+    bool use_lss = false;
+    const auto residuals = weights_->residual_blocks;
+    const auto residual_channels = weights_->residual_channels;
+    const auto lss_size = batch_size * residual_channels * num_intersections;
+    for (int i = 0; i <  residuals; ++i) {
+        use_lss |= weights_->tower[i].apply_lss;
+    }
+
+    if (use_lss) {
+        cuda::CopyOnDevice(handles_.fp16, cuda_conv_op_[4],
+            cuda_conv_op_[0], lss_size, handles_.stream);
+    }
+
     //   The Residual tower. The forwarding order of
     //   each block is
     // [
@@ -631,7 +644,6 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     //   -> (squeeze-and-excitation module)
     //   -> (spatial attention module)
     // ]
-    const auto residuals = weights_->residual_blocks;
     for (int i = 0; i < residuals; ++i) {
         // TODO: Remove one of cuda_conv_op_. Make it more
         //       clear.
@@ -655,6 +667,16 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
             cuda_conv_op_[2], first_in,
             nullptr, mask_buf[0],
             cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+
+        // long stride shortcut
+        if (tower_ptr->apply_lss) {
+            cuda::AddSpatial(
+                handles_.fp16, cuda_conv_op_[0], null_op,
+                cuda_conv_op_[4], mask_buf[0],
+                batch_size * residual_channels, // not used
+                batch_size, residual_channels, num_intersections,
+                false, handles_.stream);
+        }
 
         // 2nd conv layer
         void *second_skip = (tower_ptr->apply_se ||
@@ -695,6 +717,11 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         if (!module_skip) {
             std::swap(cuda_conv_op_[3], cuda_conv_op_[0]);
         }
+
+        if (tower_ptr->apply_lss) {
+            cuda::CopyOnDevice(handles_.fp16, cuda_conv_op_[4],
+                cuda_conv_op_[0], lss_size, handles_.stream);
+        }
     }
 
     // policy head
@@ -714,7 +741,6 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     graph_->p_inter.Forward(
         batch_size, cuda_pol_op_[2], cuda_pol_op_[1]);
 
-    void *null_op = nullptr;
     cuda::AddSpatial(
         handles_.fp16, cuda_pol_op_[0], cuda_pol_op_[2],
         null_op, mask_buf[0],
@@ -761,7 +787,6 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     auto batch_value_misc = std::vector<float>(batch_size * kOuputValueMisc);
 
     cuda::WaitToFinish(handles_.stream);
-
     {
         std::lock_guard<std::mutex> lock(io_mutex_);
 
@@ -814,10 +839,9 @@ void CudaForwardPipe::NNGraph::DestroyGraph() {
     cuda::ReportCUDAErrors(cudaFree(cuda_scratch_op_[0]));
     cuda::ReportCUDAErrors(cudaFree(cuda_scratch_op_[1]));
 
-    cuda::ReportCUDAErrors(cudaFree(cuda_conv_op_[0]));
-    cuda::ReportCUDAErrors(cudaFree(cuda_conv_op_[1]));
-    cuda::ReportCUDAErrors(cudaFree(cuda_conv_op_[2]));
-    cuda::ReportCUDAErrors(cudaFree(cuda_conv_op_[3]));
+    for (int i = 0; i < (int)cuda_conv_op_.size(); ++i) {
+        cuda::ReportCUDAErrors(cudaFree(cuda_conv_op_[i]));
+    }
 
     cuda::ReportCUDAErrors(cudaFree(cuda_pol_op_[0]));
     cuda::ReportCUDAErrors(cudaFree(cuda_pol_op_[1]));

@@ -87,6 +87,8 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
 
     auto conv_out = std::vector<float>(output_channels * num_intersections);
     auto conv_in = std::vector<float>(output_channels * num_intersections);
+    auto conv_lss = std::vector<float>(output_channels * num_intersections);
+
     auto res = std::vector<float>(output_channels * num_intersections);
     auto intermediate = std::vector<float>(3 * max_intermediates);
     auto pooling = std::vector<float>(3 * max_intermediates); 
@@ -123,8 +125,19 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
         conv_out,
         weights_->input_conv.GetBiases(), true);
 
-    // The residual tower.
+
+    bool use_lss = false;
     const auto residuals =  weights_->residual_blocks;
+    for (int i = 0; i < residuals; ++i) {
+        use_lss |= weights_->tower[i].apply_lss;
+    }
+    if (use_lss) {
+        std::copy(std::begin(conv_out),
+                      std::end(conv_out),
+                      std::begin(conv_lss));
+    }
+
+    // The residual tower.
     for (int i = 0; i < residuals; ++i) {
         const auto tower_ptr = weights_->tower.data() + i;
         const auto outer_channels = weights_->residual_channels;
@@ -172,6 +185,14 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
 
         if (!(tower_ptr->apply_btl)) {
             std::swap(conv_in, res);
+        }
+
+        // Long stride shortcut.
+        if (tower_ptr->apply_lss) {
+            AddSpatialBiases::Forward(
+                board_size, inner_channels,
+                res, zero_vec,
+                conv_lss, false);
         }
 
         std::swap(conv_out, conv_in);
@@ -240,6 +261,13 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                 conv_out,
                 zero_vec,
                 res, true);
+        }
+
+        // Copy it.
+        if (tower_ptr->apply_lss) {
+            std::copy(std::begin(conv_out),
+                          std::end(conv_out),
+                          std::begin(conv_lss));
         }
     }
 

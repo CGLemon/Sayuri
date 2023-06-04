@@ -88,6 +88,8 @@ void CopyToCudaOp(bool fp16, void **cude_op,
 void CopyToHostOp(bool fp16, std::vector<float> &outputs,
                   void **cude_op, void **pinned_op = nullptr);
 
+void DeviceToDevice(bool fp16, void **cude_dest, void **cude_src, size_t size);
+
 } // namespace cuda
 
 #endif

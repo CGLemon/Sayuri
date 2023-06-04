@@ -13,6 +13,10 @@ void AddSpatial(bool fp16, void *data, const void *biases,
                 int bsize, int batch, int channels, int spatial,
                 bool relu, cudaStream_t stream);
 
+void CopyOnDevice(bool fp16, void *dest,
+                  const void *src,
+                  int size, cudaStream_t stream);
+
 class LayerBasic {
 protected:
     CudaHandles *handles_{nullptr};

@@ -273,7 +273,7 @@ __global__ void global_pooling_kernel(T *output, T *input, const T *mask,
         sum_pool_shared[s] = val;
         max_pool_shared[s] = (1.0f-vmask) * (-5000.0f) + val;
 
-         __syncthreads();
+        __syncthreads();
 
         for (int shift = shared_size >> 1; shift > 0; shift >>= 1) {
              if (s < shift) {
@@ -344,7 +344,7 @@ __global__ void head_global_pooling_kernel(T *output, T *input,
         float val = (float)(input[
                         (n * C + c) * spatial + s]);
         pool_shared[s] = val;
-         __syncthreads();
+        __syncthreads();
 
         for (int shift = shared_size >> 1; shift > 0; shift >>= 1) {
              if (s < shift) {
@@ -437,6 +437,25 @@ void se_scale(T *output, const T *input, const T *residual,
 
     se_scale_kernel<<<blocks, block_size, 0, stream>>>(
         output, input, residual, se_biases, mask, batch, channels, spatial, relu);
+
+    ReportCUDAErrors(cudaGetLastError());
+}
+
+template <typename T>
+__global__ void copy_on_device_kernel(T *dest, const T *src, int size) {
+    int i = threadIdx.x + blockDim.x * blockIdx.x;
+    if (i < size) {
+        T val = src[i];
+        dest[i] = val;
+    }
+}
+
+template <typename T>
+void copy_on_device(T *dest, const T *src, int size, cudaStream_t stream) {
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(size, block_size);
+
+    copy_on_device_kernel<<<blocks, block_size, 0, stream>>>(dest, src, size);
 
     ReportCUDAErrors(cudaGetLastError());
 }
@@ -807,6 +826,8 @@ template void se_scale<float>(float *output, const float *input,
                               const float *mask, int batch, int channels,
                               int spatial, bool relu, cudaStream_t stream);
 
+template void copy_on_device<float>(float *dest, const float *src, int size, cudaStream_t stream);
+
 template void winograd3_transform_in<float>(float *V, const float *in, int batch,
                                             int channels, int board_size, cudaStream_t stream);
 
@@ -839,6 +860,8 @@ template void se_scale<half>(half *output, const half *input,
                              const half *residual, const half *se_biases,
                              const half *mask, int batch, int channels,
                              int spatial, bool relu, cudaStream_t stream);
+
+template void copy_on_device<half>(half *dest, const half *src, int size, cudaStream_t stream);
 
 template void winograd3_transform_in<half>(half *V, const half *in, int batch,
                                            int channels, int board_size, cudaStream_t stream);

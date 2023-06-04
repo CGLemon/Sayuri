@@ -100,7 +100,7 @@ private:
         std::array<void*, 2> host_mask_op_;
 
         std::array<void*, 2> cuda_scratch_op_;
-        std::array<void*, 4> cuda_conv_op_;
+        std::array<void*, 5> cuda_conv_op_;
         std::array<void*, 3> cuda_pol_op_;
         std::array<void*, 3> cuda_val_op_;
         std::array<void*, 2> cuda_mask_op_;
