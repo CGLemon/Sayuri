@@ -149,6 +149,7 @@ void Search::TimeSettings(const int main_time,
                           const int byo_yomi_periods) {
     time_control_.TimeSettings(main_time, byo_yomi_time,
                                    byo_yomi_stones, byo_yomi_periods);
+    time_control_.SetLagBuffer(param_->lag_buffer);
 }
 
 void Search::TimeLeft(const int color, const int time, const int stones) {
@@ -267,8 +268,9 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     Timer analysis_timer; // for analysis
 
     // Set the time control.
-    time_control_.SetLagBuffer(param_->lag_buffer);
     time_control_.Clock();
+    time_control_.SetLagBuffer(
+        std::max(param_->lag_buffer, time_control_.GetLagBuffer()));
 
     // Clean the timer.
     timer.Clock();
@@ -366,6 +368,19 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
 
     if (tag & kThinking) {
         time_control_.TookTime(color);
+
+        // Try to adjust the lag buffer.
+        float curr_lag_buf = time_control_.GetLagBuffer();
+        const auto elapsed = timer.GetDuration();
+        const auto thinking_time_with_lag =
+                       thinking_time + curr_lag_buf;
+
+        if (elapsed > thinking_time_with_lag) {
+            const auto diff = elapsed - thinking_time_with_lag;
+            curr_lag_buf = curr_lag_buf + diff / 2.f;
+            time_control_.SetLagBuffer(
+                std::max(param_->lag_buffer, curr_lag_buf));
+        }
     }
     if (tag & kAnalysis) {
         // Output the last analysis verbose because the MCTS may

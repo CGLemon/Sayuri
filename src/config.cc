@@ -70,7 +70,7 @@ void ArgsParser::InitOptionsMap() const {
 
     kOptionsMap["root_policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
-    kOptionsMap["lag_buffer"] << Option::SetOption(0);
+    kOptionsMap["lag_buffer"] << Option::SetOption(0.f);
     kOptionsMap["no_cache"] << Option::SetOption(false); 
     kOptionsMap["early_symm_cache"] << Option::SetOption(false);
     kOptionsMap["symm_pruning"] << Option::SetOption(false);
@@ -691,7 +691,7 @@ void ArgsParser::Parse(Splitter &spt) {
 
     if (const auto res = spt.FindNext("--lag-buffer")) {
         if (IsParameter(res->Get<>())) {
-            SetOption("lag_buffer", res->Get<int>());
+            SetOption("lag_buffer", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

@@ -16,7 +16,8 @@ public:
 
     void TimeLeft(const int color, const int time, const int stones);
 
-    void SetLagBuffer(int lag_buffer);
+    void SetLagBuffer(float lag_buffer_sec);
+    float GetLagBuffer() const;
 
     float GetThinkingTime(int color, int boardsize, int move_num) const;
 
@@ -47,7 +48,7 @@ private:
 
     std::array<bool,  2> in_byo_;
 
-    int lag_buffer_; // centiseconds
+    int lag_buffer_{0}; // centiseconds
 
     Timer timer_;
 

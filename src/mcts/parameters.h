@@ -49,7 +49,7 @@ public:
         reduce_playouts = GetOption<int>("reduce_playouts");
         reduce_playouts_prob = GetOption<float>("reduce_playouts_prob"); 
 
-        lag_buffer = GetOption<int>("lag_buffer");
+        lag_buffer = GetOption<float>("lag_buffer");
         ponder = GetOption<bool>("ponder");
         reuse_tree = GetOption<bool>("reuse_tree");
         friendly_pass = GetOption<bool>("friendly_pass");
@@ -103,7 +103,7 @@ public:
     int resign_playouts;
     int reduce_playouts;
     float reduce_playouts_prob;
-    int lag_buffer;
+    float lag_buffer;
     int expand_threshold;
 
     bool ponder;

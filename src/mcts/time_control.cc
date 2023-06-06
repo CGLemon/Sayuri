@@ -125,12 +125,13 @@ void TimeControl::TookTime(int color) {
     }
 }
 
-void TimeControl::SetLagBuffer(int lag_buffer) {
-    constexpr int kMinLag = 25; // 0.25 second is big enough for CPU
-                                // forward pipe hiccupping.
+void TimeControl::SetLagBuffer(float lag_buffer_sec) {
+    lag_buffer_ = static_cast<int>(lag_buffer_sec * 100.f); // second to centisecond
+    lag_buffer_ = std::max(lag_buffer_, 0);
+}
 
-    lag_buffer *= 100; // second to centisecond
-    lag_buffer_ = lag_buffer < kMinLag ? kMinLag : lag_buffer;
+float TimeControl::GetLagBuffer() const {
+    return static_cast<double>(lag_buffer_) / 100.f;
 }
 
 void TimeControl::Reset() {
@@ -242,7 +243,7 @@ float TimeControl::GetThinkingTime(int color, int boardsize, int move_num) const
     int base_time = std::max(time_remaining - lag_buffer_, 0) / std::max(moves_remaining, 1);
     int inc_time = std::max(extra_time_per_move - lag_buffer_, 0);
 
-    return (float)(base_time + inc_time) / 100.f; // centisecond to second
+    return static_cast<double>(base_time + inc_time) / 100.f; // centisecond to second
 }
 
 
