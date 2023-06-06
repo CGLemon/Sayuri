@@ -98,7 +98,6 @@ set(NEURAL_SOURCES
     ${NEURAL_SOURCES_DIR}/blas/batchnorm.cc
     ${NEURAL_SOURCES_DIR}/blas/biases.cc
     ${NEURAL_SOURCES_DIR}/blas/se_unit.cc
-    ${NEURAL_SOURCES_DIR}/blas/sa_unit.cc
     ${NEURAL_SOURCES_DIR}/blas/blas_forward_pipe.cc
     )
 

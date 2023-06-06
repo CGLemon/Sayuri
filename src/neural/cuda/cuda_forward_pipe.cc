@@ -221,7 +221,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         graph_->tower_conv.emplace_back(cuda::Convolution{});
         graph_->tower_conv.emplace_back(cuda::Convolution{});
         graph_->tower_se.emplace_back(cuda::SEUnit{});
-        graph_->tower_sa.emplace_back(cuda::SAUnit{});
     }
 
     for (int i = 0; i < residuals; ++i) {
@@ -243,7 +242,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
 
         const bool second_use_relu =
                        tower_ptr->apply_btl ||
-                       !(tower_ptr->apply_se || tower_ptr->apply_sa);
+                       !(tower_ptr->apply_se);
         graph_->tower_conv[t_offset+1] = cuda::Convolution(
             &handles_,
             max_batch_,     // max batch size
@@ -265,7 +264,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
             );
 
             const bool post_use_relu =
-                           !(tower_ptr->apply_se || tower_ptr->apply_sa);
+                           !(tower_ptr->apply_se);
             graph_->btl_conv[t_offset+1] = cuda::Convolution(
                 &handles_,
                 max_batch_,     // max batch size
@@ -279,7 +278,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
 
         if (tower_ptr->apply_se) {
             const size_t se_size = tower_ptr->se_size;
-            const bool se_use_relu = !(tower_ptr->apply_sa);
+            const bool se_use_relu = true;
             graph_->tower_se[i] = cuda::SEUnit(
                 &handles_,
                 max_batch_,      // max batch size
@@ -287,15 +286,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
                 outer_channels,  // channels
                 se_size,         // SE size
                 se_use_relu      // relu
-            );
-        }
-        if (tower_ptr->apply_sa) {
-            graph_->tower_sa[i] = cuda::SAUnit(
-                &handles_,
-                max_batch_,      // max batch size
-                board_size_,     // board size
-                outer_channels,  // channels
-                true             // relu
             );
         }
     }
@@ -424,12 +414,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
                 tower_ptr->squeeze.GetBiases(),
                 tower_ptr->excite.GetWeights(),
                 tower_ptr->excite.GetBiases());
-        }
-        if (tower_ptr->apply_sa) {
-            graph_->tower_sa[i].LoadWeights(
-                tower_ptr->sa_conv.GetWeights(),
-                tower_ptr->sa_conv.GetBiases(),
-                scratch_size_, winograd);
         }
     }
 
@@ -674,7 +658,6 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
         // 2nd conv layer
         void *second_skip = (tower_ptr->apply_se ||
-                                 tower_ptr->apply_sa ||
                                  tower_ptr->apply_btl) ?
                                      nullptr : cuda_conv_op_[0];
         graph_->tower_conv[t_offset+1].Forward(
@@ -687,8 +670,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
             std::swap(cuda_conv_op_[2], cuda_conv_op_[3]);
 
             // post-bottleneck
-            void *btl_skip = (tower_ptr->apply_se ||
-                                 tower_ptr->apply_sa) ?
+            void *btl_skip = tower_ptr->apply_se ?
                                      nullptr : cuda_conv_op_[0];
             graph_->btl_conv[t_offset+1].Forward(
                 batch_size,
@@ -700,31 +682,17 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         bool module_skip = false;
         if (tower_ptr->apply_se) {
             // squeeze-and-excitation module
-            void *se_skip = tower_ptr->apply_sa ?
-                                nullptr : cuda_conv_op_[0];
-            void *se_outs = tower_ptr->apply_sa ?
-                                cuda_conv_op_[2] : cuda_conv_op_[0];
+            void *se_skip = cuda_conv_op_[0];
+            void *se_outs = cuda_conv_op_[0];
+
             graph_->tower_se[i].Forward(
                 batch_size,
                 se_outs, cuda_conv_op_[3],
                 se_skip, mask_buf[0], mask_buf[1]);
 
-            if (se_skip) {
-                module_skip = true;
-            } else {
-                std::swap(cuda_conv_op_[3], cuda_conv_op_[2]);
-            }
+            module_skip = true;
         }
 
-        if (tower_ptr->apply_sa) {
-            // spatial attention module
-            graph_->tower_sa[i].Forward(
-                batch_size,
-                cuda_conv_op_[0], cuda_conv_op_[3], cuda_conv_op_[0],
-                mask_buf[0], mask_buf[1], 
-                cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
-            module_skip = true;
-        } 
         if (!module_skip) {
             std::swap(cuda_conv_op_[3], cuda_conv_op_[0]);
         }

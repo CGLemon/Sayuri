@@ -142,30 +142,6 @@ private:
     void *cuda_weights_b2_;
 };
 
-class SAUnit : public LayerBasic {
-public:
-    SAUnit() = default;
-    SAUnit(CudaHandles *handles,
-           const int batch,
-           const int board_size,
-           const int channels,
-           bool ReLU);
-    ~SAUnit();
-
-    void LoadWeights(const std::vector<float> &weights,
-                     const std::vector<float> &biases,
-                     size_t &scratch_size, bool winograd);
-
-    void Forward(const int batch, void *output, void *input,
-                 void *residual, void *mask, void *sqrt_mask,
-                 void *scratch, void *scratch_other, size_t scratch_size);
-private:
-    int channels_;
-    Convolution conv_;
-
-    std::array<void *, 3> cuda_op_;
-};
-
 } // namespace cuda
 
 #endif

@@ -2,7 +2,6 @@
 #include "neural/blas/convolution.h"
 #include "neural/blas/batchnorm.h"
 #include "neural/blas/se_unit.h"
-#include "neural/blas/sa_unit.h"
 #include "neural/blas/fullyconnect.h"
 #include "neural/blas/biases.h"
 #include "neural/blas/winograd_convolution3.h"
@@ -52,7 +51,6 @@ void BlasForwardPipe::Load(std::shared_ptr<DNNWeights> weights) {
 
 OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
 
-    using Convolution7 = Convolution<7>;
     using Convolution3 = Convolution<3>;
     using Convolution1 = Convolution<1>;
 
@@ -83,10 +81,6 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
             Convolution3::GetWorkspaceSize(board_size, max_channels);
         workspace1_size = 1; // not used.
     }
-
-    // The SA unit workspace size.
-    workspace0_size = std::max(
-        workspace0_size, (int)Convolution7::GetWorkspaceSize(board_size, 3));
 
     auto workspace0 = std::vector<float>(workspace0_size);
     auto workspace1 = std::vector<float>(workspace1_size);
@@ -213,20 +207,21 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                 workspace0, conv_out);
         }
 
-        bool already_skip = false;
         auto &last_biases = tower_ptr->apply_btl ?
                                 tower_ptr->post_btl_conv.GetBiases() :
                                 tower_ptr->conv2.GetBiases();
+        auto &last_skip = tower_ptr->apply_se ? zero_vec : res;
+        bool last_relu = !(tower_ptr->apply_se);
+
         AddSpatialBiases::Forward(
             board_size, outer_channels,
             conv_out,
-            last_biases, false);
+            last_biases,
+            last_skip, last_relu);
 
         // The SE process.
         if (tower_ptr->apply_se) {
-            bool se_relu = !(tower_ptr->apply_sa);
-            auto &se_skip = se_relu ? res : zero_vec;
-            already_skip = se_relu;
+            auto &se_skip = res;
 
             const size_t se_size = tower_ptr->se_size;
             SEUnit::Forward(
@@ -235,31 +230,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                 tower_ptr->squeeze.GetWeights(),
                 tower_ptr->squeeze.GetBiases(),
                 tower_ptr->excite.GetWeights(),
-                tower_ptr->excite.GetBiases(),
-                se_relu);
-        }
-
-        // The SA process.
-        if (tower_ptr->apply_sa) {
-            bool sa_relu = true;
-            auto &sa_skip = sa_relu ? res : zero_vec;
-            already_skip = sa_relu;
-
-            SAUnit::Forward(
-                board_size, outer_channels,
-                conv_out, sa_skip,
-                tower_ptr->sa_conv.GetWeights(),
-                tower_ptr->sa_conv.GetBiases(),
-                workspace0, sa_relu);
-        }
-
-        // Try to merge the skip shortcut.
-        if (!already_skip) {
-            AddSpatialBiases::Forward(
-                board_size, outer_channels,
-                conv_out,
-                zero_vec,
-                res, true);
+                tower_ptr->excite.GetBiases(), true);
         }
     }
 

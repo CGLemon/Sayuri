@@ -42,7 +42,6 @@ private:
             std::vector<cuda::Convolution> btl_conv;
             std::vector<cuda::Convolution> tower_conv;
             std::vector<cuda::SEUnit> tower_se;
-            std::vector<cuda::SAUnit> tower_sa;
 
             // policy head 
             cuda::Convolution p_ex_conv;

@@ -707,66 +707,6 @@ SEUnit::~SEUnit() {
     }
 }
 
-SAUnit::SAUnit(CudaHandles *handles,
-               const int max_batch,
-               const int board_size,
-               const int channels,
-               bool ReLU) {
-    width_ = board_size;
-    height_ = board_size;
-    spatial_size_ = width_ * height_;
-    relu_ = ReLU;
-
-    fp16_ = handles->fp16;
-    maxbatch_ = max_batch;
-    channels_ = channels;
-    loaded_ = false;
-    handles_ = handles;
-
-    conv_ = Convolution(
-        handles, maxbatch_, board_size,
-        7, 3, 1, false);
-}
-
-void SAUnit::LoadWeights(const std::vector<float> &weights,
-                         const std::vector<float> &biases,
-                         size_t &scratch_size, bool winograd) {
-    if (loaded_) { 
-        return;
-    }
-
-    const size_t pool_scratch_size  = maxbatch_ * 3 * spatial_size_;
-    const size_t conv_out_size  = maxbatch_ * 1 * spatial_size_;
-
-    MallocCudaOp(fp16_, &(cuda_op_[0]), pool_scratch_size);
-    MallocCudaOp(fp16_, &(cuda_op_[1]), conv_out_size);
-
-    conv_.LoadWeights(weights, biases, scratch_size, winograd);
-    loaded_ = true;
-}
-
-void SAUnit::Forward(const int batch, void *output, void *input,
-                     void *residual, void *mask, void *sqrt_mask,
-                     void *scratch, void *scratch_other, size_t scratch_size) {
-    ChannelPooling(
-        fp16_, cuda_op_[0], input, sqrt_mask, batch,
-        channels_, spatial_size_, handles_->stream);
-    void *null_op = nullptr;
-    conv_.Forward(
-        batch, cuda_op_[1], cuda_op_[0], null_op, mask,
-        scratch, scratch_other, scratch_size);
-    SaScale(
-        fp16_, output, input, residual, cuda_op_[1],
-        batch, channels_, spatial_size_, relu_, handles_->stream);
-}
-
-SAUnit::~SAUnit() {
-    if (loaded_) {
-        ReportCUDAErrors(cudaFree(cuda_op_[0]));
-        ReportCUDAErrors(cudaFree(cuda_op_[1]));
-    }
-}
-
 } // namespace cuda
 
 #endif
