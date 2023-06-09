@@ -113,40 +113,6 @@ void SeScale(bool fp16, void *output, const void *input,
     }
 }
 
-void ChannelPooling(bool fp16, void *output, void *input, const void *sqrt_mask,
-                    int batch, int channels, int spatial, cudaStream_t stream) {
-    if (fp16) {
-#ifdef ENABLE_FP16
-        channel_pooling(
-            (half *)output, (half *)input, (const half *)sqrt_mask,
-            batch, channels, spatial, stream);
-#endif
-    } else {
-        channel_pooling(
-            (float *)output, (float *)input, (const float *)sqrt_mask,
-            batch, channels, spatial, stream);
-    }
-}
-
-void SaScale(bool fp16, void *output, const void *input,
-             const void *residual, const void *sa_biases,
-             int batch, int channels, int spatial,
-             bool relu, cudaStream_t stream) {
-    if (fp16) {
-#ifdef ENABLE_FP16
-        sa_scale(
-            (half *)output, (const half *)input, 
-            (const half*)residual, (const half *)sa_biases,
-            batch, channels, spatial, relu, stream);
-#endif
-    } else {
-        sa_scale(
-            (float *)output, (const float *)input, 
-            (const float*)residual, (const float *)sa_biases,
-            batch, channels, spatial, relu, stream);
-    }
-}
-
 void Winograd3TransformIn(bool fp16, void *output, const void *input,
                           int batch, int channels, int board_size, cudaStream_t stream) {
     if (fp16) {
