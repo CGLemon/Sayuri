@@ -58,6 +58,9 @@ public:
 
     void SetHandicap(int handicap);
 
+    bool PlayHandicapStones(std::vector<int> movelist_vertex,
+                            bool kata_like_handicap_style);
+
     // Compute black final score with Tromp Taylor rule.
     float GetFinalScore(float bonus = 0) const;
 

@@ -126,7 +126,6 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
     } else if (const auto res = spt.Find("fixed_handicap", 0)) {
         auto handicap = -1;
         if (const auto input = spt.GetWord(1)) {
-            agent_->GetState().ClearBoard();
             handicap = input->Get<int>();
         }
         if (handicap >= 1 &&
@@ -144,31 +143,29 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         int max_handicaps = network_valid ?
                                 agent_->GetState().GetNumIntersections() / 4 :
                                 9;
+        auto stones_list = std::vector<int>{};
 
         if (handicaps >= 1 && handicaps <= max_handicaps) {
-            agent_->GetState().ClearBoard();
-            agent_->GetState().SetHandicap(handicaps);
-        } else {
-            handicaps = -1; // disable handicap
-        }
-
-        auto stone_list = std::vector<int>{};
-        if (network_valid) {
-            for (int i = 0; i < handicaps; ++i) {
-                const int vtx = agent_->GetNetwork().GetBestPolicyVertex(agent_->GetState(), false);
-                agent_->GetState().AppendMove(vtx, kBlack);
-                stone_list.emplace_back(vtx);
+            if (network_valid) {
+                for (int i = 0; i < handicaps; ++i) {
+                    const int vtx =
+                        agent_->GetNetwork().GetBestPolicyVertex(
+                            agent_->GetState(), false);
+                    stones_list.emplace_back(vtx);
+                    // agent_->GetState().ClearBoard();
+                    agent_->GetState().PlayHandicapStones(stones_list, true);
+                }
+            } else {
+                stones_list = agent_->GetState().PlaceFreeHandicap(handicaps);
             }
-        } else {
-            stone_list = agent_->GetState().PlaceFreeHandicap(handicaps);
         }
 
-        if (!stone_list.empty()) {
+        if (!stones_list.empty()) {
             auto vtx_list = std::ostringstream{};
-            for (size_t i = 0; i < stone_list.size(); i++) {
-                auto vtx = stone_list[i];
+            for (size_t i = 0; i < stones_list.size(); i++) {
+                const auto vtx = stones_list[i];
                 vtx_list << agent_->GetState().VertexToText(vtx);
-                if (i != stone_list.size() - 1) vtx_list << ' ';
+                if (i != stones_list.size() - 1) vtx_list << ' ';
             }
             out << GtpSuccess(vtx_list.str());
         } else {

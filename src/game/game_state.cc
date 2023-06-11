@@ -382,35 +382,36 @@ bool GameState::SetFixdHandicap(int handicap) {
         return false;
     }
 
+    auto movelist_vertex = std::vector<int>{};
+
     if (handicap >= 2) {
-        AppendMove(GetVertex(low, low),  kBlack);
-        AppendMove(GetVertex(high, high),  kBlack);
+        movelist_vertex.emplace_back(GetVertex(low, low));
+        movelist_vertex.emplace_back(GetVertex(high, high));
     }
 
     if (handicap >= 3) {
-        AppendMove(GetVertex(high, low), kBlack);
+        movelist_vertex.emplace_back(GetVertex(high, low));
     }
 
     if (handicap >= 4) {
-        AppendMove(GetVertex(low, high), kBlack);
+        movelist_vertex.emplace_back(GetVertex(low, high));
     }
 
     if (handicap >= 5 && handicap % 2 == 1) {
-        AppendMove(GetVertex(mid, mid), kBlack);
+        movelist_vertex.emplace_back(GetVertex(mid, mid));
     }
 
     if (handicap >= 6) {
-        AppendMove(GetVertex(low, mid), kBlack);
-        AppendMove(GetVertex(high, mid), kBlack);
+        movelist_vertex.emplace_back(GetVertex(low, mid));
+        movelist_vertex.emplace_back(GetVertex(high, mid));
     }
 
     if (handicap >= 8) {
-        AppendMove(GetVertex(mid, low), kBlack);
-        AppendMove(GetVertex(mid, high), kBlack);
+        movelist_vertex.emplace_back(GetVertex(mid, low));
+        movelist_vertex.emplace_back(GetVertex(mid, high));
     }
 
-    SetHandicap(handicap);
-    SetToMove(kWhite);
+    PlayHandicapStones(movelist_vertex, true);
 
     return true;
 }
@@ -422,33 +423,54 @@ bool GameState::SetFreeHandicap(std::vector<std::string> movelist) {
                            return TextToVertex(text);
                        }
                    );
+    return PlayHandicapStones(movelist_vertex, true);
+}
 
+std::vector<int> GameState::PlaceFreeHandicap(int handicap) {
+    auto stones_list = std::vector<int>{};
+    if (SetFixdHandicap(handicap)) {
+        const int board_size = GetBoardSize();
+        for (int x = 0; x < board_size; ++x) {
+            for (int y = 0; y < board_size; ++y) {
+                const auto vtx = GetVertex(x, y);
+                if (GetState(vtx) == kBlack) {
+                    stones_list.emplace_back(vtx);
+                }
+            }
+        }
+    }
+    return stones_list;
+}
+
+bool GameState::PlayHandicapStones(std::vector<int> movelist_vertex,
+                                   bool kata_like_handicap_style) {
     auto fork_state = *this;
+    fork_state.ClearBoard();
 
-    for (const auto vtx : movelist_vertex) {
+    const int size = movelist_vertex.size();
+
+    for (int i = 0; i < size; ++i) {
+        const auto vtx = movelist_vertex[i];
         if (fork_state.IsLegalMove(vtx, kBlack)) {
-            fork_state.AppendMove(vtx, kBlack);
+            if (i == size-1 && kata_like_handicap_style) {
+                // The last handicap move is not appending move
+                // in the KataGo's SGF.
+                fork_state.PlayMove(vtx, kBlack);
+            } else {
+                fork_state.AppendMove(vtx, kBlack);
+            }
         } else {
             return false;
         }
     }
 
+    // Legal status. Copy the status.
     *this = fork_state;
 
-    SetHandicap(movelist.size());
+    SetHandicap(movelist_vertex.size());
     SetToMove(kWhite);
 
     return true;
-}
-
-std::vector<int> GameState::PlaceFreeHandicap(int handicap) {
-    auto stone_list = std::vector<int>{};
-    if (SetFixdHandicap(handicap)) {
-        for (auto m : append_moves_) {
-            stone_list.emplace_back(m.first);
-        }
-    }
-    return stone_list;
 }
 
 std::vector<int> GameState::GetOwnership() const {
