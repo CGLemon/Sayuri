@@ -33,6 +33,8 @@ public:
         random_min_visits = GetOption<int>("random_min_visits");
         random_moves_factor = GetOption<float>("random_moves_factor");
 
+        gumbel_c_visit = GetOption<float>("gumbel_c_visit");
+        gumbel_c_scale = GetOption<float>("gumbel_c_scale");
         gumbel_considered_moves = GetOption<int>("gumbel_considered_moves");
         gumbel_playouts = GetOption<int>("gumbel_playouts");
         gumbel = GetOption<bool>("gumbel");
@@ -85,6 +87,8 @@ public:
     float cpuct_dynamic_k_base;
     float draw_factor;
 
+    float gumbel_c_visit;
+    float gumbel_c_scale;
     int gumbel_considered_moves;
     int gumbel_playouts;
     bool gumbel;

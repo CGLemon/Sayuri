@@ -81,6 +81,8 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["random_min_visits"] << Option::SetOption(1);
     kOptionsMap["random_moves_factor"] << Option::SetOption(0.f);
 
+    kOptionsMap["gumbel_c_visit"] << Option::SetOption(50.f);
+    kOptionsMap["gumbel_c_scale"] << Option::SetOption(0.1f);
     kOptionsMap["gumbel_considered_moves"] << Option::SetOption(16);
     kOptionsMap["gumbel_playouts"] << Option::SetOption(400);
     kOptionsMap["gumbel"] << Option::SetOption(false);
@@ -405,6 +407,20 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.Find({"--dirichlet-noise", "--noise", "-n"})) {
         SetOption("dirichlet_noise", true);
         spt.RemoveWord(res->Index());
+    }
+
+    if (const auto res = spt.FindNext("--gumbel-c-visit")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("gumbel_c_visit", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--gumbel-c-scale")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("gumbel_c_scale", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
     }
 
     if (const auto res = spt.FindNext("--gumbel-considered-moves")) {

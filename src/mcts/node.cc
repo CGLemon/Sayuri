@@ -1370,7 +1370,11 @@ float Node::NormalizeCompletedQ(const float completed_q,
                                 const int max_visits) const {
     // The transformation progressively increases the scale for
     // Q value and reduces the effect of the prior policy.
-    return (50.f + max_visits) * 0.1f * completed_q;
+    const auto c_visit = param_->gumbel_c_visit;
+    const auto c_scale = param_->gumbel_c_scale;
+
+    return (c_visit + max_visits) *
+               c_scale * completed_q;
 }
 
 std::vector<float> Node::GetProbLogitsCompletedQ(GameState &state) {
