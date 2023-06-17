@@ -7,7 +7,7 @@
 
 ## Let's ROCK!
 
-Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. She is strongly inspired by Leela Zero and KataGo. The board data structure, search algorithm and network format are borrowed from Leela Zero in the beginning. Current version follows the KataGo research, the engine supports variable komi and board size now. Some methods you may see my HackMD article (in chinese).
+Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. She is strongly inspired by Leela Zero and KataGo. The board data structure, search algorithm and network format are borrowed from Leela Zero in the beginning. Current version follows the KataGo research, the engine supports variable komi and board size now. Some methods you may see my HackMD articles (in chinese).
 
 * [開發日誌](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/BJgfay0Yc)
 * [AlphaZero 之加速演算法實作](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJI9_p70i)
@@ -16,7 +16,7 @@ Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network a
 
 * Ubuntu, MacOS or Windows
 * GCC, Clang, must support C++14 or higher
-* CMake 3.15 or later
+* CMake 3.15 or higher
 * Optional: Eigen or OpenBLAS library
 * Optional: CUDA 10.x - 12.x library
 * Optional: cuDNN 7.x or 8.x library
@@ -41,15 +41,15 @@ or
 
     $ cmake .. -DBLAS_BACKEND=EIGEN
 
-Accelerate the network forwarding pipe by GPUs. CUDA is required. It is the faster backend.
+Accelerate the network forwarding pipe by GPUs. CUDA is required. It should be as faster as cuDNN backend.
 
     $ cmake .. -DBLAS_BACKEND=CUDA
 
-Accelerate the network forwarding pipe by GPUs. CUDA and cuDNN are both required. This backend is much steady but may be slower than CUDA-only.
+Accelerate the network forwarding pipe by GPUs. CUDA and cuDNN are both required. This backend is much steady than CUDA-only backend.
 
     $ cmake .. -DBLAS_BACKEND=CUDNN
 
-Compile a bigger board size version. It will use the default size if we set it as 0. 
+Compile a bigger board size version. Set it as 0 to disable this option. 
 
     $ cmake .. -DBOARD_SIZE=25
 
@@ -57,7 +57,7 @@ Disable the FP16 CUDA code if your CUDA version doesn't support for it.
 
     $ cmake .. -DDISABLE_FP16=1
 
-Save the compressed training data file. It can save many memory usage in the self-play.
+Compress the training data file. It can save many memory usage in the self-play process.
 
     $ cmake .. -DUSE_ZLIB=1
 
@@ -86,13 +86,13 @@ You may download the SL weights file, opening book and patterns from [v0.3](http
 
 <br/>
 
-Download last RL weights file from [zero](https://drive.google.com/drive/folders/1PlPTOH1amP3J7HR5uxi9Q_Dd_CL9rEX8?usp=share_link) directory. The file name looks like  ```zero-10k.bin.txt```. The ```10k``` means it played 10000 self-play games. The self-play note is [here](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJew5OFci).
+Download the last RL weights file from [zero](https://drive.google.com/drive/folders/1PlPTOH1amP3J7HR5uxi9Q_Dd_CL9rEX8?usp=share_link) directory. The file name looks like  ```zero-10k.bin.txt```. The ```10k``` means it played 10000 self-play games. The self-play note is [here](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJew5OFci).
 
 ## Engine Arguments
 
 Here are some useful arguments which you may need.
 
-| Arguments               | Param  | Description                                    |
+| Arguments               | Type   | Description                                    |
 | :---------------------- | :----- | :--------------------------------------------- |
 |  --weights, -w          | string | File with network weights.                     |
 |  --patterns             | string | File with patterns.                            |
@@ -106,7 +106,7 @@ Here are some useful arguments which you may need.
 |  --analysis-verbose, -a | None   | Output more search diagnostic verbose.         |
 |  --quiet, -q            | None   | Disable all diagnostic verbose.                |
 |  --ponder               | None   | Thinking on opponent's time.                   |
-|  --friendly-pass        | None   | Do pass move if the engine wins the game.      |
+|  --friendly-pass        | None   | Play pass move if the engine won the game.     |
 |  --reuse-tree           | None   | Will reuse the sub-tree.                       |
 |  --no-dcnn              | None   | Disable network, very weak.                    |
 |  --help, -h             | None   | Show the more arguments.                       |
@@ -133,7 +133,7 @@ Example setting 4: use the GPU 0 and GPU 2
 
     $ ./Sayuri -w <weights file> --gpu 0 --gpu 2
 
-Example setting 5: disable the network forwarding pipe, arond 5k on 9x9, 10k on 19x19. The ```--lcb-reduction``` should be set ```1```
+Example setting 5: disable the network forwarding pipe, arond 5k on 9x9, 10k on 19x19. The ```--lcb-reduction``` should be set as ```1```
 
     $ ./Sayuri --patterns <patterns file> --lcb-reduction 1 --no-dcnn
 
