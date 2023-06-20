@@ -1468,10 +1468,24 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
         min_completed_q = std::min(min_completed_q, completed_q);
     }
 
-    // Rescale the the completed Q.
-    for (auto &q : completed_q_list) {
-        q = (q - min_completed_q) /
-                std::max(max_completed_q - min_completed_q, 1e-8f);
+    // Shift the completed Q.
+    if (min_completed_q <= 0.f) {
+        const auto shift = (-min_completed_q);
+        for (auto &q : completed_q_list) {
+            q += shift;
+        }
+        max_completed_q += shift;
+        min_completed_q += shift;
+    }
+
+    // Rescale the completed Q.
+    if (max_completed_q >= 1.f) {
+        const auto factor = 1.f/max_completed_q;
+        for (auto &q : completed_q_list) {
+            q *= factor;
+        }
+        max_completed_q *= factor;
+        min_completed_q *= factor;
     }
 
     // Apply the completed Q with policy.
