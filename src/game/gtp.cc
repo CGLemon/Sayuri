@@ -679,6 +679,30 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             predict_out << Format("the accuracy %.2f%", acc * 100);
             out << GtpSuccess(predict_out.str());
         }
+    } else if (const auto res = spt.Find("freeze_search", 0)) {
+        int playouts = -1;
+
+        if (const auto p = spt.GetWord(1)) {
+            playouts = std::max(p->Get<int>(), 1);
+        }
+
+        if (playouts > 0) {
+            // clean current state
+            agent_->GetSearch().ReleaseTree();
+            agent_->GetNetwork().ClearCache();
+            agent_->GetSearch().Computation(playouts, Search::kNullTag);
+            out << GtpSuccess("Done");
+        } else {
+            out << GtpFail("invalid playouts");
+        }
+    } else if (const auto res = spt.Find("debug_moves", 0)) {
+        auto moves = std::vector<int>{};
+        for (auto i = size_t{1}; i < spt.GetCount(); ++i) {
+            auto move = spt.GetWord(i)->Get<>();
+            moves.emplace_back(agent_->GetState().TextToVertex(move));
+        }
+        out << GtpSuccess(
+                   agent_->GetSearch().GetDebugMoves(moves));
     } else if (const auto res = spt.Find("gogui-analyze_commands", 0)) {
         auto gogui_cmds = std::ostringstream{};
 

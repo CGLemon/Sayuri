@@ -112,6 +112,10 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "prediction_accuracy",
 
+    "freeze_search",
+
+    "debug_moves",
+
     "gogui-analyze_commands",
 
     "gogui-wdl_rating",

@@ -195,6 +195,7 @@ public:
     float ComputeKlDivergence();
     float ComputeTreeComplexity();
 
+    std::string GetPathVerboseString(GameState &state, int color, std::vector<int> &moves);
     std::string ToAnalysisString(GameState &state, const int color, AnalysisConfig &config);
     std::string OwnershipToString(GameState &state, const int color, std::string name, Node *node);
     std::string ToVerboseString(GameState &state, const int color);

@@ -796,6 +796,40 @@ float Node::GetLcb(const int color) const {
     return mean - z * stddev;
 }
 
+std::string Node::GetPathVerboseString(GameState &state, int color,
+                                       std::vector<int> &moves) {
+    auto curr_node = Get();
+    auto out = std::ostringstream{};
+    int depth = 0;
+
+    auto ColorToText = [](int color) {
+        if (color == kBlack) {
+            return std::string{"black"};
+        }
+        return std::string{"white"};
+    };
+
+    while (depth < (int)moves.size() && curr_node) {
+        curr_node = curr_node->GetChild(moves[depth++]);
+        color = !color;
+    }
+    if (curr_node) {
+        if (curr_node->GetVisits() < 1) {
+            out << "edge";
+        } else if (curr_node->GetVisits() == 1) {
+            out << "node";
+        } else {
+            out << "node" << std::endl;
+            out << "To move color is " << ColorToText(color) << std::endl;
+            out << curr_node->ToVerboseString(state, color);
+            out << "end";
+        }
+    } else {
+        out << "not a node/edge";
+    }
+    return out.str();
+}
+
 std::string Node::ToVerboseString(GameState &state, const int color) {
     auto out = std::ostringstream{};
     const auto lcblist = GetLcbUtilityList(color);

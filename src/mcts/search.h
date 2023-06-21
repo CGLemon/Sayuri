@@ -167,6 +167,8 @@ public:
     // Release the whole trees.
     void ReleaseTree();
 
+    std::string GetDebugMoves(std::vector<int> moves);
+
 private:
     // Try to reuse the sub-tree.
     bool AdvanceToNewRootState();

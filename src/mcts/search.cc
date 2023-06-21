@@ -1067,3 +1067,8 @@ int Search::GetExpandThreshold(GameState &state) const {
     // select the little value becuase they apply RAVE method.
     return std::max(20 + 2 * (board_size-9), 20);
 }
+
+std::string Search::GetDebugMoves(std::vector<int> moves) {
+    return root_node_->GetPathVerboseString(
+               root_state_, root_state_.GetToMove(), moves);
+}
