@@ -679,7 +679,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             predict_out << Format("the accuracy %.2f%", acc * 100);
             out << GtpSuccess(predict_out.str());
         }
-    } else if (const auto res = spt.Find("freeze_search", 0)) {
+    } else if (const auto res = spt.Find("debug_search", 0)) {
         int playouts = -1;
 
         if (const auto p = spt.GetWord(1)) {

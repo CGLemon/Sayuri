@@ -112,7 +112,7 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "prediction_accuracy",
 
-    "freeze_search",
+    "debug_search",
 
     "debug_moves",
 
