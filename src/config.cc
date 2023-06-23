@@ -177,6 +177,18 @@ void ArgsParser::InitBasicParameters() const {
                       as_default);
     }
 
+    bool already_set_lagbuffer = !IsOptionDefault("lag_buffer");
+    if (!already_set_lagbuffer) {
+        float lag_buffer_base = 0.25f;
+        if (use_gpu) {
+            SetOption("lag_buffer", lag_buffer_base);
+        } else {
+            // The time of CPU hiccup is longer than GPU backend. We
+            // a bigger value.
+            SetOption("lag_buffer", 2 * lag_buffer_base);
+        }
+    }
+
     // Parse the search mode.
     auto search_mode = GetOption<std::string>("search_mode");
  

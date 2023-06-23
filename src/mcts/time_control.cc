@@ -201,7 +201,19 @@ void TimeControl::TimeStream(std::ostream &out, int color) const {
     out << std::setfill(' ');
 }
 
-float TimeControl::GetThinkingTime(int color, int boardsize, int move_num) const {
+float TimeControl::GetBufferEffect(int color, int boardsize, int move_num) const {
+    if (IsInfiniteTime(color)) {
+        return 0.f;
+    }
+    float t1 = GetThinkingTime(
+                   color, boardsize, move_num, true);
+    float t2 = GetThinkingTime(
+                   color, boardsize, move_num, false);
+    return std::max(t2 - t1, 0.f);
+}
+
+float TimeControl::GetThinkingTime(int color, int boardsize,
+                                   int move_num, bool use_lag_buffer) const {
     assert(color == kBlack || color == kWhite);
 
     if(IsInfiniteTime(color)) {
@@ -240,12 +252,14 @@ float TimeControl::GetThinkingTime(int color, int boardsize, int move_num) const
         time_remaining = maintime_left_[color] + byo_extra;
     }
 
-    int base_time = std::max(time_remaining - lag_buffer_, 0) / std::max(moves_remaining, 1);
-    int inc_time = std::max(extra_time_per_move - lag_buffer_, 0);
+    int lag_buffer_cs = use_lag_buffer ?
+                            lag_buffer_ : 0;
+    int base_time = std::max(time_remaining - lag_buffer_cs, 0) /
+                        std::max(moves_remaining, 1);
+    int inc_time = std::max(extra_time_per_move - lag_buffer_cs, 0);
 
     return static_cast<double>(base_time + inc_time) / 100.f; // centisecond to second
 }
-
 
 bool TimeControl::IsTimeOver(int color) const {
     if (maintime_left_[color] > 0 ||

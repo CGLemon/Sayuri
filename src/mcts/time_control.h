@@ -18,8 +18,10 @@ public:
 
     void SetLagBuffer(float lag_buffer_sec);
     float GetLagBuffer() const;
+    float GetBufferEffect(int color, int boardsize, int move_num) const;
 
-    float GetThinkingTime(int color, int boardsize, int move_num) const;
+    float GetThinkingTime(int color, int boardsize,
+                          int move_num, bool use_lag_buffer=true) const;
 
     void Clock();
     void TookTime(int color);

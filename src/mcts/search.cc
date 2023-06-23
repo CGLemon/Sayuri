@@ -281,10 +281,15 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     const float bound_time = (param_->const_time > 0 &&
                                  time_control_.IsInfiniteTime(color)) ?
                                      param_->const_time : std::numeric_limits<float>::max();
-
     const auto thinking_time = std::min(
                                    bound_time,
-                                   time_control_.GetThinkingTime(color, board_size, move_num));
+                                   time_control_.GetThinkingTime(
+                                       color, board_size, move_num));
+
+    // Will be zero if time mananger is invalid.
+    const float buffer_effect = time_control_.GetBufferEffect(
+                                    color, board_size, move_num);
+
     PrepareRootNode();
 
     if (param_->analysis_verbose) {
@@ -369,15 +374,24 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     if (tag & kThinking) {
         time_control_.TookTime(color);
 
-        // Try to adjust the lag buffer.
+        // Try to adjust the lag buffer. Avoid to be time-out for
+        // the last move.
         float curr_lag_buf = time_control_.GetLagBuffer();
         const auto elapsed = timer.GetDuration();
+
+        // Compute a conservative thinking time with lag buffer.
         const auto thinking_time_with_lag =
-                       thinking_time + curr_lag_buf;
+                       thinking_time + std::max(
+                                           0.75f * buffer_effect,
+                                           buffer_effect - 1.0f);
 
         if (elapsed > thinking_time_with_lag) {
             const auto diff = elapsed - thinking_time_with_lag;
-            curr_lag_buf = curr_lag_buf + diff / 2.f;
+
+            // Give it a more conservative time buffer.
+            curr_lag_buf = curr_lag_buf + std::min(
+                                              1.5f * diff,
+                                              1.0f + diff);
             time_control_.SetLagBuffer(
                 std::max(param_->lag_buffer, curr_lag_buf));
         }
