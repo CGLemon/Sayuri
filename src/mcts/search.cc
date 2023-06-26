@@ -817,16 +817,15 @@ int Search::GetSelfPlayMove() {
 
 void Search::TryPonder() {
     if (param_->ponder) {
+        // The ponder mode always reuses the tree.
         Computation(GetPonderPlayouts(), kPonder);
     }
 }
 
 int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
-    // Analysis mode.
     auto analysis_tag = kAnalysis;
-
-    // Ponder mode always reuse the tree.
-    auto reuse_tag = (param_->reuse_tree || ponder) ? kNullTag : kUnreused;
+    auto reuse_tag = param_->reuse_tree ?
+                         kNullTag : kUnreused;
     auto ponder_tag = ponder ? kPonder : kThinking;
 
     auto tag = reuse_tag | ponder_tag | analysis_tag;
@@ -838,7 +837,7 @@ int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
                                       : max_playouts_;
     auto result = Computation(playouts, tag);
 
-    // Disable the reusing the tree.
+    // Disable to reuse the tree for next move.
     if (analysis_config_.MoveRestrictions()) {
         ReleaseTree();
     }
