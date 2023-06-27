@@ -177,6 +177,7 @@ void ArgsParser::InitBasicParameters() const {
                       as_default);
     }
 
+   // Set the lag buffer time.
     bool already_set_lagbuffer = !IsOptionDefault("lag_buffer");
     if (!already_set_lagbuffer) {
         float lag_buffer_base = 0.25f;
@@ -835,7 +836,7 @@ void ArgsParser::DumpHelper() const {
                 << "\t--batch-size, -b <integer>\n"
                 << "\t\tThe number of batches for a single evaluation. Set 0 will select a reasonable number.\n\n"
 
-                << "\t--lag-buffer <integer>\n"
+                << "\t--lag-buffer <float>\n"
                 << "\t\tSafety margin for time usage in seconds.\n\n"
 
                 << "\t--score-utility-factor <float>\n"

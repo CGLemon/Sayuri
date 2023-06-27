@@ -1388,9 +1388,10 @@ void Node::ComputeNodeCount(size_t &nodes, size_t &edges) {
 }
 
 float Node::GetGumbelQValue(int color, float parent_score) const {
-    // Get non-normalized complete Q value. In the original
-    // paper, it is Q value. We mixe Q value and score lead
-    // in order to optimize the move probabilities.
+    // Get non-transform complete Q value. In the original
+    // paper, it is Q value. We mix Q value and score lead
+    // in order to optimize the move probabilities. Make it
+    // playing the best move.
     const auto score_utility_div = param_->score_utility_div;
     const auto score_utility_factor = param_->score_utility_factor;
     const auto utility = score_utility_factor *
@@ -1400,7 +1401,7 @@ float Node::GetGumbelQValue(int color, float parent_score) const {
     return mixed_q;
 }
 
-float Node::NormalizeCompletedQ(const float completed_q,
+float Node::TransformCompletedQ(const float completed_q,
                                 const int max_visits) const {
     // The transformation progressively increases the scale for
     // Q value and reduces the effect of the prior policy.
@@ -1502,7 +1503,8 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
         min_completed_q = std::min(min_completed_q, completed_q);
     }
 
-    // Shift the completed Q.
+    // Shift the completed Q. Be sure that the completed Q
+    // is bigger than zero.
     if (min_completed_q <= 0.f) {
         const auto shift = (-min_completed_q);
         for (auto &q : completed_q_list) {
@@ -1512,7 +1514,8 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
         min_completed_q += shift;
     }
 
-    // Rescale the completed Q.
+    // Rescale the completed Q. Be sure that the completed Q
+    // is lower than one.
     if (max_completed_q >= 1.f) {
         const auto factor = 1.f/max_completed_q;
         for (auto &q : completed_q_list) {
@@ -1534,12 +1537,15 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
 
         const float logits = SafeLog(prob[idx]);
         const float completed_q = completed_q_list[completed_q_idx++];
-        logits_q[idx] = logits + NormalizeCompletedQ(
+
+        // Transform the Completed Q value because it makes
+        // policy logit and Q value balance.
+        logits_q[idx] = logits + TransformCompletedQ(
                                      completed_q, max_visits);
     }
     prob = Softmax(logits_q, 1.f);
 
-    // Prune the bad policy.
+    // Prune the bad policy and rescale the policy.
     double psize = prob.size();
     double noise_threshold = 1.f/(psize * psize);
     double o = 0.f;
@@ -1560,13 +1566,14 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
                                const int color,
                                const int root_visits,
                                const int max_visists,
-                               const int considered_moves, const float mval,
+                               const int considered_moves,
+                               const float logit_zero,
                                bool only_max_visit) {
 
     // The variant of Sequential Halving algorithm. The input N playouts
-    // is always log2(considered moves) * (considered moves) for each
-    // epoch. It is same as Sequential Halving with Gumbel algorithm if
-    // the playous is low.
+    // is always '(log2(considered moves) + 1) * (considered moves)' for
+    // each epoch. The variant algorithm is same as Sequential Halving if
+    // the total playous is lower than this value.
     //
     // Round 1.
     // distribution -> 1 | 1 | 1 | 1
@@ -1619,7 +1626,7 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
     }
 
     const auto parent_score = GetFinalScore(color);
-    const int idx = offset + root_visits%width;
+    const int idx = offset + root_visits % width;
     const int considered_visists =
         only_max_visit ?
             max_visists :
@@ -1638,13 +1645,18 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
         if (visits == considered_visists) {
             if (visits > 0) {
                 gumbel_logits[node->GetVertex()] +=
-                    NormalizeCompletedQ(
+                    TransformCompletedQ(
                         node->GetGumbelQValue(color, parent_score), max_visists);
+            } else {
+                // The considered visists is zero. In this case, each
+                // completed Q value is same, is zero. To do nothing is
+                // Ok.
             }
-            // Each completed Q value is same if the considered visists is
-            // zero. To do nothing is Ok.
         } else {
-            gumbel_logits[node->GetVertex()] = mval;
+            // The child's visits is not same as considered visits. Set
+            // it as logit zero (large negative value) in order to invalid
+            // this move.
+            gumbel_logits[node->GetVertex()] = logit_zero;
         }
     }
 }
