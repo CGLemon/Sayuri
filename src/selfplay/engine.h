@@ -30,6 +30,8 @@ private:
         float probabilities;
     };
 
+    std::string SelectWeights() const;
+
     void ParseQueries();
     void SetNormalGame(int g);
     void SetHandicapGame(int g, int handicaps);

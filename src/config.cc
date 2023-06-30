@@ -44,6 +44,7 @@ void ArgsParser::InitOptionsMap() const {
 
     kOptionsMap["kgs_hint"] << Option::SetOption(std::string{});
     kOptionsMap["weights_file"] << Option::SetOption(std::string{});
+    kOptionsMap["weights_dir"] << Option::SetOption(std::string{});
     kOptionsMap["book_file"] << Option::SetOption(std::string{});
     kOptionsMap["patterns_file"] << Option::SetOption(std::string{});
 
@@ -588,6 +589,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext({"--weights", "-w"})) {
         if (IsParameter(res->Get<>())) {
             SetOption("weights_file", res->Get<>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--weights-dir")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("weights_dir", res->Get<>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

@@ -2,10 +2,13 @@
 #include "utils/threadpool.h"
 #include "utils/random.h"
 #include "utils/komi.h"
+#include "utils/filesystem.h"
 #include "game/sgf.h"
 #include "config.h"
 
 #include <sstream>
+#include <algorithm>
+#include <iostream>
 
 void Engine::Initialize() {
     default_playouts_ = 400;
@@ -19,7 +22,7 @@ void Engine::Initialize() {
     if (!network_) {
         network_ = std::make_unique<Network>();
     }
-    network_->Initialize(GetOption<std::string>("weights_file"));
+    network_->Initialize(SelectWeights());
 
     game_pool_.clear();
     for (int i = 0; i < parallel_games_; ++i) {
@@ -36,6 +39,30 @@ void Engine::Initialize() {
     ThreadPool::Get(GetOption<int>("threads") * parallel_games_);
 
     ParseQueries();
+}
+
+std::string Engine::SelectWeights() const {
+    // default weights
+    auto select_weights = GetOption<std::string>("weights_file");
+    if (!select_weights.empty()) {
+        return select_weights;
+    }
+
+    auto weights_dir = GetOption<std::string>("weights_dir");
+    auto weights_list = GetFileList(weights_dir);
+
+    if (!weights_list.empty()) {
+        // Seletet the last weights in this directory. 
+        std::sort(std::begin(weights_list), std::end(weights_list),
+                      [weights_dir](std::string a, std::string b) {
+                          auto time_a = GetFileTime(ConcatPath(weights_dir, a));
+                          auto time_b = GetFileTime(ConcatPath(weights_dir, b));
+                          return difftime(time_a, time_b) > 0.f;
+                      });
+        select_weights = ConcatPath(weights_dir, weights_list[0]);
+    }
+
+    return select_weights;
 }
 
 void Engine::ParseQueries() {
