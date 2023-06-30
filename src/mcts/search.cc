@@ -815,10 +815,8 @@ int Search::GetSelfPlayMove() {
             root_eval, root_score));
 
     // Push the data to buffer.
-    bool record_it = !(tag & kNoNoise);
-    if (record_it) {
-        GatherData(root_state_, result);
-    }
+    GatherData(root_state_, result, tag & kNoNoise);
+
     return move;
 }
 
@@ -961,7 +959,9 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
     training_buffer_.clear();
 }
 
-void Search::GatherData(const GameState &state, ComputationResult &result) {
+void Search::GatherData(const GameState &state,
+                        ComputationResult &result,
+                        bool discard) {
     if (training_buffer_.size() > 9999) {
         // To many data in the buffer.
         return;
@@ -970,6 +970,7 @@ void Search::GatherData(const GameState &state, ComputationResult &result) {
     auto data = Training{};
     data.version = GetTrainingVersion();
     data.mode = GetTrainingMode();
+    data.discard = discard;
 
     data.board_size = result.board_size;
     data.komi = result.komi;

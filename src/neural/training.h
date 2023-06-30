@@ -31,8 +31,11 @@ struct Training {
     float q_value;
 
     float final_score;
+
+    bool discard{false};
+
  /*
-    Output format is here. Every data package are 45 lines.
+    Output format is here. Every data package is 45 lines.
 
     ------- claiming -------
      L1       : Version

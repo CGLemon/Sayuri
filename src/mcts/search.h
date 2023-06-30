@@ -177,7 +177,9 @@ private:
 
     void GatherComputationResult(ComputationResult &result) const;
 
-    void GatherData(const GameState &state, ComputationResult &result);
+    void GatherData(const GameState &state,
+                    ComputationResult &result,
+                    bool discard);
 
     void PlaySimulation(GameState &currstate, Node *const node,
                         const int depth, SearchResult &search_result);

@@ -56,6 +56,10 @@ void PlanesStreamOut(std::ostream &out, const std::vector<float> &arr, size_t pl
 }
 
 void Training::StreamOut(std::ostream &out) const {
+    if (discard) {
+        return;
+    }
+
     out << version << std::endl;
     out << mode << std::endl;
     out << board_size << std::endl;
