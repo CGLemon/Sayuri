@@ -742,11 +742,15 @@ bool ShouldForbidPass(GameState &state, ComputationResult &result) {
 }
 
 int Search::GetSelfPlayMove() {
-    auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
+    // The selfplay always does not reuse the tree
+    // in most case. it will help simplify the state.
+    ReleaseTree();
 
+    auto tag = kThinking;
     int playouts = max_playouts_;
     int reduce_playouts = param_->reduce_playouts;
     float prob = param_->reduce_playouts_prob;
+
     if (reduce_playouts > 0 &&
             reduce_playouts < max_playouts_ &&
             Random<>::Get().Roulette<10000>(prob)) {
