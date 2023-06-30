@@ -127,12 +127,12 @@ void Search::PrepareRootNode() {
     playouts_.store(0, std::memory_order_relaxed);
     running_.store(true, std::memory_order_relaxed);
 
-    auto node_evals = NodeEvals{};
+    root_evals_ = NodeEvals{};
     const bool success = root_node_->PrepareRootNode(
-                             network_, root_state_, node_evals, analysis_config_);
+                             network_, root_state_, root_evals_, analysis_config_);
 
     if (!reused && success) {
-        root_node_->Update(&node_evals);
+        root_node_->Update(&root_evals_);
     }
 }
 
@@ -720,13 +720,16 @@ int Search::ThinkBestMove() {
     return result.best_move;
 }
 
-bool ShouldForbidPass(GameState &state, ComputationResult &result) {
+bool ShouldForbidPass(GameState &state,
+                      ComputationResult &result,
+                      NodeEvals &root_evals) {
     int to_move = result.to_move;
     auto safe_ownership = state.GetOwnership();
 
     for (const auto &string : result.dead_strings) {
-        // All vertex in a string should be same color.
+        // All vertices in a string should be same color.
         const auto vtx = string[0];
+
         const auto x = state.GetX(vtx);
         const auto y = state.GetY(vtx);
         const auto idx = state.GetIndex(x, y);
@@ -738,6 +741,31 @@ bool ShouldForbidPass(GameState &state, ComputationResult &result) {
             return true;
         }
     }
+
+    const auto board_size = state.GetBoardSize();
+    const auto num_intersections = state.GetNumIntersections();
+
+    constexpr float kRawOwnshipThreshold = 0.8f; // ~90%
+
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        const auto x = idx % board_size;
+        const auto y = idx / board_size;
+        const auto vtx = state.GetVertex(x, y);
+
+        float owner = root_evals.black_ownership[idx];
+        if (to_move == kWhite) {
+            owner = 0.f - owner;
+        }
+
+        // Some opp's stone are not really alive. Keep to
+        // eat these stones.
+        if (state.GetState(vtx) == (!to_move) &&
+                owner >= kRawOwnshipThreshold &&
+                safe_ownership[idx] != to_move) {
+            return true;
+        }
+    }
+
     return false;
 }
 
@@ -782,7 +810,7 @@ int Search::GetSelfPlayMove() {
     int move = result.best_move;
 
     // The game is not end. Don't play the pass move.
-    if (ShouldForbidPass(root_state_, result)) {
+    if (ShouldForbidPass(root_state_, result, root_evals_)) {
         move = result.best_no_pass_move;
     }
 

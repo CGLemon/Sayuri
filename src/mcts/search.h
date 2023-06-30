@@ -218,6 +218,9 @@ private:
     // The root node of tree.
     std::unique_ptr<Node> root_node_; 
 
+    // The root networl eval.
+    NodeEvals root_evals_;
+
     // The tree search parameters.
     std::unique_ptr<Parameters> param_;
 
