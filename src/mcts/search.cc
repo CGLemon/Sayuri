@@ -742,11 +742,15 @@ bool ShouldForbidPass(GameState &state, ComputationResult &result) {
 }
 
 int Search::GetSelfPlayMove() {
-    auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
+    // The selfplay always does not reuse the tree
+    // in most case. it will help simplify the state.
+    ReleaseTree();
 
+    auto tag = kThinking;
     int playouts = max_playouts_;
     int reduce_playouts = param_->reduce_playouts;
     float prob = param_->reduce_playouts_prob;
+
     if (reduce_playouts > 0 &&
             reduce_playouts < max_playouts_ &&
             Random<>::Get().Roulette<10000>(prob)) {
@@ -760,6 +764,7 @@ int Search::GetSelfPlayMove() {
         playouts = std::min(
                        playouts,
                        reduce_playouts + v);
+        tag = tag | kNoNoise;
     }
 
     if (!network_.Valid()) {
@@ -810,7 +815,7 @@ int Search::GetSelfPlayMove() {
             root_eval, root_score));
 
     // Push the data to buffer.
-    GatherData(root_state_, result);
+    GatherData(root_state_, result, tag & kNoNoise);
 
     return move;
 }
@@ -954,7 +959,9 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
     training_buffer_.clear();
 }
 
-void Search::GatherData(const GameState &state, ComputationResult &result) {
+void Search::GatherData(const GameState &state,
+                        ComputationResult &result,
+                        bool discard) {
     if (training_buffer_.size() > 9999) {
         // To many data in the buffer.
         return;
@@ -963,6 +970,7 @@ void Search::GatherData(const GameState &state, ComputationResult &result) {
     auto data = Training{};
     data.version = GetTrainingVersion();
     data.mode = GetTrainingMode();
+    data.discard = discard;
 
     data.board_size = result.board_size;
     data.komi = result.komi;
