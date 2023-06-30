@@ -742,16 +742,10 @@ bool ShouldForbidPass(GameState &state,
         }
     }
 
-    const auto board_size = state.GetBoardSize();
     const auto num_intersections = state.GetNumIntersections();
-
     constexpr float kRawOwnshipThreshold = 0.8f; // ~90%
 
     for (int idx = 0; idx < num_intersections; ++idx) {
-        const auto x = idx % board_size;
-        const auto y = idx / board_size;
-        const auto vtx = state.GetVertex(x, y);
-
         float owner = root_evals.black_ownership[idx];
         if (to_move == kWhite) {
             owner = 0.f - owner;
@@ -759,8 +753,7 @@ bool ShouldForbidPass(GameState &state,
 
         // Some opp's stone are not really alive. Keep to
         // eat these stones.
-        if (state.GetState(vtx) == (!to_move) &&
-                owner >= kRawOwnshipThreshold &&
+        if (owner >= kRawOwnshipThreshold &&
                 safe_ownership[idx] != to_move) {
             return true;
         }
