@@ -760,6 +760,7 @@ int Search::GetSelfPlayMove() {
         playouts = std::min(
                        playouts,
                        reduce_playouts + v);
+        tag = tag | kNoNoise;
     }
 
     if (!network_.Valid()) {
@@ -810,8 +811,10 @@ int Search::GetSelfPlayMove() {
             root_eval, root_score));
 
     // Push the data to buffer.
-    GatherData(root_state_, result);
-
+    bool record_it = !(tag & kNoNoise);
+    if (record_it) {
+        GatherData(root_state_, result);
+    }
     return move;
 }
 
