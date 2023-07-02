@@ -2,9 +2,13 @@
 
 ## Requirements
 
-* Be sure that you had built the engine. The engine should be in the ```build``` directory.
+* Be sure that you had built the engine. The engine should be in the ```build``` directory. I recommend to use the ```-DUSE_ZLIB=1``` option.
 * PyTorch 1.x (for python)
 * NumPy (for python)
+
+## Note
+
+The network will reach strong amateur level after one month on 19x19 with the RTX 2070s computer.
 
 ## Simple Usage
 
@@ -15,7 +19,7 @@ There three bash files. The ```setup.sh``` will do the initialization. The ```se
     $ bash setup.sh -s ..
     $ bash selfplay.sh
 
-The ```selfplay.sh``` will do the inifinite loop. If you want to stop the loop, you need to create a kill file.
+The ```selfplay.sh``` will do the inifinite loop. If you want to stop the loop, you need to create a kill file and wait for end of this round.
 
     $ touch kill.txt
 
@@ -30,12 +34,12 @@ The ```selfplay-setting.json``` controls the training process. Here are the para
         "MaxBoardSize": 19,         # The max size in the self-play game. It is
                                     # OK if this value greater than training games.
                                     # But set a small size can improve the training
-                                    # performance
+                                    # performance.
 
         "InputChannels": 38,
-        "ResidualChannels": 128,    # channel size of residual.
-        "PolicyExtract": 24,        # channel size of policy head
-        "ValueExtract": 24,         # channel size of value head
+        "ResidualChannels": 128,    # Channel size of residual.
+        "PolicyExtract": 24,        # Channel size of policy head.
+        "ValueExtract": 24,         # Channel size of value head.
         "ValueMisc": 5,
 
         "Stack" : [
@@ -55,7 +59,7 @@ The ```selfplay-setting.json``` controls the training process. Here are the para
         "ValidationSteps": 100,
         "VerboseSteps" : 1000,
         "MaxStepsPerRunning": 4000,  # Will stop the training after this steps.
-        "Workers": 4,                # Number of data loader worker.
+        "Workers": 4,                # Number of data loader workers.
         "BatchSize": 256,
         "BufferSize" : 524288,       # Bigger is better but it will use more memory. This
                                      # size with 4 workers will use around 17 ~ 20 GB
@@ -69,7 +73,8 @@ The ```selfplay-setting.json``` controls the training process. Here are the para
 
         "LearningRateSchedule": [
             [0,       1e-2]          # The format is [X, lr]. Will use the lr rate
-                                     # after X stpes.
+                                     # after X stpes. You only need to change the lr
+                                     # part in the reinforcement learning.
          ],
 
         "FixUpBatchNorm": false,
@@ -109,15 +114,17 @@ The ```selfplay-config.txt``` controls the self-play process. Here are the param
 
 --gumbel                     # Enable Gumbel search.
 
---gumbel-playouts 50         # Do the Gumbel search if the current playous
+--gumbel-playouts 50         # Do the Gumbel search if the current playouts
                              # below this value. 
 
 --always-completed-q-policy
 
---reduce-playouts 100        # 75% uses 100 playouts 
+--reduce-playouts 50         # 75% uses 50 playouts. Will disable any noise
+                             # do not record the training data.
+ 
 --reduce-playouts-prob 0.75  # 75% uses reduce-playouts.
 
---resign-playouts 85         # Use this playout if someone's winrate below
+--resign-playouts 75         # Use this playout if someone's winrate below
                              # threshold.
 
 --resign-threshold 0.02      # If someone's winrate is below this value,
@@ -129,5 +136,7 @@ The ```selfplay-config.txt``` controls the self-play process. Here are the param
 --early-symm-cache
 --first-pass-bonus
 
---num-games 10000            # Self-play games per epoch.
+--root-policy-temp 1.1       # The policy softmax temperature of root node.  
+
+--num-games 5000             # Self-play games per epoch.
 ```

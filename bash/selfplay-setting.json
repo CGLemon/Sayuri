@@ -34,7 +34,7 @@
         "NumberChunks" : 20000,
 
         "LearningRateSchedule": [
-            [0,       1e-2]
+            [0,       5e-3]
          ],
 
         "FixUpBatchNorm": false,

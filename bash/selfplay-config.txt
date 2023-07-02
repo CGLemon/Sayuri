@@ -36,7 +36,7 @@
 --gumbel-playouts 50
 --always-completed-q-policy
 
---reduce-playouts 80
+--reduce-playouts 50
 --reduce-playouts-prob 0.75
 
 --resign-playouts 75
@@ -52,5 +52,7 @@
 --dirichlet-epsilon 0.25
 --dirichlet-init 0.03
 --dirichlet-factor 361
+
+--root-policy-temp 1.1
 
 --num-games 5000
