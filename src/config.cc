@@ -98,6 +98,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["reduce_playouts"] << Option::SetOption(0);
     kOptionsMap["reduce_playouts_prob"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["first_pass_bonus"] << Option::SetOption(false);
+    kOptionsMap["resign_discard_prob"] << Option::SetOption(0.f, 1.f, 0.f);
 
     kOptionsMap["num_games"] << Option::SetOption(0);
     kOptionsMap["parallel_games"] << Option::SetOption(1);
@@ -701,6 +702,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--policy-temp")) {
         if (IsParameter(res->Get<>())) {
             SetOption("policy_temp", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--resign-discard-prob")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("resign_discard_prob", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

@@ -49,7 +49,8 @@ public:
         score_utility_div = GetOption<float>("score_utility_div");
         resign_playouts = GetOption<int>("resign_playouts");
         reduce_playouts = GetOption<int>("reduce_playouts");
-        reduce_playouts_prob = GetOption<float>("reduce_playouts_prob"); 
+        reduce_playouts_prob = GetOption<float>("reduce_playouts_prob");
+        resign_discard_prob = GetOption<float>("resign_discard_prob");
 
         lag_buffer = GetOption<float>("lag_buffer");
         ponder = GetOption<bool>("ponder");
@@ -109,6 +110,7 @@ public:
     float reduce_playouts_prob;
     float lag_buffer;
     int expand_threshold;
+    float resign_discard_prob;
 
     bool ponder;
     bool reuse_tree;

@@ -712,7 +712,6 @@ int Search::ThinkBestMove() {
     if (ShouldResign(root_state_, result, param_->resign_threshold)) {
         return kResign;
     }
-
     if (ShouldPass(root_state_, result, param_->friendly_pass)) {
         return kPass;
     }
@@ -764,7 +763,7 @@ bool ShouldForbidPass(GameState &state,
 
 int Search::GetSelfPlayMove() {
     // The selfplay always does not reuse the tree
-    // in most case. it will help simplify the state.
+    // in most case. It will help simplify the state.
     ReleaseTree();
 
     auto tag = kThinking;
@@ -800,6 +799,9 @@ int Search::GetSelfPlayMove() {
     playouts = std::max(1, playouts);
 
     auto result = Computation(playouts, tag);
+
+    // Default is the best move. May use another move instead
+    // of it later.
     int move = result.best_move;
 
     // Apply the Gumbel-Top-k trick if it is valid. Will cover
@@ -813,30 +815,50 @@ int Search::GetSelfPlayMove() {
         move = result.best_no_pass_move;
     }
 
+    // Do the random move in the opening stage in order to improve the
+    // game state diversity.
     int random_moves_cnt = param_->random_moves_factor *
                                result.board_size * result.board_size;
-
-    // Do the random move in the opening step in order to improve the
-    // game state diversity.
     if (random_moves_cnt > result.movenum) {
         move = result.random_move;
     }
 
-    // Save the move comment.
+    // Should I discard the data?
     float root_eval = result.root_eval;
     float root_score = result.root_final_score;
+    bool discard_it = false;
+    if (tag & kNoNoise) {
+        // This is faster search of "Playout Cap Randomization". Do
+        // not record the low quality datas. 
+        discard_it = true;
+    }
+    if (ShouldResign(root_state_, result, param_->resign_threshold)) {
+        // Someone already won the game. Do not record this kind
+        // of positions too much to avoid introducing pathological
+        // biases in the training data
+        if (Random<>::Get().Roulette<10000>(param_->resign_discard_prob)) {
+            discard_it = true;
+        }
+    }
 
+    // Save the move comment in the SGF file.
     if (result.to_move == kWhite) {
         root_eval = 1.0f - root_eval;
         root_score = 0.f - root_score;
     }
+
+    // TODO: Use "Policy Surprise Weighting" instead of
+    //       "Playout Cap Randomization". See the document
+    //       here.
+    const float record_weights = discard_it ? 0.f : 1.f;
+
     root_state_.SetComment(
-        Format("%d, %.2f, %.2f",
-            result.playouts,
-            root_eval, root_score));
+        Format("%d, %.2f, %.2f, %.2f",
+            result.playouts, root_eval,
+            root_score, record_weights));
 
     // Push the data to buffer.
-    GatherData(root_state_, result, tag & kNoNoise);
+    GatherData(root_state_, result, discard_it);
 
     return move;
 }
