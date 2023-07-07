@@ -832,7 +832,8 @@ int Search::GetSelfPlayMove() {
         // not record the low quality datas. 
         discard_it = true;
     }
-    if (ShouldResign(root_state_, result, param_->resign_threshold)) {
+    if (root_eval < param_->resign_threshold ||
+            root_eval > (1.f-param_->resign_threshold)) {
         // Someone already won the game. Do not record this kind
         // of positions too much to avoid introducing pathological
         // biases in the training data
