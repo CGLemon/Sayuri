@@ -802,6 +802,12 @@ int Search::GetSelfPlayMove() {
     auto result = Computation(playouts, tag);
     int move = result.best_move;
 
+    // Apply the Gumbel-Top-k trick if it is valid. Will cover
+    // the original best move.
+    if (root_node_->ShouldApplyGumbel() && !(tag & kNoNoise)) {
+        move = result.gumbel_move;
+    }
+
     // The game is not end. Don't play the pass move.
     if (ShouldForbidPass(root_state_, result, root_evals_)) {
         move = result.best_no_pass_move;
@@ -814,12 +820,6 @@ int Search::GetSelfPlayMove() {
     // game state diversity.
     if (random_moves_cnt > result.movenum) {
         move = result.random_move;
-    }
-
-    // The Gumbel-Top-k trick holds more information, so we use it instead
-    // of random move.
-    if (root_node_->ShouldApplyGumbel()) {
-        move = result.gumbel_move;
     }
 
     // Save the move comment.
