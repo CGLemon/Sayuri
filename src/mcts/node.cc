@@ -215,7 +215,6 @@ void Node::ApplyNetOutput(GameState &state,
                           const Network::Result &raw_netlist,
                           NodeEvals& node_evals, const int color) {
     auto black_ownership = std::array<float, kNumIntersections>{};
-    auto black_fs = float(0.f);
     auto draw =raw_netlist.wdl[1];
 
     // Compute the black side to move evals.
@@ -235,7 +234,7 @@ void Node::ApplyNetOutput(GameState &state,
     }
 
     black_wl_ = wl;
-    black_fs = final_score;
+    black_fs_ = final_score;
 
     for (int idx = 0; idx < kNumIntersections; ++idx) {
         auto owner = raw_netlist.ownership[idx];
@@ -256,14 +255,14 @@ void Node::ApplyNetOutput(GameState &state,
                                             mc_black_rollout_score);
         if (param_->no_dcnn) {
             black_wl_ = mc_black_rollout_result;
-            black_fs = mc_black_rollout_score;
+            black_fs_ = mc_black_rollout_score;
         }
     }
 
     // Store the network or rollout evals.
     node_evals.black_wl = black_wl_;
     node_evals.draw = draw;
-    node_evals.black_final_score = black_fs;
+    node_evals.black_final_score = black_fs_;
 
     for (int idx = 0; idx < kNumIntersections; ++idx) {
         node_evals.black_ownership[idx] = black_ownership[idx];
@@ -443,7 +442,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     const float numerator     = std::sqrt(float(parentvisits));
     const float fpu_reduction = fpu_reduction_factor * std::sqrt(total_visited_policy);
     const float fpu_value     = GetNetWL(color) - fpu_reduction;
-    const float parent_score  = GetFinalScore(color);
+    const float parent_score  = GetNetScore(color);
 
     Edge* best_node = nullptr;
     float best_value = std::numeric_limits<float>::lowest();
@@ -744,6 +743,7 @@ void Node::Update(const NodeEvals *evals) {
 
 void Node::ApplyEvals(const NodeEvals *evals) {
     black_wl_ = evals->black_wl;
+    black_fs_ = evals->black_final_score;
 }
 
 std::array<float, kNumIntersections> Node::GetOwnership(int color) {
@@ -1060,7 +1060,7 @@ std::vector<std::pair<float, int>> Node::GetLcbUtilityList(const int color) {
     const auto lcb_reduction = std::min(
                                    std::max(0.f, param_->lcb_reduction), 1.f);
     int parentvisits = 0;
-    const auto parent_score = GetFinalScore(color);
+    const auto parent_score = GetNetScore(color);
     const auto score_utility_factor = param_->score_utility_factor;
     const auto score_utility_div = param_->score_utility_div;
 
@@ -1172,6 +1172,13 @@ float Node::GetNetWL(const int color) const {
         return black_wl_;
     }
     return 1.0f - black_wl_;
+}
+
+float Node::GetNetScore(const int color) const {
+    if (color == kBlack) {
+        return black_fs_;
+    }
+    return 0.0f - black_fs_;
 }
 
 float Node::GetWL(const int color, const bool use_virtual_loss) const {
@@ -1446,7 +1453,7 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
         return;
     }
 
-    const auto parent_score = GetFinalScore(color);
+    const auto parent_score = GetNetScore(color);
     auto logits_q = GetZeroLogits<float>(num_intersections+1);
 
     int max_visits = 0;
@@ -1629,7 +1636,7 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
         offset += width;
     }
 
-    const auto parent_score = GetFinalScore(color);
+    const auto parent_score = GetNetScore(color);
     const int idx = offset + root_visits % width;
     const int considered_visists =
         only_max_visit ?

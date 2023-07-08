@@ -156,8 +156,11 @@ public:
     // Get the move probability value of this node.
     float GetPolicy() const;
 
-    // Get the Network win-loss value. 
+    // Get the network win-loss value. 
     float GetNetWL(const int color) const;
+
+    // Get the network final score value. 
+    float GetNetScore(const int color) const;
 
     // Get the average final score value.
     float GetFinalScore(const int color) const;
@@ -286,6 +289,9 @@ private:
 
     // The network win-loss value.
     float black_wl_{0.5f};
+
+    // The network final score value.
+    float black_fs_{0.0f};
 
     // The accumulated squared difference value.
     std::atomic<double> squared_eval_diff_{1e-4f};
