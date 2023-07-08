@@ -1477,8 +1477,13 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
     auto completed_q_list = std::vector<float>{};
     float max_completed_q = std::numeric_limits<float>::min();
     float min_completed_q = std::numeric_limits<float>::max();
-    float raw_value = this->GetGumbelQValue(color, parent_score);
 
+    // Mix the raw value and approximate Q value. It may help
+    // to improve the performance when the parentvisits is very
+    // low (<= 4).
+    const float raw_value = GetNetWL(color);
+    const float approximate_q = (raw_value + (parentvisits/weighted_pi) *
+                                    weighted_q) / (1 + parentvisits);
     for (auto & child : children_) {
         const auto node = child.Get();
         const bool is_pointer = node != nullptr;
@@ -1490,10 +1495,9 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
 
         float completed_q;
         if (visits == 0) {
-            // Use the mixed value instead of raw value network evaluation. It
-            // is a approximate value.
-            completed_q = (raw_value + (parentvisits/weighted_pi) *
-                               weighted_q) / (1 + parentvisits);
+            // The unvisited node has no Q value. Give it a
+            // virtual approximate Q value.
+            completed_q = approximate_q;
         } else {
             completed_q = node->GetGumbelQValue(color, parent_score);
         }
