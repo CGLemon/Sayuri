@@ -882,6 +882,11 @@ int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
     // Set the current analysis config.
     analysis_config_ = analysis_config;
 
+    // The tree shape may be different with last move.
+    if (analysis_config_.MoveRestrictions()) {
+        ReleaseTree();
+    }
+
     int playouts = ponder == true ? GetPonderPlayouts()
                                       : max_playouts_;
     auto result = Computation(playouts, tag);

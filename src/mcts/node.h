@@ -44,7 +44,7 @@ struct AnalysisConfig {
 
     bool MoveRestrictions() const {
         return !avoid_moves.empty() ||
-                   !avoid_moves.empty();
+                   !allow_moves.empty();
     }
 
     void Clear() {
