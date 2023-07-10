@@ -802,27 +802,33 @@ std::string Node::GetPathVerboseString(GameState &state, int color,
     auto out = std::ostringstream{};
     int depth = 0;
 
-    auto ColorToText = [](int color) {
-        if (color == kBlack) {
-            return std::string{"black"};
-        }
-        return std::string{"white"};
-    };
-
     while (depth < (int)moves.size() && curr_node) {
         curr_node = curr_node->GetChild(moves[depth++]);
+        if (curr_node) {
+            const auto vertex = curr_node->GetVertex();
+            const auto winrate = curr_node->GetWL(color, false);
+            const auto policy = curr_node->GetPolicy();
+            const auto score = curr_node->GetFinalScore(color);
+            out << Format("%s -> WL: %.2f(\%), P: %.2f(\%), S: %.2f\n",
+                       state.VertexToText(vertex).c_str(),
+                       100 * winrate, 100 * policy, score);
+        }
         color = !color;
     }
+
     if (curr_node) {
         if (curr_node->GetVisits() < 1) {
             out << "edge";
         } else if (curr_node->GetVisits() == 1) {
             out << "node";
         } else {
-            out << "node" << std::endl;
-            out << "To move color is " << ColorToText(color) << std::endl;
-            out << curr_node->ToVerboseString(state, color);
-            out << "end";
+            auto verbose = curr_node->ToVerboseString(state, color);
+            auto vsize = verbose.size();
+            verbose.resize(vsize-1);
+            out << "To move color is "
+                    << (color == kBlack ? "BLACK" : "WHITE")
+                    << std::endl;
+            out << verbose;
         }
     } else {
         out << "not a node/edge";
