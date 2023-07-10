@@ -1645,29 +1645,30 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
                 (visits_this_round - m*adj_considered_moves)/width;
 
     for (auto &child : children_) {
+        const auto vtx = child.GetVertex();
         const auto node = child.Get();
         const bool is_pointer = node != nullptr;
 
-        if (is_pointer && !node->IsActive()) {
-            continue;
+        int visits = 0;
+        if (is_pointer) {
+            visits = node->GetVisits();
         }
 
-        auto visits = node->GetVisits();
         if (visits == considered_visists) {
             if (visits > 0) {
-                gumbel_logits[node->GetVertex()] +=
+                // The node is always pointer in this case.
+                gumbel_logits[vtx] +=
                     TransformCompletedQ(
                         node->GetGumbelQValue(color, parent_score), max_visists);
             } else {
                 // The considered visists is zero. In this case, each
-                // completed Q value is same, is zero. To do nothing is
-                // Ok.
+                // completed Q value is same. To do nothing is Ok.
             }
         } else {
             // The child's visits is not same as considered visits. Set
             // it as logit zero (large negative value) in order to invalid
             // this move.
-            gumbel_logits[node->GetVertex()] = logit_zero;
+            gumbel_logits[vtx] = logit_zero;
         }
     }
 }
