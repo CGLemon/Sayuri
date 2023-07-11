@@ -105,7 +105,7 @@ public:
                          AnalysisConfig &config);
 
     // Select the best policy node.
-    Node *ProbSelectChild();
+    Node *ProbSelectChild(bool allow_pass);
 
     // Select the best PUCT value node.
     Node *PuctSelectChild(const int color, const bool is_root);

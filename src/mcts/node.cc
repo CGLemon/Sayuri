@@ -341,7 +341,7 @@ float Node::ComputeTreeComplexity() {
     return stddev;
 }
 
-Node *Node::ProbSelectChild() {
+Node *Node::ProbSelectChild(bool allow_pass) {
     WaitExpanded();
     assert(HasChildren());
 
@@ -361,7 +361,13 @@ Node *Node::ProbSelectChild() {
 
         // The node is expanding. Give it very bad value.
         if (is_pointer && node->IsExpanding()) {
-            prob = -1.0f + prob;
+            prob = prob - 1.0f;
+        }
+
+        // Try to forbid the pass move. Give it a crazy
+        // bad value.
+        if (!allow_pass && child.GetVertex() == kPass) {
+            prob = prob - 1e6f;
         }
 
         if (prob > best_prob) {
@@ -1127,12 +1133,7 @@ int Node::GetBestMove(bool allow_pass) {
     }
 
     if (best_move == kNullVertex) {
-        if (!allow_pass && lcblist.size() == 1) {
-            // only pass move...
-            return kPass;
-        } else {
-            best_move = ProbSelectChild()->GetVertex();
-        }
+        best_move = ProbSelectChild(allow_pass)->GetVertex();
     }
 
     assert(best_move != kNullVertex);
