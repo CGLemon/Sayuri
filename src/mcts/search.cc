@@ -767,23 +767,18 @@ int Search::GetSelfPlayMove() {
     ReleaseTree();
 
     auto tag = kThinking;
+
+    // Decide the playouts number first. Default is max
+    // playouts. May use the lower playouts instead it.
     int playouts = max_playouts_;
-    int reduce_playouts = param_->reduce_playouts;
-    float prob = param_->reduce_playouts_prob;
 
-    if (reduce_playouts > 0 &&
-            reduce_playouts < max_playouts_ &&
-            Random<>::Get().Roulette<10000>(prob)) {
-
-        const auto diff = max_playouts_ - reduce_playouts;
-        auto geometric = std::geometric_distribution<>(
-                             1.f/(std::sqrt((float)diff)));
-        const auto v = std::min(geometric(Random<>::Get()), diff);
+    if (param_->reduce_playouts > 0 &&
+            param_->reduce_playouts < max_playouts_ &&
+            Random<>::Get().Roulette<10000>(param_->reduce_playouts_prob)) {
 
         // The reduce playouts must be smaller than playouts.
         playouts = std::min(
-                       playouts,
-                       reduce_playouts + v);
+            playouts, param_->reduce_playouts);
         tag = tag | kNoNoise;
     }
 
@@ -798,6 +793,7 @@ int Search::GetSelfPlayMove() {
     // because some move select functions need at least one.
     playouts = std::max(1, playouts);
 
+    // Now start the MCTS.
     auto result = Computation(playouts, tag);
 
     // Default is the best move. May use another move instead
@@ -828,7 +824,7 @@ int Search::GetSelfPlayMove() {
     float root_score = result.root_final_score;
     bool discard_it = false;
     if (tag & kNoNoise) {
-        // This is faster search of "Playout Cap Randomization". Do
+        // This is fast search of "Playout Cap Randomization". Do
         // not record the low quality datas. 
         discard_it = true;
     }
@@ -841,8 +837,6 @@ int Search::GetSelfPlayMove() {
             discard_it = true;
         }
     }
-
-    // Save the move comment in the SGF file.
     if (result.to_move == kWhite) {
         root_eval = 1.0f - root_eval;
         root_score = 0.f - root_score;
@@ -853,6 +847,7 @@ int Search::GetSelfPlayMove() {
     //       here.
     const float record_weights = discard_it ? 0.f : 1.f;
 
+    // Save the move comment in the SGF file.
     root_state_.SetComment(
         Format("%d, %.2f, %.2f, %.2f",
             result.playouts, root_eval,
