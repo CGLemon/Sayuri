@@ -83,7 +83,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["random_moves_factor"] << Option::SetOption(0.f);
 
     kOptionsMap["gumbel_c_visit"] << Option::SetOption(50.f);
-    kOptionsMap["gumbel_c_scale"] << Option::SetOption(0.1f);
+    kOptionsMap["gumbel_c_scale"] << Option::SetOption(1.f);
     kOptionsMap["gumbel_considered_moves"] << Option::SetOption(16);
     kOptionsMap["gumbel_playouts"] << Option::SetOption(400);
     kOptionsMap["gumbel"] << Option::SetOption(false);
