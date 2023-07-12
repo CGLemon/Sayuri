@@ -93,6 +93,9 @@ public:
     // Get the index board.
     int GetIndex(const int x, const int y) const;
 
+    int IndexToVertex(int idx) const;
+    int VertexToIndex(int vtx) const;
+
     // Reture true if the move is legal.
     bool IsLegalMove(const int vertex, const int color) const;
     bool IsLegalMove(const int vertex, const int color,
@@ -449,6 +452,21 @@ inline int Board::GetIndex(const int x, const int y) const {
     assert(x >= 0 || x < board_size_);
     assert(y >= 0 || y < board_size_);
     return y * board_size_ + x;
+}
+
+inline int Board::IndexToVertex(int idx) const {
+    int x = idx % board_size_;
+    int y = idx / board_size_;
+
+    assert(x >= 0 || x < board_size_);
+    assert(y >= 0 || y < board_size_);
+    return GetVertex(x, y);
+}
+
+inline int Board::VertexToIndex(int vtx) const {
+    int x = GetX(vtx);
+    int y = GetY(vtx);
+    return GetIndex(x, y);
 }
 
 inline void Board::UpdateZobrist(const int vtx,

@@ -85,6 +85,8 @@ public:
     int GetIndex(const int x, const int y) const;
     int GetX(const int vtx) const;
     int GetY(const int vtx) const;
+    int IndexToVertex(int idx) const;
+    int VertexToIndex(int vtx) const;
 
     float GetKomi() const;
     int GetWinner() const;
@@ -92,6 +94,7 @@ public:
     int GetMoveNumber() const;
     int GetBoardSize() const;
     int GetNumIntersections() const;
+    int GetNumVertices() const;
     int GetToMove() const;
     int GetLastMove() const;
     int GetKoMove() const;

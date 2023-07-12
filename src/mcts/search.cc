@@ -728,10 +728,7 @@ bool ShouldForbidPass(GameState &state,
     for (const auto &string : result.dead_strings) {
         // All vertices in a string should be same color.
         const auto vtx = string[0];
-
-        const auto x = state.GetX(vtx);
-        const auto y = state.GetY(vtx);
-        const auto idx = state.GetIndex(x, y);
+        const auto idx = state.VertexToIndex(vtx);
 
         // Some opp's strings are death. Forbid the pass
         // move. Keep to eat all opp's dead strings.
@@ -755,6 +752,24 @@ bool ShouldForbidPass(GameState &state,
         if (owner >= kRawOwnshipThreshold &&
                 safe_ownership[idx] != to_move) {
             return true;
+        }
+    }
+
+    constexpr int kMaxEmptyGroupThreshold = 8;
+    auto &board = state.board_;
+    auto buf = std::vector<bool>(state.GetNumVertices(), false);
+
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        const auto vtx = state.IndexToVertex(idx);
+
+        if (safe_ownership[idx] == kEmpty && !buf[vtx]) {
+            int group_size = board.ComputeReachGroup(vtx, kEmpty, buf);
+
+            // TODO: The empty group size threshold should be smaller.
+            if (group_size >= kMaxEmptyGroupThreshold) {
+                // Too large empty group.
+                return true;
+            } 
         }
     }
 

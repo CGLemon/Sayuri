@@ -780,6 +780,14 @@ int GameState::GetY(const int vtx) const {
     return board_.GetY(vtx);
 }
 
+int GameState::IndexToVertex(int idx) const {
+    return board_.IndexToVertex(idx);
+}
+
+int GameState::VertexToIndex(int vtx) const {
+    return board_.VertexToIndex(vtx);
+}
+
 float GameState::GetKomi() const {
     float komi = static_cast<float>(komi_integer_) +
                      static_cast<float>(komi_half_) * 0.5f;
@@ -811,6 +819,10 @@ int GameState::GetBoardSize() const {
 
 int GameState::GetNumIntersections() const {
     return board_.GetNumIntersections();
+}
+
+int GameState::GetNumVertices() const {
+    return board_.GetNumVertices();
 }
 
 int GameState::GetToMove() const {
