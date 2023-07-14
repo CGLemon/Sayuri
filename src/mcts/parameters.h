@@ -5,6 +5,7 @@
 #include "config.h"
 
 #include <array>
+#include <string>
 
 class Parameters {
 public:
@@ -51,6 +52,8 @@ public:
         reduce_playouts = GetOption<int>("reduce_playouts");
         reduce_playouts_prob = GetOption<float>("reduce_playouts_prob");
         resign_discard_prob = GetOption<float>("resign_discard_prob");
+
+        kldgain = std::stod(GetOption<std::string>("kldgain"));
 
         lag_buffer = GetOption<float>("lag_buffer");
         ponder = GetOption<bool>("ponder");
@@ -111,6 +114,8 @@ public:
     float lag_buffer;
     int expand_threshold;
     float resign_discard_prob;
+
+    double kldgain;
 
     bool ponder;
     bool reuse_tree;

@@ -195,8 +195,8 @@ public:
     bool IsActive() const;
     bool IsValid() const;
 
-    float ComputeKlDivergence();
-    float ComputeTreeComplexity();
+    float GetKlDivergence();
+    float GetTreeComplexity();
 
     std::string GetPathVerboseString(GameState &state, int color, std::vector<int> &moves);
     std::string ToAnalysisString(GameState &state, const int color, AnalysisConfig &config);

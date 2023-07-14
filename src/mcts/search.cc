@@ -12,6 +12,7 @@
 #include "utils/log.h"
 #include "utils/format.h"
 #include "utils/random.h"
+#include "utils/kldivergence.h"
 #include "game/book.h"
 
 #ifdef WIN32
@@ -134,6 +135,9 @@ void Search::PrepareRootNode() {
     if (!reused && success) {
         root_node_->Update(&root_evals_);
     }
+
+    int visited_nodes;
+    last_root_dist_ = GetRootDistribution(visited_nodes);
 }
 
 void Search::ReleaseTree() {
@@ -316,6 +320,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     }
 
     // Main thread is running.
+    int last_updating_playouts = 0;
     auto keep_running = running_.load(std::memory_order_relaxed);
 
     while (!InputPending(tag) && keep_running) {
@@ -340,18 +345,17 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         }
 
         const auto elapsed = timer.GetDuration();
+        const auto curr_playouts = playouts_.load(std::memory_order_relaxed);
 
-        // TODO: Stop running when there is no alternate move.
         if (tag & kUnreused) {
-            // We simply limit the root visits instead of unreuse the tree. It is
-            // because that limiting the root node visits is equal to unreuse tree.
-            // Notice that the visits of root node start from one. We need to
+            // We simply limit the root visits instead of releasing the tree. It is
+            // because that limiting the root node visits is equal to disable the reused
+            // tree. Notice that the visits of root node start from one. We need to
             // reduce it.
             keep_running &= (root_node_->GetVisits() - 1 < playouts);
         }
         if (param_->resign_playouts > 0 &&
-                param_->resign_playouts <=
-                    playouts_.load(std::memory_order_relaxed)) {
+                param_->resign_playouts <= curr_playouts) {
             // If someone already won the game, the Q value was not very effective
             // in the MCTS. Low playouts with policy network is good enough. Just
             // simply stop the tree search.
@@ -359,8 +363,17 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
             keep_running &= !(wl < param_->resign_threshold ||
                                 wl > (1.f-param_->resign_threshold));
         }
-        keep_running &= (elapsed < thinking_time);
-        keep_running &= (playouts_.load(std::memory_order_relaxed) < playouts);
+        if (tag & kThinking) {
+            keep_running &= (elapsed < thinking_time);
+
+            const auto check_freq = std::max(
+                100.f, std::sqrt(10.f * curr_playouts));
+            if (curr_playouts - last_updating_playouts >= (int)check_freq) {
+                last_updating_playouts = curr_playouts;
+                keep_running &= HaveAlternateMoves();
+            }
+        }
+        keep_running &= (curr_playouts < playouts);
         keep_running &= running_.load(std::memory_order_relaxed);
     };
 
@@ -1118,6 +1131,39 @@ bool Search::AdvanceToNewRootState() {
     return true;
 }
 
+bool Search::HaveAlternateMoves() {
+    const auto &children = root_node_->GetChildren();
+    if (children.size() == 1) {
+        return false;
+    }
+
+    int visited_nodes;
+    bool success = false;
+    double kld = 0;
+
+    auto new_root_dist = GetRootDistribution(visited_nodes);
+
+    if (!last_root_dist_.empty()) {
+        success = ComputeKlDivergence(
+            new_root_dist, last_root_dist_, kld);
+    }
+
+    last_root_dist_ = new_root_dist;
+
+#if 0
+    int root_visits = root_node_->GetVisits();
+    if (success && root_visits > 1600 && visited_nodes > 1) {
+        double kldgain = param_->kldgain;
+        if (kld < kldgain) {
+            return false;
+        }
+    }
+#endif
+    (void) success;
+
+    return true;
+}
+
 int Search::GetPonderPlayouts() const {
     // We don't need to consider the NN cache size to set number
     // of ponder playouts that because we apply lazy tree destruction
@@ -1152,4 +1198,31 @@ int Search::GetExpandThreshold(GameState &state) const {
 std::string Search::GetDebugMoves(std::vector<int> moves) {
     return root_node_->GetPathVerboseString(
                root_state_, root_state_.GetToMove(), moves);
+}
+
+std::vector<double> Search::GetRootDistribution(int &visited_nodes) {
+    auto result = std::vector<double>{};
+    const auto &children = root_node_->GetChildren();
+
+    visited_nodes = 0;
+    int parentvisits = 0;
+    for (const auto &child : children) {
+        const auto node = child.Get();
+        const auto visits = node->GetVisits();
+
+        parentvisits += visits;
+        result.emplace_back(visits);
+
+        if (visits > 0) {
+            visited_nodes += 1;
+        }
+    }
+    if (parentvisits == 0) {
+        return std::vector<double>{};
+    }
+
+    for (auto &v : result) {
+        v /= parentvisits;
+    }
+    return result;
 }

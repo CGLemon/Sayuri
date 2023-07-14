@@ -173,6 +173,11 @@ private:
     // Try to reuse the sub-tree.
     bool AdvanceToNewRootState();
 
+    // Reture false if there is only one reasonable move.
+    bool HaveAlternateMoves();
+
+    std::vector<double> GetRootDistribution(int &visited_nodes);
+
     bool InputPending(Search::OptionTag tag) const;
 
     void GatherComputationResult(ComputationResult &result) const;
@@ -226,4 +231,6 @@ private:
 
     // The tree search threads.
     std::unique_ptr<ThreadGroup<void>> group_;
+
+    std::vector<double> last_root_dist_;
 };

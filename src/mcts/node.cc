@@ -5,6 +5,7 @@
 #include "utils/random.h"
 #include "utils/format.h"
 #include "utils/logits.h"
+#include "utils/kldivergence.h"
 #include "game/symmetry.h"
 
 #include <cassert>
@@ -302,34 +303,42 @@ bool Node::SetTerminal() {
     return true;
 }
 
-float Node::ComputeKlDivergence() {
-    const auto vtx = GetBestMove(true);
+float Node::GetKlDivergence() {
+    auto target_policy = std::vector<double>{};
+    auto raw_nn_policy = std::vector<double>{};
     int parentvisits = 0;
-    int best_visits = 0;
 
     for (const auto &child : children_) {
         const auto node = child.Get();
-        if (node && node->IsActive()) {
-            const auto visits = node->GetVisits();
+        int visits = 0;
 
-            parentvisits += visits;
-            if (node->GetVertex() == vtx) {
-                best_visits = visits;
-            }
+        if (node && node->IsActive()) {
+            visits = node->GetVisits();
         }
+
+        parentvisits += visits;
+        auto policy = child.GetPolicy();
+
+        target_policy.emplace_back(visits);
+        raw_nn_policy.emplace_back(policy);
     }
 
-    if (parentvisits == best_visits) {
+    if (parentvisits == 0) {
         return 0;
     }
-    if (parentvisits == 0 || best_visits == 0) {
-        return -1;
+
+    for (auto &v : target_policy) {
+        v /= parentvisits;
     }
 
-    return -std::log((float)best_visits / parentvisits);
+    double kld = 0;
+
+    ComputeKlDivergence(target_policy, raw_nn_policy, kld);
+
+    return kld;
 }
 
-float Node::ComputeTreeComplexity() {
+float Node::GetTreeComplexity() {
     const auto visits = GetVisits();
     if (visits <= 1) {
         return 0;
@@ -907,8 +916,8 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     const auto space2 = 10;
     out << " * Tree Status:" << std::endl
             << std::fixed << std::setprecision(4)
-            << std::setw(space2) << "root KL:" << ' ' << ComputeKlDivergence() << std::endl
-            << std::setw(space2) << "root C:"  << ' ' << ComputeTreeComplexity() << std::endl
+            << std::setw(space2) << "root KL:" << ' ' << GetKlDivergence() << std::endl
+            << std::setw(space2) << "root C:"  << ' ' << GetTreeComplexity() << std::endl
             << std::setw(space2) << "nodes:"   << ' ' << nodes    << std::endl
             << std::setw(space2) << "edges:"   << ' ' << edges    << std::endl
             << std::setw(space2) << "memory:"  << ' ' << mem_used << ' ' << "(MiB)" << std::endl;
@@ -967,8 +976,8 @@ std::string Node::ToAnalysisString(GameState &state,
         const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
 
         if (is_sayuri) {
-            const auto kl = child->ComputeKlDivergence();
-            const auto complexity = child->ComputeTreeComplexity();
+            const auto kl = child->GetKlDivergence();
+            const auto complexity = child->GetTreeComplexity();
             out << Format("info move %s visits %d winrate %.6f scorelead %.6f prior %.6f lcb %.6f kl %.6f complexity %.6f order %d pv %s",
                              state.VertexToText(vertex).c_str(),
                              visits,

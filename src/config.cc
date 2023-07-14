@@ -69,6 +69,8 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["score_utility_div"] << Option::SetOption(20.f);
     kOptionsMap["expand_threshold"] << Option::SetOption(-1);
 
+    kOptionsMap["kldgain"] << Option::SetOption(std::string{"0"});
+
     kOptionsMap["root_policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["lag_buffer"] << Option::SetOption(0.f);
@@ -688,6 +690,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--draw-factor")) {
         if (IsParameter(res->Get<>())) {
             SetOption("draw_factor", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--kldgain")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("kldgain", res->Get<>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
