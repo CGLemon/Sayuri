@@ -281,10 +281,12 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     const float bound_time = (param_->const_time > 0 &&
                                  time_control_.IsInfiniteTime(color)) ?
                                      param_->const_time : std::numeric_limits<float>::max();
-    const auto thinking_time = std::min(
-                                   bound_time,
-                                   time_control_.GetThinkingTime(
-                                       color, board_size, move_num));
+    const float thinking_time = !(tag & kThinking) ?
+                                    time_control_.GetInfiniteTime() : 
+                                    std::min(
+                                        bound_time,
+                                        time_control_.GetThinkingTime(
+                                            color, board_size, move_num));
 
     // Will be zero if time mananger is invalid.
     const float buffer_effect = time_control_.GetBufferEffect(
@@ -337,8 +339,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
             }
         }
 
-        const auto elapsed = (tag & kThinking) ?
-                                 timer.GetDuration() : std::numeric_limits<float>::lowest();
+        const auto elapsed = timer.GetDuration();
 
         // TODO: Stop running when there is no alternate move.
         if (tag & kUnreused) {

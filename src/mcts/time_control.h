@@ -33,6 +33,7 @@ public:
     std::string ToString() const;
 
     bool IsInfiniteTime(int color) const;
+    float GetInfiniteTime() const;
 
 private:
     void Reset();

@@ -216,11 +216,11 @@ float TimeControl::GetThinkingTime(int color, int boardsize,
                                    int move_num, bool use_lag_buffer) const {
     assert(color == kBlack || color == kWhite);
 
-    if(IsInfiniteTime(color)) {
-        return 31 * 24 * 60 * 60;
+    if (IsInfiniteTime(color)) {
+        return GetInfiniteTime();
     }
 
-    if(IsTimeOver(color)) {
+    if (IsTimeOver(color)) {
         // no time to use
         return 0;
     }
@@ -274,6 +274,10 @@ bool TimeControl::IsInfiniteTime(int /* color */) const {
                byo_time_ == 0 &&
                byo_stones_ == 0 &&
                byo_periods_ == 0;
+}
+
+float TimeControl::GetInfiniteTime() const {
+    return 31 * 24 * 60 * 60;
 }
 
 int TimeControl::EstimateMovesExpected(int boardsize, int move_num) const {
