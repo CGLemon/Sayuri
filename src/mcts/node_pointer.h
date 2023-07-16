@@ -42,6 +42,7 @@ public:
 
     int GetVertex() const;
     float GetPolicy() const;
+    int GetVisits() const;
 
 private:
     std::atomic<std::uint64_t> pointer_{kUninflated};
@@ -231,4 +232,17 @@ inline float NodePointer<NodeType>::GetPolicy() const {
         return ReadPointer(v)->GetPolicy();
     }
     return ReadPolicy(v);
+}
+
+template<typename NodeType>
+inline int NodePointer<NodeType>::GetVisits() const {
+    auto v = pointer_.load(std::memory_order_relaxed);
+
+    while (IsInflating(v)) {
+        v = pointer_.load(std::memory_order_relaxed);
+    }
+    if (IsPointer(v)) {
+        return ReadPointer(v)->GetVisits();
+    }
+    return 0;
 }

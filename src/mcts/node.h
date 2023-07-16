@@ -129,7 +129,7 @@ public:
     int GetBestMove(bool allow_pass);
 
     // Get best move(vertex) with Gumbel-Top-k trick.
-    int GetGumbelMove();
+    int GetGumbelMove(bool allow_pass);
 
     const std::vector<Edge> &GetChildren() const;
 

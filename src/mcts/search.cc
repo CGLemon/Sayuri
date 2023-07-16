@@ -466,7 +466,8 @@ void Search::GatherComputationResult(ComputationResult &result) const {
                              RandomizeMoveWithGumbel(
                                  root_state_,
                                  1, param_->random_min_visits);
-    result.gumbel_move = root_node_->GetGumbelMove();
+    result.gumbel_move = root_node_->GetGumbelMove(true);
+    result.gumbel_no_pass_move = root_node_->GetGumbelMove(false);
     result.root_final_score = root_node_->GetFinalScore(color);
     result.root_eval = root_node_->GetWL(color, false);
     {
@@ -736,6 +737,14 @@ int Search::ThinkBestMove() {
 bool ShouldForbidPass(GameState &state,
                       ComputationResult &result,
                       NodeEvals &root_evals) {
+
+    const auto num_intersections = state.GetNumIntersections();
+    const auto move_threshold = num_intersections / 3;
+    if (state.GetMoveNumber() <= move_threshold) {
+        // Too early to pass.
+        return true;
+    }
+
     int to_move = result.to_move;
     auto safe_ownership = state.GetOwnership();
 
@@ -752,7 +761,6 @@ bool ShouldForbidPass(GameState &state,
         }
     }
 
-    const auto num_intersections = state.GetNumIntersections();
     constexpr float kRawOwnshipThreshold = 0.8f; // ~90%
 
     for (int idx = 0; idx < num_intersections; ++idx) {
@@ -824,27 +832,24 @@ int Search::GetSelfPlayMove() {
 
     // Now start the MCTS.
     auto result = Computation(playouts, tag);
+    const bool is_gumbel = root_node_->ShouldApplyGumbel() && !(tag & kNoNoise);
 
-    // Default is the best move. May use another move instead
-    // of it later.
-    int move = result.best_move;
-
-    // Apply the Gumbel-Top-k trick if it is valid. Will cover
-    // the original best move.
-    if (root_node_->ShouldApplyGumbel() && !(tag & kNoNoise)) {
-        move = result.gumbel_move;
-    }
+    // Default is the best move or the Gumbel-Top-k trick move. May use
+    // another move instead of it later.
+    int move = is_gumbel ? result.gumbel_move : result.best_move;
 
     // The game is not end. Don't play the pass move.
     if (ShouldForbidPass(root_state_, result, root_evals_)) {
-        move = result.best_no_pass_move;
+        move = is_gumbel ?
+                   result.gumbel_no_pass_move :
+                   result.best_no_pass_move;
     }
 
     // Do the random move in the opening stage in order to improve the
     // game state diversity.
     int random_moves_cnt = param_->random_moves_factor *
                                result.board_size * result.board_size;
-    if (random_moves_cnt > result.movenum) {
+    if (random_moves_cnt > result.movenum && !is_gumbel) {
         move = result.random_move;
     }
 

@@ -84,6 +84,7 @@ struct ComputationResult {
     int best_no_pass_move{kNullVertex};
     int random_move{kNullVertex};
     int gumbel_move{kNullVertex};
+    int gumbel_no_pass_move{kNullVertex};
 
     VertexType to_move;
     float komi;

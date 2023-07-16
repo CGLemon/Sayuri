@@ -100,7 +100,6 @@ bool Node::ExpandChildren(Network &network,
 
     // For children...
     auto nodelist = std::vector<Network::PolicyVertexPair>{};
-    auto allow_pass = true;
     auto legal_accumulate = 0.0f;
 
     const auto board_size = state.GetBoardSize();
@@ -166,17 +165,9 @@ bool Node::ExpandChildren(Network &network,
         legal_accumulate += policy;
     }
 
-    // There ara too many legal moves. Disable the pass move.
-    if ((int)nodelist.size() > 3*num_intersections/4) {
-        allow_pass = false;
-    }
-
-    // The pass is always legal. If there is no legal move except for pass, forcing
-    // to open the pass node.
-    if (allow_pass || nodelist.empty()) {
-        nodelist.emplace_back(raw_netlist.pass_probability, kPass);
-        legal_accumulate += raw_netlist.pass_probability;
-    }
+    // The pass is always legal.
+    nodelist.emplace_back(raw_netlist.pass_probability, kPass);
+    legal_accumulate += raw_netlist.pass_probability;
 
     if (legal_accumulate < 1e-8f) {
         // It will be happened if the policy focuses on the illegal moves.
@@ -1743,10 +1734,40 @@ Node *Node::GumbelSelectChild(int color, bool only_max_visit) {
     return best_node->Get();
 }
 
-int Node::GetGumbelMove() {
+int Node::GetGumbelMove(bool allow_pass) {
     WaitExpanded();
     assert(HasChildren());
-    return GumbelSelectChild(color_, true)->GetVertex();
+
+    int max_visits = -1;
+    int num_candidates = 0;
+
+    for (auto &child : children_) {
+        const int visits = child.GetVisits();
+        if (visits > max_visits) {
+            num_candidates = 0;
+            max_visits = visits;
+        }
+        if (visits == max_visits) {
+            num_candidates += 1;
+        } 
+    }
+
+    if (!allow_pass && num_candidates == 1) {
+        // Only one candidate move. It may be the pass move.
+        allow_pass = true;
+    }
+
+    auto move = kNullVertex;
+
+    while (move == kNullVertex) {
+        move = GumbelSelectChild(color_, true)->GetVertex();
+
+        if (!allow_pass && move == kPass) {
+            // Select the new next move again.
+            move = kNullVertex;
+        }
+    }
+    return move;
 }
 
 void Node::SetScoreBouns(float val) {
