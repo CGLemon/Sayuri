@@ -805,11 +805,16 @@ int Search::GetSelfPlayMove() {
 
     auto tag = kThinking;
 
+    const int random_moves_cnt = param_->random_moves_factor *
+                                     root_state_.GetNumIntersections();
+    bool is_opening_random = root_state_.GetMoveNumber() < random_moves_cnt;
+
     // Decide the playouts number first. Default is max
     // playouts. May use the lower playouts instead it.
     int playouts = max_playouts_;
 
-    if (param_->reduce_playouts > 0 &&
+    if (!is_opening_random &&
+            param_->reduce_playouts > 0 &&
             param_->reduce_playouts < max_playouts_ &&
             Random<>::Get().Roulette<10000>(param_->reduce_playouts_prob)) {
 
@@ -846,10 +851,9 @@ int Search::GetSelfPlayMove() {
     }
 
     // Do the random move in the opening stage in order to improve the
-    // game state diversity.
-    int random_moves_cnt = param_->random_moves_factor *
-                               result.board_size * result.board_size;
-    if (random_moves_cnt > result.movenum && !is_gumbel) {
+    // game state diversity. The Gumbel noise may be good enough. Don't
+    // play the random move.
+    if (is_opening_random && !is_gumbel) {
         move = result.random_move;
     }
 
