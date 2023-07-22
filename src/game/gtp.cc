@@ -2,6 +2,7 @@
 #include "game/sgf.h"
 #include "game/commands_list.h"
 #include "utils/log.h"
+#include "utils/time.h"
 #include "utils/komi.h"
 #include "utils/gogui_helper.h"
 #include "pattern/mm_trainer.h"
@@ -14,6 +15,7 @@
 #include <string>
 #include <vector>
 #include <array>
+#include <atomic>
 
 void GtpLoop::Loop() {
     while (true) {
@@ -605,26 +607,40 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             out << GtpFail("symmetry must be from 0 to 7");
         }
     } else if (const auto res = spt.Find("benchmark", 0)) {
-        int playouts = 3200;
+        int eval_cnt = 3200;
 
-        if (const auto p = spt.GetWord(1)) {
-            playouts = std::max(p->Get<int>(), 1);
+        if (const auto e = spt.GetWord(1)) {
+            eval_cnt = std::max(e->Get<int>(), 1);
         }
 
-        // clean current state
-        agent_->GetSearch().ReleaseTree();
         agent_->GetNetwork().ClearCache();
+        auto group = ThreadGroup<void>(&ThreadPool::Get());
 
-        auto result = agent_->GetSearch().Computation(playouts, Search::kNullTag);
+        std::atomic<int> count{0};
+        const auto Worker = [&, this, eval_cnt]() -> void {
+            while (count.load(std::memory_order_relaxed) < eval_cnt) {
+                count.fetch_add(1, std::memory_order_relaxed);
+                agent_->GetNetwork().GetOutput(
+                    agent_->GetState(), Network::kRandom, 1.f, 0, false, false);
+            }
+        };
 
-        auto benchmark_out = std::ostringstream{};
-        benchmark_out <<  "Benchmark Result:\n"
-                          << Format("Use %d threads, the batch size is %d.\n",
-                                        result.threads, result.batch_size)
-                          << Format("Do %d playouts in %.2f sec.",
-                                        result.playouts, result.seconds);
+        Timer timer;
+        timer.Clock();
 
-        out << GtpSuccess(benchmark_out.str());
+        const auto threads = GetOption<int>("threads");
+        const auto batch_size = GetOption<int>("batch_size");
+        for (int i = 0; i < threads; ++i) {
+            group.AddTask(Worker);
+        }
+        group.WaitToJoin();
+
+        const auto elapsed = timer.GetDuration();
+        out << GtpSuccess(
+            Format("%d -> %.2f(eval/s), bs=%d, t=%d",
+                count.load(),
+                count.load()/elapsed,
+                threads, batch_size));
     } else if (const auto res = spt.Find("genbook", 0)) {
         auto sgf_file = std::string{};
         auto data_file = std::string{};
