@@ -2,7 +2,7 @@
 
 ## Requirements
 
-* Be sure that you had built the engine. The engine should be in the ```build``` directory. I recommend to use the ```-DUSE_ZLIB=1``` option.
+* Be sure that you had built the engine. The engine should be in the ```build``` directory. Recommend to use the ```-DUSE_ZLIB=1``` option.
 * PyTorch 1.x (for python)
 * NumPy (for python)
 
@@ -127,8 +127,11 @@ The ```selfplay-config.txt``` controls the self-play process. Here are the param
 --resign-playouts 75         # Use this playout if someone's winrate below
                              # threshold.
 
---resign-threshold 0.02      # If someone's winrate is below this value,
+--resign-threshold 0.05      # If someone's winrate is below this value,
                              # will use the resign-playouts.
+
+--resign-discard-prob 0.8    # Discard the training data in 80% when someome
+                             # has already won the game.
 
 --parallel-games 128         # Parallel games at the same time.
 --batch-size 64              # Network evalutaion batch size.

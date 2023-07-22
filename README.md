@@ -192,7 +192,7 @@ Although the Neural Network based engines are more powerful, I still recommend t
 * [Pachi](https://github.com/pasky/pachi), need to add the option ```--nodcnn``` to disable DCNN.
 * [Ray](https://github.com/kobanium/Ray), may be strongest open source engine before the 2016s.
 
-I am trying to implement this ancient technique. Merge the MM patterns based and the DCNN based technique to provide widely dynamic strength. It should be fun.
+I had implemented this ancient technique. Merge the MM patterns based and the DCNN based technique to provide widely dynamic strength.
 
 ### The Gumbel learning
 
@@ -216,6 +216,14 @@ The Ray author, Yuki Kobayashi, proposed three points which may improve my netwo
 * Bottleneck network, It may improve 30% speed without losing accuracy.
 
 KataGo also proposed a variant bottleneck and said it could significantly improve the performance. This result shows the advance of these kinds of structure. However in my recent testing (March, 2023), bottleneck is not effective on the 10x128 and 15x192 network. And seem that there are more blind spots in bottleneck because the 1x1 kernel may compress the board information. I will check it again.
+
+
+### Break the SL pipe and next step
+
+(July, 2023)
+
+Thanks for [shengkelong](https://github.com/shengkelong)'s experiment. The experiment givse the project some better paramters and ideas. Some ideas are about RL improvement which is generating the training data from the self-play. I think it is time to break the SL pipe because the curreny RL weights is stronger than any SL weights. Breaking the SL pipe can be more easy to rewrite the RL pipe.
+
 
 ## Features
 

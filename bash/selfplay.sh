@@ -50,6 +50,7 @@ do
     # Stop the loop if we find the kill file.
     if [ -f $KILL_FILE ]; then 
         echo "Find the kill file. Stop the self-play loop."
+        rm $KILL_FILE
         break
     fi
 done

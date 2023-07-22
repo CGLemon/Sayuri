@@ -40,7 +40,8 @@
 --reduce-playouts-prob 0.75
 
 --resign-playouts 75
---resign-threshold 0.02
+--resign-threshold 0.05
+--resign-discard-prob 0.8
 
 --parallel-games 128
 --batch-size 64
