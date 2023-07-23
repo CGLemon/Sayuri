@@ -187,7 +187,7 @@ std::string GameState::VertexToSgf(const int vtx) const {
 
     auto out = std::ostringstream{};    
     const auto x = GetX(vtx);
-    const auto y = GetY(vtx);
+    const auto y = GetBoardSize() - GetY(vtx) - 1;
 
     if (x >= 26) {
         out << static_cast<char>(x - 26 + 'A');
