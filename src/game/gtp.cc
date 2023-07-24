@@ -707,7 +707,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             agent_->GetSearch().ReleaseTree();
             agent_->GetNetwork().ClearCache();
             agent_->GetSearch().Computation(playouts, Search::kNullTag);
-            out << GtpSuccess("Done");
+            out << GtpSuccess("done");
         } else {
             out << GtpFail("invalid playouts");
         }

@@ -813,11 +813,14 @@ std::string Node::GetPathVerboseString(GameState &state, int color,
         if (curr_node) {
             const auto vertex = curr_node->GetVertex();
             const auto winrate = curr_node->GetWL(color, false);
-            const auto policy = curr_node->GetPolicy();
             const auto score = curr_node->GetFinalScore(color);
-            out << Format("%s -> WL: %.2f(\%), P: %.2f(\%), S: %.2f\n",
+            const auto policy = curr_node->GetPolicy();
+            const auto raw_winrate = curr_node->GetNetWL(color);
+            const auto raw_score = curr_node->GetNetScore(color);
+            out << Format("%s -> avg-WL: %.2f(\%), avg-S: %.2f, P: %.2f(\%), WL: %.2f(\%), S: %.2f\n",
                        state.VertexToText(vertex).c_str(),
-                       100 * winrate, 100 * policy, score);
+                       100 * winrate, score,
+                       100 * policy, 100 * raw_winrate, raw_score);
         }
         color = !color;
     }
