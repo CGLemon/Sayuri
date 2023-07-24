@@ -6,7 +6,6 @@
 #include "utils/komi.h"
 #include "utils/gogui_helper.h"
 #include "pattern/mm_trainer.h"
-#include "neural/supervised.h"
 #include "neural/encoder.h"
 #include "accuracy/predict.h"
 
@@ -562,25 +561,6 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             out << GtpSuccess("true");
         } else {
             out << GtpSuccess("false");
-        }
-    } else if (const auto res = spt.Find({"supervised", "sayuri-supervised"}, 0)) {
-        auto sgf_file = std::string{};
-        auto data_file = std::string{};
-
-        if (const auto sgf = spt.GetWord(1)) {
-            sgf_file = sgf->Get<>();
-        }
-        if (const auto data = spt.GetWord(2)) {
-            data_file = data->Get<>();
-        }
-
-        if (!sgf_file.empty() && !data_file.empty()) {
-            bool is_general = res->Get<>() != "sayuri-supervised";
-
-            Supervised::Get().FromSgfs(is_general, sgf_file, data_file);
-            out << GtpSuccess("");
-        } else {
-            out << GtpFail("file name is empty");
         }
     } else if (const auto res = spt.Find("planes", 0)) {
         int symmetry = Symmetry::kIdentitySymmetry;

@@ -96,10 +96,6 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "kgs-time_settings",
 
-    "supervised",
-
-    "sayuri-supervised",
-
     "planes",
 
     "raw-nn",
