@@ -907,7 +907,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     const auto space2 = 10;
     out << " * Tree Status:" << std::endl
             << std::fixed << std::setprecision(4)
-            << std::setw(space2) << "root KL:" << ' ' << GetKlDivergence() << std::endl
+            << std::setw(space2) << "root K:" << ' ' << GetKlDivergence() << std::endl
             << std::setw(space2) << "root C:"  << ' ' << GetTreeComplexity() << std::endl
             << std::setw(space2) << "nodes:"   << ' ' << nodes    << std::endl
             << std::setw(space2) << "edges:"   << ' ' << edges    << std::endl
@@ -967,16 +967,16 @@ std::string Node::ToAnalysisString(GameState &state,
         const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
 
         if (is_sayuri) {
-            const auto kl = child->GetKlDivergence();
+            const auto kld = child->GetKlDivergence();
             const auto complexity = child->GetTreeComplexity();
-            out << Format("info move %s visits %d winrate %.6f scorelead %.6f prior %.6f lcb %.6f kl %.6f complexity %.6f order %d pv %s",
+            out << Format("info move %s visits %d winrate %.6f scorelead %.6f prior %.6f lcb %.6f kld %.6f complexity %.6f order %d pv %s",
                              state.VertexToText(vertex).c_str(),
                              visits,
                              winrate,
                              final_score,
                              prior,
                              lcb,
-                             kl,
+                             kld,
                              complexity,
                              order,
                              pv_string.c_str()
