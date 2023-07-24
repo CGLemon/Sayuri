@@ -37,7 +37,7 @@
 --always-completed-q-policy
 
 --reduce-playouts 50
---reduce-playouts-prob 0.75
+--reduce-playouts-prob 0.0
 
 --resign-playouts 75
 --resign-threshold 0.05

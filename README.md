@@ -222,7 +222,7 @@ KataGo also proposed a variant bottleneck and said it could significantly improv
 
 (July, 2023)
 
-Thanks for [shengkelong](https://github.com/shengkelong)'s experiment. The experiment givse the project some better paramters and ideas. Some ideas are about RL improvement which is generating the training data from the self-play. I think it is time to break the SL pipe because the curreny RL weights is stronger than any SL weights. Breaking the SL pipe can be more easy to rewrite the RL pipe.
+Thanks for [shengkelong](https://github.com/shengkelong)'s experiment. The experiment gives the project some better parameters and ideas. Some ideas are about RL improvement which is generating the training data from the self-play. I think it is time to break the SL pipe because the current RL weights is stronger than any SL weights which I train. Breaking the SL pipe can be more easy to rewrite the RL pipe.
 
 
 ## Features
