@@ -16,11 +16,7 @@ struct Training {
 
     std::vector<float> planes;
 
-    int probabilities_index{-1};
-
     std::vector<float> probabilities;
-
-    int auxiliary_probabilities_index{-1};
 
     std::vector<float> auxiliary_probabilities;
 
@@ -37,7 +33,7 @@ struct Training {
  /*
     Output format is here. Every data package is 45 lines.
 
-    ------- claiming -------
+    ------- Version -------
      L1       : Version
      L2       : Mode
      

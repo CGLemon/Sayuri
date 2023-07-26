@@ -4,7 +4,7 @@ import numpy as np
 import random, time, math, os, glob, io, gzip
 
 from network import Network
-from data import Data, FIXED_DATA_VERSION
+from data import Data
 
 from torch.nn import DataParallel
 from lazy_loader import LazyLoader, LoaderFlag
@@ -56,32 +56,22 @@ class StreamParser:
     def func(self, stream):
         if stream is None:
             return None
-
-        datalines = Data.get_datalines(FIXED_DATA_VERSION);
-        data_str = []
-
-        while True:
-            for cnt in range(datalines):
-                line = stream.readline()
-                if len(line) == 0:
-                    return None # stream is end
-                else:
-                    data_str.append(line)
-
-            if self.down_sample_rate > 1:
-                if random.randint(0, self.down_sample_rate-1) != 0:
-                    data_str = []
-                    continue
-            break
-
         data = Data()
 
-        for cnt in range(datalines):
-            line = data_str[cnt]
-            data.fill_v1(cnt, line)
+        while True:
+            skip_this_time = False
+            if self.down_sample_rate > 1:
+                if random.randint(0, self.down_sample_rate-1) != 0:
+                    skip_this_time = True
+
+            success = data.parse_from_stream(stream, skip_this_time)
+
+            if success == False:
+                return None # stream is end
+            if skip_this_time == False:
+                break
 
         data.apply_symmetry(random.randint(0, 7))
-
         return data
 
 class BatchGenerator:
@@ -308,7 +298,7 @@ class TrainingPipe():
         model_name = os.path.join(model_path, "s{}.pt".format(last_steps))
         if os.path.isfile(model_name):
             self.module.load_state_dict(torch.load(model_name, map_location=torch.device('cpu')))
-            print("load model: {}".format(model_name))
+            print("Load model from {}.".format(model_name))
         else:
             # If we fail to load another model, be sure that
             # init steps is zero.
@@ -320,7 +310,7 @@ class TrainingPipe():
             # TODO: We may load different optimizers. Be sure that
             #       program don't crash in any condition.
             self.opt.load_state_dict(torch.load(opt_name, map_location=torch.device('cpu')))
-            print("load optimizer: {}".format(opt_name))
+            print("Load optimizer status from {}.".format(opt_name))
 
         # update to current learning rate...
         curr_lr = self._get_lr_schedule(last_steps)
@@ -474,9 +464,8 @@ class TrainingPipe():
     def fit_and_store(self):
         init_steps = self._load_current_status()
 
-        print("init loader...")
         self._init_loader()
-        print("start training...")
+        print("Start training...")
 
         running_loss_dict = self.get_new_running_loss_dict()
         num_steps = init_steps
