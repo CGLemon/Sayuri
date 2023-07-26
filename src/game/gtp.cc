@@ -249,23 +249,6 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             Sgf::Get().ToFile(filename, agent_->GetState());
             out << GtpSuccess("");
         }
-    } else if (const auto res = spt.Find("cleansgf", 0)) {
-        auto fin = std::string{};
-        auto fout = std::string{};
-
-        if (const auto input = spt.GetWord(1)) {
-            fin = input->Get<>();
-        }
-        if (const auto input = spt.GetWord(2)) {
-            fout = input->Get<>();
-        }
-
-        if (fin.empty() || fout.empty()) {
-            out << GtpFail("invalid cleansgf");
-        } else {
-            Sgf::Get().CleanSgf(fin, fout);
-            out << GtpSuccess("");
-        }
     } else if (const auto res = spt.Find("get_komi", 0)) {
         out << GtpSuccess(std::to_string(agent_->GetState().GetKomi()));
     } else if (const auto res = spt.Find("get_handicap", 0)) {

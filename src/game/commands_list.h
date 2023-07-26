@@ -52,8 +52,6 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "printsgf",
 
-    "cleansgf",
-
     "is_legal",
 
     "color",
