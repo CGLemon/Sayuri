@@ -36,6 +36,7 @@ public:
 
         gumbel_c_visit = GetOption<float>("gumbel_c_visit");
         gumbel_c_scale = GetOption<float>("gumbel_c_scale");
+        gumbel_prom_visits = GetOption<int>("gumbel_prom_visits");
         gumbel_considered_moves = GetOption<int>("gumbel_considered_moves");
         gumbel_playouts = GetOption<int>("gumbel_playouts");
         gumbel = GetOption<bool>("gumbel");
@@ -93,6 +94,7 @@ public:
 
     float gumbel_c_visit;
     float gumbel_c_scale;
+    int gumbel_prom_visits;
     int gumbel_considered_moves;
     int gumbel_playouts;
     bool gumbel;

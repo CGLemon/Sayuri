@@ -1585,16 +1585,18 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
 
 void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
                                const int color,
-                               const int root_visits,
+                               const int parent_visits,
                                const int max_visists,
                                const int considered_moves,
                                const float logit_zero,
                                bool only_max_visit) {
-
-    // The variant of Sequential Halving algorithm. The input N playouts
-    // is always '(log2(considered moves) + 1) * (considered moves)' for
-    // each epoch. The variant algorithm is same as Sequential Halving if
-    // the total playous is lower than this value.
+    // The variant of Sequential Halving algorithm. The input N playouts is always
+    // '(promotion visits) * (log2(considered moves) + 1) * (considered moves)' for
+    // each epoch. The variant algorithm is same as Sequential Halving if the total
+    // playous is lower than this value. Following is a example,
+    // 
+    // promotion visits = 1
+    // considered moves = 4
     //
     // Round 1.
     // distribution -> 1 | 1 | 1 | 1
@@ -1604,7 +1606,7 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
     // distribution -> 2 | 2 | 0 | 0
     // accumulation -> 3 | 3 | 1 | 1
     //
-    // Round 3.(first epoch is end)
+    // Round 3.(1st epoch is end)
     // distribution -> 4 | 0 | 0 | 0
     // accumulation -> 7 | 3 | 1 | 1
     //
@@ -1616,11 +1618,12 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
     // distribution -> 2  | 2 | 0 | 0
     // accumulation -> 10 | 6 | 2 | 2
     //
-    // Round 6. (second epoch is end)
+    // Round 6. (2nd epoch is end)
     // distribution -> 4  | 0 | 0 | 0
     // accumulation -> 14 | 6 | 2 | 2
 
-    const int n = std::log2(std::max(1,considered_moves)) + 1;
+    const int prom_visits = std::max(1, param_->gumbel_prom_visits);
+    const int n = std::log2(std::max(1, considered_moves)) + 1;
     const int adj_considered_moves = std::pow(2, n-1); // Be sure that it is pow of 2.
 
     auto table = std::vector<int>(adj_considered_moves, 0);
@@ -1632,27 +1635,30 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
         }
     }
 
-    const int visits_per_round = n * adj_considered_moves;
-    const int rounds = root_visits / visits_per_round;
-    const int visits_this_round = root_visits - rounds * visits_per_round;
-    const int m = visits_this_round / adj_considered_moves;
+    const int visits_per_epoch = n * prom_visits * adj_considered_moves;
+    const int epoches = parent_visits / visits_per_epoch;
+    const int visits_this_epoch = parent_visits - epoches * visits_per_epoch;
+    const int rounds_this_epoch =
+        visits_this_epoch / (prom_visits * adj_considered_moves);
 
     int height = 0;
     int width = adj_considered_moves;
     int offset = 0;
-    for (int i = 0, t = 1; i < m; i++, t *= 2) {
+    for (int i = 0, t = 1; i < rounds_this_epoch; i++, t *= 2) {
         height += t;
         width /= 2;
         offset += width;
     }
 
     const auto parent_score = GetNetScore(color);
-    const int idx = offset + root_visits % width;
+    const int visits_this_epoch_remining =
+        visits_this_epoch - rounds_this_epoch * prom_visits * adj_considered_moves;
+    const int idx = offset + visits_this_epoch_remining % width;
     const int considered_visists =
         only_max_visit ?
             max_visists :
-            table[idx] * rounds + height +
-                (visits_this_round - m*adj_considered_moves)/width;
+            prom_visits * (table[idx] * epoches + height) +
+                visits_this_epoch_remining / width;
 
     for (auto &child : children_) {
         const auto vtx = child.GetVertex();
