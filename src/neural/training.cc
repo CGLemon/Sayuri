@@ -30,8 +30,9 @@ void PlanesStreamOut(std::ostream &out, const std::vector<float> &arr, size_t pl
     const auto size = arr.size();
     const auto spatial = size / planes;
     const bool remaining = (spatial % 4 != 0);
+    const auto saved_planes = planes-4; // Last four channels are not binary features.
 
-    for (size_t p = 0; p < planes-4; ++p) { // Last four channels are not binary features.
+    for (size_t p = 0; p < saved_planes; ++p) {
         for (size_t idx = 0; idx+4 <= spatial; idx+=4) {
             int hex = 0;
 
@@ -68,18 +69,8 @@ void Training::StreamOut(std::ostream &out) const {
     PlanesStreamOut(out, planes, kInputChannels);
     out << (side_to_move == kBlack ? 1 : 0) << std::endl;
 
-    if (probabilities_index == -1) {
-        ArrayStreamOut(out, probabilities);
-    } else {
-        out << probabilities_index << std::endl;
-    }
-
-    if (auxiliary_probabilities_index == -1) {
-        ArrayStreamOut(out, auxiliary_probabilities);
-    } else {
-        out << auxiliary_probabilities_index << std::endl;
-    }
-
+    ArrayStreamOut(out, probabilities);
+    ArrayStreamOut(out, auxiliary_probabilities);
     OwnershipStreamOut(out, ownership);
 
     out << result << std::endl;

@@ -1024,11 +1024,7 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
 
     for (int i = training_buffer_.size()-1; i >= 0; --i) {
         auto &buf = training_buffer_[i];
-
-        buf.auxiliary_probabilities_index = -1;
         buf.auxiliary_probabilities = aux_prob;
-
-        buf.probabilities_index = -1;
         aux_prob = buf.probabilities;
     }
 
