@@ -87,6 +87,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["gumbel_c_visit"] << Option::SetOption(50.f);
     kOptionsMap["gumbel_c_scale"] << Option::SetOption(1.f);
     kOptionsMap["gumbel_prom_visits"] << Option::SetOption(1);
+    kOptionsMap["gumbel_adj_factor"] << Option::SetOption(0.f);
     kOptionsMap["gumbel_considered_moves"] << Option::SetOption(16);
     kOptionsMap["gumbel_playouts"] << Option::SetOption(400);
     kOptionsMap["gumbel"] << Option::SetOption(false);
@@ -437,6 +438,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--gumbel-c-scale")) {
         if (IsParameter(res->Get<>())) {
             SetOption("gumbel_c_scale", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--gumbel-adj-factor")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("gumbel_adj_factor", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

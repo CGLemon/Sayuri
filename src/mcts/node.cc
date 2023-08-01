@@ -670,7 +670,7 @@ int Node::RandomizeMoveWithGumbel(GameState &state, int temp, int min_visits) {
     for (float &p : prob) {
         p /= (float)acc_visists;
     }
-    MixLogitsCompletedQ(state, prob);
+    MixLogitsCompletedQ(state, prob, 0.f);
 
     constexpr int int_factor = 100000;
     auto int_prob_acc_table = std::vector<int>(num_intersections+1, 0);
@@ -1449,11 +1449,14 @@ std::vector<float> Node::GetProbLogitsCompletedQ(GameState &state) {
         v /= acc;
     }
 
-    MixLogitsCompletedQ(state, prob);
+    const float adj_factor = param_->gumbel_adj_factor;
+    MixLogitsCompletedQ(state, prob, adj_factor);
     return prob;
 }
 
-void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
+void Node::MixLogitsCompletedQ(GameState &state,
+                               std::vector<float> &prob,
+                               float adj_factor) {
     const auto num_intersections = state.GetNumIntersections();
     const auto color = state.GetToMove();
 
@@ -1548,6 +1551,8 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
 
     // Apply the completed Q with policy.
     int completed_q_idx = 0;
+    const float adj_c_scale = std::min(
+        adj_factor * (1.f/weighted_pi), 1.f);
     for (auto & child : children_) {
         const auto vtx = child.GetVertex();
         int idx = num_intersections; // pass move
@@ -1561,8 +1566,8 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
 
         // Transform the Completed Q value because it makes
         // policy logit and Q value balance.
-        logits_q[idx] = logits + TransformCompletedQ(
-                                     completed_q, max_visits);
+        logits_q[idx] = logits + adj_c_scale *
+                            TransformCompletedQ(completed_q, max_visits);
     }
     prob = Softmax(logits_q, 1.f);
 
