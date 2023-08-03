@@ -3,6 +3,7 @@
 
 #include <sstream>
 #include <iomanip>
+#include <iostream>
 
 Encoder& Encoder::Get() {
     static Encoder encoder;
@@ -29,6 +30,45 @@ InputData Encoder::GetInputs(const GameState &state, int symmetry) const {
 std::vector<float> Encoder::GetPlanes(const GameState &state, int symmetry) const {
     auto num_intersections = state.GetNumIntersections();
     auto plane_size = num_intersections * kPlaneChannels;
+    auto planes_v2 = std::vector<float>(plane_size, 0.f);
+
+    auto planes_v3 = GetPlanes_V3(state, symmetry);
+
+    // history and ko
+    for (int i = 0; i < 25 * num_intersections; ++i) {
+        planes_v2[i] = planes_v3[i];
+    }
+
+    // merge the owner
+    for (int i = 0; i < 1 * num_intersections; ++i) {
+        int v2_start = 25 * num_intersections;
+        int v3_start_0 = 25 * num_intersections; // my
+        int v3_start_1 = 26 * num_intersections; // opp's
+        float val = planes_v3[v3_start_0 + i] +
+                        planes_v3[v3_start_1 + i];
+        planes_v2[v2_start + i] = val;
+    }
+
+    // liberties and ladder
+    for (int i = 0; i < 8 * num_intersections; ++i) {
+        int v2_start = 26 * num_intersections;
+        int v3_start = 29 * num_intersections;
+        planes_v2[v2_start + i] = planes_v3[v3_start + i];
+    }
+
+    // last 4 planes are same
+    for (int i = 0; i < 4 * num_intersections; ++i) {
+        int v2_start = 34 * num_intersections;
+        int v3_start = 39 * num_intersections;
+        planes_v2[v2_start + i] = planes_v3[v3_start + i];
+    }
+
+    return planes_v2;
+}
+
+std::vector<float> Encoder::GetPlanes_V3(const GameState &state, int symmetry) const {
+    auto num_intersections = state.GetNumIntersections();
+    auto plane_size = num_intersections * kPlaneChannels_V3;
     auto planes = std::vector<float>(plane_size, 0.f);
     auto it = std::begin(planes);
 
@@ -169,16 +209,32 @@ void Encoder::FillKoMove(const Board* board,
     ko_it[index] = static_cast<float>(true);
 }
 
-void Encoder::FillSafeArea(const Board* board,
-                           std::vector<float>::iterator safearea_it) const {
+void Encoder::FillArea(const Board* board,
+                       const int to_move,
+                       std::vector<float>::iterator area_it) const {
     auto num_intersections = board->GetNumIntersections();
 
+    auto ownership = std::vector<int>(num_intersections, kInvalid);
     auto safe_area = std::vector<bool>(num_intersections, false);
+
+    board->ComputeScoreArea(ownership);
     board->ComputeSafeArea(safe_area, false);
 
     for (int index = 0; index < num_intersections; ++index) {
-        if (safe_area[index]) {
-            safearea_it[index] = static_cast<float>(true);
+        bool safe = safe_area[index];
+        int owner = ownership[index];
+
+        if (safe) {
+            if (owner == to_move) {
+                area_it[index + 0 * num_intersections] = static_cast<float>(true);
+            } else if (owner == (!to_move)) {
+                area_it[index + 1 * num_intersections] = static_cast<float>(true);
+            }
+        }
+        if (owner == to_move) {
+            area_it[index + 2 * num_intersections] = static_cast<float>(true);
+        } else if (owner == (!to_move)) {
+            area_it[index + 3 * num_intersections] = static_cast<float>(true);
         }
     }
 }
@@ -240,37 +296,47 @@ void Encoder::FillMisc(const Board* board,
         komi = 0.0f - komi;
     }
 
-    // komi
+    // rule
     std::fill(misc_it+ 0 * num_intersections,
-                  misc_it+ 1 * num_intersections, komi/20.f);
+                  misc_it+ 1 * num_intersections, static_cast<float>(false));
+
+    // wave
+    std::fill(misc_it+ 1 * num_intersections,
+                  misc_it+ 2 * num_intersections, static_cast<float>(false));
+
+    // komi
+    std::fill(misc_it+ 2 * num_intersections,
+                  misc_it+ 3 * num_intersections, komi/20.f);
 
     // negative komi
-    std::fill(misc_it+ 1 * num_intersections,
-                  misc_it+ 2 * num_intersections, -komi/20.f);
+    std::fill(misc_it+ 3 * num_intersections,
+                  misc_it+ 4 * num_intersections, -komi/20.f);
 
     // number of intersections
-    std::fill(misc_it+ 2 * num_intersections,
-                  misc_it+ 3 * num_intersections, static_cast<float>(num_intersections)/361.f);
+    std::fill(misc_it+ 4 * num_intersections,
+                  misc_it+ 5 * num_intersections, static_cast<float>(num_intersections)/361.f);
 
     // ones
-    std::fill(misc_it+ 3 * num_intersections,
-                  misc_it+ 4 * num_intersections, static_cast<float>(true));
+    std::fill(misc_it+ 5 * num_intersections,
+                  misc_it+ 6 * num_intersections, static_cast<float>(true));
 }
 
 void Encoder::EncoderFeatures(const GameState &state,
                               std::vector<float>::iterator it) const {
     auto board = state.GetPastBoard(0);
-    auto num_intersections = board->GetNumIntersections();
+    const auto shift = board->GetNumIntersections();
 
-    auto ko_it = it;
-    auto safearea_it = it + 1 * num_intersections;
-    auto liberties_it = it + 2 * num_intersections;
-    auto ladder_it = it + 6 * num_intersections;
-    auto misc_it = it + 10 * num_intersections;
+    auto ko_it        = it +  0 * shift; // 1p, ko move
+    auto area_it      = it +  1 * shift; // 4p, pass-alive and pass-dead area
+    auto liberties_it = it +  5 * shift; // 4p, strings with 1, 2, 3 and 4 liberties
+    auto ladder_it    = it +  9 * shift; // 4p, ladder features
+    auto misc_it      = it + 13 * shift; // 6p, others
+
+    auto color = state.GetToMove();
 
     FillKoMove(board.get(), ko_it);
-    FillSafeArea(board.get(), safearea_it);
+    FillArea(board.get(), color, area_it);
     FillLiberties(board.get(), liberties_it);
     FillLadder(board.get(), ladder_it);
-    FillMisc(board.get(), state.GetToMove(), state.GetKomi(), misc_it);
+    FillMisc(board.get(), color, state.GetKomi(), misc_it);
 }

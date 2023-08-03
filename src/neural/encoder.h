@@ -9,6 +9,7 @@
 class Encoder {
 public:
     static constexpr int kPlaneChannels = kInputChannels;
+    static constexpr int kPlaneChannels_V3 = kInputChannels_V3;
     static constexpr int kHistoryMoves = 8;
     static constexpr int kNumFeatures = 14;
     static_assert(kPlaneChannels == 3*kHistoryMoves + kNumFeatures, "");
@@ -19,12 +20,12 @@ public:
     InputData GetInputs(const GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
 
     /*
-     * Get the Network input planes.
+     * Get the v1, v2 Network input planes.
      *
      * planes 1 -24 : last 8 history moves
      * plane     25 : ko move
      * plane     26 : pass-alive and pass-dead area
-     * planes 27-30 : strings with 1, 2, 3 and 4 liberties 
+     * planes 27-30 : strings with 1, 2, 3 and 4 liberties
      * planes 31-34 : ladder features
      * plane     35 : komi/20
      * plane     36 : -komi/20
@@ -33,6 +34,24 @@ public:
      *
      */
     std::vector<float> GetPlanes(const GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
+
+    /*
+     * Get the v3 Network input planes.
+     *
+     * planes 1 -24 : last 8 history moves
+     * plane     25 : ko move
+     * planes 26-29 : pass-alive and pass-dead area 
+     * planes 30-33 : strings with 1, 2, 3 and 4 liberties
+     * planes 34-37 : ladder features
+     * plane     38 : rule, not used now
+     * plane     39 : wave
+     * plane     40 : komi/20
+     * plane     41 : -komi/20
+     * plane     42 : intersections/361
+     * plane     43 : fill ones
+     *
+     */
+    std::vector<float> GetPlanes_V3(const GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
 
     std::string GetPlanesString(const GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
 
@@ -53,8 +72,9 @@ private:
     void FillKoMove(const Board* board,
                     std::vector<float>::iterator ko_it) const;
 
-    void FillSafeArea(const Board* board,
-                      std::vector<float>::iterator safearea_it) const;
+    void FillArea(const Board* board,
+                  const int to_move,
+                  std::vector<float>::iterator area_it) const;
 
     void FillLiberties(const Board* board,
                        std::vector<float>::iterator liberties_it) const;
