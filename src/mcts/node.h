@@ -114,10 +114,10 @@ public:
     Node *UctSelectChild(const int color, const bool is_root, const GameState &state);
 
     // Randomly select one child by visits. 
-    int RandomizeFirstProportionally(float temp, int min_visits);
+    int RandomFirstProportionally(float temp, int min_visits);
 
-    // 
-    int RandomizeMoveWithGumbel(GameState &state, int temp, int min_visits);
+    // Randomly select one child by visits and Q value.
+    int RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits);
 
     // Update the node.
     void Update(const NodeEvals *evals);
@@ -293,8 +293,9 @@ private:
     // The network final score value.
     float black_fs_{0.0f};
 
-    // The accumulated squared difference value.
+    // The accumulated squared difference values.
     std::atomic<double> squared_eval_diff_{1e-4f};
+    std::atomic<double> squared_score_diff_{1e-4f};
 
     // The black accumulated values.
     std::atomic<double> accumulated_black_fs_{0.0f};

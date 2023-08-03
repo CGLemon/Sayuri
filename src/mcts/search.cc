@@ -463,7 +463,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     result.best_move = root_node_->GetBestMove(true);
     result.best_no_pass_move = root_node_->GetBestMove(false);
     result.random_move = root_node_->
-                             RandomizeMoveWithGumbel(
+                             RandomMoveWithLogitsQ(
                                  root_state_,
                                  1, param_->random_min_visits);
     result.gumbel_move = root_node_->GetGumbelMove(true);

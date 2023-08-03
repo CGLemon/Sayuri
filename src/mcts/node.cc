@@ -532,7 +532,8 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
         }
         edge_buf.emplace_back(&child);
     }
-    const float numerator = std::log((float)parentvisits + 1);
+    const float numerator = std::log(
+        (float)std::max(parentvisits , 1));
 
     Edge* best_node = nullptr;
     float best_value = std::numeric_limits<float>::lowest();
@@ -601,7 +602,7 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
     return best_node->Get();
 }
 
-int Node::RandomizeFirstProportionally(float temp, int min_visits) {
+int Node::RandomFirstProportionally(float temp, int min_visits) {
     auto select_vertex = kNullVertex;
     auto accum = float{0.0f};
     auto accum_vector = std::vector<std::pair<float, int>>{};
@@ -618,7 +619,7 @@ int Node::RandomizeFirstProportionally(float temp, int min_visits) {
 
     if (accum_vector.empty()) {
         if (min_visits > 0) {
-            return RandomizeFirstProportionally(temp, 0);
+            return RandomFirstProportionally(temp, 0);
         } else {
             // There is no visits. Reture the best policy move.
             return GetBestMove(true);
@@ -639,7 +640,7 @@ int Node::RandomizeFirstProportionally(float temp, int min_visits) {
     return select_vertex;
 }
 
-int Node::RandomizeMoveWithGumbel(GameState &state, int temp, int min_visits) {
+int Node::RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits) {
     const auto num_intersections = state.GetNumIntersections();
     auto prob = std::vector<float>(num_intersections+1, 0.f);
     auto vertices_table = std::vector<int>(num_intersections+1, kNullVertex);
@@ -672,15 +673,14 @@ int Node::RandomizeMoveWithGumbel(GameState &state, int temp, int min_visits) {
     }
     MixLogitsCompletedQ(state, prob);
 
-    constexpr int int_factor = 100000;
+    constexpr int kIntProbFactor = 100000;
     auto int_prob_acc_table = std::vector<int>(num_intersections+1, 0);
     int int_prob_acc = 0;
 
     for (int idx = 0; idx < num_intersections+1; ++idx) {
         // Prune the unvisited moves.
         if (vertices_table[idx] != kNullVertex) {
-            int integer_val = int(int_factor * prob[idx]);
-            int_prob_acc += integer_val;
+            int_prob_acc += int(kIntProbFactor * prob[idx]);
             int_prob_acc_table[idx] = int_prob_acc;
         }
     }
@@ -688,11 +688,11 @@ int Node::RandomizeMoveWithGumbel(GameState &state, int temp, int min_visits) {
     if (int_prob_acc == 0) {
         // All possible moves are pruned or the probabilities of
         // valid moves are too small. Use the traditional random move.
-        return RandomizeFirstProportionally(temp, min_visits);
+        return RandomFirstProportionally(temp, min_visits);
     }
 
     int select_vertex = kNullVertex;
-    int pick = Random<>::Get().RandFix<int_factor>();
+    int pick = Random<>::Get().RandFix<kIntProbFactor>();
 
     for (int idx = 0; idx < num_intersections+1; ++idx) {
         if (pick < int_prob_acc_table[idx]) {
@@ -719,21 +719,25 @@ void Node::Update(const NodeEvals *evals) {
     // type casting
     const double eval = evals->black_wl;
     const double draw = evals->draw;
-    const double black_final_score = evals->black_final_score;
+    const double score = evals->black_final_score;
+
     const double old_acc_eval = accumulated_black_wl_.load(std::memory_order_relaxed);
+    const double old_acc_score = accumulated_black_fs_.load(std::memory_order_relaxed);
 
     const int old_visits = visits_.load(std::memory_order_relaxed);
 
     // TODO: According to Kata Go, It is not necessary to use
     //       Welford's online algorithm. The accuracy of simplify
     //       algorithm is enough.
-    const double delta = WelfordDelta(eval, old_acc_eval, old_visits);
+    const double eval_delta = WelfordDelta(eval, old_acc_eval, old_visits);
+    const double score_delta = WelfordDelta(score, old_acc_score, old_visits);
 
     visits_.fetch_add(1, std::memory_order_relaxed);
-    AtomicFetchAdd(squared_eval_diff_   , delta);
     AtomicFetchAdd(accumulated_black_wl_, eval);
     AtomicFetchAdd(accumulated_draw_    , draw);
-    AtomicFetchAdd(accumulated_black_fs_, black_final_score);
+    AtomicFetchAdd(accumulated_black_fs_, score);
+    AtomicFetchAdd(squared_eval_diff_   , eval_delta);
+    AtomicFetchAdd(squared_score_diff_  , score_delta);
 
     {
         std::lock_guard<std::mutex> lock(os_mtx_);
@@ -1073,7 +1077,7 @@ std::vector<std::pair<float, int>> Node::GetLcbUtilityList(const int color) {
     assert(HasChildren());
 
     const auto lcb_reduction = std::min(
-                                   std::max(0.f, param_->lcb_reduction), 1.f);
+        std::max(0.f, param_->lcb_reduction), 1.f);
     int parentvisits = 0;
     const auto parent_score = GetNetScore(color);
     const auto score_utility_factor = param_->score_utility_factor;
