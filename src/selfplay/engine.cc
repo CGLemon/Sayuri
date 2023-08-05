@@ -225,7 +225,7 @@ void Engine::SetFairKomi(int g) {
     auto result = search_pool_[g]->Computation(
                       default_playouts_, Search::kNoNoise);
     auto komi = state.GetKomi();
-    auto score_lead = result.root_final_score;
+    auto score_lead = result.root_score_lead;
 
     if (state.GetToMove() == kWhite) {
         score_lead = 0.0f - score_lead;

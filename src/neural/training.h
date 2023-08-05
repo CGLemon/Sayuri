@@ -5,51 +5,64 @@
 
 struct Training {
     int version;
-
     int mode;
-
     int board_size;
-
     float komi;
-
     int side_to_move;
 
     std::vector<float> planes;
-
     std::vector<float> probabilities;
-
     std::vector<float> auxiliary_probabilities;
-
     std::vector<int> ownership;
+    std::vector<int> expected_values;
 
     int result;
 
     float q_value;
+    float avg_q_value;
+    float short_avg_q, middle_avg_q, long_avg_q;
 
     float final_score;
+    float score_stddev;
+    float score_lead;
+    float avg_score_lead;
+    float short_avg_score, middle_avg_score, long_avg_score;
+
+    float kld;
+    float rule;
+    float wave;
 
     bool discard{false};
 
  /*
-    Output format is here. Every v1 data package is 45 lines.
+    Output format is here. Every v2 data package is 54 lines.
 
     ------- Version -------
-     L1       : Version
-     L2       : Mode
+     L1        : Version
+     L2        : Mode
      
      ------- Inputs data -------
-     L3       : Board size
-     L4       : Komi
-     L5  - L38: Binary features
-     L39      : Current Player
+     L3        : Board Size
+     L4        : Komi
+     L5        : Rule
+     L6        : Wave
+     L7  - L43 : Binary Features
+     L44       : Current Player
     
      ------- Prediction data -------
-     L40      : Probabilities
-     L41      : Auxiliary probabilities
-     L42      : Ownership
-     L43      : Result
-     L44      : Q value
-     L45      : Final score
+     L45       : Probabilities
+     L46       : Auxiliary Probabilities
+     L47       : Expected Values
+     L48       : Ownership
+     L49       : Result
+     L50       : Average Q Value, Short, Middel, Long
+     L51       : Final Score
+     L52       : Average Score Lead, Short, Middel, Long
+     L53       : Score Stddev
+
+     ------- Misc data -------
+     L54       : KLD
+
   */
     void StreamOut(std::ostream &out) const;
 };

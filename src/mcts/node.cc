@@ -778,6 +778,18 @@ float Node::GetScoreUtility(const int color,
     return std::tanh((score - parent_score)/div);
 }
 
+float Node::GetScoreVariance(const float default_var, const int visits) const {
+    return visits > 1 ?
+               squared_score_diff_.load(std::memory_order_relaxed) / (visits - 1) :
+               default_var;
+}
+
+float Node::GetScoreStddev() const {
+    const auto visits = GetVisits();
+    const auto variance = GetScoreVariance(1.0f, visits);
+    return std::sqrt(variance);
+}
+
 float Node::GetLcbVariance(const float default_var, const int visits) const {
     return visits > 1 ?
                squared_eval_diff_.load(std::memory_order_relaxed) / (visits - 1) :

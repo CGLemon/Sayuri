@@ -9,6 +9,7 @@
 #include "pattern/gammas_dict.h"
 
 #include <random>
+#include <cmath>
 
 void GameState::Reset(const int boardsize, const float komi) {
     board_.Reset(boardsize);
@@ -927,4 +928,42 @@ std::string GameState::GetComment(size_t i) const {
 void GameState::PushComment() {
     comments_.emplace_back(last_comment_);
     last_comment_.clear();
+}
+
+float GameState::GetWave() const {
+    float curr_komi = GetKomi();
+    if (GetToMove() == kWhite) {
+        curr_komi = 0.f - curr_komi;
+    }
+
+    bool is_board_area_even = (GetNumIntersections()) % 2 == 0;
+
+    // Find the difference between the komi viewed from our perspective and
+    // the nearest drawable komi below it.
+    float komi_floor;
+    if (is_board_area_even) {
+        komi_floor = std::floor(curr_komi / 2.0f) * 2.0f;
+    } else {
+        komi_floor = std::floor((curr_komi-1.0f) / 2.0f) * 2.0f + 1.0f;
+    }
+
+    // Cap just in case we have floating point weirdness.
+    float delta = curr_komi - komi_floor;
+    delta = std::max(delta, 0.f);
+    delta = std::min(delta, 2.f);
+
+    // Create the triangle wave based on the difference.
+    float wave;
+    if (delta < 0.5f) {
+        wave = delta;
+    } else if (delta < 1.5f) {
+        wave = 1.f - delta;
+    } else {
+        wave = delta - 2.f;
+    }
+    return wave;
+}
+
+float GameState::GetRule() const {
+    return 0.f;
 }

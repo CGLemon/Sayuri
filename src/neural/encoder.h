@@ -9,31 +9,16 @@
 class Encoder {
 public:
     static constexpr int kPlaneChannels = kInputChannels;
-    static constexpr int kPlaneChannels_V3 = kInputChannels_V3;
     static constexpr int kHistoryMoves = 8;
-    static constexpr int kNumFeatures = 14;
+    static constexpr int kNumBinaryFeatures = 13;
+    static constexpr int kNumMiscFeatures = 6;
+    static constexpr int kNumFeatures = kNumBinaryFeatures + kNumMiscFeatures;
     static_assert(kPlaneChannels == 3*kHistoryMoves + kNumFeatures, "");
 
     static Encoder& Get();
 
     // Get the Network input datas.
     InputData GetInputs(const GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
-
-    /*
-     * Get the v1, v2 Network input planes.
-     *
-     * planes 1 -24 : last 8 history moves
-     * plane     25 : ko move
-     * plane     26 : pass-alive and pass-dead area
-     * planes 27-30 : strings with 1, 2, 3 and 4 liberties
-     * planes 31-34 : ladder features
-     * plane     35 : komi/20
-     * plane     36 : -komi/20
-     * plane     37 : intersections/361
-     * plane     38 : fill ones
-     *
-     */
-    std::vector<float> GetPlanes(const GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
 
     /*
      * Get the v3 Network input planes.
@@ -51,7 +36,7 @@ public:
      * plane     43 : fill ones
      *
      */
-    std::vector<float> GetPlanes_V3(const GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
+    std::vector<float> GetPlanes(const GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
 
     std::string GetPlanesString(const GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
 
@@ -84,7 +69,7 @@ private:
 
     void FillMisc(const Board* board,
                   const int color,
-                  float komi,
+                  float rule, float wave, float komi,
                   std::vector<float>::iterator color_it) const;
 
     void EncoderFeatures(const GameState &state,

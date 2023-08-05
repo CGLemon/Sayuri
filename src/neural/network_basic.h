@@ -5,17 +5,13 @@
 #include <array>
 #include <memory>
 
-static constexpr int kInputChannels = 38; // 8 past moves * 3 
-                                          // 10 binary features
-                                          // 4 misc features
+static constexpr int kInputChannels = 43; // 8 past moves * 3 
+                                          // 13 binary features
+                                          // 6 misc features
 static constexpr int kOuputValueMisc = 5;
 static constexpr int kOuputPassProbability = 1;
 static constexpr int kOuputProbabilitiesChannels = 1;
 static constexpr int kOuputOwnershipChannels = 1;
-
-static constexpr int kInputChannels_V3 = 43; // 8 past moves * 3 
-                                             // 13 binary features
-                                             // 6 misc features
 
 struct InputData {
     InputData() : komi(0.f), board_size(-1), side_to_move(kInvalid) {

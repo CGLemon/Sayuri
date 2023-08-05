@@ -126,6 +126,9 @@ public:
     void AppendComment(std::string c);
     std::string GetComment(size_t i) const;
 
+    float GetWave() const;
+    float GetRule() const;
+
 private:
     using VertexColor = std::pair<int, int>;
 

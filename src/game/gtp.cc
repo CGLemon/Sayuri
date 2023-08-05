@@ -262,7 +262,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
     } else if (const auto res = spt.Find("final_score", 0)) {
         auto result = agent_->GetSearch().Computation(400, Search::kForced);
         auto color = agent_->GetState().GetToMove();
-        auto final_score = result.root_final_score;
+        auto final_score = result.root_score_lead;
 
         final_score = AdjustKomi<float>(final_score);
         if (std::abs(final_score) < 1e-4f) {

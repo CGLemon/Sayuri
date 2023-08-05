@@ -1,6 +1,6 @@
 #include "game/types.h"
 #include "neural/training.h"
-#include "neural/network_basic.h"
+#include "neural/encoder.h"
 
 void ArrayStreamOut(std::ostream &out, const std::vector<float> &arr) {
     const auto size = arr.size();
@@ -26,11 +26,12 @@ void OwnershipStreamOut(std::ostream &out, const std::vector<int> &arr) {
     out << std::endl;
 }
 
-void PlanesStreamOut(std::ostream &out, const std::vector<float> &arr, size_t planes) {
+void PlanesStreamOut(std::ostream &out, const std::vector<float> &arr) {
+    const auto planes = Encoder::kPlaneChannels;
     const auto size = arr.size();
     const auto spatial = size / planes;
     const bool remaining = (spatial % 4 != 0);
-    const auto saved_planes = planes-4; // Last four channels are not binary features.
+    const auto saved_planes = planes - Encoder::kNumMiscFeatures; // Last 6 channels are not binary features.
 
     for (size_t p = 0; p < saved_planes; ++p) {
         for (size_t idx = 0; idx+4 <= spatial; idx+=4) {
@@ -61,25 +62,42 @@ void Training::StreamOut(std::ostream &out) const {
         return;
     }
 
+    // the "Version" part
     out << version << std::endl;
     out << mode << std::endl;
+
+    // the "Inputs" part
     out << board_size << std::endl;
     out << komi << std::endl;
-
-    PlanesStreamOut(out, planes, kInputChannels);
+    out << rule << std::endl;
+    out << wave << std::endl;
+    PlanesStreamOut(out, planes);
     out << (side_to_move == kBlack ? 1 : 0) << std::endl;
 
+    // the "Prediction" part
     ArrayStreamOut(out, probabilities);
     ArrayStreamOut(out, auxiliary_probabilities);
+    OwnershipStreamOut(out, expected_values);
     OwnershipStreamOut(out, ownership);
 
     out << result << std::endl;
-    out << q_value << std::endl;
+    out << avg_q_value << ' '
+            << short_avg_q << ' '
+            << middle_avg_q << ' '
+            << long_avg_q << std::endl;
     out << final_score << std::endl;
+    out << avg_score_lead << ' '
+            << short_avg_score << ' '
+            << middle_avg_score << ' '
+            << long_avg_score << std::endl;
+    out << score_stddev << std::endl;
+ 
+    // the "Misc" part
+    out << kld << std::endl;
 }
 
 int GetTrainingVersion() {
-    return 1;
+    return 2;
 }
 
 int GetTrainingMode() {

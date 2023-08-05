@@ -89,14 +89,17 @@ struct ComputationResult {
     VertexType to_move;
     float komi;
     float root_eval;
-    float root_final_score;
+    float root_score_lead;
     float best_eval;
+    float root_score_stddev;
 
     std::vector<float> root_ownership;
     std::vector<int> root_visits;
 
     std::vector<float> root_playouts_dist;
     std::vector<float> target_playouts_dist;
+
+    std::vector<int> root_expected_values;
 
     std::vector<std::vector<int>> alive_strings;
     std::vector<std::vector<int>> dead_strings;

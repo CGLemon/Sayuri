@@ -468,8 +468,9 @@ void Search::GatherComputationResult(ComputationResult &result) const {
                                  1, param_->random_min_visits);
     result.gumbel_move = root_node_->GetGumbelMove(true);
     result.gumbel_no_pass_move = root_node_->GetGumbelMove(false);
-    result.root_final_score = root_node_->GetFinalScore(color);
+    result.root_score_lead = root_node_->GetFinalScore(color);
     result.root_eval = root_node_->GetWL(color, false);
+    result.root_score_stddev = root_node_->GetScoreStddev();
     {
         auto best_node = root_node_->GetChild(result.best_move);
         if (best_node->GetVisits() >= 1) {
@@ -484,6 +485,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     result.root_playouts_dist.resize(num_intersections+1);
     result.root_visits.resize(num_intersections+1);
     result.target_playouts_dist.resize(num_intersections+1);
+    result.root_expected_values.resize(num_intersections+1);
 
     // Fill ownership.
     auto ownership = root_node_->GetOwnership(color);
@@ -568,6 +570,28 @@ void Search::GatherComputationResult(ComputationResult &result) const {
             for (auto &prob : result.target_playouts_dist) {
                 prob /= acc_target_policy;
             }
+        }
+    }
+
+    // Fill expected children's values.
+    const auto middle_eval = root_node_->GetNetWL(color);
+    for (const auto &child : children) {
+        const auto node = child.Get();
+        const auto vertex = node->GetVertex();
+        int index = num_intersections;
+
+        if (vertex != kPass) {
+            index = root_state_.VertexToIndex(vertex);
+        }
+        if (result.root_visits[index] > 0) {
+            const auto eval = node->GetWL(color, false);
+            if (eval > middle_eval) {
+                result.root_expected_values[index] = 1;
+            } else {
+                result.root_expected_values[index] = -1;
+            }
+        } else {
+            result.root_expected_values[index] = 0;
         }
     }
 
@@ -859,7 +883,7 @@ int Search::GetSelfPlayMove() {
 
     // Should I discard the data?
     float root_eval = result.root_eval;
-    float root_score = result.root_final_score;
+    float root_score = result.root_score_lead;
     bool discard_it = false;
     if (tag & kNoNoise) {
         // This is fast search of "Playout Cap Randomization". Do
@@ -992,9 +1016,13 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
         winner = kWhiteWon;
     }
 
-    // Set the all buffer values except for auxiliary probablility.
-    for (auto &buf : training_buffer_) {
+    // Set the most buffer values.
+    const int buf_size = training_buffer_.size();
+    const int window_half_size = 4; // full size is (1 + 2*window_half_size)
+    for (int i = 0; i < buf_size; ++i) {
         assert(winner != kUndecide);
+
+        auto &buf = training_buffer_[i];
         if (winner == kDraw) {
             buf.final_score = 0;
             buf.result = 0;
@@ -1014,6 +1042,68 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
                 buf.ownership[idx] = 0;
             }
         }
+
+        float window_q_sum = 0.f;
+        float window_score_sum = 0.f;
+        int window_size = 0;
+        for (int w = -window_half_size; w <= window_half_size; ++w) {
+            int w_index = i+w;
+            if (w_index < 0 || w_index >= buf_size) {
+                continue;
+            }
+            auto &w_buf = training_buffer_[w_index];
+
+            if (w_buf.side_to_move == buf.side_to_move) {
+                window_q_sum += w_buf.q_value;
+                window_score_sum += w_buf.score_lead;
+            } else {
+                window_q_sum -= w_buf.q_value;
+                window_score_sum -= w_buf.score_lead;
+            }
+            window_size += 1;
+        }
+        buf.avg_q_value = window_q_sum / window_size;
+        buf.avg_score_lead = window_score_sum / window_size;
+    }
+
+    // Set the short, middle and long, average Q value buffer
+    for (int i = 0; i < buf_size; ++i) {
+        auto &buf = training_buffer_[i];
+        const auto board_size = buf.board_size;
+
+        const int short_moves =
+            std::min(i + (int)(0.5f * board_size), buf_size-1);
+        const int middle_moves =
+            std::min(i + 1 * board_size, buf_size-1);
+        const int long_moves =
+            std::min(i + 3 * board_size, buf_size-1);
+
+        auto &short_buf = training_buffer_[short_moves];
+        if (short_buf.side_to_move == buf.side_to_move) {
+            buf.short_avg_q = short_buf.avg_q_value;
+            buf.short_avg_score = short_buf.avg_score_lead;
+        } else {
+            buf.short_avg_q = -short_buf.avg_q_value;
+            buf.short_avg_score = -short_buf.avg_score_lead;
+        }
+
+        auto &middle_buf = training_buffer_[middle_moves];
+        if (middle_buf.side_to_move == buf.side_to_move) {
+            buf.middle_avg_q = middle_buf.avg_q_value;
+            buf.middle_avg_score = middle_buf.avg_score_lead;
+        } else {
+            buf.middle_avg_q = -middle_buf.avg_q_value;
+            buf.middle_avg_score = -middle_buf.avg_score_lead;
+        }
+
+        auto &long_buf = training_buffer_[long_moves];
+        if (long_buf.side_to_move == buf.side_to_move) {
+            buf.long_avg_q = long_buf.avg_q_value;
+            buf.long_avg_score = long_buf.avg_score_lead;
+        } else {
+            buf.long_avg_q = -long_buf.avg_q_value;
+            buf.long_avg_score = -long_buf.avg_score_lead;
+        }
     }
 
     // Set the auxiliary probablility in the buffer.
@@ -1022,7 +1112,7 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
     // Force the last aux policy is pass move.
     aux_prob[num_intersections] = 1.f;
 
-    for (int i = training_buffer_.size()-1; i >= 0; --i) {
+    for (int i = buf_size-1; i >= 0; --i) {
         auto &buf = training_buffer_[i];
         buf.auxiliary_probabilities = aux_prob;
         aux_prob = buf.probabilities;
@@ -1056,8 +1146,14 @@ void Search::GatherData(const GameState &state,
 
     // Map the root eval from [0 ~ 1] to [-1 ~ 1]
     data.q_value = 2 * result.root_eval - 1.f;
+    data.score_lead = result.root_score_lead;
+    data.score_stddev = result.root_score_stddev;
     data.planes = Encoder::Get().GetPlanes(state);
     data.probabilities = result.target_playouts_dist;
+    data.wave = state.GetWave();
+    data.expected_values = result.root_expected_values;
+    data.rule = state.GetRule();
+    data.kld = 0.f;
 
     training_buffer_.emplace_back(data);
 }
