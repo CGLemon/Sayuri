@@ -602,7 +602,8 @@ class Network(nn.Module):
         self.ysize = cfg.boardsize
         self.policy_extract = cfg.policy_extract
         self.value_extract = cfg.value_extract
-        self.value_misc = cfg.value_misc
+        self.value_misc = 14
+        self.policy_outs = 5
         self.stack = cfg.stack
         self.version = 2
 
@@ -682,33 +683,16 @@ class Network(nn.Module):
         )
         self.prob = Convolve(
             in_channels=self.policy_extract,
-            out_channels=1,
+            out_channels=self.policy_outs,
             kernel_size=1,
             relu=False,
             collector=self.layers_collector
         )
         self.prob_pass_fc = FullyConnect(
             in_size=self.policy_extract,
-            out_size=1,
+            out_size=self.policy_outs,
             relu=False,
             collector=self.layers_collector
-        )
-
-        # Ingnore auxiliary policy.
-        self.aux_prob = Convolve(
-            in_channels=self.policy_extract,
-            out_channels=1,
-            kernel_size=1,
-            relu=False,
-            collector=self.unused_collector
-        )
-
-        # Ingnore auxiliary pass policy.
-        self.aux_prob_pass_fc = FullyConnect(
-            in_size=self.policy_extract,
-            out_size=1,
-            relu=False,
-            collector=self.unused_collector
         )
 
         # value head
@@ -752,6 +736,10 @@ class Network(nn.Module):
         mask_sum_hw_sqrt = torch.sqrt(mask_sum_hw)
         mask_buffers = (mask, mask_sum_hw, mask_sum_hw_sqrt)
 
+        policy_mask = torch.flatten(mask, start_dim=1, end_dim=3)
+        b, _ = policy_mask.shape
+        policy_mask = torch.cat((policy_mask, mask.new_ones((b, 1))), dim=1)
+
         # input layer
         x = self.input_conv(planes, mask)
 
@@ -764,34 +752,35 @@ class Network(nn.Module):
         pol_inter = self.policy_intermediate_fc(pol_gpool)
 
         # Add intermediate as biases. It may improve the policy performance.
-        b, c = pol_inter.size()
+        b, c = pol_inter.shape
         pol = (pol + pol_inter.view(b, c, 1, 1)) * mask
 
         # Apply CRAZY_NEGATIVE_VALUE on out of board area. This position
         # policy will be zero after softmax 
         prob_without_pass = self.prob(pol, mask) + (1.0-mask) * CRAZY_NEGATIVE_VALUE
-
         if use_symm:
             prob_without_pass = torch_symmetry(symm, prob_without_pass, invert=True)
-        prob_without_pass = torch.flatten(prob_without_pass, start_dim=1, end_dim=3)
-        prob_pass = self.prob_pass_fc(pol_inter)
-        prob = torch.cat((prob_without_pass, prob_pass), 1)
+        prob_without_pass = torch.flatten(prob_without_pass, start_dim=2, end_dim=3) # b, c, h*w
+        prob_pass = self.prob_pass_fc(pol_inter)  # b, c
+        b, c = prob_pass.shape
+        prob_misc = torch.cat((prob_without_pass, prob_pass.view(b, c, 1)), dim=2)
 
-        # Apply CRAZY_NEGATIVE_VALUE on out of board area. This position
-        # policy will be zero after softmax 
-        aux_prob_without_pass = self.aux_prob(pol, mask) + (1.0-mask) * CRAZY_NEGATIVE_VALUE
-        if use_symm:
-            aux_prob_without_pass = torch_symmetry(symm, aux_prob_without_pass, invert=True)
-        aux_prob_without_pass = torch.flatten(aux_prob_without_pass, start_dim=1, end_dim=3)
-        aux_prob_pass = self.aux_prob_pass_fc(pol_inter)
-        aux_prob = torch.cat((aux_prob_without_pass, aux_prob_pass), 1)
+        prob, aux_prob, soft_prob, soft_aux_prob, expected_vals = torch.split(prob_misc, [1, 1, 1, 1, 1], dim=1)
+        prob          = torch.flatten(prob, start_dim=1, end_dim=2)
+        aux_prob      = torch.flatten(aux_prob, start_dim=1, end_dim=2)
+        soft_prob     = torch.flatten(soft_prob, start_dim=1, end_dim=2)
+        soft_aux_prob = torch.flatten(soft_aux_prob, start_dim=1, end_dim=2)
+        expected_vals = torch.flatten(expected_vals, start_dim=1, end_dim=2)
+
+        expected_vals = expected_vals * policy_mask
+        expected_vals = torch.tanh(expected_vals)
 
         # value head
         val = self.value_conv(x, mask)
         val_gpool = self.global_pool_val(val, mask_buffers)
         val_inter = self.value_intermediate_fc(val_gpool)
 
-        # b, c = val_inter.size()
+        # b, c = val_inter.size
         # val = (val + val_inter.view(b, c, 1, 1)) * mask
 
         ownership = self.ownership_conv(val, mask)
@@ -801,20 +790,36 @@ class Network(nn.Module):
         ownership = torch.tanh(ownership)
 
         val_misc = self.value_misc_fc(val_inter)
-        wdl, stm, score = torch.split(val_misc, [3, 1, 1], dim=1)
-        stm = torch.tanh(stm)
+        wdl, all_q_vals, all_scores =  torch.split(val_misc, [3, 5, 6], dim=1)
+        all_q_vals = torch.tanh(all_q_vals)
 
-        predict = (prob, aux_prob, ownership, wdl, stm, score)
+        predict = (
+            prob, # logits
+            aux_prob, # logits
+            soft_prob, # logits
+            soft_aux_prob, # logits
+            expected_vals,
+            ownership,
+            wdl, # logits
+            all_q_vals,
+            all_scores,
+        )
 
-        all_loss = None
+        all_loss_dict = dict()
         if target is not None:
-            all_loss = self.compute_loss(predict, target, mask_sum_hw)
+            all_loss_dict = self.compute_loss(
+                predict, target, mask_sum_hw, policy_mask)
 
-        return predict, all_loss
+        return predict, all_loss_dict
 
-    def compute_loss(self, pred, target, mask_sum_hw):
-        (pred_prob, pred_aux_prob, pred_ownership, pred_wdl, pred_stm, pred_score) = pred
-        (target_prob,target_aux_prob, target_ownership, target_wdl, target_stm, target_final_score) = target
+    def compute_loss(self, pred, target, mask_sum_hw, policy_mask):
+        p_prob, p_aux_prob, p_soft_porb, p_soft_aux_prob, p_expected_vals, p_ownership, p_wdl, p_q_vals, p_scores = pred
+        t_prob, t_aux_prob, t_expected_vals, t_ownership, t_wdl, t_q_vals, t_scores = target
+
+        def make_soft_porb(prob, t=4):
+            soft_prob = torch.pow(prob, 1/t)
+            soft_prob /= torch.sum(soft_prob, dim=1, keepdim=True)
+            return soft_prob
 
         def cross_entropy(pred, target):
             return torch.mean(-torch.sum(torch.mul(F.log_softmax(pred, dim=-1), target), dim=1), dim=0)
@@ -824,25 +829,33 @@ class Network(nn.Module):
             loss = torch.where(absdiff > delta, (0.5 * delta*delta) + delta * (absdiff - delta), 0.5 * absdiff * absdiff)
             return torch.mean(torch.sum(loss, dim=1), dim=0)
 
-        def mse_loss_spat(pred, target, mask_sum_hw):
+        def mse_loss_spat(pred, target):
             spat_sum = torch.sum(torch.square(pred - target), dim=1) / mask_sum_hw
             return torch.mean(spat_sum, dim=0)
 
-        prob_loss = cross_entropy(pred_prob, target_prob)
-        aux_prob_loss = 0.15 * cross_entropy(pred_aux_prob, target_aux_prob)
-        ownership_loss = 1.5 * mse_loss_spat(pred_ownership, target_ownership, mask_sum_hw)
-        wdl_loss = cross_entropy(pred_wdl, target_wdl)
-        stm_loss = F.mse_loss(pred_stm, target_stm)
+        prob_loss = 1 * cross_entropy(p_prob, t_prob)
+        aux_prob_loss = 0.15 * cross_entropy(p_aux_prob, t_aux_prob)
+        soft_prob_loss = 1 * cross_entropy(p_prob, make_soft_porb(t_prob))
+        soft_aux_prob_loss = 0.15 * cross_entropy(p_aux_prob, make_soft_porb(t_aux_prob))
 
-        fina_score_loss = 0.0012 * huber_loss(20 * pred_score, target_final_score, 12)
+        expected_vals_loss = 10 * mse_loss_spat(p_expected_vals, t_expected_vals)
+        ownership_loss = 1.5 * mse_loss_spat(p_ownership, t_ownership)
+        wdl_loss = cross_entropy(p_wdl, t_wdl)
+        q_vals_loss = F.mse_loss(p_q_vals, t_q_vals)
+        scores_loss = 0.0012 * huber_loss(20 * p_scores, t_scores, 12)
 
-        return (prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, fina_score_loss)
-
-    def trainable(self, t=True):
-        if t==True:
-            self.train()
-        else:
-            self.eval()
+        all_loss_dict = {
+            "prob_loss"          : prob_loss,
+            "aux_prob_loss"      : aux_prob_loss,
+            "soft_prob_loss"     : soft_prob_loss,
+            "soft_aux_prob_loss" : soft_aux_prob_loss,
+            "expected_vals_loss" : expected_vals_loss,
+            "ownership_loss"     : ownership_loss,
+            "wdl_loss"           : wdl_loss,
+            "q_vals_loss"        : q_vals_loss,
+            "scores_loss"        : scores_loss
+        }
+        return all_loss_dict
 
     def save_pt(self, filename):
         torch.save(self.state_dict(), filename)

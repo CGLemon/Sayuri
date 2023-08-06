@@ -29,7 +29,6 @@ def gather_filenames(root, num_chunks=None, sort_key_fn=None):
             chunks = chunks[:num_chunks]
     return chunks
 
-
 class StreamLoader:
     def __init__(self):
         pass
@@ -91,26 +90,28 @@ class BatchGenerator:
         input_planes = np.zeros((self.input_channels, nn_board_size, nn_board_size))
         prob = np.zeros(nn_num_intersections+1)
         aux_prob = np.zeros(nn_num_intersections+1)
+        expected_vals = np.zeros(nn_num_intersections+1)
         ownership = np.zeros((nn_board_size, nn_board_size))
         wdl = np.zeros(3)
-        stm = np.zeros(1)
-        final_score = np.zeros(1)
+        all_q_vals = np.zeros(5)
+        all_scores = np.zeros(6)
 
         buf = np.zeros(num_intersections)
         sqr_buf = np.zeros((nn_board_size, nn_board_size))
 
         # input planes
-        for p in range(self.input_channels-4):
+        for p in range(self.input_channels-6):
             plane = data.planes[p]
             input_planes[p, 0:board_size, 0:board_size] = np.reshape(plane, (board_size, board_size))[:, :]
 
+        input_planes[self.input_channels-6, 0:board_size, 0:board_size] = data.rule
+        input_planes[self.input_channels-5, 0:board_size, 0:board_size] = data.wave
         if data.to_move == 1:
             input_planes[self.input_channels-4, 0:board_size, 0:board_size] =  data.komi/20
             input_planes[self.input_channels-3, 0:board_size, 0:board_size] = -data.komi/20
         else:
             input_planes[self.input_channels-4, 0:board_size, 0:board_size] = -data.komi/20
             input_planes[self.input_channels-3, 0:board_size, 0:board_size] =  data.komi/20
-
         input_planes[self.input_channels-2, 0:board_size, 0:board_size] = (data.board_size**2)/361
         input_planes[self.input_channels-1, 0:board_size, 0:board_size] = 1 # fill ones
 
@@ -121,6 +122,12 @@ class BatchGenerator:
         prob[nn_num_intersections] = data.prob[num_intersections]
 
         # auxiliary probabilities
+        buf[:] = data.expected_vals[0:num_intersections]
+        sqr_buf[0:board_size, 0:board_size] = np.reshape(buf, (board_size, board_size))[:, :]
+        expected_vals[0:nn_num_intersections] = np.reshape(sqr_buf, (nn_num_intersections))[:]
+        expected_vals[nn_num_intersections] = data.expected_vals[num_intersections]
+
+        # expected values
         buf[:] = data.aux_prob[0:num_intersections]
         sqr_buf[0:board_size, 0:board_size] = np.reshape(buf, (board_size, board_size))[:, :]
         aux_prob[0:nn_num_intersections] = np.reshape(sqr_buf, (nn_num_intersections))[:]
@@ -132,18 +139,32 @@ class BatchGenerator:
 
         # winrate
         wdl[1 - data.result] = 1
-        stm[0] = data.q_value
-        final_score[0] = data.final_score
+
+        # all q values
+        all_q_vals[0] = data.result
+        all_q_vals[1] = data.avg_q
+        all_q_vals[2] = data.short_avg_q
+        all_q_vals[3] = data.mid_avg_q
+        all_q_vals[4] = data.long_avg_q
+
+        # all scores
+        all_scores[0] = data.final_score
+        all_scores[1] = data.avg_score
+        all_scores[2] = data.short_avg_score
+        all_scores[3] = data.mid_avg_score
+        all_scores[4] = data.long_avg_score
+        all_scores[5] = data.score_stddev
 
         return (
             data.board_size,
             input_planes,
             prob,
             aux_prob,
+            expected_vals,
             ownership,
             wdl,
-            stm,
-            final_score
+            all_q_vals,
+            all_scores
         )
 
     def func(self, data_list):
@@ -151,32 +172,35 @@ class BatchGenerator:
         batch_planes = list()
         batch_prob = list()
         batch_aux_prob = list()
+        batch_expected_vals = list()
         batch_ownership = list()
         batch_wdl = list()
-        batch_stm = list()
-        batch_score = list()
+        batch_q_vals = list()
+        batch_scores = list()
 
         for data in data_list:
-            bsize, planes, prob, aux_prob, ownership, wdl, stm, score = self._wrap_data(data)
+            bsize, planes, prob, aux_prob, expected_vals, ownership, wdl, q_vals, scores = self._wrap_data(data)
 
             batch_bsize.append(bsize)
             batch_planes.append(planes)
             batch_prob.append(prob)
             batch_aux_prob.append(aux_prob)
+            batch_expected_vals.append(expected_vals)
             batch_ownership.append(ownership)
             batch_wdl.append(wdl)
-            batch_stm.append(stm)
-            batch_score.append(score)
+            batch_q_vals.append(q_vals)
+            batch_scores.append(scores)
 
         return (
             batch_bsize,
             torch.tensor(np.array(batch_planes)).float(),
             torch.tensor(np.array(batch_prob)).float(),
             torch.tensor(np.array(batch_aux_prob)).float(),
+            torch.tensor(np.array(batch_expected_vals)).float(),
             torch.tensor(np.array(batch_ownership)).float(),
             torch.tensor(np.array(batch_wdl)).float(),
-            torch.tensor(np.array(batch_stm)).float(),
-            torch.tensor(np.array(batch_score)).float()
+            torch.tensor(np.array(batch_q_vals)).float(),
+            torch.tensor(np.array(batch_scores)).float()
         )
 
 class TrainingPipe():
@@ -195,6 +219,7 @@ class TrainingPipe():
         self.train_dir = cfg.train_dir
         self.validation_dir = cfg.validation_dir
 
+        # How many last chunks do we load?
         self.num_chunks = cfg.num_chunks
 
         # The stpes of storing the last model and validating it per epoch.
@@ -226,7 +251,7 @@ class TrainingPipe():
         if self.use_gpu:
             self.device = torch.device('cuda')
         self.net = Network(cfg)
-        self.net.trainable(True)
+        self.net.train()
 
         # The Store root dir
         self.store_path = cfg.store_path
@@ -384,14 +409,49 @@ class TrainingPipe():
     def get_new_running_loss_dict(self):
         # Get the new dict.
         running_loss_dict = dict()
-        running_loss_dict['loss'] = 0
-        running_loss_dict['prob_loss'] = 0
-        running_loss_dict['aux_prob_loss'] = 0
-        running_loss_dict['ownership_loss'] = 0
-        running_loss_dict['wdl_loss'] = 0
-        running_loss_dict['stm_loss'] = 0
-        running_loss_dict['final_score_loss'] = 0
+        running_loss_dict["loss"] = 0
+        running_loss_dict["prob_loss"] = 0
+        running_loss_dict["aux_prob_loss"] = 0
+        running_loss_dict["soft_prob_loss"] = 0
+        running_loss_dict["soft_aux_prob_loss"] = 0
+        running_loss_dict["expected_vals_loss"] = 0
+        running_loss_dict["ownership_loss"] = 0
+        running_loss_dict["wdl_loss"] = 0
+        running_loss_dict["q_vals_loss"] = 0
+        running_loss_dict["scores_loss"] = 0
         return running_loss_dict
+
+    def _accumulate_loss(self, running_loss_dict, all_loss_dict):
+        for k, v in all_loss_dict.items():
+            this_item_loss = v.item()
+            running_loss_dict[k] += this_item_loss
+            running_loss_dict["loss"] += this_item_loss
+        return running_loss_dict
+
+    def _handle_loss(self, all_loss_dict):
+        for k, v in all_loss_dict.items():
+            v /= self.macrofactor
+
+        loss = all_loss_dict["prob_loss"]
+        for k, v in all_loss_dict.items():
+            if k == "prob_loss":
+               continue
+            loss += v
+        return loss, all_loss_dict
+
+    def _get_loss_info(self, running_loss_dict):
+        info = str()
+        info += "\tloss: {:.4f}\n".format(running_loss_dict["loss"]/self.verbose_steps)
+        info += "\tprob loss: {:.4f}\n".format(running_loss_dict["prob_loss"]/self.verbose_steps)
+        info += "\taux prob loss: {:.4f}\n".format(running_loss_dict["aux_prob_loss"]/self.verbose_steps)
+        info += "\tsoft prob loss: {:.4f}\n".format(running_loss_dict["soft_prob_loss"]/self.verbose_steps)
+        info += "\tsoft aux prob loss: {:.4f}\n".format(running_loss_dict["soft_aux_prob_loss"]/self.verbose_steps)
+        info += "\texpected values loss: {:.4f}\n".format(running_loss_dict["expected_vals_loss"]/self.verbose_steps)
+        info += "\townership loss: {:.4f}\n".format(running_loss_dict['ownership_loss']/self.verbose_steps)
+        info += "\twdl loss: {:.4f}\n".format(running_loss_dict['wdl_loss']/self.verbose_steps)
+        info += "\tQ values loss: {:.4f}\n".format(running_loss_dict['q_vals_loss']/self.verbose_steps)
+        info += "\tscores loss: {:.4f}".format(running_loss_dict['scores_loss']/self.verbose_steps)
+        return info
 
     def gather_data_from_loader(self, use_training=True):
         # Fetch the next batch data from disk.
@@ -400,66 +460,25 @@ class TrainingPipe():
         else:
             batch = next(self.validation_lazy_loader)
 
-        _, planes, target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score = batch
+        _, planes, t_prob, t_aux_prob, t_expected_vals, t_ownership, t_wdl, t_q_vals, t_scores = batch
 
         # Move the data to the current device.
         if self.use_gpu:
             planes = planes.to(self.device)
-            target_prob = target_prob.to(self.device)
-            target_aux_prob = target_aux_prob.to(self.device)
-            target_ownership = target_ownership.to(self.device)
-            target_wdl = target_wdl.to(self.device)
-            target_stm = target_stm.to(self.device)
-            target_score = target_score.to(self.device)
+            t_prob = t_prob.to(self.device)
+            t_aux_prob = t_aux_prob.to(self.device)
+            t_expected_vals = t_expected_vals.to(self.device)
+            t_ownership = t_ownership.to(self.device)
+            t_wdl = t_wdl.to(self.device)
+            t_q_vals = t_q_vals.to(self.device)
+            t_scores = t_scores.to(self.device)
 
         # Gather batch data
-        target = (target_prob, target_aux_prob, target_ownership, target_wdl, target_stm, target_score)
+        target = (t_prob, t_aux_prob, t_expected_vals, t_ownership, t_wdl, t_q_vals, t_scores)
         return planes, target
 
     def validate_the_last_model(self, steps):
-        if self.validation_lazy_loader is None:
-            return
-
-        self.module.trainable(False)
-        running_loss_dict = self.get_new_running_loss_dict()
-        total_steps = self.validation_steps * self.macrofactor
-
-        clock_time = time.time()
-
-        for _ in range(total_steps):
-            planes, target = self.gather_data_from_loader(False)
-            _, all_loss = self.net(planes, target, use_symm=True)
-            prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, final_score_loss = all_loss
-            
-            loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + final_score_loss
-
-            # accumulate loss
-            running_loss_dict['loss'] += loss.mean().item()
-            running_loss_dict['prob_loss'] += prob_loss.mean().item()
-            running_loss_dict['aux_prob_loss'] += aux_prob_loss.mean().item()
-            running_loss_dict['ownership_loss'] += ownership_loss.mean().item()
-            running_loss_dict['wdl_loss'] += wdl_loss.mean().item()
-            running_loss_dict['stm_loss'] += stm_loss.mean().item()
-            running_loss_dict['final_score_loss'] += final_score_loss.mean().item()
-
-        log_outs = "steps: {} -> ".format(steps)
-        log_outs += "speed: {:.2f}, opt: {}, learning rate: {}, batch size: {}\n".format(
-                        self.validation_steps/(time.time() - clock_time),
-                        self.opt_name,
-                        self.opt.param_groups[0]["lr"],
-                        self.batchsize)
-        log_outs += "\tloss: {:.4f}\n".format(running_loss_dict['loss']/total_steps)
-        log_outs += "\tprob loss: {:.4f}\n".format(running_loss_dict['prob_loss']/total_steps)
-        log_outs += "\taux prob loss: {:.4f}\n".format(running_loss_dict['aux_prob_loss']/total_steps)
-        log_outs += "\townership loss: {:.4f}\n".format(running_loss_dict['ownership_loss']/total_steps)
-        log_outs += "\twdl loss: {:.4f}\n".format(running_loss_dict['wdl_loss']/total_steps)
-        log_outs += "\tstm loss: {:.4f}\n".format(running_loss_dict['stm_loss']/total_steps)
-        log_outs += "\tfinal score loss: {:.4f}".format(running_loss_dict['final_score_loss']/total_steps)
-
-        log_file = os.path.join(self.store_path, "validation.log")
-        with open(log_file, 'a') as f:
-            f.write(log_outs + '\n')
-        self.module.trainable(True)
+        pass
 
     def fit_and_store(self):
         init_steps = self._load_current_status()
@@ -479,32 +498,17 @@ class TrainingPipe():
                 planes, target = self.gather_data_from_loader(True)
 
                 # forward and backforwad
-                _, all_loss = self.net(planes, target, use_symm=True)
-
-                prob_loss, aux_prob_loss, ownership_loss, wdl_loss, stm_loss, final_score_loss = all_loss
+                _, all_loss_dict = self.net(planes, target, use_symm=True)
 
                 # compute loss
-                prob_loss = prob_loss.mean() / self.macrofactor
-                aux_prob_loss = aux_prob_loss.mean() / self.macrofactor
-                ownership_loss = ownership_loss.mean() / self.macrofactor
-                wdl_loss = wdl_loss.mean() / self.macrofactor
-                stm_loss = stm_loss.mean() / self.macrofactor
-                final_score_loss = final_score_loss.mean() / self.macrofactor
-
-                loss = prob_loss + aux_prob_loss + ownership_loss + wdl_loss + stm_loss + final_score_loss
+                loss, all_loss_dict = self._handle_loss(all_loss_dict)
                 loss.backward()
                 macro_steps += 1
 
                 # accumulate loss
-                running_loss_dict['loss'] += loss.item()
-                running_loss_dict['prob_loss'] += prob_loss.item()
-                running_loss_dict['aux_prob_loss'] += aux_prob_loss.item()
-                running_loss_dict['ownership_loss'] += ownership_loss.item()
-                running_loss_dict['wdl_loss'] += wdl_loss.item()
-                running_loss_dict['stm_loss'] += stm_loss.item()
-                running_loss_dict['final_score_loss'] += final_score_loss.item()
-
-                if math.isnan(running_loss_dict['loss']):
+                running_loss_dict = self._accumulate_loss(running_loss_dict, all_loss_dict)
+ 
+                if math.isnan(running_loss_dict["loss"]):
                     print("The gradient is explosion. Stop the training...")
                     keep_running = False
                     break
@@ -531,13 +535,7 @@ class TrainingPipe():
                                         self.opt_name,
                                         self.opt.param_groups[0]["lr"],
                                         self.batchsize)
-                        log_outs += "\tloss: {:.4f}\n".format(running_loss_dict['loss']/self.verbose_steps)
-                        log_outs += "\tprob loss: {:.4f}\n".format(running_loss_dict['prob_loss']/self.verbose_steps)
-                        log_outs += "\taux prob loss: {:.4f}\n".format(running_loss_dict['aux_prob_loss']/self.verbose_steps)
-                        log_outs += "\townership loss: {:.4f}\n".format(running_loss_dict['ownership_loss']/self.verbose_steps)
-                        log_outs += "\twdl loss: {:.4f}\n".format(running_loss_dict['wdl_loss']/self.verbose_steps)
-                        log_outs += "\tstm loss: {:.4f}\n".format(running_loss_dict['stm_loss']/self.verbose_steps)
-                        log_outs += "\tfinal score loss: {:.4f}".format(running_loss_dict['final_score_loss']/self.verbose_steps)
+                        log_outs += self._get_loss_info(running_loss_dict)
                         print(log_outs)
 
                         # Also save the current running loss.

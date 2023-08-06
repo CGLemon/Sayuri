@@ -1,27 +1,35 @@
 import numpy as np
 from symmetry import numpy_symmetry_planes, numpy_symmetry_plane, numpy_symmetry_prob
 
-V1_DATA_LINES = 45
+V2_DATA_LINES = 54
 
 '''
-------- Version -------
- L1       : Version
- L2       : Mode
- 
- ------- Inputs data -------
- L3       : Board size
- L4       : Komi
- L5  - L38: Binary features
- L39      : Current Player
+    Output format is here. Every v2 data package is 54 lines.
 
- ------- Prediction data -------
- L40      : Probabilities
- L41      : Auxiliary probabilities
- L42      : Ownership
- L43      : Result
- L44      : Q value
- L45      : Final score
+    ------- Version -------
+     L1        : Version
+     L2        : Mode
+     
+     ------- Inputs data -------
+     L3        : Board Size
+     L4        : Komi
+     L5        : Rule
+     L6        : Wave
+     L7  - L43 : Binary Features
+     L44       : Current Player
+    
+     ------- Prediction data -------
+     L45       : Probabilities
+     L46       : Auxiliary Probabilities
+     L47       : Expected Values
+     L48       : Ownership
+     L49       : Result
+     L50       : Average Q Value, Short, Middel, Long
+     L51       : Final Score
+     L52       : Average Score Lead, Short, Middel, Long
+     L53       : Score Stddev
 
+     L54       : KLD
 '''
 
 class Data():
@@ -31,15 +39,30 @@ class Data():
 
         self.board_size = None
         self.komi = None
-        self.planes = []
+        self.rule = None
+        self.wave = None
+        self.planes = list()
         self.to_move = None
-        self.prob = []
-        self.aux_prob = []
-        self.ownership = []
+
+        self.prob = list()
+        self.aux_prob = list()
+        self.expected_vals = list()
+        self.ownership = list()
 
         self.result = None
-        self.q_value = None
+        self.avg_q = None
+        self.short_avg_q = None
+        self.mid_avg_q = None
+        self.long_avg_q = None
+
         self.final_score = None
+        self.avg_score = None
+        self.short_avg_score = None
+        self.mid_avg_score = None
+        self.long_avg_score = None
+        self.score_stddev = None
+
+        self.kld = None
 
     def _hex_to_int(self, h):
         if h == '0':
@@ -98,48 +121,88 @@ class Data():
         return plane
 
     def _get_probabilities(self, board_size, readline):
-        value = readline.split()
+        values = readline.split()
         size = board_size * board_size + 1
         prob = np.zeros(size, dtype=np.float32)
 
         for index in range(size):
-            prob[index] = float(value[index])
+            prob[index] = float(values[index])
         return prob
 
     def _get_ownership(self, board_size, readline):
-        ownership = np.zeros(board_size * board_size, dtype=np.int8)
+        size = board_size * board_size
+        buf = np.zeros(size, dtype=np.int8)
 
-        for index in range(board_size * board_size):
-            ownership[index] = self._int2_to_int(readline[index])
-        return ownership
+        for index in range(size):
+            buf[index] = self._int2_to_int(readline[index])
+        return buf
 
-    def _fill_v1(self, linecnt, readline):
-        if linecnt == 0:
+    def _get_expected_vals(self, board_size, readline):
+        size = board_size * board_size + 1
+        buf = np.zeros(size, dtype=np.int8)
+
+        for index in range(size):
+            buf[index] = self._int2_to_int(readline[index])
+        return buf
+
+    def _get_vals_list(self, readline):
+        values = readline.split()
+        size = len(values)
+        buf = np.zeros(size, dtype=np.float32)
+
+        for index in range(size):
+            buf[index] = float(values[index])
+        return buf
+
+    def _fill_v2(self, virtual_linecnt, readline):
+        linecnt = virtual_linecnt + 1
+
+        if linecnt == 1:
             pass
-        elif linecnt == 1:
-            self.mode = int(readline)
         elif linecnt == 2:
-            self.board_size = int(readline)
+            self.mode = int(readline)
         elif linecnt == 3:
+            self.board_size = int(readline)
+        elif linecnt == 4:
             self.komi = float(readline)
-        elif linecnt >= 4 and linecnt <= 37:
+        elif linecnt == 5:
+            self.wave = float(readline)
+        elif linecnt == 6:
+            self.rule = float(readline)
+        elif linecnt >= 7 and linecnt <= 43:
             plane = self._gether_binary_plane(self.board_size, readline)
             self.planes.append(plane)
-        elif linecnt == 38:
+        elif linecnt == 44:
             self.planes = np.array(self.planes)
             self.to_move = int(readline)
-        elif linecnt == 39:
+        elif linecnt == 45:
             self.prob = self._get_probabilities(self.board_size, readline)
-        elif linecnt == 40:
+        elif linecnt == 46:
             self.aux_prob = self._get_probabilities(self.board_size, readline)
-        elif linecnt == 41:
+        elif linecnt == 47:
+            self.expected_vals = self._get_expected_vals(self.board_size, readline)
+        elif linecnt == 48:
             self.ownership = self._get_ownership(self.board_size, readline)
-        elif linecnt == 42:
+        elif linecnt == 49:
             self.result = int(readline)
-        elif linecnt == 43:
-            self.q_value = float(readline)
-        elif linecnt == 44:
+        elif linecnt == 50:
+            vals_list = self._get_vals_list(readline)
+            self.avg_q = vals_list[0]
+            self.short_avg_q = vals_list[1]
+            self.mid_avg_q = vals_list[2]
+            self.long_avg_q = vals_list[3]
+        elif linecnt == 51:
             self.final_score = float(readline)
+        elif linecnt == 52:
+            vals_list = self._get_vals_list(readline)
+            self.avg_score = vals_list[0]
+            self.short_avg_score = vals_list[1]
+            self.mid_avg_score = vals_list[2]
+            self.long_avg_score = vals_list[3]
+        elif linecnt == 53:
+            self.score_stddev = float(readline)
+        elif linecnt == 54:
+            self.kld = float(readline)
 
     def apply_symmetry(self, symm):
         channels       = self.planes.shape[0]
@@ -153,8 +216,10 @@ class Data():
         self.ownership = numpy_symmetry_plane(symm, self.ownership)
         self.ownership = np.reshape(self.ownership, (bsize * bsize))
 
-        self.prob      = numpy_symmetry_prob(symm, self.prob)
-        self.aux_prob  = numpy_symmetry_prob(symm, self.aux_prob)
+        self.prob          = numpy_symmetry_prob(symm, self.prob)
+        self.aux_prob      = numpy_symmetry_prob(symm, self.aux_prob)
+        self.expected_vals = numpy_symmetry_prob(symm, self.expected_vals)
+
 
     def parse_from_stream(self, stream, skip=False):
         line = stream.readline()
@@ -163,8 +228,8 @@ class Data():
 
         self.version = int(line)
         datalines = 0
-        if self.version == 1:
-            datalines = V1_DATA_LINES
+        if self.version == 2:
+            datalines = V2_DATA_LINES
         else:
             raise Exception("The data is not correct version. The loaded data version is {}.".format(self.version))
 
@@ -175,33 +240,5 @@ class Data():
         if skip == False:
             for cnt in range(1, datalines):
                 line = lines[cnt-1]
-                self._fill_v1(cnt, line)
+                self._fill_v2(cnt, line)
         return True
-
-    def __str__(self):
-        out = str()
-        out += "Board size: {}\n".format(self.board_size)
-        out += "Side to move: {}\n".format(self.to_move)
-        out += "Komi: {}\n".format(self.komi)
-        out += "Result: {}\n".format(self.result)
-        out += "Q value: {}\n".format(self.q_value)
-        out += "Final score: {}\n".format(self.final_score)
-
-        for p in range(len(self.planes)):
-            out += "Plane: {}".format(p+1)
-            out += str(self.planes[p])
-            out += "\n"
-
-        out += "Probabilities: "
-        out += str(self.prob)
-        out += "\n"
-
-        out += "Auxiliary probabilities: "
-        out += str(self.aux_prob)
-        out += "\n"
-
-        out += "Ownership: "
-        out += str(self.ownership)
-        out += "\n"
-
-        return out

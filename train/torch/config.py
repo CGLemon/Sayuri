@@ -30,7 +30,6 @@ class Config:
         self.input_channels = None
         self.input_features = None
         self.boardsize = None
-        self.value_misc = None
         self.num_chunks = None
 
 def parse_training_config(json_data, config):
@@ -77,13 +76,11 @@ def parse_nn_config(json_data, config):
     config.residual_channels = network.get("ResidualChannels", None)
     config.policy_extract = network.get("PolicyExtract", None)
     config.value_extract = network.get("ValueExtract", None)
-    config.value_misc = network.get("ValueMisc", None)
 
     assert config.input_channels != None, ""
     assert config.residual_channels != None, ""
     assert config.policy_extract != None, ""
     assert config.value_extract != None, ""
-    assert config.value_misc != None, ""
 
     stack = network.get("Stack", None)
     for s in stack:
