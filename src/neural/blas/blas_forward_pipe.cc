@@ -98,9 +98,9 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                   std::begin(planes));
 
     // Allocate the output buffers. 
-    auto output_prob = std::vector<float>(num_intersections);
+    auto output_prob = std::vector<float>(kOuputProbabilitiesChannels * num_intersections);
     auto output_pass = std::vector<float>(kOuputPassProbability);
-    auto output_ownership = std::vector<float>(num_intersections);
+    auto output_ownership = std::vector<float>(kOuputOwnershipChannels * num_intersections);
     auto output_misc = std::vector<float>(kOuputValueMisc);
 
     // The input Layers.
@@ -339,11 +339,15 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     result.wdl[1] = output_misc[1];
     result.wdl[2] = output_misc[2];
     result.stm_winrate = output_misc[3];
-    result.final_score = output_misc[4];
+    result.final_score = output_misc[8];
     result.pass_probability = output_pass[0];
 
-    std::copy(std::begin(output_prob), std::end(output_prob), std::begin(result.probabilities));
-    std::copy(std::begin(output_ownership), std::end(output_ownership), std::begin(result.ownership));
+    std::copy(std::begin(output_prob),
+        std::begin(output_prob) + num_intersections,
+        std::begin(result.probabilities));
+    std::copy(std::begin(output_ownership),
+        std::begin(output_ownership) + num_intersections,
+        std::begin(result.ownership));
 
     return result;
 }

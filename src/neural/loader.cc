@@ -366,7 +366,8 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
                        buffer,
                        input_bn_shape[0]);
 
-    if (weights->residual_channels != input_conv_shape[1] ||
+    if (weights->input_channels != input_conv_shape[0] ||
+            weights->residual_channels != input_conv_shape[1] ||
             weights->residual_channels != input_bn_shape[0] ||
             input_conv_shape[2] != 3) {
         throw "The input layers are wrong";

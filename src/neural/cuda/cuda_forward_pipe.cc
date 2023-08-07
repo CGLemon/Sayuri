@@ -457,7 +457,10 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
 
     const size_t planes_size = factor * kInputChannels * num_intersections;
     const size_t spatia_size = factor * num_intersections;
+    const size_t pol_size = spatia_size * kOuputProbabilitiesChannels;
+    const size_t pass_size = factor * kOuputPassProbability;
     const size_t val_size = factor * kOuputValueMisc;
+    const size_t ownership_size = spatia_size * kOuputOwnershipChannels;
 
     const size_t conv_op_size = factor * weights_->residual_channels * num_intersections;
 
@@ -492,9 +495,9 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_mask_op_[1], mask_op2_size));
 
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_input_planes_, planes_size));
-    cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_prob_pass_, factor));
-    cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_prob_, spatia_size));
-    cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_ownership_, spatia_size));
+    cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_prob_pass_, pass_size));
+    cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_prob_, pol_size));
+    cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_ownership_, ownership_size));
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_val_, val_size));
 
     // Locked-page memory.
@@ -502,9 +505,9 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     cuda::ReportCUDAErrors(cudaMallocHost(&host_mask_op_[1], mask_op2_size));
 
     cuda::ReportCUDAErrors(cudaMallocHost(&host_input_planes_, planes_size));
-    cuda::ReportCUDAErrors(cudaMallocHost(&host_output_prob_pass_, factor));
-    cuda::ReportCUDAErrors(cudaMallocHost(&host_output_prob_, spatia_size));
-    cuda::ReportCUDAErrors(cudaMallocHost(&host_output_ownership_, spatia_size));
+    cuda::ReportCUDAErrors(cudaMallocHost(&host_output_prob_pass_, pass_size));
+    cuda::ReportCUDAErrors(cudaMallocHost(&host_output_prob_, pol_size));
+    cuda::ReportCUDAErrors(cudaMallocHost(&host_output_ownership_, ownership_size));
     cuda::ReportCUDAErrors(cudaMallocHost(&host_output_val_, val_size));
 }
 
@@ -756,9 +759,9 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     graph_->v_misc.Forward(
         batch_size, cuda_output_val_, cuda_val_op_[2]);
 
-    auto batch_prob_pass = std::vector<float>(batch_size);
-    auto batch_prob = std::vector<float>(batch_size * num_intersections);
-    auto batch_ownership = std::vector<float>(batch_size * num_intersections);
+    auto batch_prob_pass = std::vector<float>(batch_size * kOuputPassProbability);
+    auto batch_prob = std::vector<float>(batch_size * kOuputProbabilitiesChannels * num_intersections);
+    auto batch_ownership = std::vector<float>(batch_size * kOuputOwnershipChannels * num_intersections);
     auto batch_value_misc = std::vector<float>(batch_size * kOuputValueMisc);
 
     cuda::WaitToFinish(handles_.stream);
@@ -787,17 +790,21 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
     for (int b = 0; b < batch_size; ++b) {
         auto &output_result = batch_output_result[b];
+        int pol_offset = kOuputProbabilitiesChannels * num_intersections;
+        int own_offset = kOuputOwnershipChannels * num_intersections;
         for (int idx = 0; idx < num_intersections; ++idx) {
-            output_result.probabilities[idx] = batch_prob[b * num_intersections + idx];
-            output_result.ownership[idx] = batch_ownership[b * num_intersections + idx];
+            int pol_index = b * pol_offset + 0 * num_intersections + idx;
+            int own_index = b * own_offset + 0 * num_intersections + idx;
+            output_result.probabilities[idx] = batch_prob[pol_index];
+            output_result.ownership[idx] = batch_ownership[own_index];
         }
-        output_result.pass_probability = batch_prob_pass[b];
+        output_result.pass_probability = batch_prob_pass[b * kOuputPassProbability + 0];
 
         output_result.wdl[0] = batch_value_misc[b * kOuputValueMisc + 0];
         output_result.wdl[1] = batch_value_misc[b * kOuputValueMisc + 1];
         output_result.wdl[2] = batch_value_misc[b * kOuputValueMisc + 2];
         output_result.stm_winrate = batch_value_misc[b * kOuputValueMisc + 3];
-        output_result.final_score = batch_value_misc[b * kOuputValueMisc + 4];
+        output_result.final_score = batch_value_misc[b * kOuputValueMisc + 8];
 
         output_result.board_size = inputs[b].board_size;
         output_result.komi = inputs[b].komi;

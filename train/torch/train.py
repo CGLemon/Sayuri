@@ -94,7 +94,8 @@ class BatchGenerator:
         ownership = np.zeros((nn_board_size, nn_board_size))
         wdl = np.zeros(3)
         all_q_vals = np.zeros(5)
-        all_scores = np.zeros(6)
+        all_scores = np.zeros(5)
+        all_stddev = np.zeros(2)
 
         buf = np.zeros(num_intersections)
         sqr_buf = np.zeros((nn_board_size, nn_board_size))
@@ -153,10 +154,12 @@ class BatchGenerator:
         all_scores[2] = data.short_avg_score
         all_scores[3] = data.mid_avg_score
         all_scores[4] = data.long_avg_score
-        all_scores[5] = data.score_stddev
+
+        # all sttdev
+        all_stddev[0] = data.q_stddev
+        all_stddev[1] = data.score_stddev
 
         return (
-            data.board_size,
             input_planes,
             prob,
             aux_prob,
@@ -164,11 +167,11 @@ class BatchGenerator:
             ownership,
             wdl,
             all_q_vals,
-            all_scores
+            all_scores,
+            all_stddev
         )
 
     def func(self, data_list):
-        batch_bsize = list()
         batch_planes = list()
         batch_prob = list()
         batch_aux_prob = list()
@@ -177,11 +180,11 @@ class BatchGenerator:
         batch_wdl = list()
         batch_q_vals = list()
         batch_scores = list()
+        batch_stddevs = list()
 
         for data in data_list:
-            bsize, planes, prob, aux_prob, expected_vals, ownership, wdl, q_vals, scores = self._wrap_data(data)
+            planes, prob, aux_prob, expected_vals, ownership, wdl, q_vals, scores, stddevs = self._wrap_data(data)
 
-            batch_bsize.append(bsize)
             batch_planes.append(planes)
             batch_prob.append(prob)
             batch_aux_prob.append(aux_prob)
@@ -190,18 +193,20 @@ class BatchGenerator:
             batch_wdl.append(wdl)
             batch_q_vals.append(q_vals)
             batch_scores.append(scores)
+            batch_stddevs.append(stddevs)
 
-        return (
-            batch_bsize,
-            torch.tensor(np.array(batch_planes)).float(),
-            torch.tensor(np.array(batch_prob)).float(),
-            torch.tensor(np.array(batch_aux_prob)).float(),
-            torch.tensor(np.array(batch_expected_vals)).float(),
-            torch.tensor(np.array(batch_ownership)).float(),
-            torch.tensor(np.array(batch_wdl)).float(),
-            torch.tensor(np.array(batch_q_vals)).float(),
-            torch.tensor(np.array(batch_scores)).float()
-        )
+        batch_dict = {
+            "planes"        : torch.from_numpy(np.array(batch_planes)).float(),
+            "prob"          : torch.from_numpy(np.array(batch_prob)).float(),
+            "aux_prob"      : torch.from_numpy(np.array(batch_aux_prob)).float(),
+            "expected_vals" : torch.from_numpy(np.array(batch_expected_vals)).float(),
+            "ownership"     : torch.from_numpy(np.array(batch_ownership)).float(),
+            "wdl"           : torch.from_numpy(np.array(batch_wdl)).float(),
+            "q_vals"        : torch.from_numpy(np.array(batch_q_vals)).float(),
+            "scores"        : torch.from_numpy(np.array(batch_scores)).float(),
+            "stddevs"       : torch.from_numpy(np.array(batch_stddevs)).float()
+        }
+        return batch_dict
 
 class TrainingPipe():
     def __init__(self, cfg):
@@ -406,19 +411,12 @@ class TrainingPipe():
             self.validation_lazy_loader = None
 
 
-    def get_new_running_loss_dict(self):
+    def _get_new_running_loss_dict(self, all_loss_dict):
         # Get the new dict.
         running_loss_dict = dict()
         running_loss_dict["loss"] = 0
-        running_loss_dict["prob_loss"] = 0
-        running_loss_dict["aux_prob_loss"] = 0
-        running_loss_dict["soft_prob_loss"] = 0
-        running_loss_dict["soft_aux_prob_loss"] = 0
-        running_loss_dict["expected_vals_loss"] = 0
-        running_loss_dict["ownership_loss"] = 0
-        running_loss_dict["wdl_loss"] = 0
-        running_loss_dict["q_vals_loss"] = 0
-        running_loss_dict["scores_loss"] = 0
+        for k, v in all_loss_dict.items():
+            running_loss_dict[k] = 0
         return running_loss_dict
 
     def _accumulate_loss(self, running_loss_dict, all_loss_dict):
@@ -447,34 +445,37 @@ class TrainingPipe():
         info += "\tsoft prob loss: {:.4f}\n".format(running_loss_dict["soft_prob_loss"]/self.verbose_steps)
         info += "\tsoft aux prob loss: {:.4f}\n".format(running_loss_dict["soft_aux_prob_loss"]/self.verbose_steps)
         info += "\texpected values loss: {:.4f}\n".format(running_loss_dict["expected_vals_loss"]/self.verbose_steps)
-        info += "\townership loss: {:.4f}\n".format(running_loss_dict['ownership_loss']/self.verbose_steps)
-        info += "\twdl loss: {:.4f}\n".format(running_loss_dict['wdl_loss']/self.verbose_steps)
-        info += "\tQ values loss: {:.4f}\n".format(running_loss_dict['q_vals_loss']/self.verbose_steps)
-        info += "\tscores loss: {:.4f}".format(running_loss_dict['scores_loss']/self.verbose_steps)
+        info += "\townership loss: {:.4f}\n".format(running_loss_dict["ownership_loss"]/self.verbose_steps)
+        info += "\twdl loss: {:.4f}\n".format(running_loss_dict["wdl_loss"]/self.verbose_steps)
+        info += "\tQ values loss: {:.4f}\n".format(running_loss_dict["q_vals_loss"]/self.verbose_steps)
+        info += "\tscores loss: {:.4f}\n".format(running_loss_dict["scores_loss"]/self.verbose_steps)
+        info += "\tstddevs loss: {:.4f}".format(running_loss_dict["stddevs_loss"]/self.verbose_steps)
         return info
 
     def gather_data_from_loader(self, use_training=True):
         # Fetch the next batch data from disk.
         if use_training:
-            batch = next(self.train_lazy_loader)
+            batch_dict = next(self.train_lazy_loader)
         else:
-            batch = next(self.validation_lazy_loader)
-
-        _, planes, t_prob, t_aux_prob, t_expected_vals, t_ownership, t_wdl, t_q_vals, t_scores = batch
+            batch_dict = next(self.validation_lazy_loader)
 
         # Move the data to the current device.
         if self.use_gpu:
-            planes = planes.to(self.device)
-            t_prob = t_prob.to(self.device)
-            t_aux_prob = t_aux_prob.to(self.device)
-            t_expected_vals = t_expected_vals.to(self.device)
-            t_ownership = t_ownership.to(self.device)
-            t_wdl = t_wdl.to(self.device)
-            t_q_vals = t_q_vals.to(self.device)
-            t_scores = t_scores.to(self.device)
+            for k, v in batch_dict.items():
+                v = v.to(self.device)
 
         # Gather batch data
-        target = (t_prob, t_aux_prob, t_expected_vals, t_ownership, t_wdl, t_q_vals, t_scores)
+        planes = batch_dict["planes"]
+        target = (
+            batch_dict["prob"],
+            batch_dict["aux_prob"],
+            batch_dict["expected_vals"],
+            batch_dict["ownership"],
+            batch_dict["wdl"],
+            batch_dict["q_vals"],
+            batch_dict["scores"],
+            batch_dict["stddevs"]
+        )
         return planes, target
 
     def validate_the_last_model(self, steps):
@@ -486,7 +487,7 @@ class TrainingPipe():
         self._init_loader()
         print("Start training...")
 
-        running_loss_dict = self.get_new_running_loss_dict()
+        running_loss_dict = dict()
         num_steps = init_steps
         keep_running = True
         macro_steps = 0
@@ -506,6 +507,8 @@ class TrainingPipe():
                 macro_steps += 1
 
                 # accumulate loss
+                if len(running_loss_dict) == 0:
+                    running_loss_dict = self._get_new_running_loss_dict(all_loss_dict)
                 running_loss_dict = self._accumulate_loss(running_loss_dict, all_loss_dict)
  
                 if math.isnan(running_loss_dict["loss"]):
@@ -542,8 +545,7 @@ class TrainingPipe():
                         log_file = os.path.join(self.store_path, "training.log")
                         with open(log_file, 'a') as f:
                             f.write(log_outs + '\n')
-
-                        running_loss_dict = self.get_new_running_loss_dict()
+                        running_loss_dict = self._get_new_running_loss_dict(all_loss_dict)
 
                     # update learning rate
                     for param in self.opt.param_groups:

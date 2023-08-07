@@ -602,7 +602,7 @@ class Network(nn.Module):
         self.ysize = cfg.boardsize
         self.policy_extract = cfg.policy_extract
         self.value_extract = cfg.value_extract
-        self.value_misc = 14
+        self.value_misc = 15
         self.policy_outs = 5
         self.stack = cfg.stack
         self.version = 2
@@ -757,7 +757,11 @@ class Network(nn.Module):
 
         # Apply CRAZY_NEGATIVE_VALUE on out of board area. This position
         # policy will be zero after softmax 
-        prob_without_pass = self.prob(pol, mask) + (1.0-mask) * CRAZY_NEGATIVE_VALUE
+        prob_without_pass = self.prob(pol, mask)
+        logits_part, non_logits_part = torch.split(prob_without_pass, [4, 1], dim=1)
+        logits_part = logits_part + (1.0-mask) * CRAZY_NEGATIVE_VALUE
+        prob_without_pass = torch.cat((logits_part, non_logits_part), dim=1)
+
         if use_symm:
             prob_without_pass = torch_symmetry(symm, prob_without_pass, invert=True)
         prob_without_pass = torch.flatten(prob_without_pass, start_dim=2, end_dim=3) # b, c, h*w
@@ -771,8 +775,6 @@ class Network(nn.Module):
         soft_prob     = torch.flatten(soft_prob, start_dim=1, end_dim=2)
         soft_aux_prob = torch.flatten(soft_aux_prob, start_dim=1, end_dim=2)
         expected_vals = torch.flatten(expected_vals, start_dim=1, end_dim=2)
-
-        expected_vals = expected_vals * policy_mask
         expected_vals = torch.tanh(expected_vals)
 
         # value head
@@ -790,7 +792,7 @@ class Network(nn.Module):
         ownership = torch.tanh(ownership)
 
         val_misc = self.value_misc_fc(val_inter)
-        wdl, all_q_vals, all_scores =  torch.split(val_misc, [3, 5, 6], dim=1)
+        wdl, all_q_vals, all_scores, all_stddevs =  torch.split(val_misc, [3, 5, 5, 2], dim=1)
         all_q_vals = torch.tanh(all_q_vals)
 
         predict = (
@@ -803,18 +805,18 @@ class Network(nn.Module):
             wdl, # logits
             all_q_vals,
             all_scores,
+            all_stddevs
         )
 
         all_loss_dict = dict()
         if target is not None:
-            all_loss_dict = self.compute_loss(
-                predict, target, mask_sum_hw, policy_mask)
+            all_loss_dict = self.compute_loss(predict, target, mask_sum_hw)
 
         return predict, all_loss_dict
 
-    def compute_loss(self, pred, target, mask_sum_hw, policy_mask):
-        p_prob, p_aux_prob, p_soft_porb, p_soft_aux_prob, p_expected_vals, p_ownership, p_wdl, p_q_vals, p_scores = pred
-        t_prob, t_aux_prob, t_expected_vals, t_ownership, t_wdl, t_q_vals, t_scores = target
+    def compute_loss(self, pred, target, mask_sum_hw):
+        p_prob, p_aux_prob, p_soft_porb, p_soft_aux_prob, p_expected_vals, p_ownership, p_wdl, p_q_vals, p_scores, p_stddevs = pred
+        t_prob, t_aux_prob, t_expected_vals, t_ownership, t_wdl, t_q_vals, t_scores, t_stddevs = target
 
         def make_soft_porb(prob, t=4):
             soft_prob = torch.pow(prob, 1/t)
@@ -838,11 +840,12 @@ class Network(nn.Module):
         soft_prob_loss = 1 * cross_entropy(p_prob, make_soft_porb(t_prob))
         soft_aux_prob_loss = 0.15 * cross_entropy(p_aux_prob, make_soft_porb(t_aux_prob))
 
-        expected_vals_loss = 10 * mse_loss_spat(p_expected_vals, t_expected_vals)
+        expected_vals_loss = 4 * mse_loss_spat(p_expected_vals, t_expected_vals)
         ownership_loss = 1.5 * mse_loss_spat(p_ownership, t_ownership)
         wdl_loss = cross_entropy(p_wdl, t_wdl)
         q_vals_loss = F.mse_loss(p_q_vals, t_q_vals)
         scores_loss = 0.0012 * huber_loss(20 * p_scores, t_scores, 12)
+        stddevs_loss = 0.05 * huber_loss(20 * p_stddevs, p_stddevs, 12)
 
         all_loss_dict = {
             "prob_loss"          : prob_loss,
@@ -853,7 +856,8 @@ class Network(nn.Module):
             "ownership_loss"     : ownership_loss,
             "wdl_loss"           : wdl_loss,
             "q_vals_loss"        : q_vals_loss,
-            "scores_loss"        : scores_loss
+            "scores_loss"        : scores_loss,
+            "stddevs_loss"       : stddevs_loss
         }
         return all_loss_dict
 

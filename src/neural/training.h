@@ -23,10 +23,11 @@ struct Training {
     float short_avg_q, middle_avg_q, long_avg_q;
 
     float final_score;
-    float score_stddev;
     float score_lead;
     float avg_score_lead;
     float short_avg_score, middle_avg_score, long_avg_score;
+
+    float q_stddev, score_stddev;
 
     float kld;
     float rule;
@@ -58,7 +59,7 @@ struct Training {
      L50       : Average Q Value, Short, Middel, Long
      L51       : Final Score
      L52       : Average Score Lead, Short, Middel, Long
-     L53       : Score Stddev
+     L53       : Q Stddev, Score Stddev
 
      ------- Misc data -------
      L54       : KLD

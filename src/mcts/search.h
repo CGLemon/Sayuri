@@ -92,6 +92,7 @@ struct ComputationResult {
     float root_score_lead;
     float best_eval;
     float root_score_stddev;
+    float root_eval_stddev;
 
     std::vector<float> root_ownership;
     std::vector<int> root_visits;

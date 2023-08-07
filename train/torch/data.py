@@ -27,7 +27,7 @@ V2_DATA_LINES = 54
      L50       : Average Q Value, Short, Middel, Long
      L51       : Final Score
      L52       : Average Score Lead, Short, Middel, Long
-     L53       : Score Stddev
+     L53       : Q Stddev, Score Stddev
 
      L54       : KLD
 '''
@@ -60,6 +60,8 @@ class Data():
         self.short_avg_score = None
         self.mid_avg_score = None
         self.long_avg_score = None
+
+        self.q_stddev = None
         self.score_stddev = None
 
         self.kld = None
@@ -200,7 +202,9 @@ class Data():
             self.mid_avg_score = vals_list[2]
             self.long_avg_score = vals_list[3]
         elif linecnt == 53:
-            self.score_stddev = float(readline)
+            vals_list = self._get_vals_list(readline)
+            self.q_stddev = vals_list[0]
+            self.score_stddev = vals_list[1]
         elif linecnt == 54:
             self.kld = float(readline)
 

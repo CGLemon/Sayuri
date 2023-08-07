@@ -335,7 +335,7 @@ float Node::GetTreeComplexity() {
         return 0;
     }
 
-    const auto variance = GetLcbVariance(1.0f, visits);
+    const auto variance = GetWLVariance(1.0f, visits);
     const auto stddev = std::sqrt(100 * variance);
 
     return stddev;
@@ -393,9 +393,9 @@ float Node::GetDynamicCpuctFactor(Node *node, const int visits) {
     double cpuct_dynamic_k_factor = param_->cpuct_dynamic_k_factor;
     double cpuct_dynamic_k_base = param_->cpuct_dynamic_k_base;
 
-    double variance = node->GetLcbVariance(1.0f, visits);
-    double stddev = std::sqrt(variance / visits);
-    double k = cpuct_dynamic_k_factor * stddev;
+    double variance = node->GetWLVariance(1.0f, visits);
+    double stddev = std::sqrt(variance);
+    double k = cpuct_dynamic_k_factor * (stddev / visits);
 
     k = std::max(0.5, k);
     k = std::min(1.4, k);
@@ -790,10 +790,16 @@ float Node::GetScoreStddev() const {
     return std::sqrt(variance);
 }
 
-float Node::GetLcbVariance(const float default_var, const int visits) const {
+float Node::GetWLVariance(const float default_var, const int visits) const {
     return visits > 1 ?
                squared_eval_diff_.load(std::memory_order_relaxed) / (visits - 1) :
                default_var;
+}
+
+float Node::GetWLStddev() const {
+    const auto visits = GetVisits();
+    const auto variance = GetWLVariance(1.0f, visits);
+    return std::sqrt(variance);
 }
 
 float Node::GetLcb(const int color) const {
@@ -808,14 +814,13 @@ float Node::GetLcb(const int color) const {
     }
 
     const auto mean = GetWL(color, false);
-    const auto variance = GetLcbVariance(1.0f, visits);
-
-    // The variance divide the visits inorder to empirically
-    // make the bound decrease slower.
-    const auto stddev = std::sqrt(variance / float(visits));
+    const auto variance = GetWLVariance(1.0f, visits);
+    const auto stddev = std::sqrt(variance);
     const auto z = LcbEntries::Get().CachedTQuantile(visits - 1);
 
-    return mean - z * stddev;
+    // The variance divide the visits in order to empirically
+    // make the bound decrease slower.
+    return mean - z * (stddev/visits);
 }
 
 std::string Node::GetPathVerboseString(GameState &state, int color,

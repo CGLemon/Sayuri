@@ -90,7 +90,7 @@ void Training::StreamOut(std::ostream &out) const {
             << short_avg_score << ' '
             << middle_avg_score << ' '
             << long_avg_score << std::endl;
-    out << score_stddev << std::endl;
+    out << q_stddev << ' ' << score_stddev << std::endl;
  
     // the "Misc" part
     out << kld << std::endl;

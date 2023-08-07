@@ -471,6 +471,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     result.root_score_lead = root_node_->GetFinalScore(color);
     result.root_eval = root_node_->GetWL(color, false);
     result.root_score_stddev = root_node_->GetScoreStddev();
+    result.root_eval_stddev = root_node_->GetWLStddev();
     {
         auto best_node = root_node_->GetChild(result.best_move);
         if (best_node->GetVisits() >= 1) {
@@ -481,11 +482,11 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     }
 
     // Resize the childern status buffer.
-    result.root_ownership.resize(num_intersections);
-    result.root_playouts_dist.resize(num_intersections+1);
-    result.root_visits.resize(num_intersections+1);
-    result.target_playouts_dist.resize(num_intersections+1);
-    result.root_expected_values.resize(num_intersections+1);
+    result.root_ownership.resize(num_intersections, 0);
+    result.root_playouts_dist.resize(num_intersections+1, 0);
+    result.root_visits.resize(num_intersections+1, 0);
+    result.target_playouts_dist.resize(num_intersections+1, 0);
+    result.root_expected_values.resize(num_intersections+1, 0);
 
     // Fill ownership.
     auto ownership = root_node_->GetOwnership(color);
@@ -1018,7 +1019,6 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
 
     // Set the most buffer values.
     const int buf_size = training_buffer_.size();
-    const int window_half_size = 4; // full size is (1 + 2*window_half_size)
     for (int i = 0; i < buf_size; ++i) {
         assert(winner != kUndecide);
 
@@ -1031,7 +1031,7 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
             buf.final_score = buf.side_to_move == kBlack ? black_final_score : -black_final_score;
         }
 
-        buf.ownership.resize(num_intersections);
+        buf.ownership.resize(num_intersections, 0);
         for (int idx = 0; idx < num_intersections; ++idx) {
             const auto owner = ownership[idx];
             if (owner == buf.side_to_move) {
@@ -1043,6 +1043,8 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
             }
         }
 
+        const int window_half_size =
+            std::max(3, (int)(buf.board_size/2)); // full size is (1 + 2*window_half_size)
         float window_q_sum = 0.f;
         float window_score_sum = 0.f;
         int window_size = 0;
@@ -1148,6 +1150,7 @@ void Search::GatherData(const GameState &state,
     data.q_value = 2 * result.root_eval - 1.f;
     data.score_lead = result.root_score_lead;
     data.score_stddev = result.root_score_stddev;
+    data.q_stddev = result.root_eval_stddev;
     data.planes = Encoder::Get().GetPlanes(state);
     data.probabilities = result.target_playouts_dist;
     data.wave = state.GetWave();

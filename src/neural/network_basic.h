@@ -8,9 +8,9 @@
 static constexpr int kInputChannels = 43; // 8 past moves * 3 
                                           // 13 binary features
                                           // 6 misc features
-static constexpr int kOuputValueMisc = 5;
-static constexpr int kOuputPassProbability = 1;
-static constexpr int kOuputProbabilitiesChannels = 1;
+static constexpr int kOuputValueMisc = 15;
+static constexpr int kOuputPassProbability = 5;
+static constexpr int kOuputProbabilitiesChannels = 5;
 static constexpr int kOuputOwnershipChannels = 1;
 
 struct InputData {

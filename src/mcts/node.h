@@ -177,6 +177,7 @@ public:
     // Set the network win-loss value from outside.
     void ApplyEvals(const NodeEvals *evals);
 
+    float GetWLStddev() const;
     float GetScoreStddev() const;
 
     bool ShouldApplyGumbel() const;
@@ -223,7 +224,7 @@ private:
     float GetSearchPolicy(Edge& child, bool noise);
     float GetScoreUtility(const int color, float div, float parent_score) const;
     float GetScoreVariance(const float default_var, const int visits) const;
-    float GetLcbVariance(const float default_var, const int visits) const;
+    float GetWLVariance(const float default_var, const int visits) const;
     float GetLcb(const int color) const;
 
     void Inflate(Edge& child);
