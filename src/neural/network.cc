@@ -180,7 +180,18 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
     out_result.wdl[1] = wdl_buffer[1];
     out_result.wdl[2] = wdl_buffer[2];
     out_result.wdl_winrate = (wdl_buffer[0] - wdl_buffer[2] + 1.f) / 2;
-    out_result.stm_winrate = (std::tanh(out_result.stm_winrate) + 1.f) / 2;
+    out_result.stm_winrate = (std::tanh(result_buf.stm_winrate) + 1.f) / 2;
+
+    // error
+    auto SoftplusSquare = [](float x) -> float {
+        if (x <= 20.f) {
+            x = std::log(1 + std::exp(x));
+        }
+        return x * x;
+    };
+
+    out_result.q_error = 0.25 * SoftplusSquare(result_buf.q_error);
+    out_result.score_error = 150 * SoftplusSquare(result_buf.score_error);
 
     return out_result;
 }
@@ -279,6 +290,8 @@ std::string Network::GetOutputString(const GameState &state,
     out << "draw probability: " << result.wdl[1] << std::endl;
     out << "loss probability: " << result.wdl[2] << std::endl;
     out << "final score: " << result.final_score << std::endl;
+    out << "q error: " << result.q_error << std::endl;
+    out << "score error: " << result.score_error << std::endl;
 
     out << "probabilities: " << std::endl;
     for (int y = 0; y < bsize; ++y) {

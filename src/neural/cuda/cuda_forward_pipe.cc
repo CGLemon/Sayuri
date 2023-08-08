@@ -805,6 +805,8 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         output_result.wdl[2] = batch_value_misc[b * kOuputValueMisc + 2];
         output_result.stm_winrate = batch_value_misc[b * kOuputValueMisc + 3];
         output_result.final_score = batch_value_misc[b * kOuputValueMisc + 8];
+        output_result.q_error = batch_value_misc[b * kOuputValueMisc + 13];
+        output_result.score_error = batch_value_misc[b * kOuputValueMisc + 14];
 
         output_result.board_size = inputs[b].board_size;
         output_result.komi = inputs[b].komi;

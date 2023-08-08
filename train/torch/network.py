@@ -60,9 +60,9 @@ class SoftPlusWithGradientFloorFunction(torch.autograd.Function):
         ctx.save_for_backward(x)
         ctx.grad_floor = grad_floor # grad_floor is not a tensor
         if square:
-            return torch.square(torch.nn.functional.softplus(0.5 * x))
+            return torch.square(F.softplus(0.5 * x))
         else:
-            return torch.nn.functional.softplus(x)
+            return F.softplus(x)
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
@@ -773,6 +773,12 @@ class Network(nn.Module):
         all_q_vals = torch.tanh(all_q_vals)
         all_errors = SoftPlusWithGradientFloorFunction.apply(all_errors, 0.05, True)
 
+        short_term_q_error, short_term_score_error = torch.split(all_errors, [1, 1], dim=1)
+        all_scores = 20 * all_scores
+        short_term_q_error = 0.25 * short_term_q_error
+        short_term_score_error = 150 * short_term_score_error
+        all_errors = torch.cat((short_term_q_error, short_term_score_error), dim=1)
+
         predict = (
             prob, # logits
             aux_prob, # logits
@@ -865,17 +871,17 @@ class Network(nn.Module):
         q_vals_loss = F.mse_loss(p_q_vals, t_q_vals)
 
         # all scores loss
-        scores_loss = 0.0012 * huber_loss(20 * p_scores, t_scores, 12.)
+        scores_loss = 0.0012 * huber_loss(p_scores, t_scores, 12.)
 
         # all short term square error loss
         q_error_loss = 2 * square_huber_loss(
-            0.25 * short_term_q_error,
+            short_term_q_error,
             short_term_q_pred.detach(),
             short_term_q_target,
             delta=0.4, eps=1.0e-8
         )
         score_error_loss = 0.00002 * square_huber_loss(
-            150 * short_term_score_error,
+            short_term_score_error,
             short_term_score_pred.detach(),
             short_term_score_target,
             delta=100.0, eps=1.0e-4

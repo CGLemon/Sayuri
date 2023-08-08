@@ -340,6 +340,9 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     result.wdl[2] = output_misc[2];
     result.stm_winrate = output_misc[3];
     result.final_score = output_misc[8];
+    result.q_error = output_misc[13];
+    result.score_error = output_misc[14];
+
     result.pass_probability = output_pass[0];
 
     std::copy(std::begin(output_prob),

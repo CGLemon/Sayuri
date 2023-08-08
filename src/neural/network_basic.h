@@ -14,37 +14,34 @@ static constexpr int kOuputProbabilitiesChannels = 6;
 static constexpr int kOuputOwnershipChannels = 1;
 
 struct InputData {
-    InputData() : komi(0.f), board_size(-1), side_to_move(kInvalid) {
+    InputData() {
         planes.fill(0.f);
     };
 
-    float komi;
-    int board_size;
-    int side_to_move;
+    float komi{0.f};
+    int board_size{-1};
+    int side_to_move{kInvalid};
 
     std::array<float, kInputChannels * kNumIntersections> planes;
 };
 
 struct OutputResult {
-    OutputResult() : board_size(-1),
-                     pass_probability(0.f),
-                     wdl_winrate(0.f),
-                     stm_winrate(0.f),
-                     final_score(0.f) {
+    OutputResult() {
         wdl.fill(0.0f);
         probabilities.fill(0.f);
         ownership.fill(0.f);
-        fp16 = false;
     }
 
-    bool fp16;
-    int board_size;
-    float komi;
+    bool fp16{false};
+    int board_size{-1};
+    float komi{0.f};
 
-    float pass_probability;
-    float wdl_winrate;
-    float stm_winrate;
-    float final_score;
+    float pass_probability{0.f};
+    float wdl_winrate{0.f};
+    float stm_winrate{0.f};
+    float final_score{0.f};
+    float q_error{0.f};
+    float score_error{0.f};
 
     std::array<float, 3> wdl;
     std::array<float, kNumIntersections> probabilities;
