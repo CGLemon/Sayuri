@@ -704,7 +704,7 @@ class Network(nn.Module):
             collector=self.layers_collector
         )
 
-    def forward(self, planes, target=None, use_symm=False):
+    def forward(self, planes, target=None, use_symm=False, loss_weight_dict=None):
         symm = int(np.random.choice(8, 1)[0])
         if use_symm:
             planes = torch_symmetry(symm, planes, invert=False)
@@ -789,11 +789,16 @@ class Network(nn.Module):
 
         all_loss_dict = dict()
         if target is not None:
-            all_loss_dict = self.compute_loss(predict, target, mask_sum_hw)
+            all_loss_dict = self.compute_loss(predict, target, mask_sum_hw, loss_weight_dict)
 
         return predict, all_loss_dict
 
-    def compute_loss(self, pred, target, mask_sum_hw, soft_weight=0.1):
+    def compute_loss(self, pred, target, mask_sum_hw, loss_weight_dict):
+        if loss_weight_dict is None:
+            soft_weight = 0.1
+        else:
+            soft_weight = loss_weight_dict["soft"]
+
         p_prob, p_aux_prob, p_soft_prob, p_soft_aux_prob, p_optimistic_prob, p_ownership, p_wdl, p_q_vals, p_scores, p_errors = pred
         t_prob, t_aux_prob, t_ownership, t_wdl, t_q_vals, t_scores = target
 

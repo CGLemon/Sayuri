@@ -56,6 +56,7 @@ def parse_training_config(json_data, config):
     config.fixup_batch_norm = train.get("FixUpBatchNorm", False)
     config.down_sample_rate = train.get("DownSampleRate", 16)
     config.num_chunks  = train.get("NumberChunks", None)
+    config.soft_loss_weight  = train.get("SoftLossWeight", 0.1)
 
     assert config.train_dir != None, ""
     assert config.store_path != None, ""

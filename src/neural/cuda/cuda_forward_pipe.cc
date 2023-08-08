@@ -196,6 +196,8 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         LOGGING << cuda::GetCurrentDeviceInfo(&handles_);
     }
 
+    use_optimistic_policy_ = GetOption<bool>("optimistic_policy");
+
     board_size_ = board_size;
     scratch_size_ = 0;
     max_batch_ = max_batch_size;
@@ -794,6 +796,9 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         int own_offset = kOuputOwnershipChannels * num_intersections;
         for (int idx = 0; idx < num_intersections; ++idx) {
             int pol_index = b * pol_offset + 0 * num_intersections + idx;
+            if (use_optimistic_policy_) {
+                pol_index = b * pol_offset + 4 * num_intersections + idx;
+            }
             int own_index = b * own_offset + 0 * num_intersections + idx;
             output_result.probabilities[idx] = batch_prob[pol_index];
             output_result.ownership[idx] = batch_ownership[own_index];

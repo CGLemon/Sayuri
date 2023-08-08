@@ -285,6 +285,11 @@ class TrainingPipe():
         with open(info_file, 'w') as f:
             f.write(self.module.simple_info())
 
+        self._loss_weight_dict = {
+            "soft" : self.cfg.soft_loss_weight
+        }
+
+
     def _get_lr_schedule(self, num_steps):
         # Get the current learning rate with schedule.
         curr_lr = 0.2
@@ -432,7 +437,7 @@ class TrainingPipe():
         info += "\terrors loss: {:.4f}".format(running_loss_dict["errors_loss"]/self.verbose_steps)
         return info
 
-    def gather_data_from_loader(self, use_training=True):
+    def _gather_data_from_loader(self, use_training=True):
         # Fetch the next batch data from disk.
         if use_training:
             batch_dict = next(self.train_lazy_loader)
@@ -474,10 +479,15 @@ class TrainingPipe():
 
         while keep_running:
             for _ in range(self.steps_per_epoch):
-                planes, target = self.gather_data_from_loader(True)
+                planes, target = self._gather_data_from_loader(True)
 
                 # forward and backforwad
-                _, all_loss_dict = self.net(planes, target, use_symm=True)
+                _, all_loss_dict = self.net(
+                    planes,
+                    target,
+                    use_symm=True,
+                    loss_weight_dict=self._loss_weight_dict
+                )
 
                 # compute loss
                 loss, all_loss_dict = self._handle_loss(all_loss_dict)

@@ -25,6 +25,7 @@
         "DownSampleRate": 16,
         "MacroFactor": 1,
         "WeightDecay": 1e-4,
+        "SoftLossWeight" : 0.1,
 
         "LearningRateSchedule": [
             [0,       1e-2],

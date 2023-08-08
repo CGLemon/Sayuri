@@ -24,5 +24,7 @@ public:
 private:
     void InitWinograd();
 
+    bool use_optimistic_policy_;
+
     std::shared_ptr<DNNWeights> weights_{nullptr};
 };

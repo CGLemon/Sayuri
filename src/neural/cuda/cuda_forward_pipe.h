@@ -80,6 +80,7 @@ private:
 
         cuda::CudaHandles handles_;
 
+        bool use_optimistic_policy_;
         int board_size_{0};
         int max_batch_;
 

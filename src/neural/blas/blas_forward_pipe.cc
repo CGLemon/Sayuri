@@ -6,12 +6,14 @@
 #include "neural/blas/biases.h"
 #include "neural/blas/winograd_convolution3.h"
 #include "neural/winograd_helper.h"
+#include "utils/option.h"
 
 #include <algorithm>
 
 void BlasForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
     Load(weights);
     InitWinograd();
+    use_optimistic_policy_ = GetOption<bool>("optimistic_policy");
 }
 
 void BlasForwardPipe::InitWinograd() {
@@ -345,9 +347,19 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
 
     result.pass_probability = output_pass[0];
 
-    std::copy(std::begin(output_prob),
-        std::begin(output_prob) + num_intersections,
-        std::begin(result.probabilities));
+    auto pol_it = std::begin(output_prob);
+    if (use_optimistic_policy_) {
+        std::copy(
+            pol_it,
+            pol_it + num_intersections,
+            std::begin(result.probabilities));
+    } else {
+        pol_it += 4 * num_intersections;
+        std::copy(
+            pol_it,
+            pol_it + num_intersections,
+            std::begin(result.probabilities));
+    }
     std::copy(std::begin(output_ownership),
         std::begin(output_ownership) + num_intersections,
         std::begin(result.ownership));

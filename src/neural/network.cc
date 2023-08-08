@@ -185,9 +185,9 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
     // error
     auto SoftplusSquare = [](float x) -> float {
         if (x <= 20.f) {
-            x = std::log(1 + std::exp(x));
+            x = std::log(1.f + std::exp(x));
         }
-        return x * x;
+        return (x * x) / 4.f;
     };
 
     out_result.q_error = 0.25 * SoftplusSquare(result_buf.q_error);

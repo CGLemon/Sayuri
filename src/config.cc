@@ -29,6 +29,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["root_dcnn"] << Option::SetOption(false);
     kOptionsMap["winograd"] << Option::SetOption(true);
     kOptionsMap["fp16"] << Option::SetOption(true);
+    kOptionsMap["optimistic_policy"] << Option::SetOption(false);
 
     kOptionsMap["search_mode"] << Option::SetOption(std::string{});
     kOptionsMap["fixed_nn_boardsize"] << Option::SetOption(0);
@@ -393,6 +394,11 @@ void ArgsParser::Parse(Splitter &spt) {
 
     if (const auto res = spt.Find("--no-fp16")) {
         SetOption("fp16", false);
+        spt.RemoveWord(res->Index());
+    }
+
+    if (const auto res = spt.Find("--use-optimistic-policy")) {
+        SetOption("optimistic_policy", true);
         spt.RemoveWord(res->Index());
     }
 
