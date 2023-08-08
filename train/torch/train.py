@@ -95,7 +95,6 @@ class BatchGenerator:
         wdl = np.zeros(3)
         all_q_vals = np.zeros(5)
         all_scores = np.zeros(5)
-        all_stddev = np.zeros(2)
 
         buf = np.zeros(num_intersections)
         sqr_buf = np.zeros((nn_board_size, nn_board_size))
@@ -155,10 +154,6 @@ class BatchGenerator:
         all_scores[3] = data.mid_avg_score
         all_scores[4] = data.long_avg_score
 
-        # all sttdev
-        all_stddev[0] = data.q_stddev
-        all_stddev[1] = data.score_stddev
-
         return (
             input_planes,
             prob,
@@ -167,8 +162,7 @@ class BatchGenerator:
             ownership,
             wdl,
             all_q_vals,
-            all_scores,
-            all_stddev
+            all_scores
         )
 
     def func(self, data_list):
@@ -180,10 +174,9 @@ class BatchGenerator:
         batch_wdl = list()
         batch_q_vals = list()
         batch_scores = list()
-        batch_stddevs = list()
 
         for data in data_list:
-            planes, prob, aux_prob, expected_vals, ownership, wdl, q_vals, scores, stddevs = self._wrap_data(data)
+            planes, prob, aux_prob, expected_vals, ownership, wdl, q_vals, scores = self._wrap_data(data)
 
             batch_planes.append(planes)
             batch_prob.append(prob)
@@ -193,7 +186,6 @@ class BatchGenerator:
             batch_wdl.append(wdl)
             batch_q_vals.append(q_vals)
             batch_scores.append(scores)
-            batch_stddevs.append(stddevs)
 
         batch_dict = {
             "planes"        : torch.from_numpy(np.array(batch_planes)).float(),
@@ -203,8 +195,7 @@ class BatchGenerator:
             "ownership"     : torch.from_numpy(np.array(batch_ownership)).float(),
             "wdl"           : torch.from_numpy(np.array(batch_wdl)).float(),
             "q_vals"        : torch.from_numpy(np.array(batch_q_vals)).float(),
-            "scores"        : torch.from_numpy(np.array(batch_scores)).float(),
-            "stddevs"       : torch.from_numpy(np.array(batch_stddevs)).float()
+            "scores"        : torch.from_numpy(np.array(batch_scores)).float()
         }
         return batch_dict
 
@@ -444,12 +435,13 @@ class TrainingPipe():
         info += "\taux prob loss: {:.4f}\n".format(running_loss_dict["aux_prob_loss"]/self.verbose_steps)
         info += "\tsoft prob loss: {:.4f}\n".format(running_loss_dict["soft_prob_loss"]/self.verbose_steps)
         info += "\tsoft aux prob loss: {:.4f}\n".format(running_loss_dict["soft_aux_prob_loss"]/self.verbose_steps)
+        info += "\toptimistic loss: {:.4f}\n".format(running_loss_dict["optimistic_loss"]/self.verbose_steps)
         info += "\texpected values loss: {:.4f}\n".format(running_loss_dict["expected_vals_loss"]/self.verbose_steps)
         info += "\townership loss: {:.4f}\n".format(running_loss_dict["ownership_loss"]/self.verbose_steps)
         info += "\twdl loss: {:.4f}\n".format(running_loss_dict["wdl_loss"]/self.verbose_steps)
         info += "\tQ values loss: {:.4f}\n".format(running_loss_dict["q_vals_loss"]/self.verbose_steps)
         info += "\tscores loss: {:.4f}\n".format(running_loss_dict["scores_loss"]/self.verbose_steps)
-        info += "\tstddevs loss: {:.4f}".format(running_loss_dict["stddevs_loss"]/self.verbose_steps)
+        info += "\terrors loss: {:.4f}".format(running_loss_dict["errors_loss"]/self.verbose_steps)
         return info
 
     def gather_data_from_loader(self, use_training=True):
@@ -473,8 +465,7 @@ class TrainingPipe():
             batch_dict["ownership"],
             batch_dict["wdl"],
             batch_dict["q_vals"],
-            batch_dict["scores"],
-            batch_dict["stddevs"]
+            batch_dict["scores"]
         )
         return planes, target
 

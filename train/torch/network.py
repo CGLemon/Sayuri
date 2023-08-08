@@ -48,6 +48,33 @@ def tensor_to_text(t: torch.Tensor, use_bin):
         return tensor_to_bin(t)
     return " ".join([str(w) for w in t.detach().numpy().ravel()]) + "\n"
 
+# It is imported from KataGo.
+class SoftPlusWithGradientFloorFunction(torch.autograd.Function):
+    """
+    Same as softplus, except on backward pass, we never let the gradient decrease below grad_floor.
+    Equivalent to having a dynamic learning rate depending on stop_grad(x) where x is the input.
+    If square, then also squares the result while halving the input, and still also keeping the same gradient.
+    """
+    @staticmethod
+    def forward(ctx, x: torch.Tensor, grad_floor: float, square: bool):
+        ctx.save_for_backward(x)
+        ctx.grad_floor = grad_floor # grad_floor is not a tensor
+        if square:
+            return torch.square(torch.nn.functional.softplus(0.5 * x))
+        else:
+            return torch.nn.functional.softplus(x)
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor):
+        (x,) = ctx.saved_tensors
+        grad_floor = ctx.grad_floor
+        grad_x = None
+        grad_grad_floor = None
+        grad_square = None
+        if ctx.needs_input_grad[0]:
+            grad_x = grad_output * (grad_floor + (1.0 - grad_floor) / (1.0 + torch.exp(-x)))
+        return grad_x, grad_grad_floor, grad_square
+
 class GlobalPool(nn.Module):
     def __init__(self, is_value_head=False):
         super(GlobalPool, self).__init__()
@@ -129,43 +156,6 @@ class SqueezeAndExcitation(nn.Module):
         betas = torch.reshape(betas, (b, c, 1, 1))
 
         out = torch.sigmoid(gammas) * x + betas
-        return out * mask
-
-class SpatialAttention(nn.Module):
-    def __init__(self, collector=None):
-        # The idead of Spatial Attention is from the paper, "CBAM:
-        # Convolutional Block Attention Module".
-        super(SpatialAttention, self).__init__()
-        self.b_avg = (19 + 9) / 2
-        self.conv = Convolve(
-            in_channels=3,
-            out_channels=1,
-            kernel_size=7,
-            relu=False,
-            collector=collector
-        )
-
-    def forward(self, x, mask_buffers):
-        mask, mask_sum_hw, mask_sum_hw_sqrt = mask_buffers
-        div = torch.reshape(mask_sum_hw, (-1,1))
-        div_sqrt = torch.reshape(mask_sum_hw_sqrt, (-1,1))
-        b_diff = div_sqrt - self.b_avg
-
-        b, c = b_diff.size()
-        b_diff = b_diff.view(b, c, 1, 1)
-        layer_raw_mean = torch.mean(x, dim=1, keepdim=True)
-        layer_raw_max = torch.max(x, dim=1, keepdim=True)[0]
-
-        layer0 = layer_raw_mean
-        layer1 = layer_raw_mean * (b_diff / 10.0)
-        layer2 = layer_raw_max
-
-        # The out of board area is zero. Do not need to
-        # multiply the mask.
-        sa = torch.cat([layer0, layer1, layer2], dim=1)
-        sa = self.conv(sa, mask)
-
-        out = torch.sigmoid(sa) * x
         return out * mask
 
 class BatchNorm2d(nn.Module):
@@ -492,7 +482,6 @@ class ResBlock(nn.Module):
 
         self.use_btl = bottleneck_channels is not None
         self.use_se = se_size is not None
-        self.use_sa = kwargs.get("use_sa", False)
 
         if self.use_btl:
             self.inner_channels = bottleneck_channels
@@ -540,10 +529,6 @@ class ResBlock(nn.Module):
                 se_size=se_size,
                 collector=collector
             )
-        if self.use_sa:
-            self.sa_module = SpatialAttention(
-                collector=collector
-            )
 
         if fixup:
             # re-scale the weights
@@ -575,8 +560,6 @@ class ResBlock(nn.Module):
 
         if self.use_se:
             out = self.se_module(out, mask_buffers)
-        if self.use_sa:
-            out = self.sa_module(out, mask_buffers)
         out = out + x
 
         return F.relu(out, inplace=True), mask_buffers
@@ -603,9 +586,9 @@ class Network(nn.Module):
         self.policy_extract = cfg.policy_extract
         self.value_extract = cfg.value_extract
         self.value_misc = 15
-        self.policy_outs = 5
+        self.policy_outs = 6
         self.stack = cfg.stack
-        self.version = 2
+        self.version = 3
 
         self.construct_layers()
 
@@ -629,7 +612,6 @@ class Network(nn.Module):
         for s in self.stack:
             has_basic_block = False
             use_fixup = self.fixup
-            use_sa = False
             se_size = None
             bottleneck_channels = None
 
@@ -642,8 +624,6 @@ class Network(nn.Module):
                     has_basic_block = True
                 elif component == "SE":
                     se_size = main_channels
-                elif component == "SA":
-                    use_sa = True
                 elif component == "FixUp":
                     use_fixup = True
                 else:
@@ -657,7 +637,6 @@ class Network(nn.Module):
                                      fixup=use_fixup,
                                      bottleneck_channels=bottleneck_channels,
                                      se_size=se_size,
-                                     use_sa=use_sa,
                                      collector=self.layers_collector))
 
         if main_channels != self.residual_channels:
@@ -681,14 +660,14 @@ class Network(nn.Module):
             relu=True,
             collector=self.layers_collector
         )
-        self.prob = Convolve(
+        self.pol_misc = Convolve(
             in_channels=self.policy_extract,
             out_channels=self.policy_outs,
             kernel_size=1,
             relu=False,
             collector=self.layers_collector
         )
-        self.prob_pass_fc = FullyConnect(
+        self.pol_misc_pass_fc = FullyConnect(
             in_size=self.policy_extract,
             out_size=self.policy_outs,
             relu=False,
@@ -757,33 +736,31 @@ class Network(nn.Module):
 
         # Apply CRAZY_NEGATIVE_VALUE on out of board area. This position
         # policy will be zero after softmax 
-        prob_without_pass = self.prob(pol, mask)
-        logits_part, non_logits_part = torch.split(prob_without_pass, [4, 1], dim=1)
+        pol_without_pass = self.pol_misc(pol, mask)
+        logits_part, non_logits_part = torch.split(pol_without_pass, [5, 1], dim=1)
         logits_part = logits_part + (1.0-mask) * CRAZY_NEGATIVE_VALUE
-        prob_without_pass = torch.cat((logits_part, non_logits_part), dim=1)
+        pol_without_pass = torch.cat((logits_part, non_logits_part), dim=1)
 
         if use_symm:
-            prob_without_pass = torch_symmetry(symm, prob_without_pass, invert=True)
-        prob_without_pass = torch.flatten(prob_without_pass, start_dim=2, end_dim=3) # b, c, h*w
-        prob_pass = self.prob_pass_fc(pol_inter)  # b, c
-        b, c = prob_pass.shape
-        prob_misc = torch.cat((prob_without_pass, prob_pass.view(b, c, 1)), dim=2)
+            pol_without_pass = torch_symmetry(symm, pol_without_pass, invert=True)
+        pol_without_pass = torch.flatten(pol_without_pass, start_dim=2, end_dim=3) # b, c, h*w
+        pol_pass = self.pol_misc_pass_fc(pol_inter)  # b, c
+        b, c = pol_pass.shape
+        pol_misc = torch.cat((pol_without_pass, pol_pass.view(b, c, 1)), dim=2)
 
-        prob, aux_prob, soft_prob, soft_aux_prob, expected_vals = torch.split(prob_misc, [1, 1, 1, 1, 1], dim=1)
-        prob          = torch.flatten(prob, start_dim=1, end_dim=2)
-        aux_prob      = torch.flatten(aux_prob, start_dim=1, end_dim=2)
-        soft_prob     = torch.flatten(soft_prob, start_dim=1, end_dim=2)
-        soft_aux_prob = torch.flatten(soft_aux_prob, start_dim=1, end_dim=2)
-        expected_vals = torch.flatten(expected_vals, start_dim=1, end_dim=2)
-        expected_vals = torch.tanh(expected_vals)
+        prob, aux_prob, soft_prob, soft_aux_prob, optimistic_prob, expected_vals = torch.split(pol_misc, [1, 1, 1, 1, 1, 1], dim=1)
+        prob            = torch.flatten(prob, start_dim=1, end_dim=2)
+        aux_prob        = torch.flatten(aux_prob, start_dim=1, end_dim=2)
+        soft_prob       = torch.flatten(soft_prob, start_dim=1, end_dim=2)
+        soft_aux_prob   = torch.flatten(soft_aux_prob, start_dim=1, end_dim=2)
+        optimistic_prob = torch.flatten(optimistic_prob, start_dim=1, end_dim=2)
+        expected_vals   = torch.flatten(expected_vals, start_dim=1, end_dim=2)
+        expected_vals   = torch.tanh(expected_vals)
 
         # value head
         val = self.value_conv(x, mask)
         val_gpool = self.global_pool_val(val, mask_buffers)
         val_inter = self.value_intermediate_fc(val_gpool)
-
-        # b, c = val_inter.size
-        # val = (val + val_inter.view(b, c, 1, 1)) * mask
 
         ownership = self.ownership_conv(val, mask)
         if use_symm:
@@ -792,20 +769,22 @@ class Network(nn.Module):
         ownership = torch.tanh(ownership)
 
         val_misc = self.value_misc_fc(val_inter)
-        wdl, all_q_vals, all_scores, all_stddevs =  torch.split(val_misc, [3, 5, 5, 2], dim=1)
+        wdl, all_q_vals, all_scores, all_errors = torch.split(val_misc, [3, 5, 5, 2], dim=1)
         all_q_vals = torch.tanh(all_q_vals)
+        all_errors = SoftPlusWithGradientFloorFunction.apply(all_errors, 0.05, True)
 
         predict = (
             prob, # logits
             aux_prob, # logits
             soft_prob, # logits
             soft_aux_prob, # logits
+            optimistic_prob, # logits
             expected_vals,
             ownership,
             wdl, # logits
-            all_q_vals,
-            all_scores,
-            all_stddevs
+            all_q_vals, # {final, current, short, middle, long}
+            all_scores, # {final, current, short, middle, long}
+            all_errors # {q error, score error}
         )
 
         all_loss_dict = dict()
@@ -814,17 +793,18 @@ class Network(nn.Module):
 
         return predict, all_loss_dict
 
-    def compute_loss(self, pred, target, mask_sum_hw):
-        p_prob, p_aux_prob, p_soft_porb, p_soft_aux_prob, p_expected_vals, p_ownership, p_wdl, p_q_vals, p_scores, p_stddevs = pred
-        t_prob, t_aux_prob, t_expected_vals, t_ownership, t_wdl, t_q_vals, t_scores, t_stddevs = target
+    def compute_loss(self, pred, target, mask_sum_hw, soft_weight=0.1):
+        p_prob, p_aux_prob, p_soft_prob, p_soft_aux_prob, p_optimistic_prob, p_expected_vals, p_ownership, p_wdl, p_q_vals, p_scores, p_errors = pred
+        t_prob, t_aux_prob, t_expected_vals, t_ownership, t_wdl, t_q_vals, t_scores = target
 
         def make_soft_porb(prob, t=4):
             soft_prob = torch.pow(prob, 1/t)
             soft_prob /= torch.sum(soft_prob, dim=1, keepdim=True)
             return soft_prob
 
-        def cross_entropy(pred, target):
-            return torch.mean(-torch.sum(torch.mul(F.log_softmax(pred, dim=-1), target), dim=1), dim=0)
+        def cross_entropy(pred, target, weight=1):
+            loss_sum = -torch.sum(torch.mul(F.log_softmax(pred, dim=-1), target), dim=1)
+            return torch.mean(weight * loss_sum, dim=0)
 
         def huber_loss(x, y, delta):
             absdiff = torch.abs(x - y)
@@ -835,29 +815,85 @@ class Network(nn.Module):
             spat_sum = torch.sum(torch.square(pred - target), dim=1) / mask_sum_hw
             return torch.mean(spat_sum, dim=0)
 
-        prob_loss = 1 * cross_entropy(p_prob, t_prob)
-        aux_prob_loss = 0.15 * cross_entropy(p_aux_prob, t_aux_prob)
-        soft_prob_loss = 1 * cross_entropy(p_prob, make_soft_porb(t_prob))
-        soft_aux_prob_loss = 0.15 * cross_entropy(p_aux_prob, make_soft_porb(t_aux_prob))
+        def square_huber_loss(pred, x, y, delta, eps):
+            sqerror = torch.square(x - y) + eps
+            loss = huber_loss(pred, sqerror, delta=delta)
+            return loss
 
-        expected_vals_loss = 4 * mse_loss_spat(p_expected_vals, t_expected_vals)
+        # will use these values later
+        _, short_term_q_pred, _ = torch.split(p_q_vals, [2, 1, 2], dim=1)
+        _, short_term_q_target, _ = torch.split(t_q_vals, [2, 1, 2], dim=1)
+        _, short_term_score_pred, _ = torch.split(p_scores, [2, 1, 2], dim=1)
+        _, short_term_score_target, _ = torch.split(t_scores, [2, 1, 2], dim=1)
+        short_term_q_error, short_term_score_error = torch.split(p_errors, [1, 1], dim=1)
+
+        # current player's probabilities loss
+        prob_loss = 1 * cross_entropy(p_prob, t_prob)
+
+        # opponent's probabilities loss
+        aux_prob_loss = 0.15 * cross_entropy(p_aux_prob, t_aux_prob)
+
+        # current player's soft probabilities loss
+        soft_prob_loss = 1 * soft_weight * cross_entropy(p_soft_prob, make_soft_porb(t_prob))
+
+        # opponent's soft probabilities loss
+        soft_aux_prob_loss = 0.15 * soft_weight * cross_entropy(p_soft_aux_prob, make_soft_porb(t_aux_prob))
+
+        # short-term optimistic probabilities loss
+        z_short_term_q = (short_term_q_target - short_term_q_pred.detach()) / torch.sqrt(short_term_q_error.detach() + 0.0001)
+        z_short_term_score = (short_term_score_target - short_term_score_pred.detach()) / torch.sqrt(short_term_score_error.detach() + 0.25)
+
+        optimistic_weight = torch.clamp(
+            torch.sigmoid((z_short_term_q - 1.5) * 3.0) + torch.sigmoid((z_short_term_score - 1.5) * 3.0),
+            min=0.0,
+            max=1.0,
+        )
+        b, _ = optimistic_weight.shape
+        optimistic_weight = torch.reshape(optimistic_weight, (b, ))
+        optimistic_loss = 1 * cross_entropy(p_optimistic_prob, t_prob, optimistic_weight)
+
+        # expected values loss
+        expected_vals_loss = 1.5 * mse_loss_spat(p_expected_vals, t_expected_vals)
+
+        # ownership loss
         ownership_loss = 1.5 * mse_loss_spat(p_ownership, t_ownership)
+
+        # win-draw-lose loss
         wdl_loss = cross_entropy(p_wdl, t_wdl)
+
+        # all Q values loss
         q_vals_loss = F.mse_loss(p_q_vals, t_q_vals)
-        scores_loss = 0.0012 * huber_loss(20 * p_scores, t_scores, 12)
-        stddevs_loss = 0.05 * huber_loss(20 * p_stddevs, p_stddevs, 12)
+
+        # all scores loss
+        scores_loss = 0.0012 * huber_loss(20 * p_scores, t_scores, 12.)
+
+        # all short term square error loss
+        q_error_loss = 2 * square_huber_loss(
+            0.25 * short_term_q_error,
+            short_term_q_pred.detach(),
+            short_term_q_target,
+            delta=0.4, eps=1.0e-8
+        )
+        score_error_loss = 0.00002 * square_huber_loss(
+            150 * short_term_score_error,
+            short_term_score_pred.detach(),
+            short_term_score_target,
+            delta=100.0, eps=1.0e-4
+        )
+        errors_loss = q_error_loss + score_error_loss
 
         all_loss_dict = {
             "prob_loss"          : prob_loss,
             "aux_prob_loss"      : aux_prob_loss,
             "soft_prob_loss"     : soft_prob_loss,
             "soft_aux_prob_loss" : soft_aux_prob_loss,
+            "optimistic_loss"    : optimistic_loss,
             "expected_vals_loss" : expected_vals_loss,
             "ownership_loss"     : ownership_loss,
             "wdl_loss"           : wdl_loss,
             "q_vals_loss"        : q_vals_loss,
             "scores_loss"        : scores_loss,
-            "stddevs_loss"       : stddevs_loss
+            "errors_loss"        : errors_loss
         }
         return all_loss_dict
 

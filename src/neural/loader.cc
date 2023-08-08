@@ -227,11 +227,14 @@ void DNNLoder::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstr
         // v2: Fixed the batch normalize layer weights
         //     format. There are some error in the gammas
         //     compression process.
-
-        if (version_ > 2) {
-            throw "Do not support this version";
-        }
+        //
+        // v3: Add more output heads. 
     }
+
+    if (version_ >= 4 || version_ <= 2) {
+        throw "Do not support this version";
+    }
+
 
     if (!NotFound(netinfo, "NNType")) {
         // Not used.

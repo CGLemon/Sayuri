@@ -72,7 +72,7 @@ def parse_nn_config(json_data, config):
     config.boardsize = network.get("MaxBoardSize", 19)
 
     config.nntype = network.get("NNType", None)
-    config.input_channels = network.get("InputChannels", None)
+    config.input_channels = network.get("InputChannels", 43)
     config.residual_channels = network.get("ResidualChannels", None)
     config.policy_extract = network.get("PolicyExtract", None)
     config.value_extract = network.get("ValueExtract", None)

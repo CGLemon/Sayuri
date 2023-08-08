@@ -1068,44 +1068,62 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
         buf.avg_score_lead = window_score_sum / window_size;
     }
 
-    // Set the short, middle and long, average Q value buffer
+    // Set the short, middle and long term average values buffer
     for (int i = 0; i < buf_size; ++i) {
         auto &buf = training_buffer_[i];
         const auto board_size = buf.board_size;
 
-        const int short_moves =
-            std::min(i + (int)(0.5f * board_size), buf_size-1);
-        const int middle_moves =
-            std::min(i + 1 * board_size, buf_size-1);
-        const int long_moves =
-            std::min(i + 3 * board_size, buf_size-1);
+        double short_term_q = 0;
+        double middle_term_q = 0;
+        double long_term_q = 0;
 
-        auto &short_buf = training_buffer_[short_moves];
-        if (short_buf.side_to_move == buf.side_to_move) {
-            buf.short_avg_q = short_buf.avg_q_value;
-            buf.short_avg_score = short_buf.avg_score_lead;
-        } else {
-            buf.short_avg_q = -short_buf.avg_q_value;
-            buf.short_avg_score = -short_buf.avg_score_lead;
+        double short_term_score = 0;
+        double middle_term_score = 0;
+        double long_term_score = 0;
+
+        const int short_time_horizon = 0.4f * board_size;
+        const int middle_time_horizon = 1 * board_size;
+        const int long_time_horizon = 3 * board_size;
+
+        const double lambda = 1. - 1./std::max(2, short_time_horizon);
+        double gamma = 1.;
+
+        for (int h = 0; h < long_time_horizon; ++h) {
+            int buf_idx = std::min(i+h, buf_size-1);
+            auto &curr_buf = training_buffer_[buf_idx];
+
+            if (curr_buf.side_to_move == buf.side_to_move) {
+                if (h < short_time_horizon) {
+                    short_term_q += (gamma * curr_buf.avg_q_value);
+                    short_term_score += (gamma * curr_buf.avg_score_lead);
+                }
+                if (h < middle_time_horizon) {
+                    middle_term_q += (gamma * curr_buf.avg_q_value);
+                    middle_term_score += (gamma * curr_buf.avg_score_lead);
+                }
+                long_term_q += (gamma * curr_buf.avg_q_value);
+                long_term_score += (gamma * curr_buf.avg_score_lead);
+            } else {
+                if (h < short_time_horizon) {
+                    short_term_q -= (gamma * curr_buf.avg_q_value);
+                    short_term_score -= (gamma * curr_buf.avg_score_lead);
+                }
+                if (h < middle_time_horizon) {
+                    middle_term_q -= (gamma * curr_buf.avg_q_value);
+                    middle_term_score -= (gamma * curr_buf.avg_score_lead);
+                }
+                long_term_q -= (gamma * curr_buf.avg_q_value);
+                long_term_score -= (gamma * curr_buf.avg_score_lead);
+            }
+            gamma *= lambda;
         }
 
-        auto &middle_buf = training_buffer_[middle_moves];
-        if (middle_buf.side_to_move == buf.side_to_move) {
-            buf.middle_avg_q = middle_buf.avg_q_value;
-            buf.middle_avg_score = middle_buf.avg_score_lead;
-        } else {
-            buf.middle_avg_q = -middle_buf.avg_q_value;
-            buf.middle_avg_score = -middle_buf.avg_score_lead;
-        }
-
-        auto &long_buf = training_buffer_[long_moves];
-        if (long_buf.side_to_move == buf.side_to_move) {
-            buf.long_avg_q = long_buf.avg_q_value;
-            buf.long_avg_score = long_buf.avg_score_lead;
-        } else {
-            buf.long_avg_q = -long_buf.avg_q_value;
-            buf.long_avg_score = -long_buf.avg_score_lead;
-        }
+        buf.short_avg_q = short_term_q * (1. - lambda);
+        buf.middle_avg_q = middle_term_q * (1. - lambda);
+        buf.long_avg_q = long_term_q * (1. - lambda);
+        buf.short_avg_score = short_term_score * (1. - lambda);
+        buf.middle_avg_score = middle_term_score * (1. - lambda);
+        buf.long_avg_score = long_term_score * (1. - lambda);
     }
 
     // Set the auxiliary probablility in the buffer.

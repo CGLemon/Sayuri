@@ -59,9 +59,9 @@ struct Training {
      L50       : Average Q Value, Short, Middel, Long
      L51       : Final Score
      L52       : Average Score Lead, Short, Middel, Long
-     L53       : Q Stddev, Score Stddev
 
      ------- Misc data -------
+     L53       : Q Stddev, Score Stddev
      L54       : KLD
 
   */

@@ -2,11 +2,9 @@
     "NeuralNetwork" : {
         "NNType": "Residual",
         "MaxBoardSize": 19,
-        "InputChannels": 38,
         "ResidualChannels": 64,
         "PolicyExtract": 16,
         "ValueExtract": 16,
-        "ValueMisc": 5,
 
         "Stack" : [
             "ResidualBlock",
