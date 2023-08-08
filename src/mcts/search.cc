@@ -486,7 +486,6 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     result.root_playouts_dist.resize(num_intersections+1, 0);
     result.root_visits.resize(num_intersections+1, 0);
     result.target_playouts_dist.resize(num_intersections+1, 0);
-    result.root_expected_values.resize(num_intersections+1, 0);
 
     // Fill ownership.
     auto ownership = root_node_->GetOwnership(color);
@@ -571,28 +570,6 @@ void Search::GatherComputationResult(ComputationResult &result) const {
             for (auto &prob : result.target_playouts_dist) {
                 prob /= acc_target_policy;
             }
-        }
-    }
-
-    // Fill expected children's values.
-    const auto middle_eval = root_node_->GetNetWL(color);
-    for (const auto &child : children) {
-        const auto node = child.Get();
-        const auto vertex = node->GetVertex();
-        int index = num_intersections;
-
-        if (vertex != kPass) {
-            index = root_state_.VertexToIndex(vertex);
-        }
-        if (result.root_visits[index] > 0) {
-            const auto eval = node->GetWL(color, false);
-            if (eval > middle_eval) {
-                result.root_expected_values[index] = 1;
-            } else {
-                result.root_expected_values[index] = -1;
-            }
-        } else {
-            result.root_expected_values[index] = 0;
         }
     }
 
@@ -1172,7 +1149,6 @@ void Search::GatherData(const GameState &state,
     data.planes = Encoder::Get().GetPlanes(state);
     data.probabilities = result.target_playouts_dist;
     data.wave = state.GetWave();
-    data.expected_values = result.root_expected_values;
     data.rule = state.GetRule();
     data.kld = 0.f;
 

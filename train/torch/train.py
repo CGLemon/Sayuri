@@ -90,7 +90,6 @@ class BatchGenerator:
         input_planes = np.zeros((self.input_channels, nn_board_size, nn_board_size))
         prob = np.zeros(nn_num_intersections+1)
         aux_prob = np.zeros(nn_num_intersections+1)
-        expected_vals = np.zeros(nn_num_intersections+1)
         ownership = np.zeros((nn_board_size, nn_board_size))
         wdl = np.zeros(3)
         all_q_vals = np.zeros(5)
@@ -122,12 +121,6 @@ class BatchGenerator:
         prob[nn_num_intersections] = data.prob[num_intersections]
 
         # auxiliary probabilities
-        buf[:] = data.expected_vals[0:num_intersections]
-        sqr_buf[0:board_size, 0:board_size] = np.reshape(buf, (board_size, board_size))[:, :]
-        expected_vals[0:nn_num_intersections] = np.reshape(sqr_buf, (nn_num_intersections))[:]
-        expected_vals[nn_num_intersections] = data.expected_vals[num_intersections]
-
-        # expected values
         buf[:] = data.aux_prob[0:num_intersections]
         sqr_buf[0:board_size, 0:board_size] = np.reshape(buf, (board_size, board_size))[:, :]
         aux_prob[0:nn_num_intersections] = np.reshape(sqr_buf, (nn_num_intersections))[:]
@@ -158,7 +151,6 @@ class BatchGenerator:
             input_planes,
             prob,
             aux_prob,
-            expected_vals,
             ownership,
             wdl,
             all_q_vals,
@@ -169,19 +161,17 @@ class BatchGenerator:
         batch_planes = list()
         batch_prob = list()
         batch_aux_prob = list()
-        batch_expected_vals = list()
         batch_ownership = list()
         batch_wdl = list()
         batch_q_vals = list()
         batch_scores = list()
 
         for data in data_list:
-            planes, prob, aux_prob, expected_vals, ownership, wdl, q_vals, scores = self._wrap_data(data)
+            planes, prob, aux_prob, ownership, wdl, q_vals, scores = self._wrap_data(data)
 
             batch_planes.append(planes)
             batch_prob.append(prob)
             batch_aux_prob.append(aux_prob)
-            batch_expected_vals.append(expected_vals)
             batch_ownership.append(ownership)
             batch_wdl.append(wdl)
             batch_q_vals.append(q_vals)
@@ -191,7 +181,6 @@ class BatchGenerator:
             "planes"        : torch.from_numpy(np.array(batch_planes)).float(),
             "prob"          : torch.from_numpy(np.array(batch_prob)).float(),
             "aux_prob"      : torch.from_numpy(np.array(batch_aux_prob)).float(),
-            "expected_vals" : torch.from_numpy(np.array(batch_expected_vals)).float(),
             "ownership"     : torch.from_numpy(np.array(batch_ownership)).float(),
             "wdl"           : torch.from_numpy(np.array(batch_wdl)).float(),
             "q_vals"        : torch.from_numpy(np.array(batch_q_vals)).float(),
@@ -436,7 +425,6 @@ class TrainingPipe():
         info += "\tsoft prob loss: {:.4f}\n".format(running_loss_dict["soft_prob_loss"]/self.verbose_steps)
         info += "\tsoft aux prob loss: {:.4f}\n".format(running_loss_dict["soft_aux_prob_loss"]/self.verbose_steps)
         info += "\toptimistic loss: {:.4f}\n".format(running_loss_dict["optimistic_loss"]/self.verbose_steps)
-        info += "\texpected values loss: {:.4f}\n".format(running_loss_dict["expected_vals_loss"]/self.verbose_steps)
         info += "\townership loss: {:.4f}\n".format(running_loss_dict["ownership_loss"]/self.verbose_steps)
         info += "\twdl loss: {:.4f}\n".format(running_loss_dict["wdl_loss"]/self.verbose_steps)
         info += "\tQ values loss: {:.4f}\n".format(running_loss_dict["q_vals_loss"]/self.verbose_steps)
@@ -461,7 +449,6 @@ class TrainingPipe():
         target = (
             batch_dict["prob"],
             batch_dict["aux_prob"],
-            batch_dict["expected_vals"],
             batch_dict["ownership"],
             batch_dict["wdl"],
             batch_dict["q_vals"],

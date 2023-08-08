@@ -586,7 +586,7 @@ class Network(nn.Module):
         self.policy_extract = cfg.policy_extract
         self.value_extract = cfg.value_extract
         self.value_misc = 15
-        self.policy_outs = 6
+        self.policy_outs = 5
         self.stack = cfg.stack
         self.version = 3
 
@@ -736,10 +736,7 @@ class Network(nn.Module):
 
         # Apply CRAZY_NEGATIVE_VALUE on out of board area. This position
         # policy will be zero after softmax 
-        pol_without_pass = self.pol_misc(pol, mask)
-        logits_part, non_logits_part = torch.split(pol_without_pass, [5, 1], dim=1)
-        logits_part = logits_part + (1.0-mask) * CRAZY_NEGATIVE_VALUE
-        pol_without_pass = torch.cat((logits_part, non_logits_part), dim=1)
+        pol_without_pass = self.pol_misc(pol, mask) + (1.0-mask) * CRAZY_NEGATIVE_VALUE
 
         if use_symm:
             pol_without_pass = torch_symmetry(symm, pol_without_pass, invert=True)
@@ -748,14 +745,12 @@ class Network(nn.Module):
         b, c = pol_pass.shape
         pol_misc = torch.cat((pol_without_pass, pol_pass.view(b, c, 1)), dim=2)
 
-        prob, aux_prob, soft_prob, soft_aux_prob, optimistic_prob, expected_vals = torch.split(pol_misc, [1, 1, 1, 1, 1, 1], dim=1)
+        prob, aux_prob, soft_prob, soft_aux_prob, optimistic_prob = torch.split(pol_misc, [1, 1, 1, 1, 1], dim=1)
         prob            = torch.flatten(prob, start_dim=1, end_dim=2)
         aux_prob        = torch.flatten(aux_prob, start_dim=1, end_dim=2)
         soft_prob       = torch.flatten(soft_prob, start_dim=1, end_dim=2)
         soft_aux_prob   = torch.flatten(soft_aux_prob, start_dim=1, end_dim=2)
         optimistic_prob = torch.flatten(optimistic_prob, start_dim=1, end_dim=2)
-        expected_vals   = torch.flatten(expected_vals, start_dim=1, end_dim=2)
-        expected_vals   = torch.tanh(expected_vals)
 
         # value head
         val = self.value_conv(x, mask)
@@ -785,7 +780,6 @@ class Network(nn.Module):
             soft_prob, # logits
             soft_aux_prob, # logits
             optimistic_prob, # logits
-            expected_vals,
             ownership,
             wdl, # logits
             all_q_vals, # {final, current, short, middle, long}
@@ -800,8 +794,8 @@ class Network(nn.Module):
         return predict, all_loss_dict
 
     def compute_loss(self, pred, target, mask_sum_hw, soft_weight=0.1):
-        p_prob, p_aux_prob, p_soft_prob, p_soft_aux_prob, p_optimistic_prob, p_expected_vals, p_ownership, p_wdl, p_q_vals, p_scores, p_errors = pred
-        t_prob, t_aux_prob, t_expected_vals, t_ownership, t_wdl, t_q_vals, t_scores = target
+        p_prob, p_aux_prob, p_soft_prob, p_soft_aux_prob, p_optimistic_prob, p_ownership, p_wdl, p_q_vals, p_scores, p_errors = pred
+        t_prob, t_aux_prob, t_ownership, t_wdl, t_q_vals, t_scores = target
 
         def make_soft_porb(prob, t=4):
             soft_prob = torch.pow(prob, 1/t)
@@ -858,9 +852,6 @@ class Network(nn.Module):
         optimistic_weight = torch.reshape(optimistic_weight, (b, ))
         optimistic_loss = 1 * cross_entropy(p_optimistic_prob, t_prob, optimistic_weight)
 
-        # expected values loss
-        expected_vals_loss = 1.5 * mse_loss_spat(p_expected_vals, t_expected_vals)
-
         # ownership loss
         ownership_loss = 1.5 * mse_loss_spat(p_ownership, t_ownership)
 
@@ -894,7 +885,6 @@ class Network(nn.Module):
             "soft_prob_loss"     : soft_prob_loss,
             "soft_aux_prob_loss" : soft_aux_prob_loss,
             "optimistic_loss"    : optimistic_loss,
-            "expected_vals_loss" : expected_vals_loss,
             "ownership_loss"     : ownership_loss,
             "wdl_loss"           : wdl_loss,
             "q_vals_loss"        : q_vals_loss,

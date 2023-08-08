@@ -77,7 +77,6 @@ void Training::StreamOut(std::ostream &out) const {
     // the "Prediction" part
     ArrayStreamOut(out, probabilities);
     ArrayStreamOut(out, auxiliary_probabilities);
-    OwnershipStreamOut(out, expected_values);
     OwnershipStreamOut(out, ownership);
 
     out << result << std::endl;

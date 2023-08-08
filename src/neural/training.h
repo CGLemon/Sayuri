@@ -14,7 +14,6 @@ struct Training {
     std::vector<float> probabilities;
     std::vector<float> auxiliary_probabilities;
     std::vector<int> ownership;
-    std::vector<int> expected_values;
 
     int result;
 
@@ -53,16 +52,15 @@ struct Training {
      ------- Prediction data -------
      L45       : Probabilities
      L46       : Auxiliary Probabilities
-     L47       : Expected Values
-     L48       : Ownership
-     L49       : Result
-     L50       : Average Q Value, Short, Middel, Long
-     L51       : Final Score
-     L52       : Average Score Lead, Short, Middel, Long
+     L47       : Ownership
+     L48       : Result
+     L49       : Average Q Value, Short, Middel, Long
+     L50       : Final Score
+     L51       : Average Score Lead, Short, Middel, Long
 
      ------- Misc data -------
-     L53       : Q Stddev, Score Stddev
-     L54       : KLD
+     L52       : Q Stddev, Score Stddev
+     L53       : KLD
 
   */
     void StreamOut(std::ostream &out) const;

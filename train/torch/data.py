@@ -1,7 +1,7 @@
 import numpy as np
 from symmetry import numpy_symmetry_planes, numpy_symmetry_plane, numpy_symmetry_prob
 
-V2_DATA_LINES = 54
+V2_DATA_LINES = 53
 
 '''
     Output format is here. Every v2 data package is 54 lines.
@@ -21,16 +21,15 @@ V2_DATA_LINES = 54
      ------- Prediction data -------
      L45       : Probabilities
      L46       : Auxiliary Probabilities
-     L47       : Expected Values
-     L48       : Ownership
-     L49       : Result
-     L50       : Average Q Value, Short, Middel, Long
-     L51       : Final Score
-     L52       : Average Score Lead, Short, Middel, Long
+     L47       : Ownership
+     L48       : Result
+     L49       : Average Q Value, Short, Middel, Long
+     L50       : Final Score
+     L51       : Average Score Lead, Short, Middel, Long
 
      ------- Misc data -------
-     L53       : Q Stddev, Score Stddev
-     L54       : KLD
+     L52       : Q Stddev, Score Stddev
+     L53       : KLD
 '''
 
 class Data():
@@ -47,7 +46,6 @@ class Data():
 
         self.prob = list()
         self.aux_prob = list()
-        self.expected_vals = list()
         self.ownership = list()
 
         self.result = None
@@ -140,14 +138,6 @@ class Data():
             buf[index] = self._int2_to_int(readline[index])
         return buf
 
-    def _get_expected_vals(self, board_size, readline):
-        size = board_size * board_size + 1
-        buf = np.zeros(size, dtype=np.int8)
-
-        for index in range(size):
-            buf[index] = self._int2_to_int(readline[index])
-        return buf
-
     def _get_vals_list(self, readline):
         values = readline.split()
         size = len(values)
@@ -183,30 +173,28 @@ class Data():
         elif linecnt == 46:
             self.aux_prob = self._get_probabilities(self.board_size, readline)
         elif linecnt == 47:
-            self.expected_vals = self._get_expected_vals(self.board_size, readline)
-        elif linecnt == 48:
             self.ownership = self._get_ownership(self.board_size, readline)
-        elif linecnt == 49:
+        elif linecnt == 48:
             self.result = int(readline)
-        elif linecnt == 50:
+        elif linecnt == 49:
             vals_list = self._get_vals_list(readline)
             self.avg_q = vals_list[0]
             self.short_avg_q = vals_list[1]
             self.mid_avg_q = vals_list[2]
             self.long_avg_q = vals_list[3]
-        elif linecnt == 51:
+        elif linecnt == 50:
             self.final_score = float(readline)
-        elif linecnt == 52:
+        elif linecnt == 51:
             vals_list = self._get_vals_list(readline)
             self.avg_score = vals_list[0]
             self.short_avg_score = vals_list[1]
             self.mid_avg_score = vals_list[2]
             self.long_avg_score = vals_list[3]
-        elif linecnt == 53:
+        elif linecnt == 52:
             vals_list = self._get_vals_list(readline)
             self.q_stddev = vals_list[0]
             self.score_stddev = vals_list[1]
-        elif linecnt == 54:
+        elif linecnt == 53:
             self.kld = float(readline)
 
     def apply_symmetry(self, symm):
@@ -223,7 +211,6 @@ class Data():
 
         self.prob          = numpy_symmetry_prob(symm, self.prob)
         self.aux_prob      = numpy_symmetry_prob(symm, self.aux_prob)
-        self.expected_vals = numpy_symmetry_prob(symm, self.expected_vals)
 
 
     def parse_from_stream(self, stream, skip=False):

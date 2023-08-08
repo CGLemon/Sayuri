@@ -100,8 +100,6 @@ struct ComputationResult {
     std::vector<float> root_playouts_dist;
     std::vector<float> target_playouts_dist;
 
-    std::vector<int> root_expected_values;
-
     std::vector<std::vector<int>> alive_strings;
     std::vector<std::vector<int>> dead_strings;
 
