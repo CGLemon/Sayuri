@@ -108,6 +108,8 @@ struct ComputationResult {
     int threads;
     int batch_size;
     float seconds;
+
+    float policy_kld;
 };
 
 class Search {
@@ -236,4 +238,6 @@ private:
     std::unique_ptr<ThreadGroup<void>> group_;
 
     std::vector<double> last_root_dist_;
+
+    std::vector<float> root_raw_probabilities_;
 };

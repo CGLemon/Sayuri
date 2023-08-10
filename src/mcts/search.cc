@@ -138,6 +138,16 @@ void Search::PrepareRootNode() {
 
     int visited_nodes;
     last_root_dist_ = GetRootDistribution(visited_nodes);
+
+    // We should get this root policy from the NN cache.
+    auto netlist = network_.GetOutput(root_state_, Network::kRandom, 1);
+    auto num_intersections = root_state_.GetNumIntersections();
+    root_raw_probabilities_.resize(num_intersections+1);
+
+    std::copy(std::begin(netlist.probabilities), 
+                  std::begin(netlist.probabilities) + num_intersections,
+                  std::begin(root_raw_probabilities_));
+    root_raw_probabilities_[num_intersections] = netlist.pass_probability;
 }
 
 void Search::ReleaseTree() {
@@ -573,6 +583,9 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         }
     }
 
+    result.policy_kld = GetKlDivergence(
+        result.target_playouts_dist, root_raw_probabilities_);
+
     // Fill the dead strings and live strings.
     constexpr float kOwnshipThreshold = 0.75f;
 
@@ -859,7 +872,8 @@ int Search::GetSelfPlayMove() {
         move = result.random_move;
     }
 
-    // Should I discard the data?
+    // Should we discard the data? If the 'discard_it' is true, we will
+    // discard the current data.
     float root_eval = result.root_eval;
     float root_score = result.root_score_lead;
     bool discard_it = false;
@@ -878,20 +892,22 @@ int Search::GetSelfPlayMove() {
         }
     }
     if (result.to_move == kWhite) {
+        // Always record the black's view point.
         root_eval = 1.0f - root_eval;
         root_score = 0.f - root_score;
     }
 
     // TODO: Use "Policy Surprise Weighting" instead of
     //       "Playout Cap Randomization". See the document
-    //       here.
-    const float record_weights = discard_it ? 0.f : 1.f;
+    //       here, https://github.com/lightvector/KataGo/blob/master/docs/KataGoMethods.md
+    const float record_kld = result.policy_kld;
+    const char discard_char = discard_it ? 'F' : 'T';
 
     // Save the move comment in the SGF file.
     root_state_.SetComment(
-        Format("%d, %.2f, %.2f, %.2f",
+        Format("%d, %.2f, %.2f, %.2f, %c",
             result.playouts, root_eval,
-            root_score, record_weights));
+            root_score, record_kld, discard_char));
 
     // Push the data to buffer.
     GatherData(root_state_, result, discard_it);
@@ -1150,7 +1166,7 @@ void Search::GatherData(const GameState &state,
     data.probabilities = result.target_playouts_dist;
     data.wave = state.GetWave();
     data.rule = state.GetRule();
-    data.kld = 0.f;
+    data.kld = result.policy_kld;
 
     training_buffer_.emplace_back(data);
 }

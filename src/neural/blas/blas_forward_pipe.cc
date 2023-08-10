@@ -13,7 +13,7 @@
 void BlasForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
     Load(weights);
     InitWinograd();
-    use_optimistic_policy_ = GetOption<bool>("optimistic_policy");
+    use_optimistic_policy_ = GetOption<bool>("use_optimistic_policy");
 }
 
 void BlasForwardPipe::InitWinograd() {

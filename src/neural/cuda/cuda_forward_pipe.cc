@@ -196,7 +196,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         LOGGING << cuda::GetCurrentDeviceInfo(&handles_);
     }
 
-    use_optimistic_policy_ = GetOption<bool>("optimistic_policy");
+    use_optimistic_policy_ = GetOption<bool>("use_optimistic_policy");
 
     board_size_ = board_size;
     scratch_size_ = 0;

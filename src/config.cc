@@ -29,7 +29,6 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["root_dcnn"] << Option::SetOption(false);
     kOptionsMap["winograd"] << Option::SetOption(true);
     kOptionsMap["fp16"] << Option::SetOption(true);
-    kOptionsMap["optimistic_policy"] << Option::SetOption(false);
 
     kOptionsMap["search_mode"] << Option::SetOption(std::string{});
     kOptionsMap["fixed_nn_boardsize"] << Option::SetOption(0);
@@ -79,6 +78,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["early_symm_cache"] << Option::SetOption(false);
     kOptionsMap["symm_pruning"] << Option::SetOption(false);
     kOptionsMap["use_stm_winrate"] << Option::SetOption(false);
+    kOptionsMap["use_optimistic_policy"] << Option::SetOption(false);
 
     // self-play options
     kOptionsMap["selfplay_query"] << Option::SetOption(std::string{});
@@ -382,6 +382,11 @@ void ArgsParser::Parse(Splitter &spt) {
         spt.RemoveWord(res->Index());
     }
 
+    if (const auto res = spt.Find("--use-optimistic-policy")) {
+        SetOption("use_optimistic_policy", true);
+        spt.RemoveWord(res->Index());
+    }
+
     if (const auto res = spt.Find("--no-dcnn")) {
         SetOption("no_dcnn", true);
         spt.RemoveWord(res->Index());
@@ -394,11 +399,6 @@ void ArgsParser::Parse(Splitter &spt) {
 
     if (const auto res = spt.Find("--no-fp16")) {
         SetOption("fp16", false);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--use-optimistic-policy")) {
-        SetOption("optimistic_policy", true);
         spt.RemoveWord(res->Index());
     }
 
