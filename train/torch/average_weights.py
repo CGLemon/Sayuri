@@ -19,9 +19,9 @@ def swa(cfg, input_weights, outs_name, recompute):
         avarage_list[inputs_size].load_pt(filename)
         inputs_size += 1
 
-    lsize = len(out_net.layer_collector)
+    lsize = len(out_net.layers_collector)
     for i in range(lsize):
-        out_layer = out_net.layer_collector[i]
+        out_layer = out_net.layers_collector[i]
 
         # set zeros
         if isinstance(out_layer, FullyConnect):
@@ -40,7 +40,7 @@ def swa(cfg, input_weights, outs_name, recompute):
 
         # average
         for j in range(inputs_size):
-            input_layer = avarage_list[j].layer_collector[i]
+            input_layer = avarage_list[j].layers_collector[i]
 
             if isinstance(out_layer, FullyConnect):
                 out_layer.linear.weight.data += (input_layer.linear.weight.data / inputs_size)

@@ -31,6 +31,9 @@ class Config:
         self.input_features = None
         self.boardsize = None
         self.num_chunks = None
+        self.soft_loss_weight = None
+        self.swa_max_count = None
+        self.swa_steps = None
 
 def parse_training_config(json_data, config):
     train = json_data.get("Train", None)
@@ -57,6 +60,8 @@ def parse_training_config(json_data, config):
     config.down_sample_rate = train.get("DownSampleRate", 16)
     config.num_chunks  = train.get("NumberChunks", None)
     config.soft_loss_weight  = train.get("SoftLossWeight", 0.1)
+    config.swa_max_count  = train.get("SwaMaxCount", 16)
+    config.swa_steps  = train.get("SwaSteps", 100)
 
     assert config.train_dir != None, ""
     assert config.store_path != None, ""

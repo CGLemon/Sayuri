@@ -31,6 +31,8 @@
         "WeightDecay": 1e-4,
         "NumberChunks" : 20000,
         "SoftLossWeight" : 0.1,
+        "SwaMaxCount" : 16,
+        "SwaSteps" : 100,
 
         "LearningRateSchedule": [
             [0,       5e-3]

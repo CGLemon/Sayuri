@@ -26,6 +26,8 @@
         "MacroFactor": 1,
         "WeightDecay": 1e-4,
         "SoftLossWeight" : 0.1,
+        "SwaMaxCount" : 16,
+        "SwaSteps" : 100,
 
         "LearningRateSchedule": [
             [0,       1e-2],

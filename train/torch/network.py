@@ -906,6 +906,70 @@ class Network(nn.Module):
             elif isinstance(layer, ConvBlock):
                 layer.bn.update_renorm_clips(curr_steps)
 
+    def accumulate_swa(self, other_network, swa_count):
+        a_size = len(self.layers_collector)
+        b_size = len(other_network.layers_collector)
+
+        if a_size != b_size:
+            raise Exception("The weights are not same size")
+
+        def accum_weights(val, w, n):
+            return val * (n / (n + 1.)) + w * (1. / (n + 1.))
+
+        for i in range(a_size):
+            this_layer = self.layers_collector[i]
+            other_layer = other_network.layers_collector[i]
+
+            if isinstance(this_layer, FullyConnect):
+                this_layer.linear.weight.data = accum_weights(
+                    this_layer.linear.weight.data,
+                    other_layer.linear.weight.data,
+                    swa_count
+                )
+                this_layer.linear.bias.data = accum_weights(
+                    this_layer.linear.bias.data,
+                    other_layer.linear.bias.data,
+                    swa_count
+                )
+            elif isinstance(this_layer, Convolve):
+                this_layer.conv.weight.data = accum_weights(
+                    this_layer.conv.weight.data,
+                    other_layer.conv.weight.data,
+                    swa_count
+                )
+                this_layer.conv.bias.data = accum_weights(
+                    this_layer.conv.bias.data,
+                    other_layer.conv.bias.data,
+                    swa_count
+                )
+            elif isinstance(this_layer, ConvBlock):
+                this_layer.conv.weight.data = accum_weights(
+                    this_layer.conv.weight.data,
+                    other_layer.conv.weight.data,
+                    swa_count
+                )
+                this_layer.bn.running_mean.data = accum_weights(
+                    this_layer.bn.running_mean.data,
+                    other_layer.bn.running_mean.data,
+                    swa_count
+                )
+                this_layer.bn.running_var.data = accum_weights(
+                    this_layer.bn.running_var.data,
+                    other_layer.bn.running_var.data,
+                    swa_count
+                )
+                if this_layer.bn.gamma is not None:
+                    this_layer.bn.gamma.data = accum_weights(
+                        this_layer.bn.gamma.data,
+                        other_layer.bn.gamma.data,
+                        swa_count
+                    )
+                this_layer.bn.beta.data = accum_weights(
+                    this_layer.bn.beta.data,
+                    other_layer.bn.beta.data,
+                    swa_count
+                )
+
     def simple_info(self):
         info = str()
         info += "NN Type: {type}\n".format(type=self.nntype)

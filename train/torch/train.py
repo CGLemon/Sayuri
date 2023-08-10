@@ -239,9 +239,17 @@ class TrainingPipe():
         self.net = Network(cfg)
         self.net.train()
 
-        # The Store root dir
+        self.swa_net = Network(cfg)
+        self.swa_net.eval()
+
+        # The Store root directory.
         self.store_path = cfg.store_path
         self._status_loader = StatusLoader()
+
+        # The SWA setting.
+        self.swa_count = 0
+        self.swa_max_count = self.cfg.swa_max_count
+        self.swa_steps = self.cfg.swa_steps
 
         self._setup()
 
@@ -252,10 +260,14 @@ class TrainingPipe():
             self.net = self.net.to(self.device)
             self.net = DataParallel(self.net) 
             self.module  = self.net.module
+            self.swa_net = self.swa_net.to(self.device)
+
+        # Copy the initial weights.
+        self.swa_net.accumulate_swa(self.module, 0)
 
         init_lr = self._get_lr_schedule(0)
 
-        # We may fail to load the optimizer. So init
+        # We may fail to load the optimizer. So initializing
         # it before loading it.
         self.opt = None
         if self.opt_name == "Adam":
@@ -279,6 +291,10 @@ class TrainingPipe():
         if not os.path.isdir(self.weights_path):
             os.mkdir(self.weights_path)
 
+        self.swa_weights_path = os.path.join(self.store_path, "swa")
+        if not os.path.isdir(self.swa_weights_path):
+            os.mkdir(self.swa_weights_path)
+
         info_file = os.path.join(self.store_path, "info.txt")
         with open(info_file, 'w') as f:
             f.write(self.module.simple_info())
@@ -301,9 +317,11 @@ class TrainingPipe():
         status_name = os.path.join(self.store_path, "last_status.pt")
         self._status_loader.load(status_name, device=torch.device("cpu"))
         self._status_loader.load_model(self.module)
+        self._status_loader.load_swa_model(self.swa_net)
         self._status_loader.load_optimizer(self.opt)
 
         last_steps = self._status_loader.get_steps()
+        self.swa_count = self._status_loader.get_swa_count()
         curr_lr = self._get_lr_schedule(last_steps)
 
         for param in self.opt.param_groups:
@@ -320,13 +338,19 @@ class TrainingPipe():
         self.validate_the_last_model(steps)
 
         self._status_loader.set_steps(steps)
+        self._status_loader.set_swa_count(self.swa_count)
         self._status_loader.save_model(self.module)
+        self._status_loader.save_swa_model(self.swa_net)
         self._status_loader.save_optimizer(self.opt)
         self._status_loader.save(status_name)
 
         weights_name = os.path.join(self.weights_path, "s{}.bin.txt".format(steps))
         cpu_module = self.module.to("cpu")
         cpu_module.transfer_to_bin(weights_name)
+
+        swa_weights_name = os.path.join(self.swa_weights_path, "swa-s{}.bin.txt".format(steps))
+        cpu_swa_net = self.swa_net.to("cpu")
+        cpu_swa_net.transfer_to_bin(swa_weights_name)
 
     def _init_loader(self):
         self._stream_loader = StreamLoader()
@@ -509,6 +533,11 @@ class TrainingPipe():
                         with open(log_file, 'a') as f:
                             f.write(log_outs + '\n')
                         running_loss_dict = self._get_new_running_loss_dict(all_loss_dict)
+
+
+                    if num_steps % self.swa_steps == 0:
+                        self.swa_count = min(self.swa_count+1, self.swa_max_count)
+                        self.swa_net.accumulate_swa(self.module, self.swa_count)
 
                     # update learning rate
                     for param in self.opt.param_groups:
