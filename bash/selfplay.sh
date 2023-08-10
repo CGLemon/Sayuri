@@ -3,7 +3,7 @@
 # directory parameters
 WORKSPACE="workspace"
 SELFPLAY_DIR="selfplay"
-WEIGHTS_DIR="weights"
+WEIGHTS_DIR="$WORKSPACE/weights"
 LAST_STEPS_FILE="$WORKSPACE/last_steps.txt"
 SETTING_FILE="selfplay-setting.json"
 KILL_FILE="kill.txt"
@@ -34,18 +34,6 @@ do
     # Train a new model.
     TRAIN_CMD="python3 torch/parser.py -j $SETTING_FILE"
     $TRAIN_CMD
-
-    # Transfer the last model.
-    if [ -f $LAST_STEPS_FILE ]; then
-        NUM_STEPS=$( cat $LAST_STEPS_FILE )
-    fi
-    WEIGHTS_PREFIX="$WORKSPACE/model/s$NUM_STEPS"
-    TRANSFER_CMD="python3 torch/transfer.py -j $SETTING_FILE -b -n $WEIGHTS_PREFIX"
-    $TRANSFER_CMD
-
-    # move the weights
-    MOVE_CMD="mv $WEIGHTS_PREFIX.bin.txt $WEIGHTS_DIR"
-    $MOVE_CMD
 
     # Stop the loop if we find the kill file.
     if [ -f $KILL_FILE ]; then 

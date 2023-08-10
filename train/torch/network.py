@@ -7,6 +7,7 @@ import struct
 import sys
 
 from symmetry import torch_symmetry
+from status_loader import StatusLoader
 
 CRAZY_NEGATIVE_VALUE = -5000.0
 
@@ -40,13 +41,16 @@ def str_to_bin(st):
 def ffffffff_nan():
     return b'\xff\xff\xff\xff'
 
+def tensor_to_list(t: torch.Tensor):
+    return t.detach().cpu().numpy().ravel()
+
 def tensor_to_bin(t: torch.Tensor):
-    return b''.join([float_to_bin(w, False) for w in t.detach().numpy().ravel()]) + ffffffff_nan()
+    return b''.join([float_to_bin(w, False) for w in tensor_to_list(t)]) + ffffffff_nan()
 
 def tensor_to_text(t: torch.Tensor, use_bin):
     if use_bin:
         return tensor_to_bin(t)
-    return " ".join([str(w) for w in t.detach().numpy().ravel()]) + "\n"
+    return " ".join([str(w) for w in tensor_to_list(t)]) + "\n"
 
 # It is imported from KataGo.
 class SoftPlusWithGradientFloorFunction(torch.autograd.Function):
@@ -175,9 +179,8 @@ class BatchNorm2d(nn.Module):
         self.register_buffer(
             "running_var", torch.ones(num_features, dtype=torch.float)
         )
-        self.register_buffer(
-            "num_batches_tracked", torch.tensor(0, dtype=torch.long)
-        )
+        self.rmax = 1
+        self.dmax = 0
 
         self.gamma = None
         if use_gamma:
@@ -195,36 +198,37 @@ class BatchNorm2d(nn.Module):
         self.use_gamma = use_gamma
         self.num_features = num_features
         self.eps = eps
-        self.momentum = self.__clamp(momentum)
+        self.momentum = self._clamp(momentum)
 
-        # Fix up Batch Normalization layer. According to kata Go, Batch Normalization may cause
+        # Fixup Batch Normalization layer. According to kataGo, Batch Normalization may cause
         # some wierd reuslts becuse the inference and training computation results are different.
-        # Fix up can avoid the weird forwarding result. Fix up also speeds up the performance. May
-        # improve around x1.6 ~ x1.8.
+        # Fixup can avoid the weird forwarding result. Fixup also speeds up the performance. The
+        # improvement may be around x1.6 ~ x1.8 faster.
         self.fixup = fixup
 
-    def __clamp(self, x):
-        x = max(0, x)
-        x = min(1, x)
+    def _clamp(self, x, lower=0., upper=1.):
+        x = max(lower, x)
+        x = min(upper, x)
         return x
 
-    @property
-    def rmax(self):
+    def update_renorm_clips(self, curr_steps):
         # first 5k training step, rmax = 1
         # after 25k training step, rmax = 3
-        return (2 / 35000 * self.num_batches_tracked + 25 / 35).clamp_(
-            1.0, 3.0
+        self.rmax = self._clamp(
+            (2/35000) * curr_steps + 25/35,
+            lower=1.0,
+            upper=3.0
         )
 
-    @property
-    def dmax(self):
         # first 5k training step, dmax = 0
         # after 25k training step, dmax = 5
-        return (5 / 20000 * self.num_batches_tracked - 25 / 20).clamp_(
-            0.0, 5.0
+        self.dmax = self._clamp(
+            (5/20000) * curr_steps - 25/20,
+            lower=0.0,
+            upper=5.0
         )
 
-    def __apply_renorm(self, x, mean, var):
+    def _apply_renorm(self, x, mean, var):
         mean = mean.view(1, self.num_features, 1, 1)
         std = torch.sqrt(var+self.eps).view(1, self.num_features, 1, 1)
         running_std = torch.sqrt(self.running_var+self.eps).view(1, self.num_features, 1, 1)
@@ -232,17 +236,16 @@ class BatchNorm2d(nn.Module):
 
         r = (
             std.detach() / running_std
-        ).clamp_(1 / self.rmax, self.rmax)
-
+        ).clamp(1 / self.rmax, self.rmax)
 
         d = (
             (mean.detach() - running_mean) / running_std
-        ).clamp_(-self.dmax, self.dmax)
+        ).clamp(-self.dmax, self.dmax)
 
         x = (x-mean)/std * r + d
         return x
 
-    def __apply_norm(self, x, mean, var):
+    def _apply_norm(self, x, mean, var):
         mean = mean.view(1, self.num_features, 1, 1)
         std = torch.sqrt(var+self.eps).view(1, self.num_features, 1, 1)
         x = (x-mean)/std
@@ -259,19 +262,16 @@ class BatchNorm2d(nn.Module):
             batch_var = torch.sum(torch.square(zmtensor * mask), dim=(0,2,3)) / mask_sum
 
             if self.use_renorm:
-                # In the first 5k training steps, the batch renorm is equal
-                # to the batch norm.
-                x = self.__apply_renorm(x , batch_mean, batch_var)
+                x = self._apply_renorm(x , batch_mean, batch_var)
             else:
-                x = self.__apply_norm(x , batch_mean, batch_var)
+                x = self._apply_norm(x , batch_mean, batch_var)
 
             # Update moving averages.
             self.running_mean += self.momentum * (batch_mean.detach() - self.running_mean)
             self.running_var += self.momentum * (batch_var.detach() - self.running_var)
-            self.num_batches_tracked += 1
         else:
             # Inference step or fixup, they are equal.
-            x = self.__apply_norm(x, self.running_mean, self.running_var)
+            x = self._apply_norm(x, self.running_mean, self.running_var)
 
         if self.gamma is not None:
             x = x * self.gamma.view(1, self.num_features, 1, 1)
@@ -295,14 +295,14 @@ class FullyConnect(nn.Module):
             out_size,
             bias=True
         )
-        self.__init_weights()
-        self.__try_collect(collector)
+        self._init_weights()
+        self._try_collect(collector)
 
-    def __init_weights(self):
+    def _init_weights(self):
         nn.init.xavier_normal_(self.linear.weight, gain=1.0)
         nn.init.zeros_(self.linear.bias)
 
-    def __try_collect(self, collector):
+    def _try_collect(self, collector):
         if collector is not None:
             collector.append(self)
 
@@ -342,10 +342,10 @@ class Convolve(nn.Module):
             padding="same",
             bias=True,
         )
-        self.__init_weights()
-        self.__try_collect(collector)
+        self._init_weights()
+        self._try_collect(collector)
 
-    def __init_weights(self):
+    def _init_weights(self):
         nn.init.xavier_normal_(self.conv.weight, gain=1.0)
         nn.init.zeros_(self.conv.bias)
 
@@ -353,7 +353,7 @@ class Convolve(nn.Module):
         #                         mode="fan_out",
         #                         nonlinearity="relu")
 
-    def __try_collect(self, collector):
+    def _try_collect(self, collector):
         if collector is not None:
             collector.append(self)
 
@@ -402,17 +402,17 @@ class ConvBlock(nn.Module):
             use_gamma=use_gamma,
             fixup=fixup
         )
-        self.__init_weights()
-        self.__try_collect(collector)
+        self._init_weights()
+        self._try_collect(collector)
 
-    def __init_weights(self):
+    def _init_weights(self):
         nn.init.xavier_normal_(self.conv.weight, gain=1.0)
 
         # nn.init.kaiming_normal_(self.conv.weight,
         #                         mode="fan_out",
         #                         nonlinearity="relu")
 
-    def __try_collect(self, collector):
+    def _try_collect(self, collector):
         if collector is not None:
             collector.append(self)
 
@@ -568,15 +568,9 @@ class Network(nn.Module):
     def __init__(self, cfg):
         super(Network, self).__init__()
 
-        # Layer Collector will collect all weights except for ingnore
-        # heads. According to multi-task learning, some heads are just
-        # auxiliary. These heads may improve the performance but are useless
-        # in the inference time. We do not output them. 
-        self.layers_collector = []
-        self.unused_collector = []
+        self.layers_collector = list()
 
         self.nntype = cfg.nntype
-
         self.fixup = cfg.fixup_batch_norm
 
         self.input_channels = cfg.input_channels
@@ -608,7 +602,7 @@ class Network(nn.Module):
 
         # residual tower
         main_channels = self.residual_channels
-        nn_stack = []
+        nn_stack = list()
         for s in self.stack:
             has_basic_block = False
             use_fixup = self.fixup
@@ -898,11 +892,19 @@ class Network(nn.Module):
         }
         return all_loss_dict
 
-    def save_pt(self, filename):
-        torch.save(self.state_dict(), filename)
-
     def load_pt(self, filename):
-        self.load_state_dict(torch.load(filename, map_location=torch.device('cpu')))
+        status_loader = StatusLoader()
+        status_loader.load(filename, device=torch.device("cpu"))
+        status_loader.load_model(self)
+
+    def update_parameters(self, curr_steps):
+        for layer in self.layers_collector:
+            if isinstance(layer, FullyConnect):
+                pass
+            elif isinstance(layer, Convolve):
+                pass
+            elif isinstance(layer, ConvBlock):
+                layer.bn.update_renorm_clips(curr_steps)
 
     def simple_info(self):
         info = str()

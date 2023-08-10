@@ -8,6 +8,7 @@ from data import Data
 
 from torch.nn import DataParallel
 from lazy_loader import LazyLoader, LoaderFlag
+from status_loader import StatusLoader
 
 def gather_filenames(root, num_chunks=None, sort_key_fn=None):
     def gather_recursive_files(root):
@@ -232,14 +233,15 @@ class TrainingPipe():
 
         # The training device.
         self.use_gpu = cfg.use_gpu
-        self.device = torch.device('cpu')
+        self.device = torch.device("cpu")
         if self.use_gpu:
-            self.device = torch.device('cuda')
+            self.device = torch.device("cuda")
         self.net = Network(cfg)
         self.net.train()
 
         # The Store root dir
         self.store_path = cfg.store_path
+        self._status_loader = StatusLoader()
 
         self._setup()
 
@@ -273,13 +275,9 @@ class TrainingPipe():
                 weight_decay=self.weight_decay,
             )
 
-        model_path = os.path.join(self.store_path, "model")
-        if not os.path.isdir(model_path):
-            os.mkdir(model_path)
-            
-        opt_path = os.path.join(self.store_path, "opt")
-        if not os.path.isdir(opt_path):
-            os.mkdir(opt_path)
+        self.weights_path = os.path.join(self.store_path, "weights")
+        if not os.path.isdir(self.weights_path):
+            os.mkdir(self.weights_path)
 
         info_file = os.path.join(self.store_path, "info.txt")
         with open(info_file, 'w') as f:
@@ -289,9 +287,8 @@ class TrainingPipe():
             "soft" : self.cfg.soft_loss_weight
         }
 
-
     def _get_lr_schedule(self, num_steps):
-        # Get the current learning rate with schedule.
+        # Get the current learning rate from schedule.
         curr_lr = 0.2
         for s, lr in self.lr_schedule:
             if s <= num_steps:
@@ -301,33 +298,12 @@ class TrainingPipe():
         return curr_lr
 
     def _load_current_status(self):
-        #TODO: Merge optimizer status and model into one file.
-        last_steps = 0
+        status_name = os.path.join(self.store_path, "last_status.pt")
+        self._status_loader.load(status_name, device=torch.device("cpu"))
+        self._status_loader.load_model(self.module)
+        self._status_loader.load_optimizer(self.opt)
 
-        steps_name = os.path.join(self.store_path, "last_steps.txt")
-        if os.path.isfile(steps_name):
-            with open(steps_name, 'r') as f:
-                last_steps = int(f.read())
-
-        model_path = os.path.join(self.store_path, "model")
-        model_name = os.path.join(model_path, "s{}.pt".format(last_steps))
-        if os.path.isfile(model_name):
-            self.module.load_state_dict(torch.load(model_name, map_location=torch.device('cpu')))
-            print("Load model from {}.".format(model_name))
-        else:
-            # If we fail to load another model, be sure that
-            # init steps is zero.
-            assert last_steps==0, ""
-
-        opt_path = os.path.join(self.store_path, "opt")
-        opt_name = os.path.join(opt_path, "s{}.pt".format(last_steps))
-        if os.path.isfile(opt_name):
-            # TODO: We may load different optimizers. Be sure that
-            #       program don't crash in any condition.
-            self.opt.load_state_dict(torch.load(opt_name, map_location=torch.device('cpu')))
-            print("Load optimizer status from {}.".format(opt_name))
-
-        # update to current learning rate...
+        last_steps = self._status_loader.get_steps()
         curr_lr = self._get_lr_schedule(last_steps)
 
         for param in self.opt.param_groups:
@@ -338,20 +314,19 @@ class TrainingPipe():
 
         return last_steps
 
-    def _store_current_status(self, steps):
-        steps_name = os.path.join(self.store_path, "last_steps.txt")
-        with open(steps_name, 'w') as f:
-            f.write(str(steps))
+    def _save_current_status(self, steps):
+        status_name = os.path.join(self.store_path, "last_status.pt")
 
         self.validate_the_last_model(steps)
 
-        model_path = os.path.join(self.store_path, "model")
-        model_name = os.path.join(model_path, "s{}.pt".format(steps))
-        torch.save(self.module.state_dict(), model_name)
+        self._status_loader.set_steps(steps)
+        self._status_loader.save_model(self.module)
+        self._status_loader.save_optimizer(self.opt)
+        self._status_loader.save(status_name)
 
-        opt_path = os.path.join(self.store_path, "opt")
-        opt_name = os.path.join(opt_path, "s{}.pt".format(steps))
-        torch.save(self.opt.state_dict(), opt_name)
+        weights_name = os.path.join(self.weights_path, "s{}.bin.txt".format(steps))
+        cpu_module = self.module.to("cpu")
+        cpu_module.transfer_to_bin(weights_name)
 
     def _init_loader(self):
         self._stream_loader = StreamLoader()
@@ -394,7 +369,6 @@ class TrainingPipe():
             batch = next(self.validation_lazy_loader)
         else:
             self.validation_lazy_loader = None
-
 
     def _get_new_running_loss_dict(self, all_loss_dict):
         # Get the new dict.
@@ -514,6 +488,7 @@ class TrainingPipe():
                     self.opt.zero_grad()
 
                     num_steps += 1
+                    self.module.update_parameters(num_steps)
 
                     # dump the verbose
                     if num_steps % self.verbose_steps == 0:
@@ -545,6 +520,6 @@ class TrainingPipe():
                     break
 
             # store the last network
-            self._store_current_status(num_steps)
+            self._save_current_status(num_steps)
         self.flag.set_stop_flag()
         print("Training is over.")
