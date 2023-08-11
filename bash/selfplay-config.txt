@@ -36,11 +36,12 @@
 --gumbel-playouts 50
 --always-completed-q-policy
 
---reduce-playouts 80
---reduce-playouts-prob 0.75
+--reduce-playouts 50
+--reduce-playouts-prob 0.0
 
 --resign-playouts 75
---resign-threshold 0.02
+--resign-threshold 0.05
+--resign-discard-prob 0.8
 
 --parallel-games 128
 --batch-size 64
@@ -52,5 +53,7 @@
 --dirichlet-epsilon 0.25
 --dirichlet-init 0.03
 --dirichlet-factor 361
+
+--root-policy-temp 1.1
 
 --num-games 5000

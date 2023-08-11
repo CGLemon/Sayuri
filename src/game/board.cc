@@ -269,7 +269,7 @@ int Board::ComputeReachGroup(int start_vertex, int spread_color, std::vector<boo
         return state_[vtx];
     };
 
-    return ComputeReachColor(start_vertex, spread_color, buf, PeekState);
+    return ComputeReachGroup(start_vertex, spread_color, buf, PeekState);
 }
 
 int Board::ComputeReachGroup(int start_vertex, int spread_color,

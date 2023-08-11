@@ -5,6 +5,7 @@
 #include "config.h"
 
 #include <array>
+#include <string>
 
 class Parameters {
 public:
@@ -33,6 +34,9 @@ public:
         random_min_visits = GetOption<int>("random_min_visits");
         random_moves_factor = GetOption<float>("random_moves_factor");
 
+        gumbel_c_visit = GetOption<float>("gumbel_c_visit");
+        gumbel_c_scale = GetOption<float>("gumbel_c_scale");
+        gumbel_prom_visits = GetOption<int>("gumbel_prom_visits");
         gumbel_considered_moves = GetOption<int>("gumbel_considered_moves");
         gumbel_playouts = GetOption<int>("gumbel_playouts");
         gumbel = GetOption<bool>("gumbel");
@@ -47,9 +51,12 @@ public:
         score_utility_div = GetOption<float>("score_utility_div");
         resign_playouts = GetOption<int>("resign_playouts");
         reduce_playouts = GetOption<int>("reduce_playouts");
-        reduce_playouts_prob = GetOption<float>("reduce_playouts_prob"); 
+        reduce_playouts_prob = GetOption<float>("reduce_playouts_prob");
+        resign_discard_prob = GetOption<float>("resign_discard_prob");
 
-        lag_buffer = GetOption<int>("lag_buffer");
+        kldgain = std::stod(GetOption<std::string>("kldgain"));
+
+        lag_buffer = GetOption<float>("lag_buffer");
         ponder = GetOption<bool>("ponder");
         reuse_tree = GetOption<bool>("reuse_tree");
         friendly_pass = GetOption<bool>("friendly_pass");
@@ -85,6 +92,9 @@ public:
     float cpuct_dynamic_k_base;
     float draw_factor;
 
+    float gumbel_c_visit;
+    float gumbel_c_scale;
+    int gumbel_prom_visits;
     int gumbel_considered_moves;
     int gumbel_playouts;
     bool gumbel;
@@ -103,8 +113,11 @@ public:
     int resign_playouts;
     int reduce_playouts;
     float reduce_playouts_prob;
-    int lag_buffer;
+    float lag_buffer;
     int expand_threshold;
+    float resign_discard_prob;
+
+    double kldgain;
 
     bool ponder;
     bool reuse_tree;

@@ -87,7 +87,6 @@ set(NEURAL_SOURCES
     ${NEURAL_SOURCES_DIR}/description.cc
     ${NEURAL_SOURCES_DIR}/encoder.cc
     ${NEURAL_SOURCES_DIR}/network.cc
-    ${NEURAL_SOURCES_DIR}/supervised.cc
     ${NEURAL_SOURCES_DIR}/training.cc
     ${NEURAL_SOURCES_DIR}/winograd_helper.cc
     ${NEURAL_SOURCES_DIR}/blas/sgemm.cc
@@ -98,7 +97,6 @@ set(NEURAL_SOURCES
     ${NEURAL_SOURCES_DIR}/blas/batchnorm.cc
     ${NEURAL_SOURCES_DIR}/blas/biases.cc
     ${NEURAL_SOURCES_DIR}/blas/se_unit.cc
-    ${NEURAL_SOURCES_DIR}/blas/sa_unit.cc
     ${NEURAL_SOURCES_DIR}/blas/blas_forward_pipe.cc
     )
 

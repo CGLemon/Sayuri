@@ -5,12 +5,12 @@ import math
 # input shape must [batch, channel, x, y]
 def torch_symmetry(symm, planes, invert=False):
     if not invert:
-        return __torch_symmetry_planes(symm, planes)
-    return __torch_symmetry_planes_invert(symm, planes)
+        return _torch_symmetry_planes(symm, planes)
+    return _torch_symmetry_planes_invert(symm, planes)
 
 
-def __torch_symmetry_planes(symm, planes):
-    rot, use_flip = __get_direction(symm)
+def _torch_symmetry_planes(symm, planes):
+    rot, use_flip = _get_direction(symm)
 
     transformed = torch.rot90(planes, rot, dims=(2,3))
     if use_flip:
@@ -18,8 +18,8 @@ def __torch_symmetry_planes(symm, planes):
     return transformed
 
 
-def __torch_symmetry_planes_invert(symm, planes):
-    rot, use_flip = __get_direction(symm)
+def _torch_symmetry_planes_invert(symm, planes):
+    rot, use_flip = _get_direction(symm)
 
     if use_flip:
         planes = torch.flip(planes, dims=(2,))
@@ -27,7 +27,7 @@ def __torch_symmetry_planes_invert(symm, planes):
 
 # input shape must [channel, x, y]
 def numpy_symmetry_planes(symm, plane):
-    rot, use_flip = __get_direction(symm)
+    rot, use_flip = _get_direction(symm)
 
     transformed = np.rot90(plane, rot, axes=(1,2))
     if use_flip:
@@ -36,7 +36,7 @@ def numpy_symmetry_planes(symm, plane):
 
 # input shape must [x, y]
 def numpy_symmetry_plane(symm, plane):
-    rot, use_flip = __get_direction(symm)
+    rot, use_flip = _get_direction(symm)
 
     transformed = np.rot90(plane, rot, axes=(0,1))
     if use_flip:
@@ -59,7 +59,7 @@ def numpy_symmetry_prob(symm, prob):
 
     return outs
 
-def __get_direction(symm):
+def _get_direction(symm):
     use_flip = False
     if symm // 4 != 0:
         use_flip = True

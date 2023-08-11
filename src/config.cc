@@ -44,6 +44,7 @@ void ArgsParser::InitOptionsMap() const {
 
     kOptionsMap["kgs_hint"] << Option::SetOption(std::string{});
     kOptionsMap["weights_file"] << Option::SetOption(std::string{});
+    kOptionsMap["weights_dir"] << Option::SetOption(std::string{});
     kOptionsMap["book_file"] << Option::SetOption(std::string{});
     kOptionsMap["patterns_file"] << Option::SetOption(std::string{});
 
@@ -68,19 +69,26 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["score_utility_div"] << Option::SetOption(20.f);
     kOptionsMap["expand_threshold"] << Option::SetOption(-1);
 
+    kOptionsMap["kldgain"] << Option::SetOption(std::string{"0"});
+
     kOptionsMap["root_policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
-    kOptionsMap["lag_buffer"] << Option::SetOption(0);
+    kOptionsMap["lag_buffer"] << Option::SetOption(0.f);
     kOptionsMap["no_cache"] << Option::SetOption(false); 
     kOptionsMap["early_symm_cache"] << Option::SetOption(false);
     kOptionsMap["symm_pruning"] << Option::SetOption(false);
     kOptionsMap["use_stm_winrate"] << Option::SetOption(false);
+    kOptionsMap["use_optimistic_policy"] << Option::SetOption(false);
 
     // self-play options
     kOptionsMap["selfplay_query"] << Option::SetOption(std::string{});
     kOptionsMap["random_min_visits"] << Option::SetOption(1);
     kOptionsMap["random_moves_factor"] << Option::SetOption(0.f);
+    kOptionsMap["random_opening_prob"] << Option::SetOption(0.f, 1.f, 0.f);
 
+    kOptionsMap["gumbel_c_visit"] << Option::SetOption(50.f);
+    kOptionsMap["gumbel_c_scale"] << Option::SetOption(1.f);
+    kOptionsMap["gumbel_prom_visits"] << Option::SetOption(1);
     kOptionsMap["gumbel_considered_moves"] << Option::SetOption(16);
     kOptionsMap["gumbel_playouts"] << Option::SetOption(400);
     kOptionsMap["gumbel"] << Option::SetOption(false);
@@ -95,6 +103,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["reduce_playouts"] << Option::SetOption(0);
     kOptionsMap["reduce_playouts_prob"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["first_pass_bonus"] << Option::SetOption(false);
+    kOptionsMap["resign_discard_prob"] << Option::SetOption(0.f, 1.f, 0.f);
 
     kOptionsMap["num_games"] << Option::SetOption(0);
     kOptionsMap["parallel_games"] << Option::SetOption(1);
@@ -173,6 +182,19 @@ void ArgsParser::InitBasicParameters() const {
         SetOption("root_policy_temp",
                       GetOption<float>("policy_temp"),
                       as_default);
+    }
+
+   // Set the lag buffer time.
+    bool already_set_lagbuffer = !IsOptionDefault("lag_buffer");
+    if (!already_set_lagbuffer) {
+        float lag_buffer_base = 0.25f;
+        if (use_gpu) {
+            SetOption("lag_buffer", lag_buffer_base);
+        } else {
+            // The time of CPU hiccup is longer than GPU backend. We
+            // a bigger value.
+            SetOption("lag_buffer", 2 * lag_buffer_base);
+        }
     }
 
     // Parse the search mode.
@@ -361,6 +383,11 @@ void ArgsParser::Parse(Splitter &spt) {
         spt.RemoveWord(res->Index());
     }
 
+    if (const auto res = spt.Find("--use-optimistic-policy")) {
+        SetOption("use_optimistic_policy", true);
+        spt.RemoveWord(res->Index());
+    }
+
     if (const auto res = spt.Find("--no-dcnn")) {
         SetOption("no_dcnn", true);
         spt.RemoveWord(res->Index());
@@ -405,6 +432,27 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.Find({"--dirichlet-noise", "--noise", "-n"})) {
         SetOption("dirichlet_noise", true);
         spt.RemoveWord(res->Index());
+    }
+
+    if (const auto res = spt.FindNext("--gumbel-c-visit")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("gumbel_c_visit", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--gumbel-c-scale")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("gumbel_c_scale", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--gumbel-prom-visits")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("gumbel_prom_visits", res->Get<int>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
     }
 
     if (const auto res = spt.FindNext("--gumbel-considered-moves")) {
@@ -460,6 +508,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--random-moves-factor")) {
         if (IsParameter(res->Get<>())) {
             SetOption("random_moves_factor", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--random-opening-prob")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("random_opening_prob", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -563,6 +618,13 @@ void ArgsParser::Parse(Splitter &spt) {
         }
     }
 
+    if (const auto res = spt.FindNext("--weights-dir")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("weights_dir", res->Get<>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
     if (const auto res = spt.FindNext("--book")) {
         if (IsParameter(res->Get<>())) {
             SetOption("book_file", res->Get<>());
@@ -654,6 +716,13 @@ void ArgsParser::Parse(Splitter &spt) {
         }
     }
 
+    if (const auto res = spt.FindNext("--kldgain")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("kldgain", res->Get<>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
     if (const auto res = spt.FindNext("--root-policy-temp")) {
         if (IsParameter(res->Get<>())) {
             SetOption("root_policy_temp", res->Get<float>());
@@ -664,6 +733,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--policy-temp")) {
         if (IsParameter(res->Get<>())) {
             SetOption("policy_temp", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--resign-discard-prob")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("resign_discard_prob", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -691,7 +767,7 @@ void ArgsParser::Parse(Splitter &spt) {
 
     if (const auto res = spt.FindNext("--lag-buffer")) {
         if (IsParameter(res->Get<>())) {
-            SetOption("lag_buffer", res->Get<int>());
+            SetOption("lag_buffer", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -807,7 +883,7 @@ void ArgsParser::DumpHelper() const {
                 << "\t--batch-size, -b <integer>\n"
                 << "\t\tThe number of batches for a single evaluation. Set 0 will select a reasonable number.\n\n"
 
-                << "\t--lag-buffer <integer>\n"
+                << "\t--lag-buffer <float>\n"
                 << "\t\tSafety margin for time usage in seconds.\n\n"
 
                 << "\t--score-utility-factor <float>\n"

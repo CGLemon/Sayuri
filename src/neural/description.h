@@ -98,9 +98,6 @@ public:
     ConvLayer post_btl_conv;
     BatchNormLayer post_btl_bn;
     bool apply_btl{false};
-
-    ConvLayer sa_conv;
-    bool apply_sa{false};
 };
 
 class DNNWeights {

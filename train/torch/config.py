@@ -30,8 +30,10 @@ class Config:
         self.input_channels = None
         self.input_features = None
         self.boardsize = None
-        self.value_misc = None
         self.num_chunks = None
+        self.soft_loss_weight = None
+        self.swa_max_count = None
+        self.swa_steps = None
 
 def parse_training_config(json_data, config):
     train = json_data.get("Train", None)
@@ -57,6 +59,9 @@ def parse_training_config(json_data, config):
     config.fixup_batch_norm = train.get("FixUpBatchNorm", False)
     config.down_sample_rate = train.get("DownSampleRate", 16)
     config.num_chunks  = train.get("NumberChunks", None)
+    config.soft_loss_weight  = train.get("SoftLossWeight", 0.1)
+    config.swa_max_count  = train.get("SwaMaxCount", 16)
+    config.swa_steps  = train.get("SwaSteps", 100)
 
     assert config.train_dir != None, ""
     assert config.store_path != None, ""
@@ -73,17 +78,15 @@ def parse_nn_config(json_data, config):
     config.boardsize = network.get("MaxBoardSize", 19)
 
     config.nntype = network.get("NNType", None)
-    config.input_channels = network.get("InputChannels", None)
+    config.input_channels = network.get("InputChannels", 43)
     config.residual_channels = network.get("ResidualChannels", None)
     config.policy_extract = network.get("PolicyExtract", None)
     config.value_extract = network.get("ValueExtract", None)
-    config.value_misc = network.get("ValueMisc", None)
 
     assert config.input_channels != None, ""
     assert config.residual_channels != None, ""
     assert config.policy_extract != None, ""
     assert config.value_extract != None, ""
-    assert config.value_misc != None, ""
 
     stack = network.get("Stack", None)
     for s in stack:

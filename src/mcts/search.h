@@ -84,12 +84,15 @@ struct ComputationResult {
     int best_no_pass_move{kNullVertex};
     int random_move{kNullVertex};
     int gumbel_move{kNullVertex};
+    int gumbel_no_pass_move{kNullVertex};
 
     VertexType to_move;
     float komi;
     float root_eval;
-    float root_final_score;
+    float root_score_lead;
     float best_eval;
+    float root_score_stddev;
+    float root_eval_stddev;
 
     std::vector<float> root_ownership;
     std::vector<int> root_visits;
@@ -105,6 +108,8 @@ struct ComputationResult {
     int threads;
     int batch_size;
     float seconds;
+
+    float policy_kld;
 };
 
 class Search {
@@ -167,15 +172,24 @@ public:
     // Release the whole trees.
     void ReleaseTree();
 
+    std::string GetDebugMoves(std::vector<int> moves);
+
 private:
     // Try to reuse the sub-tree.
     bool AdvanceToNewRootState();
+
+    // Reture false if there is only one reasonable move.
+    bool HaveAlternateMoves();
+
+    std::vector<double> GetRootDistribution(int &visited_nodes);
 
     bool InputPending(Search::OptionTag tag) const;
 
     void GatherComputationResult(ComputationResult &result) const;
 
-    void GatherData(const GameState &state, ComputationResult &result);
+    void GatherData(const GameState &state,
+                    ComputationResult &result,
+                    bool discard);
 
     void PlaySimulation(GameState &currstate, Node *const node,
                         const int depth, SearchResult &search_result);
@@ -214,9 +228,16 @@ private:
     // The root node of tree.
     std::unique_ptr<Node> root_node_; 
 
+    // The root networl eval.
+    NodeEvals root_evals_;
+
     // The tree search parameters.
     std::unique_ptr<Parameters> param_;
 
     // The tree search threads.
     std::unique_ptr<ThreadGroup<void>> group_;
+
+    std::vector<double> last_root_dist_;
+
+    std::vector<float> root_raw_probabilities_;
 };
