@@ -914,7 +914,7 @@ class Network(nn.Module):
             raise Exception("The weights are not same size")
 
         def accum_weights(val, w, n):
-            return val * (n / (n + 1.)) + w * (1. / (n + 1.))
+            return val.detach() * (n / (n + 1.)) + w.detach() * (1. / (n + 1.))
 
         for i in range(a_size):
             this_layer = self.layers_collector[i]
