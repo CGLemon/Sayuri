@@ -35,6 +35,7 @@ private:
     void ParseQueries();
     void SetNormalGame(int g);
     void SetHandicapGame(int g, int handicaps);
+    void SetRandomOpeningGame(int g);
 
     void SetUnfairKomi(int g);
     void SetFairKomi(int g);
@@ -46,8 +47,11 @@ private:
     float komi_big_stddev_;
     float komi_big_stddev_prob_;
     float handicap_fair_komi_prob_;
+    float random_opening_prob_;
+    float random_moves_factor_;
     int default_playouts_;
     int parallel_games_;
+
 
     std::vector<BoardQuery> board_queries_;
     std::vector<HandicapQuery> handicap_queries_;

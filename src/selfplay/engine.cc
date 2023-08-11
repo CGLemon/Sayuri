@@ -8,7 +8,7 @@
 
 #include <sstream>
 #include <algorithm>
-#include <iostream>
+#include <cmath>
 
 void Engine::Initialize() {
     default_playouts_ = 400;
@@ -16,7 +16,8 @@ void Engine::Initialize() {
     komi_big_stddev_ = GetOption<float>("komi_big_stddev");
     komi_big_stddev_prob_ = GetOption<float>("komi_big_stddev_prob");
     handicap_fair_komi_prob_ = GetOption<float>("handicap_fair_komi_prob");
-
+    random_opening_prob_ = GetOption<float>("random_opening_prob");
+    random_moves_factor_ = GetOption<float>("random_moves_factor");
     parallel_games_ = GetOption<int>("parallel_games");
 
     if (!network_) {
@@ -182,6 +183,9 @@ void Engine::Selfplay(int g) {
 
 void Engine::SetNormalGame(int g) {
     Handel(g);
+    if (Random<>::Get().Roulette<10000>(random_opening_prob_)) {
+        SetRandomOpeningGame(g);
+    }
     SetUnfairKomi(g);
 }
 
@@ -190,16 +194,50 @@ void Engine::SetHandicapGame(int g, int handicaps) {
     auto &state = game_pool_[g];
 
     for (int i = 0; i < handicaps-1; ++i) {
-        auto result = search_pool_[g]->Computation(
-                          default_playouts_, Search::kNoNoise);
-        state.AppendMove(result.random_move, kBlack);
+        state.SetToMove(kBlack);
+        int random_move = network_->GetVertexWithPolicy(state, 0.75f, false);
+        state.AppendMove(random_move, kBlack);
     }
     state.SetHandicap(handicaps);
     SetFairKomi(g);
 
+    if (Random<>::Get().Roulette<10000>(random_opening_prob_)) {
+        SetRandomOpeningGame(g);
+    }
     if (!Random<>::Get().Roulette<10000>(handicap_fair_komi_prob_)) {
         SetUnfairKomi(g);
     }
+}
+
+void Engine::SetRandomOpeningGame(int g) {
+    Handel(g);
+    auto &state = game_pool_[g];
+
+    const int board_size = state.GetBoardSize();
+    const int random_moves_cnt =
+        random_moves_factor_ * state.GetNumIntersections();
+    auto dist = std::normal_distribution<float>(0.f, (float)board_size/4);
+    const int remainig_random_moves =
+        std::max(
+            int(dist(Random<>::Get())) + random_moves_cnt - state.GetMoveNumber(),
+            0
+        );
+
+    const float lambda = 0.69314718056f/board_size;
+    const float init_temp = 0.8f;
+    int times = 0;
+    for (int i = 0; i < remainig_random_moves; ++i) {
+        if (state.GetPasses() >= 2) {
+            break;
+        }
+        float curr_temp = std::max(
+            init_temp * std::exp(-(lambda * times)), 0.2f);
+
+        int random_move = network_->GetVertexWithPolicy(state, curr_temp, false);
+        state.PlayMove(random_move);
+        times += 1;
+    }
+    SetFairKomi(g);
 }
 
 void Engine::SetUnfairKomi(int g) {

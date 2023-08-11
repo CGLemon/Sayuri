@@ -602,7 +602,7 @@ Node *Node::UctSelectChild(const int color, const bool is_root, const GameState 
     return best_node->Get();
 }
 
-int Node::RandomFirstProportionally(float temp, int min_visits) {
+int Node::RandomMoveProportionally(float temp, int min_visits) {
     auto select_vertex = kNullVertex;
     auto accum = float{0.0f};
     auto accum_vector = std::vector<std::pair<float, int>>{};
@@ -619,7 +619,7 @@ int Node::RandomFirstProportionally(float temp, int min_visits) {
 
     if (accum_vector.empty()) {
         if (min_visits > 0) {
-            return RandomFirstProportionally(temp, 0);
+            return RandomMoveProportionally(temp, 0);
         } else {
             // There is no visits. Reture the best policy move.
             return GetBestMove(true);
@@ -673,35 +673,34 @@ int Node::RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits) {
     }
     MixLogitsCompletedQ(state, prob);
 
-    constexpr int kIntProbFactor = 100000;
-    auto int_prob_acc_table = std::vector<int>(num_intersections+1, 0);
-    int int_prob_acc = 0;
+    auto select_vertex = kNullVertex;
+    auto accum = float{0.0f};
+    auto accum_vector = std::vector<std::pair<float, int>>{};
 
     for (int idx = 0; idx < num_intersections+1; ++idx) {
         // Prune the unvisited moves.
-        if (vertices_table[idx] != kNullVertex) {
-            int_prob_acc += int(kIntProbFactor * prob[idx]);
-            int_prob_acc_table[idx] = int_prob_acc;
+        int vtx = vertices_table[idx];
+        if (vtx != kNullVertex) {
+            accum += std::pow((float)prob[idx], (1.0 / temp));
+            accum_vector.emplace_back(std::pair<float, int>(accum, vtx));
         }
     }
 
-    if (int_prob_acc == 0) {
-        // All possible moves are pruned or the probabilities of
-        // valid moves are too small. Use the traditional random move.
-        return RandomFirstProportionally(temp, min_visits);
+    if (accum_vector.empty()) {
+        return RandomMoveProportionally(temp, min_visits);
     }
 
-    int select_vertex = kNullVertex;
-    int pick = Random<>::Get().RandFix<kIntProbFactor>();
+    auto distribution = std::uniform_real_distribution<float>{0.0, accum};
+    auto pick = distribution(Random<>::Get());
+    auto size = accum_vector.size();
 
-    for (int idx = 0; idx < num_intersections+1; ++idx) {
-        if (pick < int_prob_acc_table[idx]) {
-            select_vertex = vertices_table[idx];
-            if (select_vertex != kNullVertex) {
-                break;
-            }
+    for (auto idx = size_t{0}; idx < size; ++idx) {
+        if (pick < accum_vector[idx].first) {
+            select_vertex = accum_vector[idx].second;
+            break;
         }
     }
+
     return select_vertex;
 }
 

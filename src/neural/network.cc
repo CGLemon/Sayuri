@@ -112,20 +112,20 @@ Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
     Network::Result result{};
 
     auto rng = Random<>::Get();
-    auto dis = std::uniform_real_distribution<float>(0, 1);
+    auto dist = std::uniform_real_distribution<float>(0, 1);
 
     const auto boardsize = inputs.board_size;
     const auto num_intersections = boardsize * boardsize;
 
     result.board_size = boardsize;
     for (int idx = 0; idx < 3; ++idx) {
-        result.wdl[idx] = dis(rng);
+        result.wdl[idx] = dist(rng);
     }
 
     for (int idx = 0; idx < num_intersections; ++idx) {
-        result.probabilities[idx] = dis(rng);
+        result.probabilities[idx] = dist(rng);
     }
-    result.pass_probability = dis(rng);
+    result.pass_probability = dist(rng);
 
     return result;
 }
@@ -332,35 +332,43 @@ void Network::ActivatePolicy(Result &result, const float temperature) const {
     result.pass_probability = probabilities_buffer[num_intersections];
 }
 
-int Network::GetBestPolicyVertex(const GameState &state,
+int Network::GetVertexWithPolicy(const GameState &state,
+                                 const float temperature,
                                  const bool allow_pass) {
-    const auto result = GetOutput(state, kRandom);
+    const auto result = GetOutput(state, kRandom, temperature);
     const auto boardsize = result.board_size;
     const auto num_intersections = boardsize * boardsize;
 
-    int max_idx = -1;
-    int max_vtx = kPass;
+    auto select_vtx = kNullVertex;
+    auto accum = float{0.0f};
+    auto accum_vector = std::vector<std::pair<float, int>>{};
 
     for (int idx = 0; idx < num_intersections; ++idx) {
-        if (max_idx == -1 ||
-                result.probabilities[max_idx] < result.probabilities[idx]) {
-            const auto x = idx % boardsize;
-            const auto y = idx / boardsize;
-            const auto vtx = state.GetVertex(x,y);
-
-            if (state.IsLegalMove(vtx)) {
-                max_idx = idx;
-                max_vtx = vtx;
-            }
+        const auto vtx = state.IndexToVertex(idx);
+        if (state.IsLegalMove(vtx)) {
+            accum += result.probabilities[idx];
+            accum_vector.emplace_back(std::pair<float, int>(accum, vtx));
         }
     }
 
-    if (allow_pass &&
-            result.probabilities[max_idx] < result.pass_probability) {
-        return kPass;
+    if (accum_vector.empty() || allow_pass) {
+        accum += result.pass_probability;
+        accum_vector.emplace_back(std::pair<float, int>(accum, kPass));
     }
 
-    return max_vtx;
+    auto distribution = std::uniform_real_distribution<float>{0.0, accum};
+    auto pick = distribution(Random<>::Get());
+    auto size = accum_vector.size();
+
+    for (auto idx = size_t{0}; idx < size; ++idx) {
+        if (pick < accum_vector[idx].first) {
+            select_vtx = accum_vector[idx].second;
+            break;
+        }
+    }
+
+    return select_vtx;
+
 }
 
 bool Network::Valid() const {

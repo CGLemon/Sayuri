@@ -150,8 +150,8 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             if (network_valid) {
                 for (int i = 0; i < handicaps; ++i) {
                     const int vtx =
-                        agent_->GetNetwork().GetBestPolicyVertex(
-                            agent_->GetState(), false);
+                        agent_->GetNetwork().GetVertexWithPolicy(
+                            agent_->GetState(), 1.f, false);
                     stones_list.emplace_back(vtx);
                     // agent_->GetState().ClearBoard();
                     agent_->GetState().PlayHandicapStones(stones_list, true);

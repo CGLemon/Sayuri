@@ -828,8 +828,7 @@ int Search::GetSelfPlayMove() {
     // playouts. May use the lower playouts instead it.
     int playouts = max_playouts_;
 
-    if (!is_opening_random &&
-            param_->reduce_playouts > 0 &&
+    if (param_->reduce_playouts > 0 &&
             param_->reduce_playouts < max_playouts_ &&
             Random<>::Get().Roulette<10000>(param_->reduce_playouts_prob)) {
 

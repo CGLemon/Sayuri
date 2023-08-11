@@ -114,7 +114,7 @@ public:
     Node *UctSelectChild(const int color, const bool is_root, const GameState &state);
 
     // Randomly select one child by visits. 
-    int RandomFirstProportionally(float temp, int min_visits);
+    int RandomMoveProportionally(float temp, int min_visits);
 
     // Randomly select one child by visits and Q value.
     int RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits);

@@ -26,7 +26,8 @@ public:
     void Destroy();
     bool Valid() const;
 
-    int GetBestPolicyVertex(const GameState &state, 
+    int GetVertexWithPolicy(const GameState &state,
+                            const float temperature,
                             const bool allow_pass);
 
     Result GetOutput(const GameState &state,
