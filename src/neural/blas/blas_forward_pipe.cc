@@ -348,7 +348,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     result.pass_probability = output_pass[0];
 
     auto pol_it = std::begin(output_prob);
-    if (use_optimistic_policy_) {
+    if (!use_optimistic_policy_) {
         std::copy(
             pol_it,
             pol_it + num_intersections,
