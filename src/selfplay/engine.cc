@@ -11,7 +11,7 @@
 #include <cmath>
 
 void Engine::Initialize() {
-    default_playouts_ = 400;
+    default_playouts_ = GetOption<int>("playouts");
     komi_stddev_ = GetOption<float>("komi_stddev");
     komi_big_stddev_ = GetOption<float>("komi_big_stddev");
     komi_big_stddev_prob_ = GetOption<float>("komi_big_stddev_prob");
