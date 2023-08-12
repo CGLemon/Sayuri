@@ -3,7 +3,6 @@
 #include "mcts/time_control.h"
 #include "mcts/parameters.h"
 #include "mcts/node.h"
-#include "mcts/rollout.h"
 #include "game/game_state.h"
 #include "neural/training.h"
 #include "utils/threadpool.h"
@@ -23,17 +22,6 @@ public:
 
     void FromNetEvals(NodeEvals nn_evals) { 
         nn_evals_ = std::make_unique<NodeEvals>(nn_evals);
-    }
-
-    void FromRollout(GameState &state) {
-        if (nn_evals_ == nullptr) {
-            nn_evals_ = std::make_unique<NodeEvals>();
-        }
-        nn_evals_->black_wl = GetBlackRolloutResult(
-                                  state,
-                                  nn_evals_->black_ownership.data(),
-                                  nn_evals_->black_final_score);
-        nn_evals_->draw = 0.f;
     }
 
     void FromGameOver(GameState &state) {
@@ -196,8 +184,6 @@ private:
 
     void PrepareRootNode();
     int GetPonderPlayouts() const;
-
-    int GetExpandThreshold(GameState &state) const;
 
     AnalysisConfig analysis_config_;
 

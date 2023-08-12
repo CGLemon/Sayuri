@@ -66,25 +66,17 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
             // Prune this superko move.
             node->Invalidate();
         } else {
-            const auto visits = node->GetVisits();
-            if (param_->no_dcnn &&
-                    visits < GetExpandThreshold(currstate)) {
-                // Do the rollout only if the visits is below threshold
-                // in the no dcnn mode.
-                search_result.FromRollout(currstate);
-            } else {
-                const bool has_children = node->HasChildren();
+            const bool has_children = node->HasChildren();
 
-                // If we can not expand the node, it means that another thread
-                // is under this node. Skip the simulation stage this time. However,
-                // it still has a chance do PUCT/UCT.
-                auto node_evals = NodeEvals{};
-                const bool success = node->ExpandChildren(
-                    network_, currstate, node_evals, analysis_config_, false);
+            // If we can not expand the node, it means that another thread
+            // is under this node. Skip the simulation stage this time. However,
+            // it still has a chance do PUCT/UCT.
+            auto node_evals = NodeEvals{};
+            const bool success = node->ExpandChildren(
+                network_, currstate, node_evals, analysis_config_, false);
 
-                if (!has_children && success) {
-                    search_result.FromNetEvals(node_evals);
-                }
+            if (!has_children && success) {
+                search_result.FromNetEvals(node_evals);
             }
         }
     }
@@ -94,12 +86,9 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
         auto color = currstate.GetToMove();
         Node *next = nullptr;
 
-        // Go to the next node by PUCT/UCT algoritim.
-        if (param_->no_dcnn) {
-            next = node->UctSelectChild(color, depth == 0, currstate);
-        } else {
-            next = node->PuctSelectChild(color, depth == 0);
-        }
+        // Go to the next node by PUCT algoritim.
+        next = node->PuctSelectChild(color, depth == 0);
+
         auto vtx = next->GetVertex();
         currstate.PlayMove(vtx, color);
 
@@ -309,9 +298,6 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     PrepareRootNode();
 
     if (param_->analysis_verbose) {
-        if (param_->no_dcnn) {
-            LOGGING << "Disable DCNN forwarding pipe\n";
-        }
         LOGGING << Format("Reuse %d nodes\n", root_node_->GetVisits()-1);
         LOGGING << Format("Use %d threads for search\n", param_->threads);
         LOGGING << Format("Max thinking time: %.2f(sec)\n", thinking_time);
@@ -1176,12 +1162,9 @@ bool Search::AdvanceToNewRootState() {
     }
 
     if (param_->gumbel ||
-            param_->dirichlet_noise ||
-            param_->root_dcnn) {
+            param_->dirichlet_noise) {
         // Need to re-build the trees if we apply noise or Gumbel. Reuse
-        // the tree will ignore them. The root_dcnn option only apply
-        // the network at root. The tree shape of root is different
-        // from children.
+        // the tree will ignore them.
         return false;
     }
 
@@ -1293,19 +1276,6 @@ int Search::GetPonderPlayouts() const {
     const int ponder_playouts =  ponder_playouts_base * div_factor;
 
     return ponder_playouts;
-}
-
-int Search::GetExpandThreshold(GameState &state) const {
-    const auto board_size = state.GetBoardSize();
-
-    if (param_->expand_threshold >= 0) {
-        return param_->expand_threshold;
-    }
-
-    // We tend to select the large 'Expand Threshold' in order
-    // to converge the average winrate. The other engine may
-    // select the little value becuase they apply RAVE method.
-    return std::max(20 + 2 * (board_size-9), 20);
 }
 
 std::string Search::GetDebugMoves(std::vector<int> moves) {

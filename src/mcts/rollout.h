@@ -1,5 +1,9 @@
 #pragma once
 
+/*
+ * This code is discard.
+ */
+
 #include <vector>
 #include <cstdint>
 #include "game/game_state.h"

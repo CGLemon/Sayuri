@@ -1,6 +1,5 @@
 #include "mcts/node.h"
 #include "mcts/lcb.h"
-#include "mcts/rollout.h"
 #include "utils/atomic.h"
 #include "utils/random.h"
 #include "utils/format.h"
@@ -79,24 +78,19 @@ bool Node::ExpandChildren(Network &network,
         return false;
     }
 
-    auto raw_netlist = Network::Result{};
     color_ = state.GetToMove();
 
-    // Get network or MM computation result.
-    if (param_->no_dcnn &&
-            !(param_->root_dcnn && is_root)) {
-        ApplyNoDcnnPolicy(state, color_, raw_netlist);
-    } else {
-        // Policy softmax temperature. If 't' is greater than 1,
-        // policy is broader. If 't' is greater less 1, policy is
-        // sharper.
-        const float temp = is_root ?
-                        param_->root_policy_temp : param_->policy_temp;
-        raw_netlist = network.GetOutput(state, Network::kRandom, temp);
-    }
+    // Get network computation result.
+
+    // Policy softmax temperature. If 't' is greater than 1,
+    // policy is broader. If 't' is less than 1, policy is
+    // sharper.
+    const float temp = is_root ?
+                    param_->root_policy_temp : param_->policy_temp;
+    auto raw_netlist = network.GetOutput(state, Network::kRandom, temp);
 
     // Store the network reuslt.
-    ApplyNetOutput(state, raw_netlist, node_evals, color_);
+    ApplyNetOutput(raw_netlist, node_evals, color_);
 
     // For children...
     auto nodelist = std::vector<Network::PolicyVertexPair>{};
@@ -203,8 +197,7 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
     assert(!children_.empty());
 }
 
-void Node::ApplyNetOutput(GameState &state,
-                          const Network::Result &raw_netlist,
+void Node::ApplyNetOutput(const Network::Result &raw_netlist,
                           NodeEvals& node_evals, const int color) {
     auto black_ownership = std::array<float, kNumIntersections>{};
     auto draw =raw_netlist.wdl[1];
@@ -237,21 +230,7 @@ void Node::ApplyNetOutput(GameState &state,
         avg_black_ownership_[idx] = 0.f;
     }
 
-    // Do rollout if we disable the DCNN or the DCNN does not
-    // support the ownership.
-    if (param_->use_rollout || param_->no_dcnn) {
-        float mc_black_rollout_score;
-        float mc_black_rollout_result = GetBlackRolloutResult(
-                                            state,
-                                            black_ownership.data(),
-                                            mc_black_rollout_score);
-        if (param_->no_dcnn) {
-            black_wl_ = mc_black_rollout_result;
-            black_fs_ = mc_black_rollout_score;
-        }
-    }
-
-    // Store the network or rollout evals.
+    // Store the network evals.
     node_evals.black_wl = black_wl_;
     node_evals.draw = draw;
     node_evals.black_final_score = black_fs_;
@@ -259,28 +238,6 @@ void Node::ApplyNetOutput(GameState &state,
     for (int idx = 0; idx < kNumIntersections; ++idx) {
         node_evals.black_ownership[idx] = black_ownership[idx];
     }
-}
-
-void Node::ApplyNoDcnnPolicy(GameState &state, const int color,
-                             Network::Result &raw_netlist) const {
-    const auto num_intersections = state.GetNumIntersections();
-    auto policy = state.GetGammasPolicy(color);
-
-    for (int idx = 0; idx < num_intersections; ++idx) {
-        raw_netlist.probabilities[idx] = policy[idx];
-        raw_netlist.ownership[idx] = 0.f; // set zero...
-    }
-
-    raw_netlist.board_size = state.GetBoardSize();
-    raw_netlist.komi = state.GetKomi();
-
-    // Give the pass move a little value in order to avoid the
-    // bug if there is no legal moves.
-    raw_netlist.pass_probability = 0.1f/num_intersections;
-    raw_netlist.final_score = 0.f; // set zeros...
-    raw_netlist.wdl = {0.5f, 0, 0.5f}; // set draw value...
-    raw_netlist.wdl_winrate = 0.5f; // set draw value...
-    raw_netlist.stm_winrate = 0.5f; // set draw value...
 }
 
 bool Node::SetTerminal() {
@@ -504,97 +461,6 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
         if (value > best_value) {
             best_value = value;
             best_node = &child;
-        }
-    }
-
-    Inflate(*best_node);
-    return best_node->Get();
-}
-
-Node *Node::UctSelectChild(const int color, const bool is_root, const GameState &state) {
-    WaitExpanded();
-    assert(HasChildren());
-    // assert(color == color_);
-
-    (void) is_root;
-
-    int parentvisits = 0;
-    const float cpuct = param_->cpuct_init;
-
-    std::vector<Edge*> edge_buf;
-
-    for (auto &child : children_) {
-        const auto node = child.Get();
-        const bool is_pointer = node != nullptr;
-        if (is_pointer && node->IsValid()) {
-            // The node status is pruned or active.
-            parentvisits += node->GetVisits();
-        }
-        edge_buf.emplace_back(&child);
-    }
-    const float numerator = std::log(
-        (float)std::max(parentvisits , 1));
-
-    Edge* best_node = nullptr;
-    float best_value = std::numeric_limits<float>::lowest();
-
-    int width = std::max(ComputeWidth(parentvisits), 1);
-    int i = 0;
-
-    const float parent_score = GetFinalScore(color);
-
-    //TODO: Sort the 'edge_buf' according to dynamic priority value.
-
-    for (auto edge_ptr : edge_buf) {
-        auto &child = *edge_ptr;
-
-        if (state.board_.IsCaptureMove(edge_ptr->GetVertex(), color)) {
-            width += 1;
-        }
-
-        if (++i > width) {
-            break;
-        }
-
-        const auto node = child.Get();
-        const bool is_pointer = node != nullptr;
-
-        // The node is pruned or invalid. Skip it.
-        if (is_pointer && !node->IsActive()) {
-            width += 1;
-            continue;
-        }
-
-        float q_value = 5.0f; // FPU value
-        float score_diff = 0.f;
-        int visits = 0;
-
-        if (is_pointer) {
-            visits = node->GetVisits();
-
-            if (node->IsExpanding()) {
-                q_value = -1.0f; // Give it a bad value.
-            } else if (visits > 0) {
-                q_value = node->GetWL(color);
-            }
-            if (visits >= 1) {
-                score_diff = node->GetFinalScore(color) - parent_score;
-            }
-        }
-
-        // UCT algorithm
-        const float denom = 1.0f + visits;
-        const float psa = child.GetPolicy();
-        const float prior = 1.0f * std::sqrt(1000.f / ((float)parentvisits + 1000.f)) * psa;
-        const float bonus = 0.01f * std::sqrt(
-                                1.f - 1000.f / ((float)parentvisits + 1000.f)) * score_diff;
-        const float uct = cpuct * std::sqrt(numerator / denom);
-        float value = q_value + uct + prior + bonus;
-        assert(value > std::numeric_limits<float>::lowest());
-
-        if (value > best_value) {
-            best_value = value;
-            best_node = edge_ptr;
         }
     }
 

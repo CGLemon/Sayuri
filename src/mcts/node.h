@@ -110,9 +110,6 @@ public:
     // Select the best PUCT value node.
     Node *PuctSelectChild(const int color, const bool is_root);
 
-    // Select the best UCT value node. For no-dcnn mode.
-    Node *UctSelectChild(const int color, const bool is_root, const GameState &state);
-
     // Randomly select one child by visits. 
     int RandomMoveProportionally(float temp, int min_visits);
 
@@ -209,12 +206,8 @@ public:
 
 private:
     float GetDynamicCpuctFactor(Node *node, const int visits);
-    void ApplyNoDcnnPolicy(GameState &state,
-                           const int color,
-                           Network::Result &raw_netlist) const;
     void ApplyDirichletNoise(const float alpha);
-    void ApplyNetOutput(GameState &state,
-                        const Network::Result &raw_netlist,
+    void ApplyNetOutput(const Network::Result &raw_netlist,
                         NodeEvals& node_evals, const int color);
     void SetPolicy(float p);
     void SetVisits(int v);

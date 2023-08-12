@@ -24,13 +24,9 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["friendly_pass"] << Option::SetOption(false);
     kOptionsMap["analysis_verbose"] << Option::SetOption(false);
     kOptionsMap["quiet"] << Option::SetOption(false);
-    kOptionsMap["rollout"] << Option::SetOption(false);
-    kOptionsMap["no_dcnn"] << Option::SetOption(false);
-    kOptionsMap["root_dcnn"] << Option::SetOption(false);
     kOptionsMap["winograd"] << Option::SetOption(true);
     kOptionsMap["fp16"] << Option::SetOption(true);
 
-    kOptionsMap["search_mode"] << Option::SetOption(std::string{});
     kOptionsMap["fixed_nn_boardsize"] << Option::SetOption(0);
     kOptionsMap["defualt_boardsize"] << Option::SetOption(kDefaultBoardSize);
     kOptionsMap["defualt_komi"] << Option::SetOption(kDefaultKomi);
@@ -196,28 +192,6 @@ void ArgsParser::InitBasicParameters() const {
             SetOption("lag_buffer", 2 * lag_buffer_base);
         }
     }
-
-    // Parse the search mode.
-    auto search_mode = GetOption<std::string>("search_mode");
- 
-    for (char &c : search_mode) {
-        if (c == '+') c = ' ';
-    }
-
-    auto ss = std::istringstream(search_mode);
-    auto get_mode = std::string{};
-    while (ss >> get_mode) {
-        if (get_mode == "dcnn") {
-            SetOption("no_dcnn", false);
-        } else if (get_mode == "nodcnn" ||
-                       get_mode == "nonet") {
-            SetOption("no_dcnn", true);
-        } else if (get_mode == "rollout") {
-            SetOption("rollout", true);
-        } else if (get_mode == "rootdcnn") {
-            SetOption("root_dcnn", true);
-        }
-    }
 }
 
 bool IsParameter(const std::string &param) {
@@ -366,13 +340,6 @@ void ArgsParser::Parse(Splitter &spt) {
         spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = spt.FindNext("--search-mode")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("search_mode", res->Get<>());
-            spt.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
-    }
-
     if (const auto res = spt.Find("--first-pass-bonus")) {
         SetOption("first_pass_bonus", true);
         spt.RemoveWord(res->Index());
@@ -385,11 +352,6 @@ void ArgsParser::Parse(Splitter &spt) {
 
     if (const auto res = spt.Find("--use-optimistic-policy")) {
         SetOption("use_optimistic_policy", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--no-dcnn")) {
-        SetOption("no_dcnn", true);
         spt.RemoveWord(res->Index());
     }
 
@@ -861,9 +823,6 @@ void ArgsParser::DumpHelper() const {
 
                 << "\t--friendly-pass\n"
                 << "\t\tDo pass move if the engine wins the game.\n\n"
-
-                << "\t--no-dcnn\n"
-                << "\t\tDisable the Neural Network forwarding pipe. Very weak.\n\n"
 
                 << "\t--cache-memory-mib <integer>\n"
                 << "\t\tSet the NN cache size in MiB.\n\n"

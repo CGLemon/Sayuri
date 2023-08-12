@@ -108,7 +108,6 @@ Here are some useful arguments which you may need.
 |  --ponder               | None   | Thinking on opponent's time.                   |
 |  --friendly-pass        | None   | Play pass move if the engine won the game.     |
 |  --reuse-tree           | None   | Will reuse the sub-tree.                       |
-|  --no-dcnn              | None   | Disable network, very weak.                    |
 |  --help, -h             | None   | Show the more arguments.                       |
     
 <br/>
@@ -193,6 +192,8 @@ Although the Neural Network based engines are more powerful, I still recommend t
 * [Ray](https://github.com/kobanium/Ray), may be strongest open source engine before the 2016s.
 
 I had implemented this ancient technique. Merge the MM patterns based and the DCNN based technique to provide widely dynamic strength.
+
+* This part had been removed since August, 2023. The engine does not support no-DCNN mode.
 
 ### The Gumbel learning
 
