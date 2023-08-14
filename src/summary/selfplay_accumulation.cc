@@ -35,20 +35,17 @@ SelfplayReport ComputeSelfplayAccumulation(std::string sgf_name) {
                         c = ' ';
                     }
                 }
+
                 int playouts;
-                float winrate;
-                float score;
-                float kld;
-                std::string discard;
-
                 std::istringstream iss{line};
-                iss >> playouts;
-                iss >> winrate;
-                iss >> score;
-                iss >> kld;
-                iss >> discard;
 
-                report.accm_playouts += playouts;
+                if (iss >> playouts) {
+                    // Search move.
+                    report.accm_playouts += playouts;
+                } else {
+                    // Fast policy opening move.
+                    report.accm_playouts += 1;
+                }
             }
         }
     }
