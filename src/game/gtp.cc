@@ -674,7 +674,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             auto report = ComputeSelfplayAccumulation(sgf_file);
             auto report_out = std::ostringstream{};
             report_out << Format(
-                "accumulation playouts is %d, number games is %d",
+                "accumulation playouts is %zu, number games is %d",
                  report.accm_playouts, report.num_games);
             out << GtpSuccess(report_out.str());
         }

@@ -3,11 +3,18 @@
 #include "game/iterator.h"
 #include "utils/format.h"
 #include "utils/log.h"
+#include "utils/random.h"
+
+#include <random>
 
 AccuracyReport ComputeNetAccuracy(Network &network,
                                   std::string sgf_name) {
     AccuracyReport report;
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
+
+    std::shuffle(std::begin(sgfs),
+                     std::end(sgfs),
+                     Random<>::Get());
 
     for (const auto &sgfstring: sgfs) {
         GameState state;

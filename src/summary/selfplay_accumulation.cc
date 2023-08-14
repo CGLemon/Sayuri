@@ -3,12 +3,18 @@
 #include "game/sgf.h"
 #include "utils/format.h"
 #include "utils/log.h"
+#include "utils/random.h"
 
+#include <random>
 #include <sstream>
 
 SelfplayReport ComputeSelfplayAccumulation(std::string sgf_name) {
     SelfplayReport report;
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
+
+    std::shuffle(std::begin(sgfs),
+                     std::end(sgfs),
+                     Random<>::Get());
 
     for (const auto &sgfstring: sgfs) {
         GameState state;
@@ -22,7 +28,6 @@ SelfplayReport ComputeSelfplayAccumulation(std::string sgf_name) {
 
         const auto move_num = state.GetMoveNumber();
         report.num_games++;
-        report.accm_moves += move_num;
 
         for (int i = 0; i <= move_num; ++i) {
             auto line = state.GetComment(i);
@@ -47,6 +52,15 @@ SelfplayReport ComputeSelfplayAccumulation(std::string sgf_name) {
                     report.accm_playouts += 1;
                 }
             }
+        }
+
+        if (report.num_games % 1000 == 0) {
+            LOGGING << Format(
+                "games %d -> accum %zu, avg %.2f(p/game)",
+                report.num_games,
+                report.accm_playouts,
+                report.GetAccumulationPlayoutsPerGame())
+                    << std::endl;
         }
     }
     return report;
