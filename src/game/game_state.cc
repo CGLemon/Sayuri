@@ -914,8 +914,10 @@ void GameState::SetComment(std::string c) {
     last_comment_ = c;
 }
 
-void GameState::AppendComment(std::string c) {
-    last_comment_ += c;
+void GameState::RewriteComment(std::string c, size_t i) {
+    if (i < comments_.size()) {
+        comments_[i] = c;
+    }
 }
 
 std::string GameState::GetComment(size_t i) const {

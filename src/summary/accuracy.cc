@@ -1,13 +1,13 @@
-#include "accuracy/predict.h"
+#include "summary/accuracy.h"
 #include "game/sgf.h"
 #include "game/iterator.h"
 #include "utils/format.h"
 #include "utils/log.h"
 
-float PredictSgfAccuracy(Search &search, GameState &main_state, std::string sgf_name) {
+AccuracyReport ComputeNetAccuracy(Network &network,
+                                  std::string sgf_name) {
+    AccuracyReport report;
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
-    int num_positions = 0;
-    int num_correct = 0;
 
     for (const auto &sgfstring: sgfs) {
         GameState state;
@@ -18,7 +18,6 @@ float PredictSgfAccuracy(Search &search, GameState &main_state, std::string sgf_
                         << Format("\tCause: %s.", err) << std::endl;
             continue;
         }
-
         auto game_ite = GameStateIterator(state);
 
         if (game_ite.MaxMoveNumber() == 0) {
@@ -26,23 +25,20 @@ float PredictSgfAccuracy(Search &search, GameState &main_state, std::string sgf_
         }
 
         do {
-            num_positions++;
-
-            main_state = game_ite.GetState();
+            report.num_positions++;
+            auto main_state = game_ite.GetState();
 
             const auto vertex = game_ite.GetVertex();
-            const auto move = search.ThinkBestMove();
-
+            const auto move = network.GetVertexWithPolicy(
+                                  main_state, 0.001f, true);
             if (vertex == move) {
-                num_correct++;
+                report.num_matched++;
             }
-            if (num_positions % 1000 == 0) {
-                auto current_acc = (double)num_correct/num_positions;
-                LOGGING << Format("Current accuracy is %.2f%\n", current_acc * 100, num_positions);
+            if (report.num_positions % 1000 == 0) {
+                LOGGING << Format("Current accuracy is %.2f%\n",
+                    report.GetAccuracy() * 100, report.num_positions);
             }
-
         } while (game_ite.Next());
     }
-
-    return (double)num_correct/num_positions;
+    return report;
 }

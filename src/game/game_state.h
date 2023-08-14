@@ -123,7 +123,7 @@ public:
     std::uint64_t GetMoveHash(const int vtx, const int color) const;
 
     void SetComment(std::string c);
-    void AppendComment(std::string c);
+    void RewriteComment(std::string c, size_t i);
     std::string GetComment(size_t i) const;
 
     float GetWave() const;

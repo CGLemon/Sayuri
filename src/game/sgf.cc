@@ -194,6 +194,11 @@ void SgfNode::PopulateState(GameState currstate) {
         GetState().PlayMove(vtx, kWhite);
     }
 
+    if (const auto res = GetPropertyValue("C")) {
+        GetState().RewriteComment(
+            *res, GetState().GetMoveNumber());
+    }
+
     for (auto& child : children_) {
         child->PopulateState(GetState());
     }
@@ -212,7 +217,7 @@ SgfNode* SgfNode::GetChild(unsigned int index) {
 GameState SgfNode::GetMainLineState(unsigned int movenum) {
     auto link = this;
 
-    // This initializes a starting state from a KoState and
+    // This initializes a starting state from a GameState and
     // sets up the game history.
     GameState main_state = GetState();
 
@@ -221,6 +226,7 @@ GameState SgfNode::GetMainLineState(unsigned int movenum) {
         if (i != 0) {
             auto vtx = kNullVertex;
             auto color = kInvalid;
+            std::string comment;
             if (const auto res = link->GetPropertyValue("B")) {
                 vtx = GetVertexFromString(*res);
                 color = kBlack;
@@ -228,11 +234,16 @@ GameState SgfNode::GetMainLineState(unsigned int movenum) {
                 vtx = GetVertexFromString(*res);
                 color = kWhite;
             }
+            if (const auto res = link->GetPropertyValue("C")) {
+                comment = *res;
+            }
 
             if (vtx != kNullVertex && color != kInvalid) {
                 if (!main_state.PlayMove(vtx, color)) {
                     throw "Illegal SGF move";
                 }
+                main_state.RewriteComment(
+                    comment, main_state.GetMoveNumber());
             } else {
                 return main_state;
             }
