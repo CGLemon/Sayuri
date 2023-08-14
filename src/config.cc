@@ -75,6 +75,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["symm_pruning"] << Option::SetOption(false);
     kOptionsMap["use_stm_winrate"] << Option::SetOption(false);
     kOptionsMap["use_optimistic_policy"] << Option::SetOption(false);
+    kOptionsMap["use_rollout"] << Option::SetOption(false);
 
     // self-play options
     kOptionsMap["selfplay_query"] << Option::SetOption(std::string{});
@@ -352,6 +353,11 @@ void ArgsParser::Parse(Splitter &spt) {
 
     if (const auto res = spt.Find("--use-optimistic-policy")) {
         SetOption("use_optimistic_policy", true);
+        spt.RemoveWord(res->Index());
+    }
+
+    if (const auto res = spt.Find("--use-rollout")) {
+        SetOption("use_rollout", true);
         spt.RemoveWord(res->Index());
     }
 

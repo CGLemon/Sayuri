@@ -193,7 +193,7 @@ Although the Neural Network based engines are more powerful, I still recommend t
 
 I had implemented this ancient technique. Merge the MM patterns based and the DCNN based technique to provide widely dynamic strength.
 
-* This part had been removed since August, 2023. The engine does not support no-DCNN mode.
+* This part had been removed since August, 2023. The engine does not support no-DCNN mode now. Only remain some relevant functions.
 
 ### The Gumbel learning
 

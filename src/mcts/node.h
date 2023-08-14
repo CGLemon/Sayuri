@@ -207,7 +207,8 @@ public:
 private:
     float GetDynamicCpuctFactor(Node *node, const int visits);
     void ApplyDirichletNoise(const float alpha);
-    void ApplyNetOutput(const Network::Result &raw_netlist,
+    void ApplyNetOutput(GameState& state,
+                        const Network::Result &raw_netlist,
                         NodeEvals& node_evals, const int color);
     void SetPolicy(float p);
     void SetVisits(int v);

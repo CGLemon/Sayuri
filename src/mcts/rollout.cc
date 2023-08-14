@@ -1,8 +1,3 @@
-/*
- * This code is discard.
- */
-
-
 #include "mcts/rollout.h"
 #include "game/types.h"
 

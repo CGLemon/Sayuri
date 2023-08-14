@@ -1,5 +1,6 @@
 #include "mcts/node.h"
 #include "mcts/lcb.h"
+#include "mcts/rollout.h"
 #include "utils/atomic.h"
 #include "utils/random.h"
 #include "utils/format.h"
@@ -90,7 +91,7 @@ bool Node::ExpandChildren(Network &network,
     auto raw_netlist = network.GetOutput(state, Network::kRandom, temp);
 
     // Store the network reuslt.
-    ApplyNetOutput(raw_netlist, node_evals, color_);
+    ApplyNetOutput(state, raw_netlist, node_evals, color_);
 
     // For children...
     auto nodelist = std::vector<Network::PolicyVertexPair>{};
@@ -197,7 +198,8 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
     assert(!children_.empty());
 }
 
-void Node::ApplyNetOutput(const Network::Result &raw_netlist,
+void Node::ApplyNetOutput(GameState& state,
+                          const Network::Result &raw_netlist,
                           NodeEvals& node_evals, const int color) {
     auto black_ownership = std::array<float, kNumIntersections>{};
     auto draw =raw_netlist.wdl[1];
@@ -228,6 +230,14 @@ void Node::ApplyNetOutput(const Network::Result &raw_netlist,
         }
         black_ownership[idx] = owner;
         avg_black_ownership_[idx] = 0.f;
+    }
+
+    if (param_->use_rollout) {
+        // Use random rollout instead of net's ownership
+        // outputs.
+        float mc_black_score;
+        GetBlackRolloutResult(
+            state, black_ownership.data(), mc_black_score);
     }
 
     // Store the network evals.
