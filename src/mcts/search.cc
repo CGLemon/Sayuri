@@ -32,6 +32,13 @@ void Search::Initialize() {
     param_ = std::make_unique<Parameters>();
     param_->Reset();
 
+    no_exploring_param_ = std::make_unique<Parameters>();
+    no_exploring_param_->Reset();
+    no_exploring_param_->gumbel = false;
+    no_exploring_param_->dirichlet_noise = false;
+    no_exploring_param_->policy_temp = 1.f;
+    no_exploring_param_->root_policy_temp = 1.f;
+
     analysis_config_.Clear();
     last_state_ = root_state_;
     root_node_.reset(nullptr);
@@ -125,10 +132,14 @@ void Search::PrepareRootNode() {
         root_node_->Update(&root_evals_);
     }
 
+    // Compute the current root visits distribution. We can compute
+    // the KLD gaining from this distribution.
     int visited_nodes;
     last_root_dist_ = GetRootDistribution(visited_nodes);
 
-    // We should get this root policy from the NN cache.
+    // We should get this root policy from the NN cache. The softmax
+    // temperature of 'root_evals_' may be not 1 so we need to
+    // compute it again.
     auto netlist = network_.GetOutput(root_state_, Network::kRandom, 1);
     auto num_intersections = root_state_.GetNumIntersections();
     root_raw_probabilities_.resize(num_intersections+1);
@@ -218,12 +229,9 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         }
     }
 
-    // Disable any noise if we forbid them.
-    const bool gumbel = param_->gumbel;
-    const bool dirichlet_noise = param_->dirichlet_noise;
-    if (tag & kNoNoise) {
-        param_->gumbel =
-            param_->dirichlet_noise = false;
+    // Disable any exploring setting.
+    if (tag & kNoExploring) {
+        std::swap(param_, no_exploring_param_);
     }
 
     // Prepare some basic information.
@@ -442,9 +450,8 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
             root_state_.PlayMove(kPass);
         }
     }
-    if (tag & kNoNoise) {
-        param_->gumbel = gumbel;
-        param_->dirichlet_noise = dirichlet_noise;
+    if (tag & kNoExploring) {
+        std::swap(param_, no_exploring_param_);
     } 
 
     return computation_result;
@@ -800,11 +807,14 @@ bool ShouldForbidPass(GameState &state,
 }
 
 int Search::GetSelfPlayMove() {
-    // The selfplay always does not reuse the tree
-    // in most case. It will help simplify the state.
-    ReleaseTree();
-
-    auto tag = kThinking;
+    // May reuse the tree when fast search phase. It is playout
+    // cap oscillation which was used in the past KataGo version.
+    // If we disable the tag, it will be visit cap oscillation which
+    // is used by current KataGo.
+    // Please see here, https://arxiv.org/abs/1902.10565v2
+    auto reuse_tag = param_->reuse_tree ?
+                         kNullTag : kUnreused;
+    auto tag = kThinking | reuse_tag;
 
     const int random_moves_cnt = param_->random_moves_factor *
                                      root_state_.GetNumIntersections();
@@ -821,7 +831,7 @@ int Search::GetSelfPlayMove() {
         // The reduce playouts must be smaller than playouts.
         playouts = std::min(
             playouts, param_->reduce_playouts);
-        tag = tag | kNoNoise;
+        tag = tag | kNoExploring;
     }
 
     if (!network_.Valid()) {
@@ -837,7 +847,7 @@ int Search::GetSelfPlayMove() {
 
     // Now start the MCTS.
     auto result = Computation(playouts, tag);
-    const bool is_gumbel = root_node_->ShouldApplyGumbel() && !(tag & kNoNoise);
+    const bool is_gumbel = root_node_->ShouldApplyGumbel() && !(tag & kNoExploring);
 
     // Default is the best move or the Gumbel-Top-k trick move. May use
     // another move instead of it later.
@@ -862,7 +872,7 @@ int Search::GetSelfPlayMove() {
     float root_eval = result.root_eval;
     float root_score = result.root_score_lead;
     bool discard_it = false;
-    if (tag & kNoNoise) {
+    if (tag & kNoExploring) {
         // This is fast search of "Playout Cap Randomization". Do
         // not record the low quality datas. 
         discard_it = true;
@@ -887,12 +897,13 @@ int Search::GetSelfPlayMove() {
     //       here, https://github.com/lightvector/KataGo/blob/master/docs/KataGoMethods.md
     const float record_kld = result.policy_kld;
     const char discard_char = discard_it ? 'F' : 'T';
+    const int root_visits = root_node_->GetVisits();
 
     // Save the move comment in the SGF file.
     root_state_.SetComment(
-        Format("%d, %.2f, %.2f, %.2f, %c",
-            result.playouts, root_eval,
-            root_score, record_kld, discard_char));
+        Format("%d, %d, %.2f, %.2f, %.2f, %c",
+            result.playouts, root_visits,
+            root_eval, root_score, record_kld, discard_char));
 
     // Push the data to buffer.
     GatherData(root_state_, result, discard_it);

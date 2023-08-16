@@ -17,7 +17,6 @@ public:
         playouts = GetOption<int>("playouts");
         ponder_factor = GetOption<int>("ponder_factor");
         const_time = GetOption<int>("const_time");
-        expand_threshold = GetOption<int>("expand_threshold");
 
         resign_threshold = GetOption<float>("resign_threshold");
         lcb_reduction = GetOption<float>("lcb_reduction");
@@ -112,7 +111,6 @@ public:
     int reduce_playouts;
     float reduce_playouts_prob;
     float lag_buffer;
-    int expand_threshold;
     float resign_discard_prob;
 
     double kldgain;

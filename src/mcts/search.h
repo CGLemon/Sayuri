@@ -105,13 +105,13 @@ public:
     static constexpr int kMaxPlayouts = std::numeric_limits<int>::max() / 2;
 
     enum OptionTag : int {
-        kNullTag  = 0,
-        kThinking = 1 << 1, // use time control
-        kPonder   = 1 << 2, // thinking on opponent's time
-        kAnalysis = 1 << 3, // use the analysis mode
-        kForced   = 1 << 4, // remove double pass move before search
-        kUnreused = 1 << 5, // don't reuse the tree
-        kNoNoise  = 1 << 6  // disable any noise
+        kNullTag     = 0,
+        kThinking    = 1 << 1, // use time control
+        kPonder      = 1 << 2, // thinking on opponent's time
+        kAnalysis    = 1 << 3, // use the analysis mode
+        kForced      = 1 << 4, // remove double pass move before search
+        kUnreused    = 1 << 5, // don't reuse the tree
+        kNoExploring = 1 << 6  // disable any exploring setting
     };
 
     // Enable OptionTag operations.
@@ -219,6 +219,7 @@ private:
 
     // The tree search parameters.
     std::unique_ptr<Parameters> param_;
+    std::unique_ptr<Parameters> no_exploring_param_;
 
     // The tree search threads.
     std::unique_ptr<ThreadGroup<void>> group_;

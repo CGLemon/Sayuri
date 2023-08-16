@@ -63,7 +63,6 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["draw_factor"] << Option::SetOption(0.f);
     kOptionsMap["score_utility_factor"] << Option::SetOption(0.1f);
     kOptionsMap["score_utility_div"] << Option::SetOption(20.f);
-    kOptionsMap["expand_threshold"] << Option::SetOption(-1);
 
     kOptionsMap["kldgain"] << Option::SetOption(std::string{"0"});
 
@@ -374,13 +373,6 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext({"--resign-threshold", "-r"})) {
         if (IsParameter(res->Get<>())) {
             SetOption("resign_threshold", res->Get<float>());
-            spt.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--expand-threshold")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("expand_threshold", res->Get<int>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

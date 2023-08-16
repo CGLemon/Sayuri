@@ -261,7 +261,7 @@ void Engine::SetFairKomi(int g) {
     auto &state = game_pool_[g];
 
     auto result = search_pool_[g]->Computation(
-                      default_playouts_, Search::kNoNoise);
+                      default_playouts_, Search::kNoExploring);
     auto komi = state.GetKomi();
     auto score_lead = result.root_score_lead;
 
