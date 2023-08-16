@@ -8,138 +8,25 @@
 
 ## Note
 
-The network will reach strong amateur level after one month on 19x19 with the RTX 2070s computer.
+Use the default setting in the bash directory. The network will reach strong amateur level in 1 ~ 2 weeks on 19x19 with the RTX 2070s computer.
 
 ## Simple Usage
 
-There three bash files. The ```setup.sh``` will do the initialization. The ```selfplay.sh``` will do the self-play loop. The ```replace.sh``` will train a new network.
+There two bash files. The ```setup.sh``` will do the initialization. Copy the training script and engine to this directory. The ```selfplay.sh``` will do the self-play and trainig loop.
 
     $ cp -r bash selfplay-course
     $ cd selfplay-course
     $ bash setup.sh -s ..
     $ bash selfplay.sh
 
-The ```selfplay.sh``` will do the inifinite loop. If you want to stop the loop, you need to create a kill file and wait for end of this round.
+The ```selfplay.sh``` will do the infinite loop. If you want to stop the loop, you need to create a kill file and wait for end of this round.
 
     $ touch kill.txt
 
-## The Training Setting
+## Sample
 
-The ```selfplay-setting.json``` controls the training process. Here are the parameters.
+The sample directory includes some enigne selfplay configs. The ```sample/full-gumbel-p16.txt``` will do full Gumbel learning with 16 playouts. The ```sample/full-alphazero-p400.txt``` will do full AlphaZero learning with 400 playouts.
 
-```
-{
-    "NeuralNetwork" : {
-        "NNType": "Residual",
-        "MaxBoardSize": 19,         # The max size in the self-play game. It is
-                                    # OK if this value greater than training games.
-                                    # But set a small size can improve the training
-                                    # performance.
+## Customization
 
-        "InputChannels": 38,
-        "ResidualChannels": 128,    # Channel size of residual.
-        "PolicyExtract": 24,        # Channel size of policy head.
-        "ValueExtract": 24,         # Channel size of value head.
-        "ValueMisc": 5,
-
-        "Stack" : [
-            "ResidualBlock",        # The 1st residual block. It is normal block.
-            "ResidualBlock",        # The 2nd residual block. It is normal block.
-            "ResidualBlock-SE",     # The 3rd residual block. It is block with SE module.
-            "ResidualBlock",        # The 4th residual block.
-            "ResidualBlock",        # The 5th residual block.
-            "ResidualBlock-SE"      # The 6th residual block.
-        ]
-    },
-
-    "Train" : {
-        "UseGPU": null,
-        "Optimizer": "SGD",
-        "StepsPerEpoch" : 4000,      # Save the weight evey this steps.
-        "ValidationSteps": 100,
-        "VerboseSteps" : 1000,
-        "MaxStepsPerRunning": 4000,  # Will stop the training after this steps.
-        "Workers": 4,                # Number of data loader workers.
-        "BatchSize": 256,
-        "BufferSize" : 524288,       # Bigger is better but it will use more memory. This
-                                     # size with 4 workers will use around 17 ~ 20 GB
-                                     # memory.
-
-        "DownSampleRate": 16,        # Bigger is better but may be slow down.
-        "MacroFactor": 1,
-        "WeightDecay": 1e-4,
-        "NumberChunks" : 20000,      # Will load last X chunks. Default is 25 games for
-                                     # each chunk.
-
-        "LearningRateSchedule": [
-            [0,       1e-2]          # The format is [X, lr]. Will use the lr rate
-                                     # after X stpes. You only need to change the lr
-                                     # part in the reinforcement learning.
-         ],
-
-        "FixUpBatchNorm": false,
-        "TrainDirectory": "selfplay/data",
-        "StorePath" : "workspace"
-    }
-}
-```
-
-## The Self-play Engine Config
-
-The ```selfplay-config.txt``` controls the self-play process. Here are the parameters.
-
-```
---noise                      # Enable Dirichlet noise in MCTS.
-
---random-moves-factor 0.08   # Do the random move if the move number is
-                             # below the (X * intersections).
-
---komi-stddev 2.5            # Apply the random komi in the self-play
-                             # games.
-
---cpuct-init 1.25
---lcb-reduction 0
---score-utility-factor 0.05
-
---selfplay-query bkp:9:7:0.9 # The format is boardsize-komi-prob.
-                             # It means 90% games are 9x9 with komi 7.
-
---selfplay-query bhp:9:2:0.1 # The format is boardsize-handicap-prob.
-                             # It means 10% 9x9 games is handicap. The
-                             # max handicap size is 2.
-
---selfplay-query bkp:7:9:0.1 # It means 10% games are 7x7 with komi 9.
-
---playouts 150               # The main playouts.
-
---gumbel                     # Enable Gumbel search.
-
---gumbel-playouts 50         # Do the Gumbel search if the current playouts
-                             # below this value. 
-
---always-completed-q-policy
-
---reduce-playouts 50         # 75% uses 50 playouts. Will disable any noise
-                             # do not record the training data.
- 
---reduce-playouts-prob 0.75  # 75% uses reduce-playouts.
-
---resign-playouts 75         # Use this playout if someone's winrate below
-                             # threshold.
-
---resign-threshold 0.05      # If someone's winrate is below this value,
-                             # will use the resign-playouts.
-
---resign-discard-prob 0.8    # Discard the training data in 80% when someome
-                             # has already won the game.
-
---parallel-games 128         # Parallel games at the same time.
---batch-size 64              # Network evalutaion batch size.
---cache-memory-mib 400
---early-symm-cache
---first-pass-bonus
-
---root-policy-temp 1.1       # The policy softmax temperature of root node.  
-
---num-games 5000             # Self-play games per epoch.
-```
+Please see this [section](./CONFIG.md)

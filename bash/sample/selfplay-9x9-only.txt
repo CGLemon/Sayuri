@@ -1,0 +1,49 @@
+--random-moves-factor 0.1
+--random-opening-prob 0.75
+
+--komi-stddev 2.5
+--komi-big-stddev-prob 0.06
+--komi-big-stddev 12
+
+--handicap-fair-komi-prob 0.5
+
+--cpuct-init 1.25
+--cpuct-base 19652
+--cpuct-base-factor 1
+
+--fpu-reduction 0.25
+--fpu-root-reduction 0.25
+
+--lcb-reduction 0
+--score-utility-factor 0.1
+--score-utility-div 20
+
+--selfplay-query bkp:9:7:1
+
+--playouts 150
+
+--gumbel
+--gumbel-playouts-threshold 50
+--always-completed-q-policy
+
+--reduce-playouts 50
+--reduce-playouts-prob 0.75
+
+--resign-playouts 75
+--resign-threshold 0.05
+--resign-discard-prob 0.85
+
+--parallel-games 128
+--batch-size 64
+--cache-memory-mib 400
+--early-symm-cache
+--first-pass-bonus
+
+--dirichlet-noise
+--dirichlet-epsilon 0.25
+--dirichlet-init 0.03
+--dirichlet-factor 361
+
+--root-policy-temp 1.1
+
+--num-games 2500

@@ -87,7 +87,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["gumbel_c_scale"] << Option::SetOption(1.f);
     kOptionsMap["gumbel_prom_visits"] << Option::SetOption(1);
     kOptionsMap["gumbel_considered_moves"] << Option::SetOption(16);
-    kOptionsMap["gumbel_playouts"] << Option::SetOption(400);
+    kOptionsMap["gumbel_playouts_threshold"] << Option::SetOption(400);
     kOptionsMap["gumbel"] << Option::SetOption(false);
     kOptionsMap["always_completed_q_policy"] << Option::SetOption(false);
 
@@ -430,9 +430,9 @@ void ArgsParser::Parse(Splitter &spt) {
         }
     }
 
-    if (const auto res = spt.FindNext("--gumbel-playouts")) {
+    if (const auto res = spt.FindNext("--gumbel-playouts-threshold")) {
         if (IsParameter(res->Get<>())) {
-            SetOption("gumbel_playouts", res->Get<int>());
+            SetOption("gumbel_playouts_threshold", res->Get<int>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

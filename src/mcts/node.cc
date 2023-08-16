@@ -1590,7 +1590,7 @@ bool Node::ShouldApplyGumbel() const {
     // current visits. Ignore the pruned node.
     const int visits = GetVisits() - 1;
     return param_->gumbel &&
-               param_->gumbel_playouts > visits;
+               param_->gumbel_playouts_threshold > visits;
 }
 
 Node *Node::GumbelSelectChild(int color, bool only_max_visit) {
