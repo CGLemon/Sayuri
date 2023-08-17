@@ -352,6 +352,10 @@ class TrainingPipe():
         cpu_swa_net = self.swa_net.to("cpu")
         cpu_swa_net.transfer_to_bin(swa_weights_name)
 
+        if self.use_gpu:
+            self.module = self.module.to(self.device)
+            self.swa_net = self.swa_net.to(self.device)
+
     def _init_loader(self):
         self._stream_loader = StreamLoader()
         self._stream_parser = StreamParser(self.down_sample_rate)
