@@ -17,6 +17,7 @@ public:
     void Selfplay(int g);
 
     int GetParallelGames() const;
+    size_t GetNetReportQueries();
 
 private:
     struct BoardQuery {
@@ -59,4 +60,6 @@ private:
     std::unique_ptr<Network> network_{nullptr};
     std::vector<std::unique_ptr<Search>> search_pool_;
     std::vector<GameState> game_pool_;
+
+    size_t last_net_accm_queries_;
 };

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <atomic>
 
 class Network {
 public:
@@ -46,6 +47,8 @@ public:
     void SetCacheSize(size_t MiB);
     void ClearCache();
 
+    size_t GetNumQueries() const;
+
 private:
     void ActivatePolicy(Result &result, const float temperature) const;
 
@@ -61,4 +64,6 @@ private:
     bool no_cache_;
     bool early_symm_cache_;
     size_t cache_memory_mib_;
+
+    std::atomic<size_t> num_queries_;
 };

@@ -94,6 +94,26 @@ bool SelfPlayPipe::SaveChunk(const int out_id,
     return is_open;
 }
 
+bool SelfPlayPipe::SaveNetQueries(const size_t queries) {
+    auto out_name = ConcatPath(
+                        target_directory_,
+                        "net_queries.txt");
+
+    auto file = std::ofstream{};
+    file.open(out_name, std::ios_base::app);
+
+    bool is_open = true;
+
+    if (file.is_open()) {
+        is_open = true;
+        file << queries << std::endl;
+    } else {
+        LOGGING << "Fail to create the file: " << out_name << '!' << std::endl; 
+    }
+
+    return is_open;
+}
+
 void SelfPlayPipe::Loop() {
     // Be sure that all data are ready.
     if (target_directory_.size() == 0) {
@@ -163,6 +183,7 @@ void SelfPlayPipe::Loop() {
                     if (played_games % 100 == 0) {
                         std::lock_guard<std::mutex> lock(log_mutex_);
                         LOGGING << '[' << CurrentDateTime() << ']' << " Played " << played_games << " games." << std::endl;
+                        SaveNetQueries(engine_.GetNetReportQueries());
                     }
                 }
 

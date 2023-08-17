@@ -19,6 +19,7 @@ void Engine::Initialize() {
     random_opening_prob_ = GetOption<float>("random_opening_prob");
     random_moves_factor_ = GetOption<float>("random_moves_factor");
     parallel_games_ = GetOption<int>("parallel_games");
+    last_net_accm_queries_ = 0;
 
     if (!network_) {
         network_ = std::make_unique<Network>();
@@ -288,6 +289,14 @@ int Engine::GetHandicaps(int g) {
 
 int Engine::GetParallelGames() const {
     return parallel_games_;
+}
+
+size_t Engine::GetNetReportQueries() {
+    size_t curr_net_accm_queries = network_->GetNumQueries();
+    const auto report_queries =
+        curr_net_accm_queries - last_net_accm_queries_;
+    last_net_accm_queries_ = curr_net_accm_queries;
+    return report_queries;
 }
 
 void Engine::Handel(int g) {

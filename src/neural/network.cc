@@ -82,6 +82,8 @@ void Network::Initialize(const std::string &weightsfile) {
     // Initialize the NN forward pipe.
     pipe_->Initialize(dnn_weights);
     SetCacheSize(cache_memory_mib_);
+
+    num_queries_.store(0, std::memory_order_relaxed);
 }
 
 void Network::SetCacheSize(size_t MiB) {
@@ -106,6 +108,10 @@ void Network::SetCacheSize(size_t MiB) {
 
 void Network::ClearCache() {
     nn_cache_.Clear();
+}
+
+size_t Network::GetNumQueries() const {
+    return num_queries_.load(std::memory_order_relaxed);
 }
 
 Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
@@ -139,6 +145,7 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
     auto inputs = Encoder::Get().GetInputs(state, symmetry);
 
     if (pipe_->Valid()) {
+        num_queries_.fetch_add(1, std::memory_order_relaxed);
         result_buf = pipe_->Forward(inputs);
     } else {
         result_buf = DummyForward(inputs);
