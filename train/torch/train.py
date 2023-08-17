@@ -39,12 +39,15 @@ class StreamLoader:
         if not os.path.isfile(filename):
             return stream
 
-        if filename.find(".gz") >= 0:
-            with gzip.open(filename, 'rt') as f:
-                stream = io.StringIO(f.read())
-        else:
-            with open(filename, 'r') as f:
-                stream = io.StringIO(f.read())
+        try:
+            if filename.find(".gz") >= 0:
+                with gzip.open(filename, 'rt') as f:
+                    stream = io.StringIO(f.read())
+            else:
+                with open(filename, 'r') as f:
+                    stream = io.StringIO(f.read())
+        except:
+            print("Could not open the file: {}".format(filename))
         return stream
 
 class StreamParser:
