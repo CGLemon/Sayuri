@@ -324,6 +324,8 @@ class TrainingPipe():
         self._status_loader.load_optimizer(self.opt)
 
         last_steps = self._status_loader.get_steps()
+        self.module.update_parameters(last_steps)
+
         self.swa_count = self._status_loader.get_swa_count()
         curr_lr = self._get_lr_schedule(last_steps)
 
