@@ -16,7 +16,7 @@ const std::vector<std::string> kMikazukiNoKoukai = { // 新月航程 / ミカヅ
     "Mikazuki",                           // 1.  三日月 / ミカヅキ
     "Heikousen",                          // 2.  平行線 
     "Juu Oku Nen",                        // 3.  十億年
-    "Cake o Yaku",                        // 4.  烤蛋糕 / ケーキを焼
+    "Cake wo Yaku",                       // 4.  烤蛋糕 / ケーキを焼
     "Furaregai Girl",                     // 5.  被甩的男男女女 / フラレガイガール
     "Hachi to Misemono",                  // 6.  蜜蜂與馬戲團 / 蜂と見世物 
     "Ru-Rararu-Ra-Rurararu-Ra",           // 7.  嚕啦啦嚕拉嚕拉拉嚕拉 / るーららるーらーるららるーらー
@@ -39,15 +39,15 @@ const std::vector<std::string> kSanketsuGirl = { // 酸欠少女
     "World Secret",    // 5.  世界的祕密 / 世界の秘密
     "Aoibridge",       // 6.  葵橋
     "Moon & Bouquet",  // 7.  月與花束 / 月と花束
-    "Kamisama",        // 8.  神 
+    "Kamisama",        // 8.  神明大人 / 神様
     "Summer Bug",      // 9.  夏蟲
     "Dawn",            // 10. 黎明
-    "Nejiko"           // 11. ~
+    "Nejiko"           // 11. 螺絲 / ねじこ
 };
 
 constexpr bool kDevVersion = false;
 constexpr size_t kVersionMajor = 0;
-constexpr size_t kVersionMinor = 5;
+constexpr size_t kVersionMinor = 6;
 constexpr size_t kVersionPatch = 0;
 
 std::string GetProgramName() {
