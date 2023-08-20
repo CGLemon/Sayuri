@@ -71,7 +71,7 @@ Compress the training data file. It can save many memory usage in the self-play 
         $ cd Sayuri
         $ git submodule update --init --recursive
         $ cd src
-        $ g++ -std=c++14 -ffast-math -I . -lpthread *.cc utils/*.cc accuracy/*.cc game/*.cc mcts/*.cc neural/*.cc neural/blas/*.cc neural/cuda/*.cc pattern/*.cc selfplay/*.cc -o Sayuri -O3 -DNDEBUG -DWIN32 -I ../third_party/Eigen -DUSE_BLAS -DUSE_EIGEN
+        $ g++ -std=c++14 -ffast-math -I . -lpthread *.cc utils/*.cc summary/*.cc game/*.cc mcts/*.cc neural/*.cc neural/blas/*.cc neural/cuda/*.cc pattern/*.cc selfplay/*.cc -o Sayuri -O3 -DNDEBUG -DWIN32 -I ../third_party/Eigen -DUSE_BLAS -DUSE_EIGEN
 
 
 ## Weights and Others.
