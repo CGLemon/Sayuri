@@ -76,6 +76,8 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["use_optimistic_policy"] << Option::SetOption(false);
     kOptionsMap["use_rollout"] << Option::SetOption(false);
 
+    kOptionsMap["inject_noise_factor"] << Option::SetOption(0.f);
+
     // self-play options
     kOptionsMap["selfplay_query"] << Option::SetOption(std::string{});
     kOptionsMap["random_min_visits"] << Option::SetOption(1);
@@ -368,6 +370,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.Find("--no-fp16")) {
         SetOption("fp16", false);
         spt.RemoveWord(res->Index());
+    }
+
+    if (const auto res = spt.FindNext("--inject-noise-factor")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("inject_noise_factor", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
     }
 
     if (const auto res = spt.FindNext({"--resign-threshold", "-r"})) {

@@ -5,10 +5,12 @@
 #include "utils/format.h"
 #include "utils/parse_float.h"
 #include "utils/option.h"
+#include "utils/random.h"
 #include "config.h"
 
 #include <iostream>
 #include <sstream>
+#include <random>
 
 #ifdef USE_FAST_PARSER
 #include "fast_float.h"
@@ -683,6 +685,37 @@ void DNNLoder::ProcessWeights(std::shared_ptr<DNNWeights> weights) const {
     // value head
     ProcessConvBlock(
         weights->v_ex_conv, weights->v_ex_bn);
+
+    const auto InjectConvBlock = [](ConvLayer &conv, float factor) {
+        auto dist = std::normal_distribution<float>(0, 1.f);
+        auto w_size = conv.GetWeights().size();
+        auto b_size = conv.GetBiases().size();
+
+        for (auto i = size_t{0}; i < w_size; ++i) {
+            const float w = conv.GetWeights()[i];
+            const float r = dist(Random<>::Get());
+            conv.GetWeights()[i] = w + factor * r;
+        }
+        for (auto i = size_t{0}; i < b_size; ++i) {
+            const float w = conv.GetBiases()[i];
+            const float r = dist(Random<>::Get());
+            conv.GetBiases()[i] = w + factor * r;
+        }
+    };
+    float inject_noise_factor = GetOption<float>("inject_noise_factor");
+
+    if (std::abs(inject_noise_factor - 0.f) > 1e-6f) {
+        for (auto &residual : weights->tower) {
+            InjectConvBlock(residual.conv1, inject_noise_factor);
+            InjectConvBlock(residual.conv2, inject_noise_factor);
+
+            // bottleneck layers
+            if (residual.apply_btl) {
+                InjectConvBlock(residual.pre_btl_conv, inject_noise_factor);
+                InjectConvBlock(residual.post_btl_conv, inject_noise_factor);
+            }
+        }
+    }
 }
 
 void DNNLoder::GetWeightsFromBuffer(std::vector<float> &weights, std::istream &buffer) const {
