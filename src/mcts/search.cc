@@ -623,18 +623,26 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     result.dead_strings = dead;
 
     // The capture all dead move.
+    auto remove_deads_moves = std::vector<int>{};
     auto raw_ownership = root_state_.GetRawOwnership();
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto vtx = root_state_.IndexToVertex(idx);
         const auto raw_owner = raw_ownership[idx];
-        const auto safe_owner = safe_ownership[idx];
+        const auto owner = safe_area[idx] == true ?
+                               2 * (float)(safe_ownership[idx] == color) - 1 : result.root_ownership[idx];
 
-        if (safe_owner == color && raw_owner == kEmpty) {
+        if (owner > kOwnshipThreshold && raw_owner == kEmpty) {
             if (root_state_.IsNeighborColor(vtx, color)) {
-                result.capture_all_dead_move = vtx;        
-                break;   
+                remove_deads_moves.emplace_back(vtx);
             }
         }
+    }
+    std::shuffle(std::begin(remove_deads_moves),
+                     std::end(remove_deads_moves),
+                     Random<>::Get());
+    if (!remove_deads_moves.empty()) {
+        result.capture_all_dead_move =
+            *std::begin(remove_deads_moves);
     }
 }
 
