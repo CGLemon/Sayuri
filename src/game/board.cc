@@ -1079,8 +1079,12 @@ bool Board::IsSeki(const int vtx) const {
 }
 
 bool Board::IsBorder(const int vtx) const {
+    return IsNeighborColor(vtx, kInvalid);
+}
+
+bool Board::IsNeighborColor(const int vtx, const int color) const {
     for (int k = 0; k < 4; ++k) {
-        if (state_[vtx + directions_[k]] == kInvalid) return true;
+        if (state_[vtx + directions_[k]] == color) return true;
     }
     return false;
 }

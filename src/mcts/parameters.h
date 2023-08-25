@@ -70,6 +70,7 @@ public:
         symm_pruning = GetOption<bool>("symm_pruning");
         use_stm_winrate = GetOption<bool>("use_stm_winrate");
         analysis_verbose = GetOption<bool>("analysis_verbose");
+        capture_all_dead = GetOption<bool>("capture_all_dead");
     }
 
     int threads;
@@ -131,6 +132,7 @@ public:
     bool analysis_verbose;
     bool always_completed_q_policy;
     bool cpuct_dynamic;
+    bool capture_all_dead;
 
     std::array<float, kNumVertices + 10> dirichlet_buffer;
 };

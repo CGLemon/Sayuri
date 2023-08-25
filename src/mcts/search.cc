@@ -621,9 +621,24 @@ void Search::GatherComputationResult(ComputationResult &result) const {
 
     result.alive_strings = alive;
     result.dead_strings = dead;
+
+    // The capture all dead move.
+    auto raw_ownership = root_state_.GetRawOwnership();
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        const auto vtx = root_state_.IndexToVertex(idx);
+        const auto raw_owner = raw_ownership[idx];
+        const auto safe_owner = safe_ownership[idx];
+
+        if (safe_owner == color && raw_owner == kEmpty) {
+            if (root_state_.IsNeighborColor(vtx, color)) {
+                result.capture_all_dead_move = vtx;        
+                break;   
+            }
+        }
+    }
 }
 
-bool ShouldResign(GameState &state, ComputationResult &result, float resign_threshold) {
+bool ShouldResign(GameState &state, ComputationResult &result, Parameters *param) {
     const auto handicap = state.GetHandicap();
     const auto movenum = state.GetMoveNumber();
     const auto num_intersections = state.GetNumIntersections();
@@ -640,6 +655,7 @@ bool ShouldResign(GameState &state, ComputationResult &result, float resign_thre
 
     // TODO: Blend the dynamic komi resign threshold.
 
+    float resign_threshold = param->resign_threshold;
     if (handicap > 0 && state.GetToMove() == kWhite) {
         const auto handicap_resign_threshold =
                        resign_threshold / (1 + 2 * handicap);
@@ -661,8 +677,8 @@ bool ShouldResign(GameState &state, ComputationResult &result, float resign_thre
     return true;
 }
 
-bool ShouldPass(GameState &state, ComputationResult &result, bool friendly_pass) {
-    if (!friendly_pass || state.GetLastMove() != kPass) {
+bool ShouldPass(GameState &state, ComputationResult &result, Parameters *param) {
+    if (!(param->friendly_pass) || state.GetLastMove() != kPass) {
         return false;
     }
 
@@ -724,14 +740,21 @@ int Search::ThinkBestMove() {
     auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
     auto result = Computation(max_playouts_, tag);
 
-    if (ShouldResign(root_state_, result, param_->resign_threshold)) {
+    if (ShouldResign(root_state_, result, param_.get())) {
         return kResign;
     }
-    if (ShouldPass(root_state_, result, param_->friendly_pass)) {
-        return kPass;
+
+    int best_move = result.best_move;
+    if (ShouldPass(root_state_, result, param_.get())) {
+        best_move = kPass;
+    }
+    if (param_->capture_all_dead &&
+            best_move == kPass &&
+            result.capture_all_dead_move != kNullVertex) {
+        best_move = result.capture_all_dead_move;
     }
 
-    return result.best_move;
+    return best_move;
 }
 
 bool ShouldForbidPass(GameState &state,
@@ -932,14 +955,21 @@ int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
     // Clear config after finishing the search.
     analysis_config_.Clear();
 
-    if (ShouldResign(root_state_, result, param_->resign_threshold)) {
+    if (ShouldResign(root_state_, result, param_.get())) {
         return kResign;
     }
-    if (ShouldPass(root_state_, result, param_->friendly_pass)) {
-        return kPass;
+
+    int best_move = result.best_move;
+    if (ShouldPass(root_state_, result, param_.get())) {
+        best_move = kPass;
+    }
+    if (param_->capture_all_dead &&
+            best_move == kPass &&
+            result.capture_all_dead_move != kNullVertex) {
+        best_move = result.capture_all_dead_move;
     }
 
-    return result.best_move;
+    return best_move;
 }
 
 void Search::ClearTrainingBuffer() {

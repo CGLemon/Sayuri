@@ -481,6 +481,14 @@ std::vector<int> GameState::GetOwnership() const {
     return res;
 }
 
+std::vector<int> GameState::GetRawOwnership() const {
+    auto res = std::vector<int>(GetNumIntersections(), kInvalid);
+
+    board_.ComputeReachArea(res);
+
+    return res;
+}
+
 void GameState::FillRandomMove() {
     const int color = GetToMove();
     const int empty_cnt = board_.GetEmptyCount();
@@ -927,4 +935,8 @@ std::string GameState::GetComment(size_t i) const {
 void GameState::PushComment() {
     comments_.emplace_back(last_comment_);
     last_comment_.clear();
+}
+
+bool GameState::IsNeighborColor(const int vtx, const int color) const {
+    return board_.IsNeighborColor(vtx, color);
 }
