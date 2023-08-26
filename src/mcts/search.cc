@@ -623,26 +623,36 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     result.dead_strings = dead;
 
     // The capture all dead move.
-    auto remove_deads_moves = std::vector<int>{};
+    auto remove_dead_moves = std::vector<int>{};
+    auto priority_moves = std::vector<int>{};
+
     auto raw_ownership = root_state_.GetRawOwnership();
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto vtx = root_state_.IndexToVertex(idx);
         const auto raw_owner = raw_ownership[idx];
         const auto owner = safe_area[idx] == true ?
                                2 * (float)(safe_ownership[idx] == color) - 1 : result.root_ownership[idx];
+        const auto state = root_state_.GetState(vtx);
 
-        if (owner > kOwnshipThreshold && raw_owner == kEmpty) {
-            if (root_state_.IsNeighborColor(vtx, color)) {
-                remove_deads_moves.emplace_back(vtx);
+        if (owner > kOwnshipThreshold && root_state_.IsLegalMove(vtx, color)) {
+            if (raw_owner == kEmpty && root_state_.IsNeighborColor(vtx, color)) {
+                remove_dead_moves.emplace_back(vtx);
+            }
+            if (state == kEmpty && root_state_.board_.IsCaptureMove(vtx, color)) {
+                priority_moves.emplace_back(vtx);
             }
         }
     }
-    std::shuffle(std::begin(remove_deads_moves),
-                     std::end(remove_deads_moves),
+
+    if (!priority_moves.empty()) {
+        std::swap(priority_moves, remove_dead_moves);
+    }
+    std::shuffle(std::begin(remove_dead_moves),
+                     std::end(remove_dead_moves),
                      Random<>::Get());
-    if (!remove_deads_moves.empty()) {
+    if (!remove_dead_moves.empty()) {
         result.capture_all_dead_move =
-            *std::begin(remove_deads_moves);
+            *std::begin(remove_dead_moves);
     }
 }
 
