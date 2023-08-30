@@ -133,6 +133,8 @@ public:
     // https://senseis.xmp.net/?Seki
     bool IsSeki(const int vtx) const;
 
+    bool IsNeighborColor(const int vtx, const int color) const;
+
     // Play the move assume the move is legal.
     void PlayMoveAssumeLegal(const int vtx, const int color);
 
@@ -163,6 +165,9 @@ public:
 
     // Compute score area with Tromp Taylor rule.
     void ComputeScoreArea(std::vector<int> &result) const;
+
+    // Compute black area and white area.
+    void ComputeReachArea(std::vector<int> &result) const;
 
     // Get the ladder type map.
     // LadderType::kLadderDeath means that the ladder string is already death.
@@ -391,9 +396,6 @@ private:
                               const int color,
                               bool mark_vitals,
                               bool mark_pass_dead) const;
-
-    // Compute black area and white area.
-    void ComputeReachArea(std::vector<int> &result) const;
 
     // Reture true if string is pass-alive (unconditional life).
     bool IsPassAliveString(const int vertex,

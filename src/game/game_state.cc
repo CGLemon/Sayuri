@@ -482,6 +482,14 @@ std::vector<int> GameState::GetOwnership() const {
     return res;
 }
 
+std::vector<int> GameState::GetRawOwnership() const {
+    auto res = std::vector<int>(GetNumIntersections(), kInvalid);
+
+    board_.ComputeReachArea(res);
+
+    return res;
+}
+
 void GameState::FillRandomMove() {
     const int color = GetToMove();
     const int empty_cnt = board_.GetEmptyCount();
@@ -968,4 +976,8 @@ float GameState::GetWave() const {
 
 float GameState::GetRule() const {
     return 0.f;
+}
+
+bool GameState::IsNeighborColor(const int vtx, const int color) const {
+    return board_.IsNeighborColor(vtx, color);
 }

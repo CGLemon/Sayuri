@@ -72,9 +72,11 @@ public:
     bool IsLegalMove(const int vertex, const int color) const;
     bool IsLegalMove(const int vertex, const int color,
                      std::function<bool(int, int)> AvoidToMove) const;
+    bool IsNeighborColor(const int vtx, const int color) const;
 
     // Compute ownership with Tromp Taylor rule.
     std::vector<int> GetOwnership() const;
+    std::vector<int> GetRawOwnership() const;
 
     std::vector<int> GetOwnershipAndRemovedDeadStrings(int playouts) const;
     std::vector<int> MarKDeadStrings(int playouts) const;
