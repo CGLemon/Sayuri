@@ -1228,17 +1228,20 @@ bool Search::AdvanceToNewRootState() {
         return false;
     }
 
-    if (param_->gumbel ||
-            param_->dirichlet_noise) {
-        // Need to re-build the trees if we apply noise or Gumbel. Reuse
-        // the tree will ignore them.
+    if (param_->gumbel) {
+        // Gumbel search will make tree shape weird. We need to build
+        // the tree from scratch. The dirichlet noise also make tree
+        // shape weird. But it should be OK for most case. For example,
+        // Leela Zero reuse the tree during the self-play. Look like it
+        // is no negative effect.
         return false;
     }
 
     const auto temp_diff = param_->policy_temp -
                                param_->root_policy_temp;
     if (std::abs(temp_diff) > 1e-4f) {
-        // The tree shape is different if the temperature is different.
+        // The different temperature settings will make different training
+        // datas or tree shape. We need to build the tree from scratch.
         return false;
     }
 
