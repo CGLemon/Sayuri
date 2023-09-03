@@ -679,7 +679,7 @@ float Node::GetWLStddev() const {
 
 float Node::GetLcb(const int color) const {
     // The Lower confidence bound of winrate.
-    // See the LCB issues here: https://github.com/leela-zero/leela-zero/pull/2290
+    // See the LCB issue here: https://github.com/leela-zero/leela-zero/pull/2290
 
     const auto visits = GetVisits();
     if (visits <= 1) {

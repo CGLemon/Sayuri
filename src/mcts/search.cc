@@ -847,11 +847,14 @@ bool ShouldForbidPass(GameState &state,
 }
 
 int Search::GetSelfPlayMove() {
-    // May reuse the tree when fast search phase. It is playout
-    // cap oscillation which was used in the past KataGo version.
-    // If we disable the tag, it will be visit cap oscillation which
-    // is used by current KataGo.
-    // Please see here, https://arxiv.org/abs/1902.10565v2
+    // We always reuse the sub-tree at fast search phase. The
+    // kUnreused option doesn't mean discarding the sub-tree. 
+    // It means visit cap (The search result is as same as
+    // "playouts cap" + "discard the tree"). The default is playouts
+    // cap. If the reuse tag is true, it is visit cap oscillation.
+    // Every visit of fast search phase may be different. If the
+    // reuse tag is false, it is playouts cap oscillation which
+    // is used by KataGo. Please see here, https://arxiv.org/abs/1902.10565v2
     auto reuse_tag = param_->reuse_tree ?
                          kNullTag : kUnreused;
     auto tag = kThinking | reuse_tag;
@@ -861,27 +864,29 @@ int Search::GetSelfPlayMove() {
     bool is_opening_random = root_state_.GetMoveNumber() < random_moves_cnt;
 
     // Decide the playouts number first. Default is max
-    // playouts. May use the lower playouts instead it.
+    // playouts. May use the lower playouts instead of it.
     int playouts = max_playouts_;
 
     if (param_->reduce_playouts > 0 &&
             param_->reduce_playouts < max_playouts_ &&
             Random<>::Get().Roulette<10000>(param_->reduce_playouts_prob)) {
 
-        // The reduce playouts must be smaller than playouts.
+        // The reduce playouts must be smaller than default
+        // playouts. It is fast search phase so we also disable
+        // all exploring settings.
         playouts = std::min(
             playouts, param_->reduce_playouts);
         tag = tag | kNoExploring;
     }
 
     if (!network_.Valid()) {
-        // The network is dummy backend. The playing move is 
+        // The network is dummy backend. The playout path is 
         // random, so we only use one tenth playouts in order
         // to reduce time.
         playouts /= 10;
     }
 
-    // There is at least one playout for the self-play move
+    // The playouts should be at least one for the self-play move
     // because some move select functions need at least one.
     playouts = std::max(1, playouts);
 
@@ -902,18 +907,19 @@ int Search::GetSelfPlayMove() {
 
     // Do the random move in the opening stage in order to improve the
     // game state diversity. The Gumbel noise may be good enough. Don't
-    // play the random move.
+    // play the random move if 'is_gumbel' is true.
     if (is_opening_random && !is_gumbel) {
         move = result.random_move;
     }
 
-    // Should we discard the data? If the 'discard_it' is true, we will
-    // discard the current data.
+    // If the 'discard_it' is true, we will discard the current training 
+    // data. It is because that the quality of current data is bad. To
+    // discard it can improve the network performance.
+    bool discard_it = false;
     float root_eval = result.root_eval;
     float root_score = result.root_score_lead;
-    bool discard_it = false;
     if (tag & kNoExploring) {
-        // This is fast search of "Playout Cap Randomization". Do
+        // It is fast search of "Playout Cap Randomization". Do
         // not record the low quality datas. 
         discard_it = true;
     }
@@ -1079,6 +1085,7 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
             }
         }
 
+        // Compute average Q/score value.
         const int window_half_size =
             std::max(3, (int)(buf.board_size/2)); // full size is (1 + 2*window_half_size)
         float window_q_sum = 0.f;
@@ -1104,11 +1111,13 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
         buf.avg_score_lead = window_score_sum / window_size;
     }
 
-    // Set the short, middle and long term average values buffer
+    // Compute the short, middle and long term average values
     for (int i = 0; i < buf_size; ++i) {
         auto &buf = training_buffer_[i];
         const auto board_size = buf.board_size;
 
+        // Please see here, 
+        // https://github.com/lightvector/KataGo/blob/master/docs/KataGoMethods.md#short-term-value-and-score-targets
         double short_term_q = 0;
         double middle_term_q = 0;
         double long_term_q = 0;
@@ -1319,11 +1328,6 @@ bool Search::HaveAlternateMoves() {
 }
 
 int Search::GetPonderPlayouts() const {
-    // We don't need to consider the NN cache size to set number
-    // of ponder playouts that because we apply lazy tree destruction
-    // and reuse the tree. They can efficiently use the large tree.
-    // Set the greatest number as we can.
-
     // The factor means 'ponder_playouts = playouts * div_factor'.
     const int div_factor = std::max(1, param_->ponder_factor);
 

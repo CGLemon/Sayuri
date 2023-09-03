@@ -8,11 +8,11 @@
 
 ## Note
 
-Use the default setting in the bash directory. The network will reach strong amateur level in 1 ~ 2 weeks on 19x19 with the RTX 2070s computer.
+Use the default setting in the bash directory. The network will approach strong amateur level in 1 ~ 2 weeks on 19x19 with the RTX 2070s computer.
 
 ## Simple Usage
 
-There two bash files. The ```setup.sh``` will do the initialization. Copy the training script and engine to this directory. The ```selfplay.sh``` will do the self-play and trainig loop.
+There are two bash files. The ```setup.sh``` will do the initialization. Copy the training script and engine to this directory. The ```selfplay.sh``` will do the self-play and trainig loop.
 
     $ cp -r bash selfplay-course
     $ cd selfplay-course
@@ -29,4 +29,4 @@ The sample directory includes some enigne selfplay configs. The ```sample/full-g
 
 ## Customization
 
-Please see this [section](./CONFIG.md)
+Please see this [section](./CONFIG.md). It explain the parameters.

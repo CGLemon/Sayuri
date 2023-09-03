@@ -122,10 +122,6 @@ Example setting 4: use the GPU 0 and GPU 2
 
     $ ./Sayuri -w <weights file> --gpu 0 --gpu 2
 
-Example setting 5: disable the network forwarding pipe, arond 5k on 9x9, 10k on 19x19. The ```--lcb-reduction``` should be set as ```1```
-
-    $ ./Sayuri --patterns <patterns file> --lcb-reduction 1 --no-dcnn
-
 ## Graphical Interface
 
 Sayuri is not complete engine. You need a graphical interface for playing with her. She supports any GTP (version 2) interface application. [Sabaki](https://sabaki.yichuanshen.de/) and [GoGui](https://github.com/Remi-Coulom/gogui) are recommended that because Sayuri supports some specific analysis commands. 
@@ -140,7 +136,7 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 
 ## Analysis Commands
 
-The analysis Commands are useful on the modern GTP interface tool, like Sabaki. It shows the current winrate, best move and the other informations. The engine supports the following GTP analysis commands.
+The analysis Commands are useful on the modern GTP interface tool, like Sabaki. It shows the current win-rate, best move and the other informations. The engine supports the following GTP analysis commands.
 
   * `analyze, genmove_analyze [player (optional)] [interval (optional)] ...`
       * The behavior is same as ```lz-analyze```, ```lz-genmove_analyze```.
@@ -183,7 +179,7 @@ Please see this [section](./JOURNAL.md).
 * Predict the current side-to-move score lead and death strings.
 * Reuse the sub-tree.
 * Chinese rules with positional superko.
-* Gumbel AlphZero learning.
+* Gumbel AlphaZero learning.
 
 ## Todo
 

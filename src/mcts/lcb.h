@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <cmath>
 
-// From the: https://www.johndcook.com/blog/cpp_phi_inverse/
+// Imported from the: https://www.johndcook.com/blog/cpp_phi_inverse/
 static double RationalApprox(double t) {
     // Abramowitz and Stegun formula 26.2.23.
     // The absolute value of the error should be less than 4.5 e-4.
@@ -15,7 +15,7 @@ static double RationalApprox(double t) {
                    (((d[2]*t + d[1])*t + d[0])*t + 1.0);
 }
 
-// From the: https://www.johndcook.com/blog/cpp_phi_inverse/
+// Imported from the: https://www.johndcook.com/blog/cpp_phi_inverse/
 static double NormalCdfInverse(double p) {
     if (p <= 0.0 || p >= 1.0) {
         auto err = std::ostringstream{};
@@ -34,7 +34,7 @@ static double NormalCdfInverse(double p) {
     }
 }
 
-// From the: https://github.com/lightvector/KataGo/blob/master/cpp/core/fancymath.h
+// Imported from the: https://github.com/lightvector/KataGo/blob/master/cpp/core/fancymath.h
 static double NormToTApprox(double z, double degrees_of_freedom) {
     double n = degrees_of_freedom + 2;
     if (degrees_of_freedom > 8) {

@@ -3,7 +3,7 @@
     Copyright (c) 2012 Jakob Progsch, Václav Zeman
     Copyright (c) 2017-2019 Gian-Carlo Pascutto and contributors
     Modifications:
-    Copyright (c) 2020-2021 Hung Zhe Lin
+    Copyright (c) 2020-2021 Hung Tse Lin
 
     This software is provided 'as-is', without any express or implied
     warranty. In no event will the authors be held liable for any damages

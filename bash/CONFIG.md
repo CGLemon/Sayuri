@@ -10,8 +10,8 @@ The ```selfplay-setting.json``` controls the training process. Here are the para
         "NNType": "Residual",
         "MaxBoardSize": 19,         # The max size in the self-play game. It is
                                     # OK if this value greater than training games.
-                                    # But set a small size can improve the training
-                                    # performance.
+                                    # But to set it as small size can improve the
+                                    # training performance.
 
         "ResidualChannels": 128,    # Channel size of residual.
         "PolicyExtract": 24,        # Channel size of policy head.
@@ -36,9 +36,8 @@ The ```selfplay-setting.json``` controls the training process. Here are the para
         "MaxStepsPerRunning": 4000,  # Will stop the training after this steps.
         "Workers": 4,                # Number of data loader workers.
         "BatchSize": 256,
-        "BufferSize" : 524288,       # Bigger is better but it will use more memory. This
-                                     # size with 4 workers will use around 17 ~ 20 GB
-                                     # memory.
+        "BufferSize" : 524288,       # Bigger is better but it will use more memory. If your 
+                                     # compute is 32GB, you can set it as half value.
 
         "DownSampleRate": 16,        # Bigger is better but may be slow down.
         "MacroFactor": 1,

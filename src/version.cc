@@ -42,7 +42,7 @@ const std::vector<std::string> kSanketsuGirl = { // 酸欠少女
     "Kamisama",        // 8.  神明大人 / 神様
     "Summer Bug",      // 9.  夏蟲
     "Dawn",            // 10. 黎明
-    "Nejiko"           // 11. 螺絲 / ねじこ
+    "Nejiko"           // 11. 螺絲子 / ねじこ
 };
 
 constexpr bool kDevVersion = false;

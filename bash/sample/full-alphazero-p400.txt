@@ -38,8 +38,8 @@
 # --gumbel-playouts-threshold 0
 # --always-completed-q-policy
 
---reduce-playouts 50
---reduce-playouts-prob 0
+# --reduce-playouts 50
+# --reduce-playouts-prob 0
 
 --resign-playouts 80
 --resign-threshold 0.05
