@@ -37,6 +37,7 @@ void Search::Initialize() {
     no_exploring_param_->gumbel = false;
     no_exploring_param_->dirichlet_noise = false;
     no_exploring_param_->root_policy_temp = 1.f;
+    no_exploring_param_->forced_playouts_k = 0.f;
 
     analysis_config_.Clear();
     last_state_ = root_state_;

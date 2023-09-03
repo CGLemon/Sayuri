@@ -64,6 +64,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["draw_factor"] << Option::SetOption(0.f);
     kOptionsMap["score_utility_factor"] << Option::SetOption(0.1f);
     kOptionsMap["score_utility_div"] << Option::SetOption(20.f);
+    kOptionsMap["forced_playouts_k"] << Option::SetOption(0.f);
 
     kOptionsMap["kldgain"] << Option::SetOption(std::string{"0"});
 
@@ -615,6 +616,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--score-utility-div")) {
         if (IsParameter(res->Get<>())) {
             SetOption("score_utility_div", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--forced-playouts-k")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("forced_playouts_k", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

@@ -409,6 +409,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     const auto score_utility_div    = param_->score_utility_div;
     const auto noise                = is_root ? param_->dirichlet_noise  : false;
     const auto fpu_reduction_factor = is_root ? param_->fpu_root_reduction : param_->fpu_reduction;
+    const auto forced_playouts_k    = is_root ? param_->forced_playouts_k : 0.f;
 
     const float raw_cpuct     = cpuct_init + cpuct_base_factor *
                                     std::log((float(parentvisits) + cpuct_base + 1) / cpuct_base);
@@ -434,6 +435,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
         // the visited node. So give the unvisited node a little bad favour
         // (FPU reduction) in order to reduce the priority.
         float q_value = fpu_value;
+        const float psa = GetSearchPolicy(child, noise);
 
         float denom = 1.0f;
         float utility = 0.0f; // the utility value
@@ -456,14 +458,17 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
                 utility += score_utility_factor *
                                node->GetScoreUtility(
                                    color, score_utility_div, parent_score);
+
+                const int forced_n = forced_playouts_k * psa * (float)parentvisits;
+                if (forced_n - visits > 0) {
+                    utility += (forced_n - visits) * 1e6;
+                }
             }
             cpuct *= GetDynamicCpuctFactor(node, visits);
             denom += visits;
         }
 
-
         // PUCT algorithm
-        const float psa = GetSearchPolicy(child, noise);
         const float puct = cpuct * psa * (numerator / denom);
         const float value = q_value + puct + utility;
         assert(value > std::numeric_limits<float>::lowest());

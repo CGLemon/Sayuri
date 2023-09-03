@@ -29,6 +29,7 @@ public:
         cpuct_dynamic_k_factor = GetOption<float>("cpuct_dynamic_k_factor");
         cpuct_dynamic_k_base = GetOption<float>("cpuct_dynamic_k_base");
         draw_factor = GetOption<float>("draw_factor");
+        forced_playouts_k = GetOption<float>("forced_playouts_k");
 
         random_min_visits = GetOption<int>("random_min_visits");
         random_moves_factor = GetOption<float>("random_moves_factor");
@@ -89,6 +90,7 @@ public:
     float cpuct_dynamic_k_factor;
     float cpuct_dynamic_k_base;
     float draw_factor;
+    float forced_playouts_k;
 
     float gumbel_c_visit;
     float gumbel_c_scale;
