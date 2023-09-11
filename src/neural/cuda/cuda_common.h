@@ -21,8 +21,6 @@
 
 namespace cuda {
 
-static constexpr int kMaxSupportGPUs = 256; // Give it a large value.
-
 #define KBLOCKSIZE 256
 
 #ifdef USE_CUDNN
@@ -57,6 +55,7 @@ struct CudaHandles {
     bool has_tensor_cores;
 
     int gpu_id;
+    bool initialized{false};
 
     void ApplyOnCurrentDevice();
     void Release();

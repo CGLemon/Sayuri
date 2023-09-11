@@ -516,10 +516,13 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
 void CudaForwardPipe::NNGraph::SetComputationMode(cuda::CudaHandles *handles) {
     cudaDeviceProp dev_prop = cuda::GetDeviceProp();
 
-    if (dev_prop.major <= 5 ||
+    if (dev_prop.major <= 6 ||
             !GetOption<bool>("fp16")) {
-        // The device is too old. Disable the 
-        // FP16 computation.
+        // The compute capability is too low. The 5 is Maxwell,
+        // such as GTX 980 Ti. The 6 is Pascal, such as GTX 1080 Ti.
+        // As fair as I know, the FP16 can work on these devices,
+        // but the their performance are bad. The FP32 is better
+        // choice. So disable the FP16 computation.
         handles->fp16 = false;
     }
 

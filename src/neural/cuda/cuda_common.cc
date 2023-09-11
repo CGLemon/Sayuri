@@ -81,16 +81,8 @@ void WaitToFinish(cudaStream_t s) {
     ReportCUDAErrors(cudaStreamSynchronize(s));
 }
 
-static bool handles_init[kMaxSupportGPUs] = {false};
-
 void CudaHandles::ApplyOnCurrentDevice() {
-    int i = GetDevice();
-
-    if (i >= kMaxSupportGPUs) {
-        throw std::runtime_error("Out of supported GPU number.");
-    }
-
-    if (handles_init[i]) {
+    if (initialized) {
         return;
     }
 
@@ -103,27 +95,30 @@ void CudaHandles::ApplyOnCurrentDevice() {
     fp16 = has_tensor_cores = false;
 
 #ifdef ENABLE_FP16
+    // The supported table is here, https://en.wikipedia.org/wiki/CUDA
+
     cudaDeviceProp dev_prop = GetDeviceProp();
     if (dev_prop.major >= 7) {
         fp16 = has_tensor_cores = true;
     } else if (dev_prop.major == 6 ||
-                   dev_prop.major == 5) {
+                   (dev_prop.major == 5 &&
+                    dev_prop.minor >= 3)) {
         fp16 = true;
     }
 #endif
 
-    gpu_id = i;
-    handles_init[i] = true;
+    gpu_id = GetDevice();
+    initialized = true;
 }
 
 void CudaHandles::Release() {
-    if (handles_init[gpu_id]) {
+    if (initialized) {
         cudaStreamDestroy(stream);
         cublasDestroy(cublas_handle);
 #ifdef USE_CUDNN
         cudnnDestroy(cudnn_handle);
 #endif
-        handles_init[gpu_id] = false;
+        initialized = false;
     }
 }
 
