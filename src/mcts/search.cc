@@ -665,9 +665,9 @@ void Search::GatherComputationResult(ComputationResult &result) const {
 }
 
 bool ShouldResign(GameState &state, ComputationResult &result, Parameters *param) {
-    const auto handicap = state.GetHandicap();
     const auto movenum = state.GetMoveNumber();
     const auto num_intersections = state.GetNumIntersections();
+    const auto board_size = state.GetBoardSize();
 
     const auto move_threshold = num_intersections / 4;
     if (movenum <= move_threshold) {
@@ -679,13 +679,24 @@ bool ShouldResign(GameState &state, ComputationResult &result, Parameters *param
         return false;
     }
 
-    // TODO: Blend the dynamic komi resign threshold.
+    auto resign_threshold = param->resign_threshold;
 
-    float resign_threshold = param->resign_threshold;
-    if (handicap > 0 && state.GetToMove() == kWhite) {
+    // Seem the 7 is the fair komi for most board size.
+    const auto virtual_fair_komi = 7.0f;
+    const auto komi_diff = state.GetKomi() - virtual_fair_komi;
+    const auto to_move = state.GetToMove();
+    if ((komi_diff > 0.f && to_move == kBlack) ||
+            (komi_diff < 0.f && to_move == kWhite)) {
+        // Shift the resign threshold by komi. Compensate for
+        // komi disadvantages.
+        resign_threshold =
+            resign_threshold/std::max(1.f, std::abs(5.f * komi_diff/board_size));
+    }
+
+    const auto handicap = state.GetHandicap();
+    if (handicap > 0 && to_move == kWhite) {
         const auto handicap_resign_threshold =
-                       resign_threshold / (1 + 2 * handicap);
-
+                       (resign_threshold-1.f) * handicap/20.f;
         auto blend_ratio = std::min(1.0f, movenum / (0.6f * num_intersections));
         auto blended_resign_threshold = blend_ratio * resign_threshold +
                                             (1.0f - blend_ratio) * handicap_resign_threshold;
