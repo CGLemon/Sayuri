@@ -63,7 +63,7 @@ void Network::Initialize(const std::string &weightsfile) {
     // Initialize the parameters.
     no_cache_ = GetOption<bool>("no_cache");
     early_symm_cache_ = GetOption<bool>("early_symm_cache");
-    cache_memory_mib_ = GetOption<int>("cache_memory_mib");
+    cache_memory_mib_ = 0;
 
     pipe_ = std::make_unique<Backend>();
     auto dnn_weights = std::make_shared<DNNWeights>();
@@ -81,12 +81,12 @@ void Network::Initialize(const std::string &weightsfile) {
 
     // Initialize the NN forward pipe.
     pipe_->Initialize(dnn_weights);
-    SetCacheSize(cache_memory_mib_);
+    SetCacheSize(GetOption<int>("cache_memory_mib"));
 
     num_queries_.store(0, std::memory_order_relaxed);
 }
 
-void Network::SetCacheSize(size_t MiB) {
+size_t Network::SetCacheSize(size_t MiB) {
     const size_t mem_mib = std::min(
                                std::max(size_t{5}, MiB), // min:   5 MB
                                size_t{128 * 1024}        // max: 128 GB
@@ -96,14 +96,23 @@ void Network::SetCacheSize(size_t MiB) {
     const size_t mem_byte = mem_mib * 1024 * 1024;
     size_t num_entries = mem_byte / entry_byte + 1;
 
+    cache_memory_mib_ = mem_mib;
     nn_cache_.SetCapacity(num_entries);
 
-    const double mem_used = static_cast<double>(num_entries * entry_byte) / (1024.f * 1024.f); 
+    const double mem_used =
+        static_cast<double>(num_entries * entry_byte) / (1024.f * 1024.f); 
     if (no_cache_) {
         LOGGING << "Disable the NN cache.\n";
     } else {
-        LOGGING << Format("Allocated %.2f MiB memory for NN cache (%zu entries).\n", mem_used, num_entries);
+        LOGGING << Format(
+            "Allocated %.2f MiB memory for NN cache (%zu entries).\n",
+            mem_used, num_entries);
     }
+    return num_entries;
+}
+
+size_t Network::GetCacheMib() const {
+    return cache_memory_mib_;
 }
 
 void Network::ClearCache() {

@@ -14,12 +14,10 @@ void SelfPlayPipe::Initialize() {
     // Close search verbose.
     SetOption("analysis_verbose", false);
 
-    // Force that one game uses one thread.
+    // For each each game has only one thread.
     SetOption("threads", 1);
 
     engine_.Initialize();
-
-    // TODO: Re-compute the NN cache size.
 
     target_directory_ = GetOption<std::string>("target_directory");
     max_games_ = GetOption<int>("num_games");

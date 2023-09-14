@@ -44,7 +44,8 @@ public:
 
     void Reload(int board_size);
 
-    void SetCacheSize(size_t MiB);
+    size_t SetCacheSize(size_t MiB);
+    size_t GetCacheMib() const;
     void ClearCache();
 
     size_t GetNumQueries() const;
