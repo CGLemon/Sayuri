@@ -689,8 +689,11 @@ bool ShouldResign(GameState &state, ComputationResult &result, Parameters *param
             (komi_diff < 0.f && to_move == kWhite)) {
         // Shift the resign threshold by komi. Compensate for
         // komi disadvantages.
+        auto blend_ratio = std::min(1.0f, movenum / (0.6f * num_intersections));
         resign_threshold =
-            resign_threshold/std::max(1.f, std::abs(5.f * komi_diff/board_size));
+            blend_ratio * resign_threshold +
+            (1.0f - blend_ratio) * resign_threshold/
+                std::max(1.f, std::abs(5.f * komi_diff/board_size));
     }
 
     const auto handicap = state.GetHandicap();
