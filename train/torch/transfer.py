@@ -1,3 +1,7 @@
+'''
+    This code is discarded.
+'''
+
 import argparse
 
 from network import Network

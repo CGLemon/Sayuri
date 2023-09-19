@@ -20,19 +20,26 @@ Book &Book::Get() {
 void Book::GenerateBook(std::string sgf_name, std::string filename) const {
 
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
-    std::unordered_map<std::uint64_t, VertexFrequencyList> book_data;
+    BookMap<VertexFrequencyList> book_data;
+
+    std::shuffle(std::begin(sgfs),
+        std::end(sgfs), Random<kXoroShiro128Plus>::Get());
 
     int games = 0;
     for (const auto &sgf: sgfs) {
         BookDataProcess(sgf, book_data);
         if (++games % 1000 == 0) {
-            LOGGING << Format("parsed %d games\n", games);
+            LOGGING << Format("Parsed %d games\n", games);
+        }
+        if (games > kMaxSgfGames) {
+            LOGGING << "Too many games. Cut off remaining games.\n";
+            break;
         }
     }
 
     auto file = std::ofstream{};
 
-    file.open(filename, std::ios_base::app);
+    file.open(filename);
     if (!file.is_open()) {
         LOGGING << "Fail to create the file: " << filename << '!' << std::endl; 
         return;
@@ -44,36 +51,35 @@ void Book::GenerateBook(std::string sgf_name, std::string filename) const {
         VertexProbabilityList filtered_vprob_list;
         VertexFrequencyList filtered_vfreq_list;
 
-        int acc = 0;
+        int accm = 0;
         auto &vfreq_list = it.second;
 
         for (const auto &vfreq: vfreq_list) {
             if (vfreq.second > kFilterThreshold) {
                 filtered_vfreq_list.emplace_back(vfreq);
-                acc += vfreq.second;
+                accm += vfreq.second;
             }
         }
 
-        if (acc != 0) {
+        if (accm != 0) {
             if (idx++ != 0) {
                 file << '\n';
             }
-            file << it.first << ' ';
+            file << it.first;
 
             for (const auto &vfreq: filtered_vfreq_list) {
                 int vertex = vfreq.first;
-                float prob = (float)vfreq.second / acc;
-                file << vertex << ' ' << prob << ' ';
+                float prob = (float)vfreq.second / accm;
+                file << ' ' <<  vertex << ' ' << prob;
             }
         }
     }
-
 
     file.close();
 }
 
 void Book::BookDataProcess(std::string sgfstring,
-                           std::unordered_map<std::uint64_t, VertexFrequencyList> &book_data) const {
+                           Book::BookMap<VertexFrequencyList> &book_data) const {
 
     GameState state;
     try {
@@ -91,10 +97,9 @@ void Book::BookDataProcess(std::string sgfstring,
     auto game_ite = GameStateIterator(state);
     int book_move_num = std::min(kMaxBookMoves, (int)game_ite.MaxMoveNumber());
 
-    // TODO: Same postion may have variant paths. We should 
-    //       consider it. But if we direct use transposition
-    //       table, it will use too many memory and is very
-    //       slow. Try to find a well algorithm to deal with. 
+    // TODO: Same positions may have variant paths. We should 
+    //       consider it. But it will use too many memory and process
+    //       is slow. Try to find a better algorithm to deal with it. 
     int i = 0;
     do {
         if (i++ >= book_move_num) {
@@ -165,6 +170,7 @@ void Book::LoadBook(std::string book_name) {
         data_.insert({hash, vprob});
     }
     file.close();
+    LOGGING << GetVerbose();
 }
 
 bool Book::Probe(const GameState &state, int &book_move) const {
@@ -174,9 +180,8 @@ bool Book::Probe(const GameState &state, int &book_move) const {
         return false;
     }
 
-    auto acc_score = 0;
+    auto accm_score = 0;
     auto candidate_moves = std::vector<std::pair<int, int>>{};
-
 
     auto hash = state.GetKoHash();
     auto it = data_.find(hash);
@@ -189,21 +194,21 @@ bool Book::Probe(const GameState &state, int &book_move) const {
             int score = (int)(vprob.second * 10000);
 
             candidate_moves.emplace_back(score, vtx);
-            acc_score += score;
+            accm_score += score;
         }
     }
 
     if (candidate_moves.empty()) return false;
 
-    std::stable_sort(std::rbegin(candidate_moves), std::rend(candidate_moves));
+    std::sort(std::rbegin(candidate_moves), std::rend(candidate_moves));
 
-    const auto rand = Random<kXoroShiro128Plus>::Get().Generate() % acc_score;
+    const auto rand = Random<kXoroShiro128Plus>::Get().Generate() % accm_score;
     int choice = 0;
-    acc_score = 0;
+    accm_score = 0;
 
     for (int i = 0; i < (int)candidate_moves.size(); ++i) {
-        acc_score +=  candidate_moves[i].first;
-        if (rand < (unsigned)acc_score) {
+        accm_score +=  candidate_moves[i].first;
+        if (rand < (unsigned)accm_score) {
             choice = i;
             break;
         }
@@ -229,6 +234,19 @@ std::vector<std::pair<float, int>> Book::GetCandidateMoves(const GameState &stat
         }
     }
 
-    std::stable_sort(std::rbegin(candidate_moves), std::rend(candidate_moves));
+    std::sort(std::rbegin(candidate_moves), std::rend(candidate_moves));
     return candidate_moves;
+}
+
+std::string Book::GetVerbose() const {
+    auto oss = std::ostringstream();
+
+    int positions = 0;
+    int moves = 0;
+    for (auto &it : data_) {
+        positions += 1;
+        moves += it.second.size();
+    }
+    oss << Format("The Book contains %d positions and %d candidate moves\n", positions, moves);
+    return oss.str();
 }

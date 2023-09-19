@@ -28,10 +28,10 @@ public:
     void SetCapacity(size_t size);
 
     // Insert the new item to the cache.
-    void Insert(std::uint64_t key, const V &value);
+    void Insert(std::uint64_t key, const V& value);
 
     // Lookup the item.
-    V* LookupItem(std::uint64_t key);
+    bool LookupItem(std::uint64_t key, V& val);
 
     // Clear the hash.
     void Clear();
@@ -74,7 +74,7 @@ void HashKeyCache<V>::SetCapacity(size_t size) {
 }
 
 template<typename V>
-void HashKeyCache<V>::Insert(std::uint64_t key, const V &value) {
+void HashKeyCache<V>::Insert(std::uint64_t key, const V& value) {
     const auto idx = (key % blocks_) * kClusterSize;
     Entry *entry = table_.data() + idx;
 
@@ -99,7 +99,7 @@ void HashKeyCache<V>::Insert(std::uint64_t key, const V &value) {
 }
 
 template<typename V>
-V* HashKeyCache<V>::LookupItem(std::uint64_t key) {
+bool HashKeyCache<V>::LookupItem(std::uint64_t key, V& val) {
     const auto idx = (key % blocks_) * kClusterSize;
     Entry *entry = table_.data() + idx;
 
@@ -108,11 +108,12 @@ V* HashKeyCache<V>::LookupItem(std::uint64_t key) {
     for (size_t offset = 0; offset < kClusterSize; ++offset) {
         Entry *e = entry + offset;
         if (e->key == key && e->generation != 0) {
-            return e->value.get();
+            val = *(e->value.get());
+            return true;
         }
     }
 
-    return nullptr;
+    return false;
 }
 
 template<typename V>
@@ -126,7 +127,6 @@ void HashKeyCache<V>::Clear() {
                          e.value.reset(nullptr);
                      }
                  );
-    
 }
 
 template<typename V>
@@ -136,10 +136,7 @@ size_t HashKeyCache<V>::GetEntrySize() const {
 
 template<typename V>
 bool LookupCache(HashKeyCache<V> &cache, std::uint64_t key, V& val) {
-    auto result = cache.LookupItem(key);
-    if (result) {
-        val = *result;
-        return true;
-    }
-    return false;
+    // Interface for NN cache. Remain it for supporting the
+    // old code. 
+    return cache.LookupItem(key, val);
 }

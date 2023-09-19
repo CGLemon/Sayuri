@@ -55,26 +55,38 @@ void Network::Initialize(const std::string &weightsfile) {
 #endif
 
 #ifdef USE_CUDA
-    using backend = CudaForwardPipe;
+    using Backend = CudaForwardPipe;
 #else
-    using backend = BlasForwardPipe;
+    using Backend = BlasForwardPipe;
 #endif
 
-    pipe_ = std::make_unique<backend>();
+    // Initialize the parameters.
+    no_cache_ = GetOption<bool>("no_cache");
+    early_symm_cache_ = GetOption<bool>("early_symm_cache");
+    cache_memory_mib_ = 0;
+
+    pipe_ = std::make_unique<Backend>();
     auto dnn_weights = std::make_shared<DNNWeights>();
 
+    // Parse the NN weights file.
     DNNLoder::Get().FromFile(dnn_weights, weightsfile);
 
+    // There is no weighs. Will disable the NN forward pipe. 
     if (!dnn_weights->loaded) {
         dnn_weights.reset();
         dnn_weights = nullptr;
+        no_cache_ = false; // Disable cache because it is not
+                           // effect on dummy forwarding pipe.
     }
 
+    // Initialize the NN forward pipe.
     pipe_->Initialize(dnn_weights);
     SetCacheSize(GetOption<int>("cache_memory_mib"));
+
+    num_queries_.store(0, std::memory_order_relaxed);
 }
 
-void Network::SetCacheSize(size_t MiB) {
+size_t Network::SetCacheSize(size_t MiB) {
     const size_t mem_mib = std::min(
                                std::max(size_t{5}, MiB), // min:   5 MB
                                size_t{128 * 1024}        // max: 128 GB
@@ -84,34 +96,51 @@ void Network::SetCacheSize(size_t MiB) {
     const size_t mem_byte = mem_mib * 1024 * 1024;
     size_t num_entries = mem_byte / entry_byte + 1;
 
+    cache_memory_mib_ = mem_mib;
     nn_cache_.SetCapacity(num_entries);
 
-    const double mem_used = static_cast<double>(num_entries * entry_byte) / (1024.f * 1024.f); 
-    LOGGING << Format("Allocated %.2f MiB memory for NN cache (%zu entries). \n", mem_used, num_entries);
+    const double mem_used =
+        static_cast<double>(num_entries * entry_byte) / (1024.f * 1024.f); 
+    if (no_cache_) {
+        LOGGING << "Disable the NN cache.\n";
+    } else {
+        LOGGING << Format(
+            "Allocated %.2f MiB memory for NN cache (%zu entries).\n",
+            mem_used, num_entries);
+    }
+    return num_entries;
+}
+
+size_t Network::GetCacheMib() const {
+    return cache_memory_mib_;
 }
 
 void Network::ClearCache() {
     nn_cache_.Clear();
 }
 
+size_t Network::GetNumQueries() const {
+    return num_queries_.load(std::memory_order_relaxed);
+}
+
 Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
     Network::Result result{};
 
     auto rng = Random<>::Get();
-    auto dis = std::uniform_real_distribution<float>(0, 1);
+    auto dist = std::uniform_real_distribution<float>(0, 1);
 
     const auto boardsize = inputs.board_size;
     const auto num_intersections = boardsize * boardsize;
 
     result.board_size = boardsize;
     for (int idx = 0; idx < 3; ++idx) {
-        result.wdl[idx] = dis(rng);
+        result.wdl[idx] = dist(rng);
     }
 
     for (int idx = 0; idx < num_intersections; ++idx) {
-        result.probabilities[idx] = dis(rng);
+        result.probabilities[idx] = dist(rng);
     }
-    result.pass_probability = dis(rng);
+    result.pass_probability = dist(rng);
 
     return result;
 }
@@ -125,6 +154,7 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
     auto inputs = Encoder::Get().GetInputs(state, symmetry);
 
     if (pipe_->Valid()) {
+        num_queries_.fetch_add(1, std::memory_order_relaxed);
         result_buf = pipe_->Forward(inputs);
     } else {
         result_buf = DummyForward(inputs);
@@ -166,7 +196,18 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
     out_result.wdl[1] = wdl_buffer[1];
     out_result.wdl[2] = wdl_buffer[2];
     out_result.wdl_winrate = (wdl_buffer[0] - wdl_buffer[2] + 1.f) / 2;
-    out_result.stm_winrate = (std::tanh(out_result.stm_winrate) + 1.f) / 2;
+    out_result.stm_winrate = (std::tanh(result_buf.stm_winrate) + 1.f) / 2;
+
+    // error
+    auto SoftplusSquare = [](float x) -> float {
+        if (x <= 20.f) {
+            x = std::log(1.f + std::exp(x));
+        }
+        return (x * x) / 4.f;
+    };
+
+    out_result.q_error = 0.25 * SoftplusSquare(result_buf.q_error);
+    out_result.score_error = 150 * SoftplusSquare(result_buf.score_error);
 
     return out_result;
 }
@@ -179,8 +220,7 @@ bool Network::ProbeCache(const GameState &state,
         }
     }
 
-    if (state.GetBoardSize() >= state.GetMoveNumber() &&
-            GetOption<bool>("early_symm_cache")) {
+    if (state.GetBoardSize() >= state.GetMoveNumber() && early_symm_cache_) {
         for (int symm = Symmetry::kIdentitySymmetry+1; symm < Symmetry::kNumSymmetris; ++symm) {
             if (LookupCache(nn_cache_, state.ComputeSymmetryHash(symm), result)) {
                 if (result.board_size != state.GetBoardSize()) {
@@ -231,8 +271,8 @@ Network::GetOutput(const GameState &state,
 
     bool probed = false;
 
-    // Get result from cache, if it is in the cache memory.
-    if (read_cache) {
+    // Try to get forwarding result from cache.
+    if (read_cache && !no_cache_) {
         if (ProbeCache(state, result)) {
             probed = true;
         }
@@ -241,8 +281,8 @@ Network::GetOutput(const GameState &state,
     if (!probed) {
         result = GetOutputInternal(state, symmetry);
 
-        // Write result to cache, if it is not in the cache memory.
-        if (write_cache) {
+        // Write forwarding result to cache.
+        if (write_cache && !no_cache_) {
             nn_cache_.Insert(state.GetHash(), result);
         }
     }
@@ -266,6 +306,8 @@ std::string Network::GetOutputString(const GameState &state,
     out << "draw probability: " << result.wdl[1] << std::endl;
     out << "loss probability: " << result.wdl[2] << std::endl;
     out << "final score: " << result.final_score << std::endl;
+    out << "q error: " << result.q_error << std::endl;
+    out << "score error: " << result.score_error << std::endl;
 
     out << "probabilities: " << std::endl;
     for (int y = 0; y < bsize; ++y) {
@@ -306,35 +348,43 @@ void Network::ActivatePolicy(Result &result, const float temperature) const {
     result.pass_probability = probabilities_buffer[num_intersections];
 }
 
-int Network::GetBestPolicyVertex(const GameState &state,
+int Network::GetVertexWithPolicy(const GameState &state,
+                                 const float temperature,
                                  const bool allow_pass) {
-    const auto result = GetOutput(state, kRandom);
+    const auto result = GetOutput(state, kRandom, temperature);
     const auto boardsize = result.board_size;
     const auto num_intersections = boardsize * boardsize;
 
-    int max_idx = -1;
-    int max_vtx = kPass;
+    auto select_vtx = kNullVertex;
+    auto accum = float{0.0f};
+    auto accum_vector = std::vector<std::pair<float, int>>{};
 
     for (int idx = 0; idx < num_intersections; ++idx) {
-        if (max_idx == -1 ||
-                result.probabilities[max_idx] < result.probabilities[idx]) {
-            const auto x = idx % boardsize;
-            const auto y = idx / boardsize;
-            const auto vtx = state.GetVertex(x,y);
-
-            if (state.IsLegalMove(vtx)) {
-                max_idx = idx;
-                max_vtx = vtx;
-            }
+        const auto vtx = state.IndexToVertex(idx);
+        if (state.IsLegalMove(vtx)) {
+            accum += result.probabilities[idx];
+            accum_vector.emplace_back(std::pair<float, int>(accum, vtx));
         }
     }
 
-    if (allow_pass &&
-            result.probabilities[max_idx] < result.pass_probability) {
-        return kPass;
+    if (accum_vector.empty() || allow_pass) {
+        accum += result.pass_probability;
+        accum_vector.emplace_back(std::pair<float, int>(accum, kPass));
     }
 
-    return max_vtx;
+    auto distribution = std::uniform_real_distribution<float>{0.0, accum};
+    auto pick = distribution(Random<>::Get());
+    auto size = accum_vector.size();
+
+    for (auto idx = size_t{0}; idx < size; ++idx) {
+        if (pick < accum_vector[idx].first) {
+            select_vtx = accum_vector[idx].second;
+            break;
+        }
+    }
+
+    return select_vtx;
+
 }
 
 bool Network::Valid() const {

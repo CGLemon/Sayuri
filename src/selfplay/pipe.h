@@ -18,6 +18,8 @@ private:
     bool SaveChunk(const int out_id,
                    std::vector<Training> &chunk);
 
+    bool SaveNetQueries(const size_t queries);
+
     std::mutex data_mutex_;
     std::mutex log_mutex_;
 

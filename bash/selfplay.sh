@@ -3,6 +3,7 @@
 # directory parameters
 WORKSPACE="workspace"
 SELFPLAY_DIR="selfplay"
+WEIGHTS_DIR="$WORKSPACE/weights"
 LAST_STEPS_FILE="$WORKSPACE/last_steps.txt"
 SETTING_FILE="selfplay-setting.json"
 KILL_FILE="kill.txt"
@@ -18,20 +19,14 @@ safe_mkdir()
 
 safe_mkdir $SELFPLAY_DIR
 safe_mkdir $WORKSPACE
+safe_mkdir $WEIGHTS_DIR
 
 while true
 do
-    # Get the last weights name.
-    NUM_STEPS=0
-    if [ -f $LAST_STEPS_FILE ]; then
-        NUM_STEPS=$( cat $LAST_STEPS_FILE )
-    fi
-    CURR_WEIGHTS="$WORKSPACE/model/s$NUM_STEPS.bin.txt"
-
     # Do the self-play.
     ENGINE_PLAY_CMD="./$ENGINE_NAME --mode selfplay --config $CONFIG_FILE"
     ENGINE_PLAY_CMD="$ENGINE_PLAY_CMD --target-directory $SELFPLAY_DIR"
-    ENGINE_PLAY_CMD="$ENGINE_PLAY_CMD --weights $CURR_WEIGHTS"
+    ENGINE_PLAY_CMD="$ENGINE_PLAY_CMD --weights-dir $WEIGHTS_DIR"
 
     echo $ENGINE_PLAY_CMD
     $ENGINE_PLAY_CMD
@@ -40,16 +35,10 @@ do
     TRAIN_CMD="python3 torch/parser.py -j $SETTING_FILE"
     $TRAIN_CMD
 
-    # Transfer the last model.
-    if [ -f $LAST_STEPS_FILE ]; then
-        NUM_STEPS=$( cat $LAST_STEPS_FILE )
-    fi
-    TRANSFER_CMD="python3 torch/transfer.py -j $SETTING_FILE -b -n $WORKSPACE/model/s$NUM_STEPS"
-    $TRANSFER_CMD
-
     # Stop the loop if we find the kill file.
     if [ -f $KILL_FILE ]; then 
         echo "Find the kill file. Stop the self-play loop."
+        rm $KILL_FILE
         break
     fi
 done

@@ -12,6 +12,7 @@
 #include "utils/log.h"
 #include "utils/format.h"
 #include "utils/random.h"
+#include "utils/kldivergence.h"
 #include "game/book.h"
 
 #ifdef WIN32
@@ -30,6 +31,13 @@ Search::~Search() {
 void Search::Initialize() {
     param_ = std::make_unique<Parameters>();
     param_->Reset();
+
+    no_exploring_param_ = std::make_unique<Parameters>();
+    no_exploring_param_->Reset();
+    no_exploring_param_->gumbel = false;
+    no_exploring_param_->dirichlet_noise = false;
+    no_exploring_param_->root_policy_temp = 1.f;
+    no_exploring_param_->forced_playouts_k = 0.f;
 
     analysis_config_.Clear();
     last_state_ = root_state_;
@@ -65,25 +73,17 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
             // Prune this superko move.
             node->Invalidate();
         } else {
-            const auto visits = node->GetVisits();
-            if (param_->no_dcnn &&
-                    visits < GetExpandThreshold(currstate)) {
-                // Do the rollout only if the visits is below threshold
-                // in the no dcnn mode.
-                search_result.FromRollout(currstate);
-            } else {
-                const bool has_children = node->HasChildren();
+            const bool has_children = node->HasChildren();
 
-                // If we can not expand the node, it means that another thread
-                // is under this node. Skip the simulation stage this time. However,
-                // it still has a chance do PUCT/UCT.
-                auto node_evals = NodeEvals{};
-                const bool success = node->ExpandChildren(
-                    network_, currstate, node_evals, analysis_config_, false);
+            // If we can not expand the node, it means that another thread
+            // is under this node. Skip the simulation stage this time. However,
+            // it still has a chance do PUCT/UCT.
+            auto node_evals = NodeEvals{};
+            const bool success = node->ExpandChildren(
+                network_, currstate, node_evals, analysis_config_, false);
 
-                if (!has_children && success) {
-                    search_result.FromNetEvals(node_evals);
-                }
+            if (!has_children && success) {
+                search_result.FromNetEvals(node_evals);
             }
         }
     }
@@ -93,12 +93,9 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
         auto color = currstate.GetToMove();
         Node *next = nullptr;
 
-        // Go to the next node by PUCT/UCT algoritim.
-        if (param_->no_dcnn) {
-            next = node->UctSelectChild(color, depth == 0, currstate);
-        } else {
-            next = node->PuctSelectChild(color, depth == 0);
-        }
+        // Go to the next node by PUCT algoritim.
+        next = node->PuctSelectChild(color, depth == 0);
+
         auto vtx = next->GetVertex();
         currstate.PlayMove(vtx, color);
 
@@ -127,13 +124,30 @@ void Search::PrepareRootNode() {
     playouts_.store(0, std::memory_order_relaxed);
     running_.store(true, std::memory_order_relaxed);
 
-    auto node_evals = NodeEvals{};
+    root_evals_ = NodeEvals{};
     const bool success = root_node_->PrepareRootNode(
-                             network_, root_state_, node_evals, analysis_config_);
+                             network_, root_state_, root_evals_, analysis_config_);
 
     if (!reused && success) {
-        root_node_->Update(&node_evals);
+        root_node_->Update(&root_evals_);
     }
+
+    // Compute the current root visits distribution. We can compute
+    // the KLD gaining from this distribution.
+    int visited_nodes;
+    last_root_dist_ = GetRootDistribution(visited_nodes);
+
+    // We should get this root policy from the NN cache. The softmax
+    // temperature of 'root_evals_' may be not 1 so we need to
+    // compute it again.
+    auto netlist = network_.GetOutput(root_state_, Network::kRandom, 1);
+    auto num_intersections = root_state_.GetNumIntersections();
+    root_raw_probabilities_.resize(num_intersections+1);
+
+    std::copy(std::begin(netlist.probabilities), 
+                  std::begin(netlist.probabilities) + num_intersections,
+                  std::begin(root_raw_probabilities_));
+    root_raw_probabilities_[num_intersections] = netlist.pass_probability;
 }
 
 void Search::ReleaseTree() {
@@ -149,6 +163,7 @@ void Search::TimeSettings(const int main_time,
                           const int byo_yomi_periods) {
     time_control_.TimeSettings(main_time, byo_yomi_time,
                                    byo_yomi_stones, byo_yomi_periods);
+    time_control_.SetLagBuffer(param_->lag_buffer);
 }
 
 void Search::TimeLeft(const int color, const int time, const int stones) {
@@ -214,12 +229,9 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         }
     }
 
-    // Disable any noise if we forbid them.
-    const bool gumbel = param_->gumbel;
-    const bool dirichlet_noise = param_->dirichlet_noise;
-    if (tag & kNoNoise) {
-        param_->gumbel =
-            param_->dirichlet_noise = false;
+    // Disable any exploring setting.
+    if (tag & kNoExploring) {
+        std::swap(param_, no_exploring_param_);
     }
 
     // Prepare some basic information.
@@ -267,8 +279,9 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     Timer analysis_timer; // for analysis
 
     // Set the time control.
-    time_control_.SetLagBuffer(param_->lag_buffer);
     time_control_.Clock();
+    time_control_.SetLagBuffer(
+        std::max(param_->lag_buffer, time_control_.GetLagBuffer()));
 
     // Clean the timer.
     timer.Clock();
@@ -279,16 +292,20 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     const float bound_time = (param_->const_time > 0 &&
                                  time_control_.IsInfiniteTime(color)) ?
                                      param_->const_time : std::numeric_limits<float>::max();
+    const float thinking_time = !(tag & kThinking) ?
+                                    time_control_.GetInfiniteTime() : 
+                                    std::min(
+                                        bound_time,
+                                        time_control_.GetThinkingTime(
+                                            color, board_size, move_num));
 
-    const auto thinking_time = std::min(
-                                   bound_time,
-                                   time_control_.GetThinkingTime(color, board_size, move_num));
+    // Will be zero if time mananger is invalid.
+    const float buffer_effect = time_control_.GetBufferEffect(
+                                    color, board_size, move_num);
+
     PrepareRootNode();
 
     if (param_->analysis_verbose) {
-        if (param_->no_dcnn) {
-            LOGGING << "Disable DCNN forwarding pipe\n";
-        }
         LOGGING << Format("Reuse %d nodes\n", root_node_->GetVisits()-1);
         LOGGING << Format("Use %d threads for search\n", param_->threads);
         LOGGING << Format("Max thinking time: %.2f(sec)\n", thinking_time);
@@ -307,6 +324,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     }
 
     // Main thread is running.
+    int last_updating_playouts = 0;
     auto keep_running = running_.load(std::memory_order_relaxed);
 
     while (!InputPending(tag) && keep_running) {
@@ -330,20 +348,18 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
             }
         }
 
-        const auto elapsed = (tag & kThinking) ?
-                                 timer.GetDuration() : std::numeric_limits<float>::lowest();
+        const auto elapsed = timer.GetDuration();
+        const auto curr_playouts = playouts_.load(std::memory_order_relaxed);
 
-        // TODO: Stop running when there is no alternate move.
         if (tag & kUnreused) {
-            // We simply limit the root visits instead of unreuse the tree. It is
-            // because that limiting the root node visits is equal to unreuse tree.
-            // Notice that the visits of root node start from one. We need to
+            // We simply limit the root visits instead of releasing the tree. It is
+            // because that limiting the root node visits is equal to disable the reused
+            // tree. Notice that the visits of root node start from one. We need to
             // reduce it.
             keep_running &= (root_node_->GetVisits() - 1 < playouts);
         }
         if (param_->resign_playouts > 0 &&
-                param_->resign_playouts <=
-                    playouts_.load(std::memory_order_relaxed)) {
+                param_->resign_playouts <= curr_playouts) {
             // If someone already won the game, the Q value was not very effective
             // in the MCTS. Low playouts with policy network is good enough. Just
             // simply stop the tree search.
@@ -351,8 +367,17 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
             keep_running &= !(wl < param_->resign_threshold ||
                                 wl > (1.f-param_->resign_threshold));
         }
-        keep_running &= (elapsed < thinking_time);
-        keep_running &= (playouts_.load(std::memory_order_relaxed) < playouts);
+        if (tag & kThinking) {
+            keep_running &= (elapsed < thinking_time);
+
+            const auto check_freq = std::max(
+                100.f, std::sqrt(10.f * curr_playouts));
+            if (curr_playouts - last_updating_playouts >= (int)check_freq) {
+                last_updating_playouts = curr_playouts;
+                keep_running &= HaveAlternateMoves();
+            }
+        }
+        keep_running &= (curr_playouts < playouts);
         keep_running &= running_.load(std::memory_order_relaxed);
     };
 
@@ -366,6 +391,28 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
 
     if (tag & kThinking) {
         time_control_.TookTime(color);
+
+        // Try to adjust the lag buffer. Avoid to be time-out for
+        // the last move.
+        float curr_lag_buf = time_control_.GetLagBuffer();
+        const auto elapsed = timer.GetDuration();
+
+        // Compute a conservative thinking time with lag buffer.
+        const auto thinking_time_with_lag =
+                       thinking_time + std::max(
+                                           0.75f * buffer_effect,
+                                           buffer_effect - 1.0f);
+
+        if (elapsed > thinking_time_with_lag) {
+            const auto diff = elapsed - thinking_time_with_lag;
+
+            // Give it a more conservative time buffer.
+            curr_lag_buf = curr_lag_buf + std::min(
+                                              1.5f * diff,
+                                              1.0f + diff);
+            time_control_.SetLagBuffer(
+                std::max(param_->lag_buffer, curr_lag_buf));
+        }
     }
     if (tag & kAnalysis) {
         // Output the last analysis verbose because the MCTS may
@@ -403,9 +450,8 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
             root_state_.PlayMove(kPass);
         }
     }
-    if (tag & kNoNoise) {
-        param_->gumbel = gumbel;
-        param_->dirichlet_noise = dirichlet_noise;
+    if (tag & kNoExploring) {
+        std::swap(param_, no_exploring_param_);
     } 
 
     return computation_result;
@@ -420,12 +466,15 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     result.best_move = root_node_->GetBestMove(true);
     result.best_no_pass_move = root_node_->GetBestMove(false);
     result.random_move = root_node_->
-                             RandomizeMoveWithGumbel(
+                             RandomMoveWithLogitsQ(
                                  root_state_,
                                  1, param_->random_min_visits);
-    result.gumbel_move = root_node_->GetGumbelMove();
-    result.root_final_score = root_node_->GetFinalScore(color);
+    result.gumbel_move = root_node_->GetGumbelMove(true);
+    result.gumbel_no_pass_move = root_node_->GetGumbelMove(false);
+    result.root_score_lead = root_node_->GetFinalScore(color);
     result.root_eval = root_node_->GetWL(color, false);
+    result.root_score_stddev = root_node_->GetScoreStddev();
+    result.root_eval_stddev = root_node_->GetWLStddev();
     {
         auto best_node = root_node_->GetChild(result.best_move);
         if (best_node->GetVisits() >= 1) {
@@ -436,10 +485,10 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     }
 
     // Resize the childern status buffer.
-    result.root_ownership.resize(num_intersections);
-    result.root_playouts_dist.resize(num_intersections+1);
-    result.root_visits.resize(num_intersections+1);
-    result.target_playouts_dist.resize(num_intersections+1);
+    result.root_ownership.resize(num_intersections, 0);
+    result.root_playouts_dist.resize(num_intersections+1, 0);
+    result.root_visits.resize(num_intersections+1, 0);
+    result.target_playouts_dist.resize(num_intersections+1, 0);
 
     // Fill ownership.
     auto ownership = root_node_->GetOwnership(color);
@@ -527,6 +576,9 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         }
     }
 
+    result.policy_kld = GetKlDivergence(
+        result.target_playouts_dist, root_raw_probabilities_);
+
     // Fill the dead strings and live strings.
     constexpr float kOwnshipThreshold = 0.75f;
 
@@ -577,12 +629,14 @@ void Search::GatherComputationResult(ComputationResult &result) const {
 
     result.alive_strings = alive;
     result.dead_strings = dead;
+
+    // The capture all dead move... not for othello game...
 }
 
-bool ShouldResign(GameState &state, ComputationResult &result, float resign_threshold) {
-    const auto handicap = state.GetHandicap();
+bool ShouldResign(GameState &state, ComputationResult &result, Parameters *param) {
     const auto movenum = state.GetMoveNumber();
     const auto num_intersections = state.GetNumIntersections();
+    const auto board_size = state.GetBoardSize();
 
     const auto move_threshold = num_intersections / 4;
     if (movenum <= move_threshold) {
@@ -594,12 +648,27 @@ bool ShouldResign(GameState &state, ComputationResult &result, float resign_thre
         return false;
     }
 
-    // TODO: Blend the dynamic komi resign threshold.
+    auto resign_threshold = param->resign_threshold;
 
-    if (handicap > 0 && state.GetToMove() == kWhite) {
+    // Seem the 7 is the fair komi for most board size.
+    const auto virtual_fair_komi = 0.f;
+    const auto komi_diff = state.GetKomi() - virtual_fair_komi;
+    const auto to_move = state.GetToMove();
+    if ((komi_diff > 0.f && to_move == kBlack) ||
+            (komi_diff < 0.f && to_move == kWhite)) {
+        // Shift the resign threshold by komi. Compensate for
+        // komi disadvantages.
+        auto blend_ratio = std::min(1.0f, movenum / (0.6f * num_intersections));
+        resign_threshold =
+            blend_ratio * resign_threshold +
+            (1.0f - blend_ratio) * resign_threshold/
+                std::max(1.f, std::abs(5.f * komi_diff/board_size));
+    }
+
+    const auto handicap = state.GetHandicap();
+    if (handicap > 0 && to_move == kWhite) {
         const auto handicap_resign_threshold =
-                       resign_threshold / (1 + 2 * handicap);
-
+                       (resign_threshold-1.f) * handicap/20.f;
         auto blend_ratio = std::min(1.0f, movenum / (0.6f * num_intersections));
         auto blended_resign_threshold = blend_ratio * resign_threshold +
                                             (1.0f - blend_ratio) * handicap_resign_threshold;
@@ -617,62 +686,8 @@ bool ShouldResign(GameState &state, ComputationResult &result, float resign_thre
     return true;
 }
 
-bool ShouldPass(GameState &state, ComputationResult &result, bool friendly_pass) {
-    if (!friendly_pass || state.GetLastMove() != kPass) {
-        return false;
-    }
-
-    const auto move_threshold = state.GetNumIntersections() / 3;
-    if (state.GetMoveNumber() <= move_threshold) {
-        // Too early to pass.
-        return false;
-    }
-
-    auto dead_list = std::vector<int>{};
-    auto fork_state = state;
-
-    for (const auto &string : result.dead_strings) {
-        for (const auto vtx: string) {
-            dead_list.emplace_back(vtx);
-        }
-    }
-
-    // Remove the dead strings predicted by NN.
-    fork_state.RemoveDeadStrings(dead_list);
-    int num_dame = 0;
-
-    const auto board_size = fork_state.GetBoardSize();
-    for (int y = 0; y < board_size; ++y) {
-        for (int x = 0; x < board_size; ++x) {
-            const auto vtx = fork_state.GetVertex(x, y);
-            if (fork_state.GetState(vtx) != kEmpty &&
-                    fork_state.GetLiberties(vtx) == 1) {
-                // At least one string in atari, the game
-                // is not over yet. 
-                return false;
-            } else if (fork_state.GetState(vtx) == kEmpty) {
-                // This empty point does not belong to any
-                // side. It is the dame.
-                num_dame += 1;
-            }
-        }
-    }
-
-    (void) num_dame;
-
-    // Compute the final score.
-    float score = fork_state.GetFinalScore();
-
-    if (state.GetToMove() == kWhite) {
-        score = 0 - score;
-    }
-
-    if (score > 0.1f) {
-        // We already win the game. We will play the pass move.
-        return true;
-    }
-
-    // The game result is unknown. We will keep playing.
+bool ShouldPass(GameState &state, ComputationResult &result, Parameters *param) {
+    // not for othello game...
     return false;
 }
 
@@ -680,124 +695,146 @@ int Search::ThinkBestMove() {
     auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
     auto result = Computation(max_playouts_, tag);
 
-    if (ShouldResign(root_state_, result, param_->resign_threshold)) {
+    if (ShouldResign(root_state_, result, param_.get())) {
         return kResign;
     }
 
-    if (ShouldPass(root_state_, result, param_->friendly_pass)) {
-        return kPass;
+    int best_move = result.best_move;
+    if (ShouldPass(root_state_, result, param_.get())) {
+        best_move = kPass;
     }
-
-    return result.best_move;
+    return best_move;
 }
 
-bool ShouldForbidPass(GameState &state, ComputationResult &result) {
-    int to_move = result.to_move;
-    auto safe_ownership = state.GetOwnership();
-
-    for (const auto &string : result.dead_strings) {
-        // All vertex in a string should be same color.
-        const auto vtx = string[0];
-        const auto x = state.GetX(vtx);
-        const auto y = state.GetY(vtx);
-        const auto idx = state.GetIndex(x, y);
-
-        // Some opp's strings are death. Forbid the pass
-        // move. Keep to eat all opp's dead strings.
-        if (state.GetState(vtx) == (!to_move) &&
-                safe_ownership[idx] != to_move) {
-            return true;
-        }
-    }
+bool ShouldForbidPass(GameState &state,
+                      ComputationResult &result,
+                      NodeEvals &root_evals) {
+    // not for othello game...
     return false;
 }
 
 int Search::GetSelfPlayMove() {
-    auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
+    // We always reuse the sub-tree at fast search phase. The
+    // kUnreused option doesn't mean discarding the sub-tree. 
+    // It means visit cap (The search result is as same as
+    // "playouts cap" + "discard the tree"). The default is playouts
+    // cap. If the reuse tag is true, it is visit cap oscillation.
+    // Every visit of fast search phase may be different. If the
+    // reuse tag is false, it is playouts cap oscillation which
+    // is used by KataGo. Please see here, https://arxiv.org/abs/1902.10565v2
+    auto reuse_tag = param_->reuse_tree ?
+                         kNullTag : kUnreused;
+    auto tag = kThinking | reuse_tag;
 
+    const int random_moves_cnt = param_->random_moves_factor *
+                                     root_state_.GetNumIntersections();
+    bool is_opening_random = root_state_.GetMoveNumber() < random_moves_cnt;
+
+    // Decide the playouts number first. Default is max
+    // playouts. May use the lower playouts instead of it.
     int playouts = max_playouts_;
-    int reduce_playouts = param_->reduce_playouts;
-    float prob = param_->reduce_playouts_prob;
-    if (reduce_playouts > 0 &&
-            reduce_playouts < max_playouts_ &&
-            Random<>::Get().Roulette<10000>(prob)) {
 
-        const auto diff = max_playouts_ - reduce_playouts;
-        auto geometric = std::geometric_distribution<>(
-                             1.f/(std::sqrt((float)diff)));
-        const auto v = std::min(geometric(Random<>::Get()), diff);
+    if (param_->reduce_playouts > 0 &&
+            param_->reduce_playouts < max_playouts_ &&
+            Random<>::Get().Roulette<10000>(param_->reduce_playouts_prob)) {
 
-        // The reduce playouts must be smaller than playouts.
+        // The reduce playouts must be smaller than default
+        // playouts. It is fast search phase so we also disable
+        // all exploring settings.
         playouts = std::min(
-                       playouts,
-                       reduce_playouts + v);
+            playouts, param_->reduce_playouts);
+        tag = tag | kNoExploring;
     }
 
     if (!network_.Valid()) {
-        // The network is dummy backend. The playing move is 
+        // The network is dummy backend. The playout path is 
         // random, so we only use one tenth playouts in order
         // to reduce time.
         playouts /= 10;
     }
 
-    // There is at least one playout for the self-play move
+    // The playouts should be at least one for the self-play move
     // because some move select functions need at least one.
     playouts = std::max(1, playouts);
 
+    // Now start the MCTS.
     auto result = Computation(playouts, tag);
-    int move = result.best_move;
+    const bool is_gumbel = root_node_->ShouldApplyGumbel() && !(tag & kNoExploring);
+
+    // Default is the best move or the Gumbel-Top-k trick move. May use
+    // another move instead of it later.
+    int move = is_gumbel ? result.gumbel_move : result.best_move;
 
     // The game is not end. Don't play the pass move.
-    if (ShouldForbidPass(root_state_, result)) {
-        move = result.best_no_pass_move;
+    if (ShouldForbidPass(root_state_, result, root_evals_)) {
+        move = is_gumbel ?
+                   result.gumbel_no_pass_move :
+                   result.best_no_pass_move;
     }
 
-    int random_moves_cnt = param_->random_moves_factor *
-                               result.board_size * result.board_size;
-
-    // Do the random move in the opening step in order to improve the
-    // game state diversity.
-    if (random_moves_cnt > result.movenum) {
+    // Do the random move in the opening stage in order to improve the
+    // game state diversity. The Gumbel noise may be good enough. Don't
+    // play the random move if 'is_gumbel' is true.
+    if (is_opening_random && !is_gumbel) {
         move = result.random_move;
     }
 
-    // The Gumbel-Top-k trick holds more information, so we use it instead
-    // of random move.
-    if (root_node_->ShouldApplyGumbel()) {
-        move = result.gumbel_move;
-    }
-
-    // Save the move comment.
+    // If the 'discard_it' is true, we will discard the current training 
+    // data. It is because that the quality of current data is bad. To
+    // discard it can improve the network performance.
+    bool discard_it = false;
     float root_eval = result.root_eval;
-    float root_score = result.root_final_score;
-
+    float root_score = result.root_score_lead;
+    if (tag & kNoExploring) {
+        // It is fast search of "Playout Cap Randomization". Do
+        // not record the low quality datas. 
+        discard_it = true;
+    }
+    if (root_eval < param_->resign_threshold ||
+            root_eval > (1.f-param_->resign_threshold)) {
+        // Someone already won the game. Do not record this kind
+        // of positions too much to avoid introducing pathological
+        // biases in the training data
+        if (Random<>::Get().Roulette<10000>(param_->resign_discard_prob)) {
+            discard_it = true;
+        }
+    }
     if (result.to_move == kWhite) {
+        // Always record the black's view point.
         root_eval = 1.0f - root_eval;
         root_score = 0.f - root_score;
     }
+
+    // TODO: Use "Policy Surprise Weighting" instead of
+    //       "Playout Cap Randomization". See the document
+    //       here, https://github.com/lightvector/KataGo/blob/master/docs/KataGoMethods.md
+    const float record_kld = result.policy_kld;
+    const char discard_char = discard_it ? 'F' : 'T';
+    const int root_visits = root_node_->GetVisits();
+
+    // Save the move comment in the SGF file.
     root_state_.SetComment(
-        Format("%d, %.2f, %.2f",
-            result.playouts,
-            root_eval, root_score));
+        Format("%d, %d, %.2f, %.2f, %.2f, %c",
+            result.playouts, root_visits,
+            root_eval, root_score, record_kld, discard_char));
 
     // Push the data to buffer.
-    GatherData(root_state_, result);
+    GatherData(root_state_, result, discard_it);
 
     return move;
 }
 
 void Search::TryPonder() {
     if (param_->ponder) {
+        // The ponder mode always reuses the tree.
         Computation(GetPonderPlayouts(), kPonder);
     }
 }
 
 int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
-    // Analysis mode.
     auto analysis_tag = kAnalysis;
-
-    // Ponder mode always reuse the tree.
-    auto reuse_tag = (param_->reuse_tree || ponder) ? kNullTag : kUnreused;
+    auto reuse_tag = param_->reuse_tree ?
+                         kNullTag : kUnreused;
     auto ponder_tag = ponder ? kPonder : kThinking;
 
     auto tag = reuse_tag | ponder_tag | analysis_tag;
@@ -805,11 +842,16 @@ int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
     // Set the current analysis config.
     analysis_config_ = analysis_config;
 
+    // The tree shape may be different with last move.
+    if (analysis_config_.MoveRestrictions()) {
+        ReleaseTree();
+    }
+
     int playouts = ponder == true ? GetPonderPlayouts()
                                       : max_playouts_;
     auto result = Computation(playouts, tag);
 
-    // Disable the reusing the tree.
+    // Disable to reuse the tree for next move.
     if (analysis_config_.MoveRestrictions()) {
         ReleaseTree();
     }
@@ -817,14 +859,15 @@ int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
     // Clear config after finishing the search.
     analysis_config_.Clear();
 
-    if (ShouldResign(root_state_, result, param_->resign_threshold)) {
+    if (ShouldResign(root_state_, result, param_.get())) {
         return kResign;
     }
-    if (ShouldPass(root_state_, result, param_->friendly_pass)) {
-        return kPass;
-    }
 
-    return result.best_move;
+    int best_move = result.best_move;
+    if (ShouldPass(root_state_, result, param_.get())) {
+        best_move = kPass;
+    }
+    return best_move;
 }
 
 void Search::ClearTrainingBuffer() {
@@ -877,9 +920,12 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
         winner = kWhiteWon;
     }
 
-    // Set the all buffer values except for auxiliary probablility.
-    for (auto &buf : training_buffer_) {
+    // Set the most buffer values.
+    const int buf_size = training_buffer_.size();
+    for (int i = 0; i < buf_size; ++i) {
         assert(winner != kUndecide);
+
+        auto &buf = training_buffer_[i];
         if (winner == kDraw) {
             buf.final_score = 0;
             buf.result = 0;
@@ -888,7 +934,7 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
             buf.final_score = buf.side_to_move == kBlack ? black_final_score : -black_final_score;
         }
 
-        buf.ownership.resize(num_intersections);
+        buf.ownership.resize(num_intersections, 0);
         for (int idx = 0; idx < num_intersections; ++idx) {
             const auto owner = ownership[idx];
             if (owner == buf.side_to_move) {
@@ -899,6 +945,91 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
                 buf.ownership[idx] = 0;
             }
         }
+
+        // Compute average Q/score value.
+        const int window_half_size =
+            std::max(3, (int)(buf.board_size/2)); // full size is (1 + 2*window_half_size)
+        float window_q_sum = 0.f;
+        float window_score_sum = 0.f;
+        int window_size = 0;
+        for (int w = -window_half_size; w <= window_half_size; ++w) {
+            int w_index = i+w;
+            if (w_index < 0 || w_index >= buf_size) {
+                continue;
+            }
+            auto &w_buf = training_buffer_[w_index];
+
+            if (w_buf.side_to_move == buf.side_to_move) {
+                window_q_sum += w_buf.q_value;
+                window_score_sum += w_buf.score_lead;
+            } else {
+                window_q_sum -= w_buf.q_value;
+                window_score_sum -= w_buf.score_lead;
+            }
+            window_size += 1;
+        }
+        buf.avg_q_value = window_q_sum / window_size;
+        buf.avg_score_lead = window_score_sum / window_size;
+    }
+
+    // Compute the short, middle and long term average values
+    for (int i = 0; i < buf_size; ++i) {
+        auto &buf = training_buffer_[i];
+        const auto board_size = buf.board_size;
+
+        // Please see here, 
+        // https://github.com/lightvector/KataGo/blob/master/docs/KataGoMethods.md#short-term-value-and-score-targets
+        double short_term_q = 0;
+        double middle_term_q = 0;
+        double long_term_q = 0;
+
+        double short_term_score = 0;
+        double middle_term_score = 0;
+        double long_term_score = 0;
+
+        const int short_time_horizon = 0.4f * board_size;
+        const int middle_time_horizon = 1 * board_size;
+        const int long_time_horizon = 3 * board_size;
+
+        const double lambda = 1. - 1./std::max(2, short_time_horizon);
+        double gamma = 1.;
+
+        for (int h = 0; h < long_time_horizon; ++h) {
+            int buf_idx = std::min(i+h, buf_size-1);
+            auto &curr_buf = training_buffer_[buf_idx];
+
+            if (curr_buf.side_to_move == buf.side_to_move) {
+                if (h < short_time_horizon) {
+                    short_term_q += (gamma * curr_buf.avg_q_value);
+                    short_term_score += (gamma * curr_buf.avg_score_lead);
+                }
+                if (h < middle_time_horizon) {
+                    middle_term_q += (gamma * curr_buf.avg_q_value);
+                    middle_term_score += (gamma * curr_buf.avg_score_lead);
+                }
+                long_term_q += (gamma * curr_buf.avg_q_value);
+                long_term_score += (gamma * curr_buf.avg_score_lead);
+            } else {
+                if (h < short_time_horizon) {
+                    short_term_q -= (gamma * curr_buf.avg_q_value);
+                    short_term_score -= (gamma * curr_buf.avg_score_lead);
+                }
+                if (h < middle_time_horizon) {
+                    middle_term_q -= (gamma * curr_buf.avg_q_value);
+                    middle_term_score -= (gamma * curr_buf.avg_score_lead);
+                }
+                long_term_q -= (gamma * curr_buf.avg_q_value);
+                long_term_score -= (gamma * curr_buf.avg_score_lead);
+            }
+            gamma *= lambda;
+        }
+
+        buf.short_avg_q = short_term_q * (1. - lambda);
+        buf.middle_avg_q = middle_term_q * (1. - lambda);
+        buf.long_avg_q = long_term_q * (1. - lambda);
+        buf.short_avg_score = short_term_score * (1. - lambda);
+        buf.middle_avg_score = middle_term_score * (1. - lambda);
+        buf.long_avg_score = long_term_score * (1. - lambda);
     }
 
     // Set the auxiliary probablility in the buffer.
@@ -907,13 +1038,9 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
     // Force the last aux policy is pass move.
     aux_prob[num_intersections] = 1.f;
 
-    for (int i = training_buffer_.size()-1; i >= 0; --i) {
+    for (int i = buf_size-1; i >= 0; --i) {
         auto &buf = training_buffer_[i];
-
-        buf.auxiliary_probabilities_index = -1;
         buf.auxiliary_probabilities = aux_prob;
-
-        buf.probabilities_index = -1;
         aux_prob = buf.probabilities;
     }
 
@@ -926,7 +1053,9 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
     training_buffer_.clear();
 }
 
-void Search::GatherData(const GameState &state, ComputationResult &result) {
+void Search::GatherData(const GameState &state,
+                        ComputationResult &result,
+                        bool discard) {
     if (training_buffer_.size() > 9999) {
         // To many data in the buffer.
         return;
@@ -935,6 +1064,7 @@ void Search::GatherData(const GameState &state, ComputationResult &result) {
     auto data = Training{};
     data.version = GetTrainingVersion();
     data.mode = GetTrainingMode();
+    data.discard = discard;
 
     data.board_size = result.board_size;
     data.komi = result.komi;
@@ -942,8 +1072,14 @@ void Search::GatherData(const GameState &state, ComputationResult &result) {
 
     // Map the root eval from [0 ~ 1] to [-1 ~ 1]
     data.q_value = 2 * result.root_eval - 1.f;
+    data.score_lead = result.root_score_lead;
+    data.score_stddev = result.root_score_stddev;
+    data.q_stddev = result.root_eval_stddev;
     data.planes = Encoder::Get().GetPlanes(state);
     data.probabilities = result.target_playouts_dist;
+    data.wave = state.GetWave();
+    data.rule = state.GetRule();
+    data.kld = result.policy_kld;
 
     training_buffer_.emplace_back(data);
 }
@@ -953,20 +1089,20 @@ bool Search::AdvanceToNewRootState() {
         return false;
     }
 
-    if (param_->gumbel ||
-            param_->dirichlet_noise ||
-            param_->root_dcnn) {
-        // Need to re-build the trees if we apply noise or Gumbel. Reuse
-        // the tree will ignore them. The root_dcnn option only apply
-        // the network at root. The tree shape of root is different
-        // from children.
+    if (param_->gumbel) {
+        // Gumbel search will make tree shape weird. We need to build
+        // the tree from scratch. The dirichlet noise also make tree
+        // shape weird. But it should be OK for most case. For example,
+        // Leela Zero reuse the tree during the self-play. Look like it
+        // is no negative effect.
         return false;
     }
 
     const auto temp_diff = param_->policy_temp -
                                param_->root_policy_temp;
     if (std::abs(temp_diff) > 1e-4f) {
-        // The tree shape is different if the temperature is different.
+        // The different temperature settings will make different training
+        // datas or tree shape. We need to build the tree from scratch.
         return false;
     }
 
@@ -1022,12 +1158,40 @@ bool Search::AdvanceToNewRootState() {
     return true;
 }
 
-int Search::GetPonderPlayouts() const {
-    // We don't need to consider the NN cache size to set number
-    // of ponder playouts that because we apply lazy tree destruction
-    // and reuse the tree. They can efficiently use the large tree.
-    // Set the greatest number as we can.
+bool Search::HaveAlternateMoves() {
+    const auto &children = root_node_->GetChildren();
+    if (children.size() == 1) {
+        return false;
+    }
 
+    int visited_nodes;
+    bool success = false;
+    double kld = 0;
+
+    auto new_root_dist = GetRootDistribution(visited_nodes);
+
+    if (!last_root_dist_.empty()) {
+        success = ComputeKlDivergence(
+            new_root_dist, last_root_dist_, kld);
+    }
+
+    last_root_dist_ = new_root_dist;
+
+#if 0
+    int root_visits = root_node_->GetVisits();
+    if (success && root_visits > 1600 && visited_nodes > 1) {
+        double kldgain = param_->kldgain;
+        if (kld < kldgain) {
+            return false;
+        }
+    }
+#endif
+    (void) success;
+
+    return true;
+}
+
+int Search::GetPonderPlayouts() const {
     // The factor means 'ponder_playouts = playouts * div_factor'.
     const int div_factor = std::max(1, param_->ponder_factor);
 
@@ -1040,15 +1204,34 @@ int Search::GetPonderPlayouts() const {
     return ponder_playouts;
 }
 
-int Search::GetExpandThreshold(GameState &state) const {
-    const auto board_size = state.GetBoardSize();
+std::string Search::GetDebugMoves(std::vector<int> moves) {
+    return root_node_->GetPathVerboseString(
+               root_state_, root_state_.GetToMove(), moves);
+}
 
-    if (param_->expand_threshold >= 0) {
-        return param_->expand_threshold;
+std::vector<double> Search::GetRootDistribution(int &visited_nodes) {
+    auto result = std::vector<double>{};
+    const auto &children = root_node_->GetChildren();
+
+    visited_nodes = 0;
+    int parentvisits = 0;
+    for (const auto &child : children) {
+        const auto node = child.Get();
+        const auto visits = node->GetVisits();
+
+        parentvisits += visits;
+        result.emplace_back(visits);
+
+        if (visits > 0) {
+            visited_nodes += 1;
+        }
+    }
+    if (parentvisits == 0) {
+        return std::vector<double>{};
     }
 
-    // We tend to select the large 'Expand Threshold' in order
-    // to converge the average winrate. The other engine may
-    // select the little value becuase they apply RAVE method.
-    return std::max(20 + 2 * (board_size-9), 20);
+    for (auto &v : result) {
+        v /= parentvisits;
+    }
+    return result;
 }

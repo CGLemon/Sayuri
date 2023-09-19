@@ -55,7 +55,7 @@ set(GAME_SOURCES_DIR ${SOURCE_DIR}/game)
 set(NEURAL_SOURCES_DIR ${SOURCE_DIR}/neural)
 set(PATTERN_SOURCES_DIR ${SOURCE_DIR}/pattern)
 set(MCTS_SOURCES_DIR ${SOURCE_DIR}/mcts)
-set(ACCURACY_SOURCES_DIR ${SOURCE_DIR}/accuracy)
+set(SUMMARY_SOURCES_DIR ${SOURCE_DIR}/summary)
 set(SELFPLAY_SOURCES_DIR ${SOURCE_DIR}/selfplay)
 set(UTILS_SOURCES_DIR ${SOURCE_DIR}/utils)
 
@@ -87,7 +87,6 @@ set(NEURAL_SOURCES
     ${NEURAL_SOURCES_DIR}/description.cc
     ${NEURAL_SOURCES_DIR}/encoder.cc
     ${NEURAL_SOURCES_DIR}/network.cc
-    ${NEURAL_SOURCES_DIR}/supervised.cc
     ${NEURAL_SOURCES_DIR}/training.cc
     ${NEURAL_SOURCES_DIR}/winograd_helper.cc
     ${NEURAL_SOURCES_DIR}/blas/sgemm.cc
@@ -98,7 +97,6 @@ set(NEURAL_SOURCES
     ${NEURAL_SOURCES_DIR}/blas/batchnorm.cc
     ${NEURAL_SOURCES_DIR}/blas/biases.cc
     ${NEURAL_SOURCES_DIR}/blas/se_unit.cc
-    ${NEURAL_SOURCES_DIR}/blas/sa_unit.cc
     ${NEURAL_SOURCES_DIR}/blas/blas_forward_pipe.cc
     )
 
@@ -116,8 +114,9 @@ set(MCTS_SOURCES
     ${MCTS_SOURCES_DIR}/rollout.cc
     )
 
-set(ACCURACY_SOURCES
-    ${ACCURACY_SOURCES_DIR}/predict.cc
+set(SUMMARY_SOURCES
+    ${SUMMARY_SOURCES_DIR}/accuracy.cc
+    ${SUMMARY_SOURCES_DIR}/selfplay_accumulation.cc
     )
 
 set(SELFPLAY_SOURCES
@@ -353,7 +352,7 @@ add_executable(Sayuri
     ${MCTS_SOURCES}
     ${NEURAL_SOURCES}
     ${UTILS_SOURCES}
-    ${ACCURACY_SOURCES}
+    ${SUMMARY_SOURCES}
     ${SELFPLAY_SOURCES}
     ${CUDA_SOURCES}
     )

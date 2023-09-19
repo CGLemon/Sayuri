@@ -3,6 +3,7 @@
 
 #include <sstream>
 #include <iomanip>
+#include <iostream>
 
 Encoder& Encoder::Get() {
     static Encoder encoder;
@@ -194,12 +195,15 @@ void Encoder::FillFeatures(const Board* board,
         // feat_it[index + 7 * num_intersections];
         // feat_it[index + 8 * num_intersections];
         // feat_it[index + 9 * num_intersections];
+        // feat_it[index + 10 * num_intersections];
+        // feat_it[index + 11 * num_intersections];
+        // feat_it[index + 12 * num_intersections];
     }
 }
 
 void Encoder::FillMisc(const Board* board,
                        const int to_move,
-                       float komi,
+                       float rule, float wave, float komi,
                        std::vector<float>::iterator misc_it) const {
     auto num_intersections = board->GetNumIntersections();
 
@@ -207,31 +211,39 @@ void Encoder::FillMisc(const Board* board,
         komi = 0.0f - komi;
     }
 
-    // komi
+    // rule
     std::fill(misc_it+ 0 * num_intersections,
-                  misc_it+ 1 * num_intersections, komi/20.f);
+                  misc_it+ 1 * num_intersections, rule);
+
+    // wave
+    std::fill(misc_it+ 1 * num_intersections,
+                  misc_it+ 2 * num_intersections, wave);
+
+    // komi
+    std::fill(misc_it+ 2 * num_intersections,
+                  misc_it+ 3 * num_intersections, komi/20.f);
 
     // negative komi
-    std::fill(misc_it+ 1 * num_intersections,
-                  misc_it+ 2 * num_intersections, -komi/20.f);
+    std::fill(misc_it+ 3 * num_intersections,
+                  misc_it+ 4 * num_intersections, -komi/20.f);
 
     // number of intersections
-    std::fill(misc_it+ 2 * num_intersections,
-                  misc_it+ 3 * num_intersections, static_cast<float>(num_intersections)/361.f);
+    std::fill(misc_it+ 4 * num_intersections,
+                  misc_it+ 5 * num_intersections, static_cast<float>(num_intersections)/361.f);
 
     // ones
-    std::fill(misc_it+ 3 * num_intersections,
-                  misc_it+ 4 * num_intersections, static_cast<float>(true));
+    std::fill(misc_it+ 5 * num_intersections,
+                  misc_it+ 6 * num_intersections, static_cast<float>(true));
 }
 
 void Encoder::EncoderFeatures(const GameState &state,
                               std::vector<float>::iterator it) const {
     auto board = state.GetPastBoard(0);
-    auto num_intersections = board->GetNumIntersections();
+    const auto shift = board->GetNumIntersections();
 
-    auto feat_it = it + 0 * num_intersections;
-    auto misc_it = it + 10 * num_intersections;
+    auto feat_it = it + 0 * shift;
+    auto misc_it = it + 13 * shift;
 
     FillFeatures(board.get(), state.GetToMove(), feat_it);
-    FillMisc(board.get(), state.GetToMove(), state.GetKomi(), misc_it);
+    FillMisc(board.get(), state.GetToMove(), state.GetKomi(), state.GetRule(), state.GetWave(), misc_it);
 }

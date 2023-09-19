@@ -3,7 +3,6 @@
 #include "mcts/time_control.h"
 #include "mcts/parameters.h"
 #include "mcts/node.h"
-#include "mcts/rollout.h"
 #include "game/game_state.h"
 #include "neural/training.h"
 #include "utils/threadpool.h"
@@ -23,17 +22,6 @@ public:
 
     void FromNetEvals(NodeEvals nn_evals) { 
         nn_evals_ = std::make_unique<NodeEvals>(nn_evals);
-    }
-
-    void FromRollout(GameState &state) {
-        if (nn_evals_ == nullptr) {
-            nn_evals_ = std::make_unique<NodeEvals>();
-        }
-        nn_evals_->black_wl = GetBlackRolloutResult(
-                                  state,
-                                  nn_evals_->black_ownership.data(),
-                                  nn_evals_->black_final_score);
-        nn_evals_->draw = 0.f;
     }
 
     void FromGameOver(GameState &state) {
@@ -84,12 +72,16 @@ struct ComputationResult {
     int best_no_pass_move{kNullVertex};
     int random_move{kNullVertex};
     int gumbel_move{kNullVertex};
+    int gumbel_no_pass_move{kNullVertex};
+    int capture_all_dead_move{kNullVertex};
 
     VertexType to_move;
     float komi;
     float root_eval;
-    float root_final_score;
+    float root_score_lead;
     float best_eval;
+    float root_score_stddev;
+    float root_eval_stddev;
 
     std::vector<float> root_ownership;
     std::vector<int> root_visits;
@@ -105,6 +97,8 @@ struct ComputationResult {
     int threads;
     int batch_size;
     float seconds;
+
+    float policy_kld;
 };
 
 class Search {
@@ -112,13 +106,13 @@ public:
     static constexpr int kMaxPlayouts = std::numeric_limits<int>::max() / 2;
 
     enum OptionTag : int {
-        kNullTag  = 0,
-        kThinking = 1 << 1, // use time control
-        kPonder   = 1 << 2, // thinking on opponent's time
-        kAnalysis = 1 << 3, // use the analysis mode
-        kForced   = 1 << 4, // remove double pass move before search
-        kUnreused = 1 << 5, // don't reuse the tree
-        kNoNoise  = 1 << 6  // disable any noise
+        kNullTag     = 0,
+        kThinking    = 1 << 1, // use time control
+        kPonder      = 1 << 2, // thinking on opponent's time
+        kAnalysis    = 1 << 3, // use the analysis mode
+        kForced      = 1 << 4, // remove double pass move before search
+        kUnreused    = 1 << 5, // don't reuse the tree
+        kNoExploring = 1 << 6  // disable any exploring setting
     };
 
     // Enable OptionTag operations.
@@ -167,23 +161,30 @@ public:
     // Release the whole trees.
     void ReleaseTree();
 
+    std::string GetDebugMoves(std::vector<int> moves);
+
 private:
     // Try to reuse the sub-tree.
     bool AdvanceToNewRootState();
+
+    // Reture false if there is only one reasonable move.
+    bool HaveAlternateMoves();
+
+    std::vector<double> GetRootDistribution(int &visited_nodes);
 
     bool InputPending(Search::OptionTag tag) const;
 
     void GatherComputationResult(ComputationResult &result) const;
 
-    void GatherData(const GameState &state, ComputationResult &result);
+    void GatherData(const GameState &state,
+                    ComputationResult &result,
+                    bool discard);
 
     void PlaySimulation(GameState &currstate, Node *const node,
                         const int depth, SearchResult &search_result);
 
     void PrepareRootNode();
     int GetPonderPlayouts() const;
-
-    int GetExpandThreshold(GameState &state) const;
 
     AnalysisConfig analysis_config_;
 
@@ -214,9 +215,17 @@ private:
     // The root node of tree.
     std::unique_ptr<Node> root_node_; 
 
+    // The root networl eval.
+    NodeEvals root_evals_;
+
     // The tree search parameters.
     std::unique_ptr<Parameters> param_;
+    std::unique_ptr<Parameters> no_exploring_param_;
 
     // The tree search threads.
     std::unique_ptr<ThreadGroup<void>> group_;
+
+    std::vector<double> last_root_dist_;
+
+    std::vector<float> root_raw_probabilities_;
 };

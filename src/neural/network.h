@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <atomic>
 
 class Network {
 public:
@@ -26,7 +27,8 @@ public:
     void Destroy();
     bool Valid() const;
 
-    int GetBestPolicyVertex(const GameState &state, 
+    int GetVertexWithPolicy(const GameState &state,
+                            const float temperature,
                             const bool allow_pass);
 
     Result GetOutput(const GameState &state,
@@ -42,8 +44,11 @@ public:
 
     void Reload(int board_size);
 
-    void SetCacheSize(size_t MiB);
+    size_t SetCacheSize(size_t MiB);
+    size_t GetCacheMib() const;
     void ClearCache();
+
+    size_t GetNumQueries() const;
 
 private:
     void ActivatePolicy(Result &result, const float temperature) const;
@@ -56,5 +61,10 @@ private:
 
     std::unique_ptr<NetworkForwardPipe> pipe_{nullptr};
     Cache nn_cache_;
-};
 
+    bool no_cache_;
+    bool early_symm_cache_;
+    size_t cache_memory_mib_;
+
+    std::atomic<size_t> num_queries_;
+};

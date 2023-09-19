@@ -59,6 +59,9 @@ public:
 
     void SetHandicap(int handicap);
 
+    bool PlayHandicapStones(std::vector<int> movelist_vertex,
+                            bool kata_like_handicap_style);
+
     // Compute black final score with Tromp Taylor rule.
     float GetFinalScore(float bonus = 0) const;
 
@@ -83,6 +86,8 @@ public:
     int GetIndex(const int x, const int y) const;
     int GetX(const int vtx) const;
     int GetY(const int vtx) const;
+    int IndexToVertex(int idx) const;
+    int VertexToIndex(int vtx) const;
 
     float GetKomi() const;
     int GetWinner() const;
@@ -90,6 +95,7 @@ public:
     int GetMoveNumber() const;
     int GetBoardSize() const;
     int GetNumIntersections() const;
+    int GetNumVertices() const;
     int GetToMove() const;
     int GetLastMove() const;
     int GetKoMove() const;
@@ -118,8 +124,11 @@ public:
     std::uint64_t GetMoveHash(const int vtx, const int color) const;
 
     void SetComment(std::string c);
-    void AppendComment(std::string c);
+    void RewriteComment(std::string c, size_t i);
     std::string GetComment(size_t i) const;
+
+    float GetWave() const;
+    float GetRule() const;
 
 private:
     using VertexColor = std::pair<int, int>;

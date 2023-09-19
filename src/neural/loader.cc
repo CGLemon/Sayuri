@@ -227,11 +227,14 @@ void DNNLoder::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstr
         // v2: Fixed the batch normalize layer weights
         //     format. There are some error in the gammas
         //     compression process.
-
-        if (version_ > 2) {
-            throw "Do not support this version";
-        }
+        //
+        // v3: Add more output heads. 
     }
+
+    if (version_ >= 4 || version_ <= 2) {
+        throw "Do not support this version";
+    }
+
 
     if (!NotFound(netinfo, "NNType")) {
         // Not used.
@@ -277,7 +280,6 @@ void DNNLoder::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstr
             if (component == "ResidualBlock" ||
                     component == "BottleneckBlock" ||
                     component == "SE" ||
-                    component == "SA" ||
                     component == "FixUp") {
                 // do nothing...
             } else {
@@ -297,7 +299,7 @@ void DNNLoder::DumpInfo(std::shared_ptr<DNNWeights> weights) const {
     out << "Residual Channels: " << weights->residual_channels << '\n';
 
     for (int i = 0; i < weights->residual_blocks; ++i) {
-        out << "  block " << i+1 << ':';
+        out << "  block " << i+1 << ": ";
         if (weights->tower[i].apply_btl) {
             out << "BottleneckBlock";
         } else {
@@ -305,9 +307,6 @@ void DNNLoder::DumpInfo(std::shared_ptr<DNNWeights> weights) const {
         }
         if (weights->tower[i].apply_se) {
             out << "-SE";
-        }
-        if (weights->tower[i].apply_sa) {
-            out << "-SA";
         }
         out << '\n';
     }
@@ -370,7 +369,8 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
                        buffer,
                        input_bn_shape[0]);
 
-    if (weights->residual_channels != input_conv_shape[1] ||
+    if (weights->input_channels != input_conv_shape[0] ||
+            weights->residual_channels != input_conv_shape[1] ||
             weights->residual_channels != input_bn_shape[0] ||
             input_conv_shape[2] != 3) {
         throw "The input layers are wrong";
@@ -378,7 +378,6 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
 
     const auto residuals = weights->residual_blocks;
     auto se_cnt = 0;
-    auto sa_cnt = 0;
     auto btl_cnt = 0;
 
     auto main_channels = weights->residual_channels;
@@ -397,7 +396,6 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
         auto t_offset = 4 * b +
                             4 * btl_cnt +
                             2 * se_cnt +
-                            1 * sa_cnt +
                             inputs_cnt;
 
         const auto use_btl = SplitterFound(block_spt, "BottleneckBlock");
@@ -529,34 +527,11 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
         } else {
             tower_ptr->apply_se = false;
         }
-
-        if (SplitterFound(block_spt, "SA")) {
-            sa_cnt += 1;
-            const auto sa_conv_shape = netstruct[t_offset++];
-
-            // spatial attention module
-            FillConvolutionLayer(
-                tower_ptr->sa_conv,
-                buffer,
-                sa_conv_shape[0],
-                sa_conv_shape[1],
-                sa_conv_shape[2]);
-
-            if (sa_conv_shape[0] != 3 ||
-                    sa_conv_shape[1] != 1 ||
-                    sa_conv_shape[2] != 7) {
-                throw "The SA size is wrong.";
-            }
-            tower_ptr->apply_sa = true;
-        } else {
-            tower_ptr->apply_sa = false;
-        }
     } // end of for-loop
 
     const auto h_offset = 4 * residuals +
                               4 * btl_cnt +
                               2 * se_cnt +
-                              1 * sa_cnt +
                               inputs_cnt;
 
     // policy head

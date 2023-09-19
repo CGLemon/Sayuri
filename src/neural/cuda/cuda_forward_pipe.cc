@@ -196,6 +196,8 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         LOGGING << cuda::GetCurrentDeviceInfo(&handles_);
     }
 
+    use_optimistic_policy_ = GetOption<bool>("use_optimistic_policy");
+
     board_size_ = board_size;
     scratch_size_ = 0;
     max_batch_ = max_batch_size;
@@ -221,7 +223,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         graph_->tower_conv.emplace_back(cuda::Convolution{});
         graph_->tower_conv.emplace_back(cuda::Convolution{});
         graph_->tower_se.emplace_back(cuda::SEUnit{});
-        graph_->tower_sa.emplace_back(cuda::SAUnit{});
     }
 
     for (int i = 0; i < residuals; ++i) {
@@ -243,7 +244,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
 
         const bool second_use_relu =
                        tower_ptr->apply_btl ||
-                       !(tower_ptr->apply_se || tower_ptr->apply_sa);
+                       !(tower_ptr->apply_se);
         graph_->tower_conv[t_offset+1] = cuda::Convolution(
             &handles_,
             max_batch_,     // max batch size
@@ -265,7 +266,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
             );
 
             const bool post_use_relu =
-                           !(tower_ptr->apply_se || tower_ptr->apply_sa);
+                           !(tower_ptr->apply_se);
             graph_->btl_conv[t_offset+1] = cuda::Convolution(
                 &handles_,
                 max_batch_,     // max batch size
@@ -279,7 +280,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
 
         if (tower_ptr->apply_se) {
             const size_t se_size = tower_ptr->se_size;
-            const bool se_use_relu = !(tower_ptr->apply_sa);
+            const bool se_use_relu = true;
             graph_->tower_se[i] = cuda::SEUnit(
                 &handles_,
                 max_batch_,      // max batch size
@@ -287,15 +288,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
                 outer_channels,  // channels
                 se_size,         // SE size
                 se_use_relu      // relu
-            );
-        }
-        if (tower_ptr->apply_sa) {
-            graph_->tower_sa[i] = cuda::SAUnit(
-                &handles_,
-                max_batch_,      // max batch size
-                board_size_,     // board size
-                outer_channels,  // channels
-                true             // relu
             );
         }
     }
@@ -425,12 +417,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
                 tower_ptr->excite.GetWeights(),
                 tower_ptr->excite.GetBiases());
         }
-        if (tower_ptr->apply_sa) {
-            graph_->tower_sa[i].LoadWeights(
-                tower_ptr->sa_conv.GetWeights(),
-                tower_ptr->sa_conv.GetBiases(),
-                scratch_size_, winograd);
-        }
     }
 
     // policy head
@@ -473,7 +459,10 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
 
     const size_t planes_size = factor * kInputChannels * num_intersections;
     const size_t spatia_size = factor * num_intersections;
+    const size_t pol_size = spatia_size * kOuputProbabilitiesChannels;
+    const size_t pass_size = factor * kOuputPassProbability;
     const size_t val_size = factor * kOuputValueMisc;
+    const size_t ownership_size = spatia_size * kOuputOwnershipChannels;
 
     const size_t conv_op_size = factor * weights_->residual_channels * num_intersections;
 
@@ -508,9 +497,9 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_mask_op_[1], mask_op2_size));
 
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_input_planes_, planes_size));
-    cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_prob_pass_, factor));
-    cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_prob_, spatia_size));
-    cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_ownership_, spatia_size));
+    cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_prob_pass_, pass_size));
+    cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_prob_, pol_size));
+    cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_ownership_, ownership_size));
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_val_, val_size));
 
     // Locked-page memory.
@@ -518,19 +507,22 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     cuda::ReportCUDAErrors(cudaMallocHost(&host_mask_op_[1], mask_op2_size));
 
     cuda::ReportCUDAErrors(cudaMallocHost(&host_input_planes_, planes_size));
-    cuda::ReportCUDAErrors(cudaMallocHost(&host_output_prob_pass_, factor));
-    cuda::ReportCUDAErrors(cudaMallocHost(&host_output_prob_, spatia_size));
-    cuda::ReportCUDAErrors(cudaMallocHost(&host_output_ownership_, spatia_size));
+    cuda::ReportCUDAErrors(cudaMallocHost(&host_output_prob_pass_, pass_size));
+    cuda::ReportCUDAErrors(cudaMallocHost(&host_output_prob_, pol_size));
+    cuda::ReportCUDAErrors(cudaMallocHost(&host_output_ownership_, ownership_size));
     cuda::ReportCUDAErrors(cudaMallocHost(&host_output_val_, val_size));
 }
 
 void CudaForwardPipe::NNGraph::SetComputationMode(cuda::CudaHandles *handles) {
     cudaDeviceProp dev_prop = cuda::GetDeviceProp();
 
-    if (dev_prop.major <= 5 ||
+    if (dev_prop.major <= 6 ||
             !GetOption<bool>("fp16")) {
-        // The device is too old. Disable the 
-        // FP16 computation.
+        // The compute capability is too low. The 5 is Maxwell,
+        // such as GTX 980 Ti. The 6 is Pascal, such as GTX 1080 Ti.
+        // As fair as I know, the FP16 can work on these devices,
+        // but the their performance are bad. The FP32 is better
+        // choice. So disable the FP16 computation.
         handles->fp16 = false;
     }
 
@@ -674,7 +666,6 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
         // 2nd conv layer
         void *second_skip = (tower_ptr->apply_se ||
-                                 tower_ptr->apply_sa ||
                                  tower_ptr->apply_btl) ?
                                      nullptr : cuda_conv_op_[0];
         graph_->tower_conv[t_offset+1].Forward(
@@ -687,8 +678,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
             std::swap(cuda_conv_op_[2], cuda_conv_op_[3]);
 
             // post-bottleneck
-            void *btl_skip = (tower_ptr->apply_se ||
-                                 tower_ptr->apply_sa) ?
+            void *btl_skip = tower_ptr->apply_se ?
                                      nullptr : cuda_conv_op_[0];
             graph_->btl_conv[t_offset+1].Forward(
                 batch_size,
@@ -700,31 +690,17 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         bool module_skip = false;
         if (tower_ptr->apply_se) {
             // squeeze-and-excitation module
-            void *se_skip = tower_ptr->apply_sa ?
-                                nullptr : cuda_conv_op_[0];
-            void *se_outs = tower_ptr->apply_sa ?
-                                cuda_conv_op_[2] : cuda_conv_op_[0];
+            void *se_skip = cuda_conv_op_[0];
+            void *se_outs = cuda_conv_op_[0];
+
             graph_->tower_se[i].Forward(
                 batch_size,
                 se_outs, cuda_conv_op_[3],
                 se_skip, mask_buf[0], mask_buf[1]);
 
-            if (se_skip) {
-                module_skip = true;
-            } else {
-                std::swap(cuda_conv_op_[3], cuda_conv_op_[2]);
-            }
+            module_skip = true;
         }
 
-        if (tower_ptr->apply_sa) {
-            // spatial attention module
-            graph_->tower_sa[i].Forward(
-                batch_size,
-                cuda_conv_op_[0], cuda_conv_op_[3], cuda_conv_op_[0],
-                mask_buf[0], mask_buf[1], 
-                cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
-            module_skip = true;
-        } 
         if (!module_skip) {
             std::swap(cuda_conv_op_[3], cuda_conv_op_[0]);
         }
@@ -788,9 +764,9 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     graph_->v_misc.Forward(
         batch_size, cuda_output_val_, cuda_val_op_[2]);
 
-    auto batch_prob_pass = std::vector<float>(batch_size);
-    auto batch_prob = std::vector<float>(batch_size * num_intersections);
-    auto batch_ownership = std::vector<float>(batch_size * num_intersections);
+    auto batch_prob_pass = std::vector<float>(batch_size * kOuputPassProbability);
+    auto batch_prob = std::vector<float>(batch_size * kOuputProbabilitiesChannels * num_intersections);
+    auto batch_ownership = std::vector<float>(batch_size * kOuputOwnershipChannels * num_intersections);
     auto batch_value_misc = std::vector<float>(batch_size * kOuputValueMisc);
 
     cuda::WaitToFinish(handles_.stream);
@@ -819,17 +795,26 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
     for (int b = 0; b < batch_size; ++b) {
         auto &output_result = batch_output_result[b];
+        int pol_offset = kOuputProbabilitiesChannels * num_intersections;
+        int own_offset = kOuputOwnershipChannels * num_intersections;
         for (int idx = 0; idx < num_intersections; ++idx) {
-            output_result.probabilities[idx] = batch_prob[b * num_intersections + idx];
-            output_result.ownership[idx] = batch_ownership[b * num_intersections + idx];
+            int pol_index = b * pol_offset + 0 * num_intersections + idx;
+            if (use_optimistic_policy_) {
+                pol_index = b * pol_offset + 4 * num_intersections + idx;
+            }
+            int own_index = b * own_offset + 0 * num_intersections + idx;
+            output_result.probabilities[idx] = batch_prob[pol_index];
+            output_result.ownership[idx] = batch_ownership[own_index];
         }
-        output_result.pass_probability = batch_prob_pass[b];
+        output_result.pass_probability = batch_prob_pass[b * kOuputPassProbability + 0];
 
         output_result.wdl[0] = batch_value_misc[b * kOuputValueMisc + 0];
         output_result.wdl[1] = batch_value_misc[b * kOuputValueMisc + 1];
         output_result.wdl[2] = batch_value_misc[b * kOuputValueMisc + 2];
         output_result.stm_winrate = batch_value_misc[b * kOuputValueMisc + 3];
-        output_result.final_score = batch_value_misc[b * kOuputValueMisc + 4];
+        output_result.final_score = batch_value_misc[b * kOuputValueMisc + 8];
+        output_result.q_error = batch_value_misc[b * kOuputValueMisc + 13];
+        output_result.score_error = batch_value_misc[b * kOuputValueMisc + 14];
 
         output_result.board_size = inputs[b].board_size;
         output_result.komi = inputs[b].komi;

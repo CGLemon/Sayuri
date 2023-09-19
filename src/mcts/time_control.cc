@@ -125,12 +125,13 @@ void TimeControl::TookTime(int color) {
     }
 }
 
-void TimeControl::SetLagBuffer(int lag_buffer) {
-    constexpr int kMinLag = 25; // 0.25 second is big enough for CPU
-                                // forward pipe hiccupping.
+void TimeControl::SetLagBuffer(float lag_buffer_sec) {
+    lag_buffer_ = static_cast<int>(lag_buffer_sec * 100.f); // second to centisecond
+    lag_buffer_ = std::max(lag_buffer_, 0);
+}
 
-    lag_buffer *= 100; // second to centisecond
-    lag_buffer_ = lag_buffer < kMinLag ? kMinLag : lag_buffer;
+float TimeControl::GetLagBuffer() const {
+    return static_cast<double>(lag_buffer_) / 100.f;
 }
 
 void TimeControl::Reset() {
@@ -200,14 +201,26 @@ void TimeControl::TimeStream(std::ostream &out, int color) const {
     out << std::setfill(' ');
 }
 
-float TimeControl::GetThinkingTime(int color, int boardsize, int move_num) const {
+float TimeControl::GetBufferEffect(int color, int boardsize, int move_num) const {
+    if (IsInfiniteTime(color)) {
+        return 0.f;
+    }
+    float t1 = GetThinkingTime(
+                   color, boardsize, move_num, true);
+    float t2 = GetThinkingTime(
+                   color, boardsize, move_num, false);
+    return std::max(t2 - t1, 0.f);
+}
+
+float TimeControl::GetThinkingTime(int color, int boardsize,
+                                   int move_num, bool use_lag_buffer) const {
     assert(color == kBlack || color == kWhite);
 
-    if(IsInfiniteTime(color)) {
-        return 31 * 24 * 60 * 60;
+    if (IsInfiniteTime(color)) {
+        return GetInfiniteTime();
     }
 
-    if(IsTimeOver(color)) {
+    if (IsTimeOver(color)) {
         // no time to use
         return 0;
     }
@@ -239,12 +252,14 @@ float TimeControl::GetThinkingTime(int color, int boardsize, int move_num) const
         time_remaining = maintime_left_[color] + byo_extra;
     }
 
-    int base_time = std::max(time_remaining - lag_buffer_, 0) / std::max(moves_remaining, 1);
-    int inc_time = std::max(extra_time_per_move - lag_buffer_, 0);
+    int lag_buffer_cs = use_lag_buffer ?
+                            lag_buffer_ : 0;
+    int base_time = std::max(time_remaining - lag_buffer_cs, 0) /
+                        std::max(moves_remaining, 1);
+    int inc_time = std::max(extra_time_per_move - lag_buffer_cs, 0);
 
-    return (float)(base_time + inc_time) / 100.f; // centisecond to second
+    return static_cast<double>(base_time + inc_time) / 100.f; // centisecond to second
 }
-
 
 bool TimeControl::IsTimeOver(int color) const {
     if (maintime_left_[color] > 0 ||
@@ -261,14 +276,18 @@ bool TimeControl::IsInfiniteTime(int /* color */) const {
                byo_periods_ == 0;
 }
 
+float TimeControl::GetInfiniteTime() const {
+    return 31 * 24 * 60 * 60;
+}
+
 int TimeControl::EstimateMovesExpected(int boardsize, int move_num) const {
     const int num_intersections = boardsize * boardsize;
     const int side_move_num = move_num/2;
 
-    // The 'base_move_num' is 145 on 19x19.
-    // The 'base_move_num' is  72 on 13x13.
-    // The 'base_move_num' is  37 on 9x9.
-    const int base_move_num = (0.7f * num_intersections + 1.5f * boardsize)/2;
+    // The 'base_move_num' is 153 on 19x19.
+    // The 'base_move_num' is  71 on 13x13.
+    // The 'base_move_num' is  32 on 9x9.
+    const int base_move_num = (0.8f * num_intersections + 1.75f * (boardsize - 9))/2;
     const int base_remaining = base_move_num- side_move_num;
     const int opening_move_num = (0.2f * num_intersections) / 2;
 

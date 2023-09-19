@@ -5,6 +5,7 @@
 #include "config.h"
 
 #include <array>
+#include <string>
 
 class Parameters {
 public:
@@ -16,7 +17,6 @@ public:
         playouts = GetOption<int>("playouts");
         ponder_factor = GetOption<int>("ponder_factor");
         const_time = GetOption<int>("const_time");
-        expand_threshold = GetOption<int>("expand_threshold");
 
         resign_threshold = GetOption<float>("resign_threshold");
         lcb_reduction = GetOption<float>("lcb_reduction");
@@ -29,12 +29,16 @@ public:
         cpuct_dynamic_k_factor = GetOption<float>("cpuct_dynamic_k_factor");
         cpuct_dynamic_k_base = GetOption<float>("cpuct_dynamic_k_base");
         draw_factor = GetOption<float>("draw_factor");
+        forced_playouts_k = GetOption<float>("forced_playouts_k");
 
         random_min_visits = GetOption<int>("random_min_visits");
         random_moves_factor = GetOption<float>("random_moves_factor");
 
+        gumbel_c_visit = GetOption<float>("gumbel_c_visit");
+        gumbel_c_scale = GetOption<float>("gumbel_c_scale");
+        gumbel_prom_visits = GetOption<int>("gumbel_prom_visits");
         gumbel_considered_moves = GetOption<int>("gumbel_considered_moves");
-        gumbel_playouts = GetOption<int>("gumbel_playouts");
+        gumbel_playouts_threshold = GetOption<int>("gumbel_playouts_threshold");
         gumbel = GetOption<bool>("gumbel");
         always_completed_q_policy = GetOption<bool>("always_completed_q_policy");
 
@@ -47,22 +51,24 @@ public:
         score_utility_div = GetOption<float>("score_utility_div");
         resign_playouts = GetOption<int>("resign_playouts");
         reduce_playouts = GetOption<int>("reduce_playouts");
-        reduce_playouts_prob = GetOption<float>("reduce_playouts_prob"); 
+        reduce_playouts_prob = GetOption<float>("reduce_playouts_prob");
+        resign_discard_prob = GetOption<float>("resign_discard_prob");
 
-        lag_buffer = GetOption<int>("lag_buffer");
+        kldgain = std::stod(GetOption<std::string>("kldgain"));
+
+        lag_buffer = GetOption<float>("lag_buffer");
         ponder = GetOption<bool>("ponder");
         reuse_tree = GetOption<bool>("reuse_tree");
         friendly_pass = GetOption<bool>("friendly_pass");
 
         root_policy_temp = GetOption<float>("root_policy_temp");
         policy_temp = GetOption<float>("policy_temp");
-        use_rollout = GetOption<bool>("rollout");
-        no_dcnn = GetOption<bool>("no_dcnn");
-        root_dcnn = GetOption<bool>("root_dcnn");
         first_pass_bonus = GetOption<bool>("first_pass_bonus");
         symm_pruning = GetOption<bool>("symm_pruning");
         use_stm_winrate = GetOption<bool>("use_stm_winrate");
         analysis_verbose = GetOption<bool>("analysis_verbose");
+        use_rollout = GetOption<bool>("use_rollout");
+        capture_all_dead = GetOption<bool>("capture_all_dead");
     }
 
     int threads;
@@ -84,9 +90,13 @@ public:
     float cpuct_dynamic_k_factor;
     float cpuct_dynamic_k_base;
     float draw_factor;
+    float forced_playouts_k;
 
+    float gumbel_c_visit;
+    float gumbel_c_scale;
+    int gumbel_prom_visits;
     int gumbel_considered_moves;
-    int gumbel_playouts;
+    int gumbel_playouts_threshold;
     bool gumbel;
 
     bool dirichlet_noise;
@@ -103,21 +113,22 @@ public:
     int resign_playouts;
     int reduce_playouts;
     float reduce_playouts_prob;
-    int lag_buffer;
-    int expand_threshold;
+    float lag_buffer;
+    float resign_discard_prob;
+
+    double kldgain;
 
     bool ponder;
     bool reuse_tree;
     bool friendly_pass;
-    bool use_rollout;
-    bool no_dcnn;
-    bool root_dcnn;
     bool first_pass_bonus;
     bool symm_pruning;
     bool use_stm_winrate;
     bool analysis_verbose;
     bool always_completed_q_policy;
     bool cpuct_dynamic;
+    bool use_rollout;
+    bool capture_all_dead;
 
     std::array<float, kNumVertices + 10> dirichlet_buffer;
 };

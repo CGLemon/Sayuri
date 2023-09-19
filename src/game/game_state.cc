@@ -9,6 +9,7 @@
 #include "pattern/gammas_dict.h"
 
 #include <random>
+#include <cmath>
 
 void GameState::Reset(const int boardsize, const float komi) {
     board_.Reset(boardsize);
@@ -187,7 +188,7 @@ std::string GameState::VertexToSgf(const int vtx) const {
 
     auto out = std::ostringstream{};    
     const auto x = GetX(vtx);
-    const auto y = GetY(vtx);
+    const auto y = GetBoardSize() - GetY(vtx) - 1;
 
     if (x >= 26) {
         out << static_cast<char>(x - 26 + 'A');
@@ -377,33 +378,54 @@ bool GameState::SetFreeHandicap(std::vector<std::string> movelist) {
                            return TextToVertex(text);
                        }
                    );
+    return PlayHandicapStones(movelist_vertex, true);
+}
 
+std::vector<int> GameState::PlaceFreeHandicap(int handicap) {
+    auto stones_list = std::vector<int>{};
+    if (SetFixdHandicap(handicap)) {
+        const int board_size = GetBoardSize();
+        for (int x = 0; x < board_size; ++x) {
+            for (int y = 0; y < board_size; ++y) {
+                const auto vtx = GetVertex(x, y);
+                if (GetState(vtx) == kBlack) {
+                    stones_list.emplace_back(vtx);
+                }
+            }
+        }
+    }
+    return stones_list;
+}
+
+bool GameState::PlayHandicapStones(std::vector<int> movelist_vertex,
+                                   bool kata_like_handicap_style) {
     auto fork_state = *this;
+    fork_state.ClearBoard();
 
-    for (const auto vtx : movelist_vertex) {
+    const int size = movelist_vertex.size();
+
+    for (int i = 0; i < size; ++i) {
+        const auto vtx = movelist_vertex[i];
         if (fork_state.IsLegalMove(vtx, kBlack)) {
-            fork_state.AppendMove(vtx, kBlack);
+            if (i == size-1 && kata_like_handicap_style) {
+                // The last handicap move is not appending move
+                // in the KataGo's SGF.
+                fork_state.PlayMove(vtx, kBlack);
+            } else {
+                fork_state.AppendMove(vtx, kBlack);
+            }
         } else {
             return false;
         }
     }
 
+    // Legal status. Copy the status.
     *this = fork_state;
 
-    SetHandicap(movelist.size());
+    SetHandicap(movelist_vertex.size());
     SetToMove(kWhite);
 
     return true;
-}
-
-std::vector<int> GameState::PlaceFreeHandicap(int handicap) {
-    auto stone_list = std::vector<int>{};
-    if (SetFixdHandicap(handicap)) {
-        for (auto m : append_moves_) {
-            stone_list.emplace_back(m.first);
-        }
-    }
-    return stone_list;
 }
 
 std::vector<int> GameState::GetOwnership() const {
@@ -506,6 +528,14 @@ int GameState::GetY(const int vtx) const {
     return board_.GetY(vtx);
 }
 
+int GameState::IndexToVertex(int idx) const {
+    return board_.IndexToVertex(idx);
+}
+
+int GameState::VertexToIndex(int vtx) const {
+    return board_.VertexToIndex(vtx);
+}
+
 float GameState::GetKomi() const {
     float komi = static_cast<float>(komi_integer_) +
                      static_cast<float>(komi_half_) * 0.5f;
@@ -538,6 +568,10 @@ int GameState::GetBoardSize() const {
 
 int GameState::GetNumIntersections() const {
     return board_.GetNumIntersections();
+}
+
+int GameState::GetNumVertices() const {
+    return board_.GetNumVertices();
 }
 
 int GameState::GetToMove() const {
@@ -631,8 +665,10 @@ void GameState::SetComment(std::string c) {
     last_comment_ = c;
 }
 
-void GameState::AppendComment(std::string c) {
-    last_comment_ += c;
+void GameState::RewriteComment(std::string c, size_t i) {
+    if (i < comments_.size()) {
+        comments_[i] = c;
+    }
 }
 
 std::string GameState::GetComment(size_t i) const {
@@ -645,4 +681,13 @@ std::string GameState::GetComment(size_t i) const {
 void GameState::PushComment() {
     comments_.emplace_back(last_comment_);
     last_comment_.clear();
+}
+
+float GameState::GetWave() const {
+    // not for othello game...
+    return 0.f;
+}
+
+float GameState::GetRule() const {
+    return 0.f;
 }

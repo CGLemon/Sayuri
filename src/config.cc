@@ -24,13 +24,10 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["friendly_pass"] << Option::SetOption(false);
     kOptionsMap["analysis_verbose"] << Option::SetOption(false);
     kOptionsMap["quiet"] << Option::SetOption(false);
-    kOptionsMap["rollout"] << Option::SetOption(false);
-    kOptionsMap["no_dcnn"] << Option::SetOption(false);
-    kOptionsMap["root_dcnn"] << Option::SetOption(false);
     kOptionsMap["winograd"] << Option::SetOption(true);
     kOptionsMap["fp16"] << Option::SetOption(true);
+    kOptionsMap["capture_all_dead"] << Option::SetOption(false);
 
-    kOptionsMap["search_mode"] << Option::SetOption(std::string{});
     kOptionsMap["fixed_nn_boardsize"] << Option::SetOption(0);
     kOptionsMap["defualt_boardsize"] << Option::SetOption(kDefaultBoardSize);
     kOptionsMap["defualt_komi"] << Option::SetOption(kDefaultKomi);
@@ -44,6 +41,7 @@ void ArgsParser::InitOptionsMap() const {
 
     kOptionsMap["kgs_hint"] << Option::SetOption(std::string{});
     kOptionsMap["weights_file"] << Option::SetOption(std::string{});
+    kOptionsMap["weights_dir"] << Option::SetOption(std::string{});
     kOptionsMap["book_file"] << Option::SetOption(std::string{});
     kOptionsMap["patterns_file"] << Option::SetOption(std::string{});
 
@@ -66,22 +64,31 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["draw_factor"] << Option::SetOption(0.f);
     kOptionsMap["score_utility_factor"] << Option::SetOption(0.1f);
     kOptionsMap["score_utility_div"] << Option::SetOption(20.f);
-    kOptionsMap["expand_threshold"] << Option::SetOption(-1);
+    kOptionsMap["forced_playouts_k"] << Option::SetOption(0.f);
+
+    kOptionsMap["kldgain"] << Option::SetOption(std::string{"0"});
 
     kOptionsMap["root_policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
-    kOptionsMap["lag_buffer"] << Option::SetOption(0);
+    kOptionsMap["lag_buffer"] << Option::SetOption(0.f);
+    kOptionsMap["no_cache"] << Option::SetOption(false); 
     kOptionsMap["early_symm_cache"] << Option::SetOption(false);
     kOptionsMap["symm_pruning"] << Option::SetOption(false);
     kOptionsMap["use_stm_winrate"] << Option::SetOption(false);
+    kOptionsMap["use_optimistic_policy"] << Option::SetOption(false);
+    kOptionsMap["use_rollout"] << Option::SetOption(false);
 
     // self-play options
     kOptionsMap["selfplay_query"] << Option::SetOption(std::string{});
     kOptionsMap["random_min_visits"] << Option::SetOption(1);
     kOptionsMap["random_moves_factor"] << Option::SetOption(0.f);
+    kOptionsMap["random_opening_prob"] << Option::SetOption(0.f, 1.f, 0.f);
 
+    kOptionsMap["gumbel_c_visit"] << Option::SetOption(50.f);
+    kOptionsMap["gumbel_c_scale"] << Option::SetOption(1.f);
+    kOptionsMap["gumbel_prom_visits"] << Option::SetOption(1);
     kOptionsMap["gumbel_considered_moves"] << Option::SetOption(16);
-    kOptionsMap["gumbel_playouts"] << Option::SetOption(400);
+    kOptionsMap["gumbel_playouts_threshold"] << Option::SetOption(400);
     kOptionsMap["gumbel"] << Option::SetOption(false);
     kOptionsMap["always_completed_q_policy"] << Option::SetOption(false);
 
@@ -94,6 +101,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["reduce_playouts"] << Option::SetOption(0);
     kOptionsMap["reduce_playouts_prob"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["first_pass_bonus"] << Option::SetOption(false);
+    kOptionsMap["resign_discard_prob"] << Option::SetOption(0.f, 1.f, 0.f);
 
     kOptionsMap["num_games"] << Option::SetOption(0);
     kOptionsMap["parallel_games"] << Option::SetOption(1);
@@ -174,25 +182,16 @@ void ArgsParser::InitBasicParameters() const {
                       as_default);
     }
 
-    // Parse the search mode.
-    auto search_mode = GetOption<std::string>("search_mode");
- 
-    for (char &c : search_mode) {
-        if (c == '+') c = ' ';
-    }
-
-    auto ss = std::istringstream(search_mode);
-    auto get_mode = std::string{};
-    while (ss >> get_mode) {
-        if (get_mode == "dcnn") {
-            SetOption("no_dcnn", false);
-        } else if (get_mode == "nodcnn" ||
-                       get_mode == "nonet") {
-            SetOption("no_dcnn", true);
-        } else if (get_mode == "rollout") {
-            SetOption("rollout", true);
-        } else if (get_mode == "rootdcnn") {
-            SetOption("root_dcnn", true);
+   // Set the lag buffer time.
+    bool already_set_lagbuffer = !IsOptionDefault("lag_buffer");
+    if (!already_set_lagbuffer) {
+        float lag_buffer_base = 0.25f;
+        if (use_gpu) {
+            SetOption("lag_buffer", lag_buffer_base);
+        } else {
+            // The time of CPU hiccup is longer than GPU backend. We
+            // a bigger value.
+            SetOption("lag_buffer", 2 * lag_buffer_base);
         }
     }
 }
@@ -328,6 +327,11 @@ void ArgsParser::Parse(Splitter &spt) {
         spt.RemoveWord(res->Index());
     }
 
+    if (const auto res = spt.Find("--no-cache")) {
+        SetOption("no_cache", true);
+        spt.RemoveWord(res->Index());
+    }
+
     if (const auto res = spt.Find("--early-symm-cache")) {
         SetOption("early_symm_cache", true);
         spt.RemoveWord(res->Index());
@@ -336,13 +340,6 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.Find("--symm-pruning")) {
         SetOption("symm_pruning", true);
         spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.FindNext("--search-mode")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("search_mode", res->Get<>());
-            spt.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
     }
 
     if (const auto res = spt.Find("--first-pass-bonus")) {
@@ -355,8 +352,13 @@ void ArgsParser::Parse(Splitter &spt) {
         spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = spt.Find("--no-dcnn")) {
-        SetOption("no_dcnn", true);
+    if (const auto res = spt.Find("--use-optimistic-policy")) {
+        SetOption("use_optimistic_policy", true);
+        spt.RemoveWord(res->Index());
+    }
+
+    if (const auto res = spt.Find("--use-rollout")) {
+        SetOption("use_rollout", true);
         spt.RemoveWord(res->Index());
     }
 
@@ -370,16 +372,14 @@ void ArgsParser::Parse(Splitter &spt) {
         spt.RemoveWord(res->Index());
     }
 
+    if (const auto res = spt.Find("--capture-all-dead")) {
+        SetOption("capture_all_dead", true);
+        spt.RemoveWord(res->Index());
+    }
+
     if (const auto res = spt.FindNext({"--resign-threshold", "-r"})) {
         if (IsParameter(res->Get<>())) {
             SetOption("resign_threshold", res->Get<float>());
-            spt.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--expand-threshold")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("expand_threshold", res->Get<int>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -401,6 +401,27 @@ void ArgsParser::Parse(Splitter &spt) {
         spt.RemoveWord(res->Index());
     }
 
+    if (const auto res = spt.FindNext("--gumbel-c-visit")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("gumbel_c_visit", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--gumbel-c-scale")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("gumbel_c_scale", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--gumbel-prom-visits")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("gumbel_prom_visits", res->Get<int>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
     if (const auto res = spt.FindNext("--gumbel-considered-moves")) {
         if (IsParameter(res->Get<>())) {
             SetOption("gumbel_considered_moves", res->Get<int>());
@@ -408,9 +429,9 @@ void ArgsParser::Parse(Splitter &spt) {
         }
     }
 
-    if (const auto res = spt.FindNext("--gumbel-playouts")) {
+    if (const auto res = spt.FindNext("--gumbel-playouts-threshold")) {
         if (IsParameter(res->Get<>())) {
-            SetOption("gumbel_playouts", res->Get<int>());
+            SetOption("gumbel_playouts_threshold", res->Get<int>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -454,6 +475,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--random-moves-factor")) {
         if (IsParameter(res->Get<>())) {
             SetOption("random_moves_factor", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--random-opening-prob")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("random_opening_prob", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -557,6 +585,13 @@ void ArgsParser::Parse(Splitter &spt) {
         }
     }
 
+    if (const auto res = spt.FindNext("--weights-dir")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("weights_dir", res->Get<>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
     if (const auto res = spt.FindNext("--book")) {
         if (IsParameter(res->Get<>())) {
             SetOption("book_file", res->Get<>());
@@ -581,6 +616,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--score-utility-div")) {
         if (IsParameter(res->Get<>())) {
             SetOption("score_utility_div", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--forced-playouts-k")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("forced_playouts_k", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -648,6 +690,13 @@ void ArgsParser::Parse(Splitter &spt) {
         }
     }
 
+    if (const auto res = spt.FindNext("--kldgain")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("kldgain", res->Get<>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
     if (const auto res = spt.FindNext("--root-policy-temp")) {
         if (IsParameter(res->Get<>())) {
             SetOption("root_policy_temp", res->Get<float>());
@@ -658,6 +707,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--policy-temp")) {
         if (IsParameter(res->Get<>())) {
             SetOption("policy_temp", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--resign-discard-prob")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("resign_discard_prob", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -685,7 +741,7 @@ void ArgsParser::Parse(Splitter &spt) {
 
     if (const auto res = spt.FindNext("--lag-buffer")) {
         if (IsParameter(res->Get<>())) {
-            SetOption("lag_buffer", res->Get<int>());
+            SetOption("lag_buffer", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -780,9 +836,6 @@ void ArgsParser::DumpHelper() const {
                 << "\t--friendly-pass\n"
                 << "\t\tDo pass move if the engine wins the game.\n\n"
 
-                << "\t--no-dcnn\n"
-                << "\t\tDisable the Neural Network forwarding pipe. Very weak.\n\n"
-
                 << "\t--cache-memory-mib <integer>\n"
                 << "\t\tSet the NN cache size in MiB.\n\n"
 
@@ -801,7 +854,7 @@ void ArgsParser::DumpHelper() const {
                 << "\t--batch-size, -b <integer>\n"
                 << "\t\tThe number of batches for a single evaluation. Set 0 will select a reasonable number.\n\n"
 
-                << "\t--lag-buffer <integer>\n"
+                << "\t--lag-buffer <float>\n"
                 << "\t\tSafety margin for time usage in seconds.\n\n"
 
                 << "\t--score-utility-factor <float>\n"

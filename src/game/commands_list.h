@@ -52,8 +52,6 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "printsgf",
 
-    "cleansgf",
-
     "is_legal",
 
     "color",
@@ -96,10 +94,6 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "kgs-time_settings",
 
-    "supervised",
-
-    "sayuri-supervised",
-
     "planes",
 
     "raw-nn",
@@ -110,7 +104,13 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "genpatterns",
 
-    "prediction_accuracy",
+    "summary_accuracy",
+
+    "summary_selfplay",
+
+    "debug_search",
+
+    "debug_moves",
 
     "gogui-analyze_commands",
 

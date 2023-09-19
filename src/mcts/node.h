@@ -44,7 +44,7 @@ struct AnalysisConfig {
 
     bool MoveRestrictions() const {
         return !avoid_moves.empty() ||
-                   !avoid_moves.empty();
+                   !allow_moves.empty();
     }
 
     void Clear() {
@@ -105,19 +105,16 @@ public:
                          AnalysisConfig &config);
 
     // Select the best policy node.
-    Node *ProbSelectChild();
+    Node *ProbSelectChild(bool allow_pass);
 
     // Select the best PUCT value node.
     Node *PuctSelectChild(const int color, const bool is_root);
 
-    // Select the best UCT value node. For no-dcnn mode.
-    Node *UctSelectChild(const int color, const bool is_root, const GameState &state);
-
     // Randomly select one child by visits. 
-    int RandomizeFirstProportionally(float temp, int min_visits);
+    int RandomMoveProportionally(float temp, int min_visits);
 
-    // 
-    int RandomizeMoveWithGumbel(GameState &state, int temp, int min_visits);
+    // Randomly select one child by visits and Q value.
+    int RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits);
 
     // Update the node.
     void Update(const NodeEvals *evals);
@@ -129,7 +126,7 @@ public:
     int GetBestMove(bool allow_pass);
 
     // Get best move(vertex) with Gumbel-Top-k trick.
-    int GetGumbelMove();
+    int GetGumbelMove(bool allow_pass);
 
     const std::vector<Edge> &GetChildren() const;
 
@@ -156,8 +153,11 @@ public:
     // Get the move probability value of this node.
     float GetPolicy() const;
 
-    // Get the Network win-loss value. 
+    // Get the network win-loss value. 
     float GetNetWL(const int color) const;
+
+    // Get the network final score value. 
+    float GetNetScore(const int color) const;
 
     // Get the average final score value.
     float GetFinalScore(const int color) const;
@@ -173,6 +173,9 @@ public:
 
     // Set the network win-loss value from outside.
     void ApplyEvals(const NodeEvals *evals);
+
+    float GetWLStddev() const;
+    float GetScoreStddev() const;
 
     bool ShouldApplyGumbel() const;
     std::vector<float> GetProbLogitsCompletedQ(GameState &state);
@@ -192,9 +195,10 @@ public:
     bool IsActive() const;
     bool IsValid() const;
 
-    float ComputeKlDivergence();
-    float ComputeTreeComplexity();
+    float GetKlDivergence();
+    float GetTreeComplexity();
 
+    std::string GetPathVerboseString(GameState &state, int color, std::vector<int> &moves);
     std::string ToAnalysisString(GameState &state, const int color, AnalysisConfig &config);
     std::string OwnershipToString(GameState &state, const int color, std::string name, Node *node);
     std::string ToVerboseString(GameState &state, const int color);
@@ -202,11 +206,8 @@ public:
 
 private:
     float GetDynamicCpuctFactor(Node *node, const int visits);
-    void ApplyNoDcnnPolicy(GameState &state,
-                           const int color,
-                           Network::Result &raw_netlist) const;
     void ApplyDirichletNoise(const float alpha);
-    void ApplyNetOutput(GameState &state,
+    void ApplyNetOutput(GameState& state,
                         const Network::Result &raw_netlist,
                         NodeEvals& node_evals, const int color);
     void SetPolicy(float p);
@@ -216,7 +217,8 @@ private:
 
     float GetSearchPolicy(Edge& child, bool noise);
     float GetScoreUtility(const int color, float div, float parent_score) const;
-    float GetLcbVariance(const float default_var, const int visits) const;
+    float GetScoreVariance(const float default_var, const int visits) const;
+    float GetWLVariance(const float default_var, const int visits) const;
     float GetLcb(const int color) const;
 
     void Inflate(Edge& child);
@@ -227,14 +229,15 @@ private:
     int GetVirtualLoss() const;
 
     float GetGumbelQValue(int color, float parent_score) const;
-    float NormalizeCompletedQ(const float completed_q,
+    float TransformCompletedQ(const float completed_q,
                               const int max_visits) const;
     void ComputeNodeCount(size_t &nodes, size_t &edges);
     void ProcessGumbelLogits(std::vector<float> &gumbel_logits,
                              const int color,
                              const int root_visits,
                              const int max_visists,
-                             const int considered_moves, const float mval,
+                             const int considered_moves,
+                             const float logit_zero,
                              bool only_max_visit);
     Node *GumbelSelectChild(int color, bool only_max_visit);
     void MixLogitsCompletedQ(GameState &state, std::vector<float> &prob);
@@ -285,8 +288,12 @@ private:
     // The network win-loss value.
     float black_wl_{0.5f};
 
-    // The accumulated squared difference value.
+    // The network final score value.
+    float black_fs_{0.0f};
+
+    // The accumulated squared difference values.
     std::atomic<double> squared_eval_diff_{1e-4f};
+    std::atomic<double> squared_score_diff_{1e-4f};
 
     // The black accumulated values.
     std::atomic<double> accumulated_black_fs_{0.0f};

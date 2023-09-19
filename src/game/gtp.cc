@@ -2,18 +2,20 @@
 #include "game/sgf.h"
 #include "game/commands_list.h"
 #include "utils/log.h"
+#include "utils/time.h"
 #include "utils/komi.h"
 #include "utils/gogui_helper.h"
 #include "pattern/mm_trainer.h"
-#include "neural/supervised.h"
 #include "neural/encoder.h"
-#include "accuracy/predict.h"
+#include "summary/accuracy.h"
+#include "summary/selfplay_accumulation.h"
 
 #include <iomanip>
 #include <iostream>
 #include <string>
 #include <vector>
 #include <array>
+#include <atomic>
 
 void GtpLoop::Loop() {
     while (true) {
@@ -126,7 +128,6 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
     } else if (const auto res = spt.Find("fixed_handicap", 0)) {
         auto handicap = -1;
         if (const auto input = spt.GetWord(1)) {
-            agent_->GetState().ClearBoard();
             handicap = input->Get<int>();
         }
         if (handicap >= 1 &&
@@ -144,31 +145,29 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         int max_handicaps = network_valid ?
                                 agent_->GetState().GetNumIntersections() / 4 :
                                 9;
+        auto stones_list = std::vector<int>{};
 
         if (handicaps >= 1 && handicaps <= max_handicaps) {
-            agent_->GetState().ClearBoard();
-            agent_->GetState().SetHandicap(handicaps);
-        } else {
-            handicaps = -1; // disable handicap
-        }
-
-        auto stone_list = std::vector<int>{};
-        if (network_valid) {
-            for (int i = 0; i < handicaps; ++i) {
-                const int vtx = agent_->GetNetwork().GetBestPolicyVertex(agent_->GetState(), false);
-                agent_->GetState().AppendMove(vtx, kBlack);
-                stone_list.emplace_back(vtx);
+            if (network_valid) {
+                for (int i = 0; i < handicaps; ++i) {
+                    const int vtx =
+                        agent_->GetNetwork().GetVertexWithPolicy(
+                            agent_->GetState(), 1.f, false);
+                    stones_list.emplace_back(vtx);
+                    // agent_->GetState().ClearBoard();
+                    agent_->GetState().PlayHandicapStones(stones_list, true);
+                }
+            } else {
+                stones_list = agent_->GetState().PlaceFreeHandicap(handicaps);
             }
-        } else {
-            stone_list = agent_->GetState().PlaceFreeHandicap(handicaps);
         }
 
-        if (!stone_list.empty()) {
+        if (!stones_list.empty()) {
             auto vtx_list = std::ostringstream{};
-            for (size_t i = 0; i < stone_list.size(); i++) {
-                auto vtx = stone_list[i];
+            for (size_t i = 0; i < stones_list.size(); i++) {
+                const auto vtx = stones_list[i];
                 vtx_list << agent_->GetState().VertexToText(vtx);
-                if (i != stone_list.size() - 1) vtx_list << ' ';
+                if (i != stones_list.size() - 1) vtx_list << ' ';
             }
             out << GtpSuccess(vtx_list.str());
         } else {
@@ -251,23 +250,6 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             Sgf::Get().ToFile(filename, agent_->GetState());
             out << GtpSuccess("");
         }
-    } else if (const auto res = spt.Find("cleansgf", 0)) {
-        auto fin = std::string{};
-        auto fout = std::string{};
-
-        if (const auto input = spt.GetWord(1)) {
-            fin = input->Get<>();
-        }
-        if (const auto input = spt.GetWord(2)) {
-            fout = input->Get<>();
-        }
-
-        if (fin.empty() || fout.empty()) {
-            out << GtpFail("invalid cleansgf");
-        } else {
-            Sgf::Get().CleanSgf(fin, fout);
-            out << GtpSuccess("");
-        }
     } else if (const auto res = spt.Find("get_komi", 0)) {
         out << GtpSuccess(std::to_string(agent_->GetState().GetKomi()));
     } else if (const auto res = spt.Find("get_handicap", 0)) {
@@ -281,7 +263,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
     } else if (const auto res = spt.Find("final_score", 0)) {
         auto result = agent_->GetSearch().Computation(400, Search::kForced);
         auto color = agent_->GetState().GetToMove();
-        auto final_score = result.root_final_score;
+        auto final_score = result.root_score_lead;
 
         final_score = AdjustKomi<float>(final_score);
         if (std::abs(final_score) < 1e-4f) {
@@ -564,25 +546,6 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         } else {
             out << GtpSuccess("false");
         }
-    } else if (const auto res = spt.Find({"supervised", "sayuri-supervised"}, 0)) {
-        auto sgf_file = std::string{};
-        auto data_file = std::string{};
-
-        if (const auto sgf = spt.GetWord(1)) {
-            sgf_file = sgf->Get<>();
-        }
-        if (const auto data = spt.GetWord(2)) {
-            data_file = data->Get<>();
-        }
-
-        if (!sgf_file.empty() && !data_file.empty()) {
-            bool is_general = res->Get<>() != "sayuri-supervised";
-
-            Supervised::Get().FromSgfs(is_general, sgf_file, data_file);
-            out << GtpSuccess("");
-        } else {
-            out << GtpFail("file name is empty");
-        }
     } else if (const auto res = spt.Find("planes", 0)) {
         int symmetry = Symmetry::kIdentitySymmetry;
 
@@ -608,26 +571,40 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             out << GtpFail("symmetry must be from 0 to 7");
         }
     } else if (const auto res = spt.Find("benchmark", 0)) {
-        int playouts = 3200;
+        int eval_cnt = 3200;
 
-        if (const auto p = spt.GetWord(1)) {
-            playouts = std::max(p->Get<int>(), 1);
+        if (const auto e = spt.GetWord(1)) {
+            eval_cnt = std::max(e->Get<int>(), 1);
         }
 
-        // clean current state
-        agent_->GetSearch().ReleaseTree();
         agent_->GetNetwork().ClearCache();
+        auto group = ThreadGroup<void>(&ThreadPool::Get());
 
-        auto result = agent_->GetSearch().Computation(playouts, Search::kNullTag);
+        std::atomic<int> count{0};
+        const auto Worker = [&, this, eval_cnt]() -> void {
+            while (count.load(std::memory_order_relaxed) < eval_cnt) {
+                count.fetch_add(1, std::memory_order_relaxed);
+                agent_->GetNetwork().GetOutput(
+                    agent_->GetState(), Network::kRandom, 1.f, 0, false, false);
+            }
+        };
 
-        auto benchmark_out = std::ostringstream{};
-        benchmark_out <<  "Benchmark Result:\n"
-                          << Format("Use %d threads, the batch size is %d.\n",
-                                        result.threads, result.batch_size)
-                          << Format("Do %d playouts in %.2f sec.",
-                                        result.playouts, result.seconds);
+        Timer timer;
+        timer.Clock();
 
-        out << GtpSuccess(benchmark_out.str());
+        const auto threads = GetOption<int>("threads");
+        const auto batch_size = GetOption<int>("batch_size");
+        for (int i = 0; i < threads; ++i) {
+            group.AddTask(Worker);
+        }
+        group.WaitToJoin();
+
+        const auto elapsed = timer.GetDuration();
+        out << GtpSuccess(
+            Format("%d -> %.2f(eval/s), bs=%d, t=%d",
+                count.load(),
+                count.load()/elapsed,
+                threads, batch_size));
     } else if (const auto res = spt.Find("genbook", 0)) {
         auto sgf_file = std::string{};
         auto data_file = std::string{};
@@ -667,7 +644,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             out << GtpFail("file name is empty");
         }
 
-    } else if (const auto res = spt.Find("prediction_accuracy", 0)) {
+    } else if (const auto res = spt.Find("summary_accuracy", 0)) {
         auto sgf_file = std::string{};
 
         if (const auto sgf = spt.GetWord(1)) {
@@ -677,11 +654,54 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         if (sgf_file.empty()) {
             out << GtpFail("file name is empty");
         } else {
-            float acc = PredictSgfAccuracy(agent_->GetSearch(), agent_->GetState(), sgf_file);
-            auto predict_out = std::ostringstream{};
-            predict_out << Format("the accuracy %.2f%", acc * 100);
-            out << GtpSuccess(predict_out.str());
+            auto report = ComputeNetAccuracy(agent_->GetNetwork(), sgf_file);
+            auto report_out = std::ostringstream{};
+            report_out << Format(
+                "the final accuracy %.2f%, totally %d positions",
+                report.GetAccuracy() * 100, report.num_positions);
+            out << GtpSuccess(report_out.str());
         }
+    } else if (const auto res = spt.Find("summary_selfplay", 0)) {
+        auto sgf_file = std::string{};
+
+        if (const auto sgf = spt.GetWord(1)) {
+            sgf_file = sgf->Get<>();
+        }
+
+        if (sgf_file.empty()) {
+            out << GtpFail("file name is empty");
+        } else {
+            auto report = ComputeSelfplayAccumulation(sgf_file);
+            auto report_out = std::ostringstream{};
+            report_out << Format(
+                "accumulation playouts is %zu, number games is %d",
+                 report.accm_playouts, report.num_games);
+            out << GtpSuccess(report_out.str());
+        }
+    } else if (const auto res = spt.Find("debug_search", 0)) {
+        int playouts = -1;
+
+        if (const auto p = spt.GetWord(1)) {
+            playouts = std::max(p->Get<int>(), 1);
+        }
+
+        if (playouts > 0) {
+            // clean current state
+            agent_->GetSearch().ReleaseTree();
+            agent_->GetNetwork().ClearCache();
+            agent_->GetSearch().Computation(playouts, Search::kNullTag);
+            out << GtpSuccess("done");
+        } else {
+            out << GtpFail("invalid playouts");
+        }
+    } else if (const auto res = spt.Find("debug_moves", 0)) {
+        auto moves = std::vector<int>{};
+        for (auto i = size_t{1}; i < spt.GetCount(); ++i) {
+            auto move = spt.GetWord(i)->Get<>();
+            moves.emplace_back(agent_->GetState().TextToVertex(move));
+        }
+        out << GtpSuccess(
+                   agent_->GetSearch().GetDebugMoves(moves));
     } else if (const auto res = spt.Find("gogui-analyze_commands", 0)) {
         auto gogui_cmds = std::ostringstream{};
 

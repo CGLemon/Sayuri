@@ -2,24 +2,29 @@
 #include "utils/threadpool.h"
 #include "utils/random.h"
 #include "utils/komi.h"
+#include "utils/filesystem.h"
 #include "game/sgf.h"
 #include "config.h"
 
 #include <sstream>
+#include <algorithm>
+#include <cmath>
 
 void Engine::Initialize() {
-    default_playouts_ = 400;
+    default_playouts_ = GetOption<int>("playouts");
     komi_stddev_ = GetOption<float>("komi_stddev");
     komi_big_stddev_ = GetOption<float>("komi_big_stddev");
     komi_big_stddev_prob_ = GetOption<float>("komi_big_stddev_prob");
     handicap_fair_komi_prob_ = GetOption<float>("handicap_fair_komi_prob");
-
+    random_opening_prob_ = GetOption<float>("random_opening_prob");
+    random_moves_factor_ = GetOption<float>("random_moves_factor");
     parallel_games_ = GetOption<int>("parallel_games");
+    last_net_accm_queries_ = 0;
 
     if (!network_) {
         network_ = std::make_unique<Network>();
     }
-    network_->Initialize(GetOption<std::string>("weights_file"));
+    network_->Initialize(SelectWeights());
 
     game_pool_.clear();
     for (int i = 0; i < parallel_games_; ++i) {
@@ -36,6 +41,30 @@ void Engine::Initialize() {
     ThreadPool::Get(GetOption<int>("threads") * parallel_games_);
 
     ParseQueries();
+}
+
+std::string Engine::SelectWeights() const {
+    // default weights
+    auto select_weights = GetOption<std::string>("weights_file");
+    if (!select_weights.empty()) {
+        return select_weights;
+    }
+
+    auto weights_dir = GetOption<std::string>("weights_dir");
+    auto weights_list = GetFileList(weights_dir);
+
+    if (!weights_list.empty()) {
+        // Seletet the last weights in this directory. 
+        std::sort(std::begin(weights_list), std::end(weights_list),
+                      [weights_dir](std::string a, std::string b) {
+                          auto time_a = GetFileTime(ConcatPath(weights_dir, a));
+                          auto time_b = GetFileTime(ConcatPath(weights_dir, b));
+                          return difftime(time_a, time_b) > 0.f;
+                      });
+        select_weights = ConcatPath(weights_dir, weights_list[0]);
+    }
+
+    return select_weights;
 }
 
 void Engine::ParseQueries() {
@@ -155,6 +184,9 @@ void Engine::Selfplay(int g) {
 
 void Engine::SetNormalGame(int g) {
     Handel(g);
+    if (Random<>::Get().Roulette<10000>(random_opening_prob_)) {
+        SetRandomOpeningGame(g);
+    }
     SetUnfairKomi(g);
 }
 
@@ -163,16 +195,50 @@ void Engine::SetHandicapGame(int g, int handicaps) {
     auto &state = game_pool_[g];
 
     for (int i = 0; i < handicaps-1; ++i) {
-        auto result = search_pool_[g]->Computation(
-                          default_playouts_, Search::kNoNoise);
-        state.AppendMove(result.random_move, kBlack);
+        state.SetToMove(kBlack);
+        int random_move = network_->GetVertexWithPolicy(state, 0.75f, false);
+        state.AppendMove(random_move, kBlack);
     }
     state.SetHandicap(handicaps);
     SetFairKomi(g);
 
+    if (Random<>::Get().Roulette<10000>(random_opening_prob_)) {
+        SetRandomOpeningGame(g);
+    }
     if (!Random<>::Get().Roulette<10000>(handicap_fair_komi_prob_)) {
         SetUnfairKomi(g);
     }
+}
+
+void Engine::SetRandomOpeningGame(int g) {
+    Handel(g);
+    auto &state = game_pool_[g];
+
+    const int board_size = state.GetBoardSize();
+    const int random_moves_cnt =
+        random_moves_factor_ * state.GetNumIntersections();
+    auto dist = std::normal_distribution<float>(0.f, (float)board_size/4);
+    const int remainig_random_moves =
+        std::max(
+            int(dist(Random<>::Get())) + random_moves_cnt - state.GetMoveNumber(),
+            0
+        );
+
+    const float lambda = 0.69314718056f/board_size;
+    const float init_temp = 0.8f;
+    int times = 0;
+    for (int i = 0; i < remainig_random_moves; ++i) {
+        if (state.GetPasses() >= 2) {
+            break;
+        }
+        float curr_temp = std::max(
+            init_temp * std::exp(-(lambda * times)), 0.2f);
+
+        int random_move = network_->GetVertexWithPolicy(state, curr_temp, false);
+        state.PlayMove(random_move);
+        times += 1;
+    }
+    SetFairKomi(g);
 }
 
 void Engine::SetUnfairKomi(int g) {
@@ -196,9 +262,9 @@ void Engine::SetFairKomi(int g) {
     auto &state = game_pool_[g];
 
     auto result = search_pool_[g]->Computation(
-                      default_playouts_, Search::kNoNoise);
+                      default_playouts_, Search::kNoExploring);
     auto komi = state.GetKomi();
-    auto score_lead = result.root_final_score;
+    auto score_lead = result.root_score_lead;
 
     if (state.GetToMove() == kWhite) {
         score_lead = 0.0f - score_lead;
@@ -223,6 +289,14 @@ int Engine::GetHandicaps(int g) {
 
 int Engine::GetParallelGames() const {
     return parallel_games_;
+}
+
+size_t Engine::GetNetReportQueries() {
+    size_t curr_net_accm_queries = network_->GetNumQueries();
+    const auto report_queries =
+        curr_net_accm_queries - last_net_accm_queries_;
+    last_net_accm_queries_ = curr_net_accm_queries;
+    return report_queries;
 }
 
 void Engine::Handel(int g) {

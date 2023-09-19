@@ -1,5 +1,5 @@
 --random-moves-factor 0.1
---random-opening-prob 0.75
+# --random-opening-prob 0.75
 
 --komi-stddev 2.5
 --komi-big-stddev-prob 0.06
@@ -32,16 +32,17 @@
 --selfplay-query bkp:8:10:0.01
 --selfplay-query bkp:7:9:0.01
 
---playouts 150
+--playouts 100
 
 --gumbel
---gumbel-playouts-threshold 50
+--gumbel-playouts-threshold 400
+--gumbel-prom-visits 2
 --always-completed-q-policy
 
---reduce-playouts 50
---reduce-playouts-prob 0.75
+# --reduce-playouts 50
+# --reduce-playouts-prob 0
 
---resign-playouts 75
+--resign-playouts 100
 --resign-threshold 0.05
 --resign-discard-prob 0.85
 

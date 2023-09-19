@@ -2,11 +2,9 @@
     "NeuralNetwork" : {
         "NNType": "Residual",
         "MaxBoardSize": 19,
-        "InputChannels": 38,
-        "ResidualChannels": 128,
-        "PolicyExtract": 24,
-        "ValueExtract": 24,
-        "ValueMisc": 5,
+        "ResidualChannels": 96,
+        "PolicyExtract": 16,
+        "ValueExtract": 16,
 
         "Stack" : [
             "ResidualBlock",
@@ -31,10 +29,13 @@
         "DownSampleRate": 16,
         "MacroFactor": 1,
         "WeightDecay": 1e-4,
-        "NumberChunks" : 20000,
+        "NumberChunks" : 5000,
+        "SoftLossWeight" : 0.1,
+        "SwaMaxCount" : 16,
+        "SwaSteps" : 500,
 
         "LearningRateSchedule": [
-            [0,       1e-2]
+            [0,       5e-3]
          ],
 
         "FixUpBatchNorm": false,
