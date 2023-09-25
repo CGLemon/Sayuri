@@ -312,9 +312,9 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         LOGGING << Format("Max playouts number: %d\n", playouts);
     }
 
-    if (thinking_time < timer.GetDuration() || playouts == 0) {
-        // Prepare the root node will spent little time. So disable
-        // the tree search if the time is up.
+    if (thinking_time < timer.GetDuration() || AchieveCap(playouts, tag)) {
+        // Prepare the root node spent little time. Disable the
+        // tree search if the time is up.
         running_.store(false, std::memory_order_relaxed);
     }
 
@@ -351,13 +351,6 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         const auto elapsed = timer.GetDuration();
         const auto curr_playouts = playouts_.load(std::memory_order_relaxed);
 
-        if (tag & kUnreused) {
-            // We simply limit the root visits instead of releasing the tree. It is
-            // because that limiting the root node visits is equal to disable the reused
-            // tree. Notice that the visits of root node start from one. We need to
-            // reduce it.
-            keep_running &= (root_node_->GetVisits() - 1 < playouts);
-        }
         if (param_->resign_playouts > 0 &&
                 param_->resign_playouts <= curr_playouts) {
             // If someone already won the game, the Q value was not very effective
@@ -377,7 +370,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
                 keep_running &= HaveAlternateMoves();
             }
         }
-        keep_running &= (curr_playouts < playouts);
+        keep_running &= !AchieveCap(playouts, tag);
         keep_running &= running_.load(std::memory_order_relaxed);
     };
 
@@ -865,10 +858,10 @@ int Search::GetSelfPlayMove() {
     // We always reuse the sub-tree at fast search phase. The
     // kUnreused option doesn't mean discarding the sub-tree. 
     // It means visit cap (The search result is as same as
-    // "playouts cap" + "discard the tree"). The default is playouts
+    // "playout cap" + "discard the tree"). The default is playouts
     // cap. If the reuse tag is true, it is visit cap oscillation.
     // Every visit of fast search phase may be different. If the
-    // reuse tag is false, it is playouts cap oscillation which
+    // reuse tag is false, it is playout cap oscillation which
     // is used by KataGo. Please see here, https://arxiv.org/abs/1902.10565v2
     auto reuse_tag = param_->reuse_tree ?
                          kNullTag : kUnreused;
@@ -1343,6 +1336,29 @@ bool Search::HaveAlternateMoves() {
     (void) success;
 
     return true;
+}
+
+
+bool Search::AchieveCap(const int cap, Search::OptionTag tag) {
+    const auto playouts = playouts_.load(std::memory_order_relaxed);
+    const auto visits = root_node_->GetVisits();
+    bool should_stop = false;
+
+    if (tag & kUnreused) {
+        // Disable the reuse-tree mode. But we use visit cap instead of
+        // discarding the sub-tree. They should be equal.
+        if (visits - 1 >= cap) {
+            // The visits number is greater or equal to 1 because the 
+            // it always includes the root visit. We should reduce it.
+            should_stop |= true;
+        }
+    }
+    if (playouts >= cap) {
+        // It is playout cap. In the most case, we should be more easy
+        // to achieve visit cap.
+        should_stop |= true;
+    }
+    return should_stop;
 }
 
 int Search::GetPonderPlayouts() const {

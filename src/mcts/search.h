@@ -170,6 +170,10 @@ private:
     // Reture false if there is only one reasonable move.
     bool HaveAlternateMoves();
 
+    // Reture true if the root achieve visit cap or playout
+    // cap.
+    bool AchieveCap(const int cap, Search::OptionTag tag);
+
     std::vector<double> GetRootDistribution(int &visited_nodes);
 
     bool InputPending(Search::OptionTag tag) const;
