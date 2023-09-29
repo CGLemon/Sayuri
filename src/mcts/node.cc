@@ -160,8 +160,10 @@ bool Node::ExpandChildren(Network &network,
         legal_accumulate += policy;
     }
 
-    // The pass is always legal.
-    nodelist.emplace_back(raw_netlist.pass_probability, kPass);
+    // There is no legal moves...
+    if (nodelist.empty()) {
+        nodelist.emplace_back(raw_netlist.pass_probability, kPass);
+    }
     legal_accumulate += raw_netlist.pass_probability;
 
     if (legal_accumulate < 1e-8f) {

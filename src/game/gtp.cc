@@ -909,22 +909,23 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         const auto num_intersections = board_size * board_size;
         const auto color = agent_->GetState().GetToMove();
         auto legal_map = std::ostringstream{};
+        int i = 0;
 
         for (int idx = 0; idx < num_intersections; ++idx) {
-            if (idx != 0) {
-                legal_map << '\n';
-            }
-
             const auto x = idx % board_size;
             const auto y = idx / board_size;
             const auto vtx = agent_->GetState().GetVertex(x,y);
-            auto legal_val = 0;
 
             if (agent_->GetState().IsLegalMove(vtx)) {
-                legal_val = 1;
+                if (i++ != 0) {
+                    legal_map << '\n';
+                } 
+                if (color == kBlack) {
+                    legal_map << Format("VAR b %s", agent_->GetState().VertexToText(vtx).c_str());
+                } else {
+                    legal_map << Format("VAR w %s", agent_->GetState().VertexToText(vtx).c_str());
+                }
             }
-            legal_map << GoguiGray(
-                legal_val, agent_->GetState().VertexToText(vtx), color==kWhite);
         }
         out << GtpSuccess(legal_map.str());
     }
