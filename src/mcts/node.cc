@@ -804,7 +804,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     const auto node_mem = sizeof(Node) + sizeof(Edge);
     const auto edge_mem = sizeof(Edge);
 
-    // Here are some errors to compute memory used. 
+    // Here are some errors to compute memory used.
     const auto mem_used = static_cast<double>(
         nodes * node_mem + edges * edge_mem) / (1024.f * 1024.f);
 
@@ -1037,6 +1037,8 @@ int Node::GetBestMove(bool allow_pass) {
     }
 
     if (best_move == kNullVertex) {
+        // There is no visited (non-pass) move. We use raw probabilities
+        // instead of LCB list.
         best_move = ProbSelectChild(allow_pass)->GetVertex();
     }
 
@@ -1495,7 +1497,7 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
     // '(promotion visits) * (log2(considered moves) + 1) * (considered moves)' for
     // each epoch. The variant algorithm is same as Sequential Halving if the total
     // playous is lower than this value. Following is a example,
-    // 
+    //
     // promotion visits = 1
     // considered moves = 4
     //
@@ -1612,15 +1614,20 @@ Node *Node::GumbelSelectChild(int color, bool only_max_visit) {
         const auto node = child.Get();
         const bool is_pointer = node != nullptr;
 
-        gumbel_logits[child.GetVertex()] =
-            gumbel_type1(Random<>::Get()) + SafeLog(child.GetPolicy());
-
         if (is_pointer && node->IsValid()) {
             // The node status is pruned or active.
             const auto visits = node->GetVisits();
             parentvisits += visits;
             max_visits = std::max(max_visits, visits);
         }
+        if (is_pointer && !node->IsActive()) {
+            // The node is pruned or invalid. Skip it.
+            continue;
+        }
+        // TODO: If we prune or invalidate a node, the Sequential
+        //       Halving may be wrong. We should conside this.
+        gumbel_logits[child.GetVertex()] =
+            gumbel_type1(Random<>::Get()) + SafeLog(child.GetPolicy());
     }
 
     const int considered_moves =
@@ -1648,36 +1655,27 @@ int Node::GetGumbelMove(bool allow_pass) {
     WaitExpanded();
     assert(HasChildren());
 
-    int max_visits = -1;
     int num_candidates = 0;
-
     for (auto &child : children_) {
+        const auto node = child.Get();
         const int visits = child.GetVisits();
-        if (visits > max_visits) {
-            num_candidates = 0;
-            max_visits = visits;
-        }
-        if (visits == max_visits) {
+        if (visits > 0 && node->IsValid()) {
             num_candidates += 1;
-        } 
+        }
     }
 
     if (!allow_pass && num_candidates == 1) {
         // Only one candidate move. It may be the pass move.
         allow_pass = true;
     }
-
-    auto move = kNullVertex;
-
-    while (move == kNullVertex) {
-        move = GumbelSelectChild(color_, true)->GetVertex();
-
-        if (!allow_pass && move == kPass) {
-            // Select the new next move again.
-            move = kNullVertex;
+    if (!allow_pass) {
+        auto passnode = GetChild(kPass);
+        if (passnode) {
+            passnode->Invalidate();
         }
     }
-    return move;
+
+    return GumbelSelectChild(color_, true)->GetVertex();
 }
 
 void Node::SetScoreBouns(float val) {
