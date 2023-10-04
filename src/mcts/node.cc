@@ -14,6 +14,7 @@
 #include <sstream>
 #include <iomanip>
 #include <stack>
+#include <iostream>
 
 #define VIRTUAL_LOSS_COUNT (3)
 
@@ -380,8 +381,11 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     // Apply the Gumbel-Top-k trick here. Mix it with PUCT
     // search. Use the PUCT directly if there is already
     // enough visits (playouts).
-    if (is_root && ShouldApplyGumbel()) {
-        return GumbelSelectChild(color, false);
+    if (is_root && param_->gumbel) {
+        auto node = GumbelSelectChild(color, false);
+        if (node) {
+            return node;
+        }
     }
 
     // Gather all parent's visits.
@@ -1486,13 +1490,17 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
     }
 }
 
-void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
+bool Node::ShouldApplyGumbel() const {
+    // We simply think the parent's visits is
+    // current visits. Ignore the pruned node.
+    const int visits = GetVisits() - 1;
+    return param_->gumbel &&
+               param_->gumbel_playouts_threshold > visits;
+}
+
+bool Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
                                const int color,
-                               const int parent_visits,
-                               const int max_visists,
-                               const int considered_moves,
-                               const float logit_zero,
-                               bool only_max_visit) {
+                               const bool only_max_visits) {
     // The variant of Sequential Halving algorithm. The input N playouts is always
     // '(promotion visits) * (log2(considered moves) + 1) * (considered moves)' for
     // each epoch. The variant algorithm is same as Sequential Halving if the total
@@ -1525,126 +1533,127 @@ void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
     // distribution -> 4  | 0 | 0 | 0
     // accumulation -> 14 | 6 | 2 | 2
 
-    const int prom_visits = std::max(1, param_->gumbel_prom_visits);
-    const int n = std::log2(std::max(1, considered_moves)) + 1;
-    const int adj_considered_moves = std::pow(2, n-1); // Be sure that it is pow of 2.
-
-    auto table = std::vector<int>(adj_considered_moves, 0);
-    for (int i=0, r=1, w=adj_considered_moves; i < n; ++i, w/=2, r*=2) {
-        for (int j = 0; j < w; ++j) {
-            for (int k = 0; k < r; ++k) {
-                table[adj_considered_moves-j-1] += 1;
-            }
-        }
-    }
-
-    const int visits_per_epoch = n * prom_visits * adj_considered_moves;
-    const int epoches = parent_visits / visits_per_epoch;
-    const int visits_this_epoch = parent_visits - epoches * visits_per_epoch;
-    const int rounds_this_epoch =
-        visits_this_epoch / (prom_visits * adj_considered_moves);
-
-    int height = 0;
-    int width = adj_considered_moves;
-    int offset = 0;
-    for (int i = 0, t = 1; i < rounds_this_epoch; i++, t *= 2) {
-        height += t;
-        width /= 2;
-        offset += width;
-    }
-
-    const auto parent_score = GetNetScore(color);
-    const int visits_this_epoch_remining =
-        visits_this_epoch - rounds_this_epoch * prom_visits * adj_considered_moves;
-    const int idx = offset + visits_this_epoch_remining % width;
-    const int considered_visists =
-        only_max_visit ?
-            max_visists :
-            prom_visits * (table[idx] * epoches + height) +
-                visits_this_epoch_remining / width;
-
-    for (auto &child : children_) {
-        const auto vtx = child.GetVertex();
-        const auto node = child.Get();
-        const bool is_pointer = node != nullptr;
-
-        int visits = 0;
-        if (is_pointer) {
-            visits = node->GetVisits();
-        }
-
-        if (visits == considered_visists) {
-            if (visits > 0) {
-                // The node is always pointer in this case.
-                gumbel_logits[vtx] +=
-                    TransformCompletedQ(
-                        node->GetGumbelQValue(color, parent_score), max_visists);
-            } else {
-                // The considered visists is zero. In this case, each
-                // completed Q value is same. To do nothing is Ok.
-            }
-        } else {
-            // The child's visits is not same as considered visits. Set
-            // it as logit zero (large negative value) in order to invalid
-            // this move.
-            gumbel_logits[vtx] = logit_zero;
-        }
-    }
-}
-
-bool Node::ShouldApplyGumbel() const {
-    // We simply think the parent's visits is
-    // current visits. Ignore the pruned node.
-    const int visits = GetVisits() - 1;
-    return param_->gumbel &&
-               param_->gumbel_playouts_threshold > visits;
-}
-
-Node *Node::GumbelSelectChild(int color, bool only_max_visit) {
-    WaitExpanded();
-    assert(HasChildren());
-
     auto gumbel_type1 = std::extreme_value_distribution<float>(0, 1);
-    auto gumbel_logits = GetZeroLogits<float>(kNumVertices+10);
-    int parentvisits = 0;
-    int max_visits = 0;
 
-    // Gather all parent's visits.
-    for (auto &child : children_) {
+    const int size = children_.size();
+    auto table = std::vector<std::pair<int, int>>(size);
+    gumbel_logits.resize(size, LOGIT_ZERO);
+
+    for (int i = 0; i < size; ++i) {
+        auto &child = children_[i];
         const auto node = child.Get();
         const bool is_pointer = node != nullptr;
 
         if (is_pointer && node->IsValid()) {
             // The node status is pruned or active.
             const auto visits = node->GetVisits();
-            parentvisits += visits;
-            max_visits = std::max(max_visits, visits);
+
+            if (node->IsActive()) {
+                table[i].first = visits;
+                table[i].second = child.GetVertex();
+            }
         }
+    }
+
+    std::stable_sort(std::rbegin(table), std::rend(table));
+    const int max_visists = table[0].first;
+
+    const int considered_moves =
+        std::min(param_->gumbel_considered_moves, (int)children_.size());
+    int playouts_thres = param_->gumbel_playouts_threshold;
+    const int prom_visits = std::max(1, param_->gumbel_prom_visits);
+    const int n = std::log2(std::max(1, considered_moves)) + 1;
+    const int adj_considered_moves = std::pow(2, n-1); // Be sure that it is pow of 2.
+
+    int target_visits = 0;
+    int width = adj_considered_moves;
+    int level = prom_visits;
+
+    if (only_max_visits) {
+        playouts_thres = std::max(playouts_thres, 1);
+        target_visits = max_visists;
+        goto end_loop;
+    }
+
+    while (true) {
+        for (int i = 0; i < level; ++i) {
+            for (int j = 0; j < width; ++j) {
+                if (table[j].first <= 0) {
+                    auto vtx = table[width-1].second;
+                    target_visits = GetChild(vtx)->GetVisits();
+                    goto end_loop;
+                }
+                table[j].first -= 1;
+                playouts_thres -= 1;
+
+                if (playouts_thres <= 0) {
+                    goto end_loop;
+                }
+            }
+        }
+        if (width == 1) {
+            width = adj_considered_moves;
+            level = prom_visits;
+        } else {
+            width /= 2;
+            level *= 2;
+        }
+    }
+
+end_loop:;
+    if (playouts_thres <= 0) {
+        return false;
+    }
+
+    int count = 0;
+    const auto parent_score = GetNetScore(color);
+
+    for (int i = 0; i < size; ++i) {
+        auto &child = children_[i];
+        const auto node = child.Get();
+        const bool is_pointer = node != nullptr;
+
         if (is_pointer && !node->IsActive()) {
             // The node is pruned or invalid. Skip it.
             continue;
         }
-        // TODO: If we prune or invalidate a node, the Sequential
-        //       Halving may be wrong. We should conside this.
-        gumbel_logits[child.GetVertex()] =
-            gumbel_type1(Random<>::Get()) + SafeLog(child.GetPolicy());
+        if (target_visits == child.GetVisits()) {
+            auto logit = gumbel_type1(Random<>::Get()) +
+                             SafeLog(child.GetPolicy());
+            auto completed_q = 0.f;
+            if (is_pointer && target_visits > 0) {
+                completed_q = TransformCompletedQ(
+                    node->GetGumbelQValue(color, parent_score), max_visists);
+            }
+            gumbel_logits[i] = logit + completed_q;
+            count += 1;
+        }
     }
+    if (count == 0) {
+        // It may occur when multi-threads search.
+        return false;
+    }
+    return true;
+}
 
-    const int considered_moves =
-        std::min(param_->gumbel_considered_moves, (int)children_.size());
-    ProcessGumbelLogits(gumbel_logits, color,
-                            parentvisits, max_visits,
-                            considered_moves, LOGIT_ZERO,
-                            only_max_visit);
+Node *Node::GumbelSelectChild(int color, bool only_max_visits) {
+    WaitExpanded();
+    assert(HasChildren());
+
+    auto gumbel_logits = std::vector<float>{};
+    if (!ProcessGumbelLogits(gumbel_logits, color, only_max_visits)) {
+        return nullptr;
+    }
 
     Edge* best_node = nullptr;
     float best_value = std::numeric_limits<float>::lowest();
+    const int size = children_.size();
 
-    for (auto &child : children_) {
-        const auto value = gumbel_logits[child.GetVertex()];
+    for (int i = 0; i < size; ++i) {
+        const auto value = gumbel_logits[i];
         if (value > best_value) {
             best_value = value;
-            best_node = &child;
+            best_node = children_.data() + i;
         }
     }
     Inflate(*best_node);

@@ -232,14 +232,10 @@ private:
     float TransformCompletedQ(const float completed_q,
                               const int max_visits) const;
     void ComputeNodeCount(size_t &nodes, size_t &edges);
-    void ProcessGumbelLogits(std::vector<float> &gumbel_logits,
+    bool ProcessGumbelLogits(std::vector<float> &gumbel_logits,
                              const int color,
-                             const int root_visits,
-                             const int max_visists,
-                             const int considered_moves,
-                             const float logit_zero,
-                             bool only_max_visit);
-    Node *GumbelSelectChild(int color, bool only_max_visit);
+                             bool only_max_visits);
+    Node *GumbelSelectChild(int color, bool only_max_visits);
     void MixLogitsCompletedQ(GameState &state, std::vector<float> &prob);
 
     void KillRootSuperkos(GameState &state);
