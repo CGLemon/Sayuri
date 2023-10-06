@@ -37,6 +37,10 @@ bool Node::PrepareRootNode(Network &network,
     assert(HasChildren());
 
     InflateAllChildren();
+    if (!success) {
+        // Refill the children policy.
+        Recompute(network, state, is_root);
+    }
     if (param_->dirichlet_noise) {
         // Generate the dirichlet noise and gather it.
         const auto legal_move = children_.size();
@@ -65,6 +69,49 @@ bool Node::PrepareRootNode(Network &network,
     }
 
     return success;
+}
+
+void Node::Recompute(Network &network,
+                     GameState &state,
+                     const bool is_root) {
+    WaitExpanded();
+    if (!HasChildren()) {
+        return;
+    }
+
+    const float temp = is_root ?
+                param_->root_policy_temp : param_->policy_temp;
+    auto raw_netlist = network.GetOutput(state, Network::kRandom, temp);
+
+    const auto num_intersections = state.GetNumIntersections();
+    auto legal_accumulate = 0.f;
+
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        const auto vtx = state.IndexToVertex(idx);
+        auto node = GetChild(vtx);
+        if (node) {
+            legal_accumulate +=
+                raw_netlist.probabilities[idx];
+        }
+    }
+    auto passnode = GetChild(kPass);
+    if (passnode) {
+        legal_accumulate += raw_netlist.pass_probability;
+    }
+
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        const auto vtx = state.IndexToVertex(idx);
+        auto node = GetChild(vtx);
+        if (node) {
+            const auto policy =
+                raw_netlist.probabilities[idx]/legal_accumulate;
+            node->SetPolicy(policy);
+        }
+    }
+    if (passnode) {
+        passnode->SetPolicy(
+            raw_netlist.pass_probability/legal_accumulate);
+    }
 }
 
 bool Node::ExpandChildren(Network &network,

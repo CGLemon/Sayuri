@@ -205,6 +205,9 @@ public:
     std::string GetPvString(GameState &state);
 
 private:
+    void Recompute(Network &network,
+                   GameState &state,
+                   const bool is_root);
     float GetDynamicCpuctFactor(Node *node, const int visits);
     void ApplyDirichletNoise(const float alpha);
     void ApplyNetOutput(GameState& state,
