@@ -461,7 +461,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     result.random_move = root_node_->
                              RandomMoveWithLogitsQ(
                                  root_state_,
-                                 1, param_->random_min_visits);
+                                 1.f, param_->random_min_visits);
     result.gumbel_move = root_node_->GetGumbelMove(true);
     result.gumbel_no_pass_move = root_node_->GetGumbelMove(false);
     result.root_score_lead = root_node_->GetFinalScore(color);
@@ -915,8 +915,11 @@ int Search::GetSelfPlayMove() {
 
     // Do the random move in the opening stage in order to improve the
     // game state diversity. The Gumbel noise may be good enough. Don't
-    // play the random move if 'is_gumbel' is true.
-    if (is_opening_random && !is_gumbel) {
+    // play the random move if 'is_gumbel' is true. Or do random move
+    // when fast search phase.
+    if ((is_opening_random && !is_gumbel) ||
+            ((tag & kNoExploring) &&
+                 Random<>::Get().Roulette<10000>(param_->random_fastsearch_prob))) {
         move = result.random_move;
     }
 

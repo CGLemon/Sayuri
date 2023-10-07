@@ -52,6 +52,7 @@ public:
         resign_playouts = GetOption<int>("resign_playouts");
         reduce_playouts = GetOption<int>("reduce_playouts");
         reduce_playouts_prob = GetOption<float>("reduce_playouts_prob");
+        random_fastsearch_prob = GetOption<float>("random_fastsearch_prob");
         resign_discard_prob = GetOption<float>("resign_discard_prob");
 
         kldgain = std::stod(GetOption<std::string>("kldgain"));
@@ -113,6 +114,7 @@ public:
     int resign_playouts;
     int reduce_playouts;
     float reduce_playouts_prob;
+    float random_fastsearch_prob;
     float lag_buffer;
     float resign_discard_prob;
 

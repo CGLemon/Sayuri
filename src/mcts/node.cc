@@ -578,7 +578,7 @@ int Node::RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits) {
     const auto num_intersections = state.GetNumIntersections();
     auto prob = std::vector<float>(num_intersections+1, 0.f);
     auto vertices_table = std::vector<int>(num_intersections+1, kNullVertex);
-    int acc_visists = 0;
+    int accm_visists = 0;
 
     for (const auto &child : children_) {
         auto node = child.Get();
@@ -593,17 +593,17 @@ int Node::RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits) {
             idx = state.GetIndex(
                       state.GetX(vtx), state.GetY(vtx));
         }
-        acc_visists += visits;
+        accm_visists += visits;
         prob[idx] = visits;
         vertices_table[idx] = vtx;
     }
 
-    if (acc_visists == 0) {
+    if (accm_visists == 0) {
         // There is no visits. Reture the best policy move.
         return GetBestMove(true);
     }
     for (float &p : prob) {
-        p /= (float)acc_visists;
+        p /= (float)accm_visists;
     }
     MixLogitsCompletedQ(state, prob);
 

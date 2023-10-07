@@ -100,6 +100,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["resign_playouts"] << Option::SetOption(0);
     kOptionsMap["reduce_playouts"] << Option::SetOption(0);
     kOptionsMap["reduce_playouts_prob"] << Option::SetOption(0.f, 1.f, 0.f);
+    kOptionsMap["random_fastsearch_prob"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["first_pass_bonus"] << Option::SetOption(false);
     kOptionsMap["resign_discard_prob"] << Option::SetOption(0.f, 1.f, 0.f);
 
@@ -735,6 +736,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--reduce-playouts-prob")) {
         if (IsParameter(res->Get<>())) {
             SetOption("reduce_playouts_prob", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--random-fastsearch-prob")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("random_fastsearch_prob", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
