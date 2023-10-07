@@ -14,7 +14,6 @@
 #include <sstream>
 #include <iomanip>
 #include <stack>
-#include <iostream>
 
 #define VIRTUAL_LOSS_COUNT (3)
 
@@ -38,7 +37,8 @@ bool Node::PrepareRootNode(Network &network,
 
     InflateAllChildren();
     if (!success) {
-        // Refill the children policy.
+        // The setting of root policy and children may be different,
+        // like softmax temperature, so we refill the children policy.
         Recompute(network, state, is_root);
     }
     if (param_->dirichlet_noise) {
@@ -86,6 +86,7 @@ void Node::Recompute(Network &network,
     const auto num_intersections = state.GetNumIntersections();
     auto legal_accumulate = 0.f;
 
+    // Filter the illegal or pruned nodes.
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto vtx = state.IndexToVertex(idx);
         auto node = GetChild(vtx);
@@ -99,6 +100,7 @@ void Node::Recompute(Network &network,
         legal_accumulate += raw_netlist.pass_probability;
     }
 
+    // Assign the new policy.
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto vtx = state.IndexToVertex(idx);
         auto node = GetChild(vtx);
@@ -426,8 +428,8 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     // assert(color == color_);
 
     // Apply the Gumbel-Top-k trick here. Mix it with PUCT
-    // search. Use the PUCT directly if there is already
-    // enough visits (playouts).
+    // search. Use the PUCT directly if we fail to find the
+    // next Gumbel move.
     if (is_root && param_->gumbel) {
         auto node = GumbelSelectChild(color, false);
         if (node) {
@@ -1538,8 +1540,8 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
 }
 
 bool Node::ShouldApplyGumbel() const {
-    // We simply think the parent's visits is
-    // current visits. Ignore the pruned node.
+    // We simply think the parent's visits is current
+    // visits. Include the pruned and invalid nodes.
     const int visits = GetVisits() - 1;
     return param_->gumbel &&
                param_->gumbel_playouts_threshold > visits;
@@ -1556,31 +1558,32 @@ bool Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
     // promotion visits = 1
     // considered moves = 4
     //
-    // Round 1.
-    // distribution -> 1 | 1 | 1 | 1
-    // accumulation -> 1 | 1 | 1 | 1
+    // * Round 0.
+    //  accumulation -> { 0, 0, 0, 0 }
     //
-    // Round 2.
-    // distribution -> 2 | 2 | 0 | 0
-    // accumulation -> 3 | 3 | 1 | 1
+    // * Round 1.
+    //  distribution -> { 1, 1, 1, 1 }
+    //  accumulation -> { 1, 1, 1, 1 }
     //
-    // Round 3.(1st epoch is end)
-    // distribution -> 4 | 0 | 0 | 0
-    // accumulation -> 7 | 3 | 1 | 1
+    // * Round 2.
+    //  distribution -> { 2, 2, 0, 0 }
+    //  accumulation -> { 3, 3, 1, 1 }
     //
-    // Round 4.
-    // distribution -> 1 | 1 | 1 | 1
-    // accumulation -> 8 | 4 | 2 | 2
+    // * Round 3.(1st epoch is end)
+    //  distribution -> { 4, 0, 0, 0 }
+    //  accumulation -> { 7, 3, 1, 1 }
     //
-    // Round 5.
-    // distribution -> 2  | 2 | 0 | 0
-    // accumulation -> 10 | 6 | 2 | 2
+    // * Round 4.
+    //  distribution -> { 1, 1, 1, 1 }
+    //  accumulation -> { 8, 4, 2, 2 }
     //
-    // Round 6. (2nd epoch is end)
-    // distribution -> 4  | 0 | 0 | 0
-    // accumulation -> 14 | 6 | 2 | 2
-
-    auto gumbel_type1 = std::extreme_value_distribution<float>(0, 1);
+    // * Round 5.
+    //  distribution -> {  2, 2, 0, 0 }
+    //  accumulation -> { 10, 6, 2, 2 }
+    //
+    // * Round 6. (2nd epoch is end)
+    //  distribution -> {  4, 0, 0, 0 }
+    //  accumulation -> { 14, 6, 2, 2 }
 
     const int size = children_.size();
     auto table = std::vector<std::pair<int, int>>(size);
@@ -1622,6 +1625,20 @@ bool Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
         goto end_loop;
     }
 
+    // We may reuse the sub-tree. Try fill old distribution in oredr
+    // to cover the Sequential Halving distribution. For example,
+    //
+    // Original distribution
+    // { 9, 2, 0, 0 }
+    //
+    // Target Sequential Halving distribution
+    // { 7, 3, 1, 1 }
+    //
+    // Addition playouts distribution
+    // { 0, 1, 1, 1 }
+    //
+    // Result distribution
+    // { 9, 3, 1, 1 }
     while (true) {
         for (int i = 0; i < level; ++i) {
             for (int j = 0; j < width; ++j) {
@@ -1654,6 +1671,7 @@ end_loop:;
 
     int count = 0;
     const auto parent_score = GetNetScore(color);
+    auto gumbel_type1 = std::extreme_value_distribution<float>(0, 1);
 
     for (int i = 0; i < size; ++i) {
         auto &child = children_[i];
@@ -1689,6 +1707,7 @@ Node *Node::GumbelSelectChild(int color, bool only_max_visits) {
 
     auto gumbel_logits = std::vector<float>{};
     if (!ProcessGumbelLogits(gumbel_logits, color, only_max_visits)) {
+        // Fail to find the next node.
         return nullptr;
     }
 
