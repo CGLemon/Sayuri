@@ -907,7 +907,8 @@ int Search::GetSelfPlayMove() {
     int move = is_gumbel ? result.gumbel_move : result.best_move;
 
     // The game is not end. Don't play the pass move.
-    if (ShouldForbidPass(root_state_, result, root_evals_)) {
+    bool forbid_pass = ShouldForbidPass(root_state_, result, root_evals_);
+    if (forbid_pass) {
         move = is_gumbel ?
                    result.gumbel_no_pass_move :
                    result.best_no_pass_move;
@@ -920,7 +921,9 @@ int Search::GetSelfPlayMove() {
     if ((is_opening_random && !is_gumbel) ||
             ((tag & kNoExploring) &&
                  Random<>::Get().Roulette<10000>(param_->random_fastsearch_prob))) {
-        move = result.random_move;
+        if (!(forbid_pass && result.random_move == kPass)) {
+            move = result.random_move;
+        }
     }
 
     // If the 'discard_it' is true, we will discard the current training 
