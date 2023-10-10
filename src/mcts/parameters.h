@@ -54,7 +54,7 @@ public:
         reduce_playouts_prob = GetOption<float>("reduce_playouts_prob");
         resign_discard_prob = GetOption<float>("resign_discard_prob");
 
-        kldgain = std::stod(GetOption<std::string>("kldgain"));
+        kldgain = std::stod(GetOption<std::string>("kldgain")); // not used
 
         lag_buffer = GetOption<float>("lag_buffer");
         ponder = GetOption<bool>("ponder");

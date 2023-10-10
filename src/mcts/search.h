@@ -165,16 +165,16 @@ public:
 
 private:
     // Try to reuse the sub-tree.
-    bool AdvanceToNewRootState();
+    bool AdvanceToNewRootState(Search::OptionTag tag);
 
     // Reture false if there is only one reasonable move.
-    bool HaveAlternateMoves();
+    bool HaveAlternateMoves(float elapsed, float limit);
 
     // Reture true if the root achieve visit cap or playout
     // cap.
     bool AchieveCap(const int cap, Search::OptionTag tag);
 
-    std::vector<double> GetRootDistribution(int &visited_nodes);
+    std::vector<double> GetRootDistribution(int &parentvisits);
 
     bool InputPending(Search::OptionTag tag) const;
 
@@ -187,7 +187,7 @@ private:
     void PlaySimulation(GameState &currstate, Node *const node,
                         const int depth, SearchResult &search_result);
 
-    void PrepareRootNode();
+    void PrepareRootNode(Search::OptionTag tag);
     int GetPonderPlayouts() const;
 
     AnalysisConfig analysis_config_;
