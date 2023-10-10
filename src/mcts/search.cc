@@ -110,8 +110,8 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
     node->DecrementThreads();
 }
 
-void Search::PrepareRootNode() {
-    bool reused = AdvanceToNewRootState();
+void Search::PrepareRootNode(Search::OptionTag tag) {
+    bool reused = AdvanceToNewRootState(tag);
 
     if (!reused) {
         // Try release whole trees.
@@ -134,8 +134,8 @@ void Search::PrepareRootNode() {
 
     // Compute the current root visits distribution. We can compute
     // the KLD gaining from this distribution.
-    int visited_nodes;
-    last_root_dist_ = GetRootDistribution(visited_nodes);
+    int visits;
+    last_root_dist_ = GetRootDistribution(visits);
 
     // We should get this root policy from the NN cache. The softmax
     // temperature of 'root_evals_' may be not 1 so we need to
@@ -303,7 +303,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     const float buffer_effect = time_control_.GetBufferEffect(
                                     color, board_size, move_num);
 
-    PrepareRootNode();
+    PrepareRootNode(tag);
 
     if (param_->analysis_verbose) {
         LOGGING << Format("Reuse %d nodes\n", root_node_->GetVisits()-1);
@@ -324,7 +324,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     }
 
     // Main thread is running.
-    int last_updating_playouts = 0;
+    auto last_updating_visits = root_node_->GetVisits();
     auto keep_running = running_.load(std::memory_order_relaxed);
 
     while (!InputPending(tag) && keep_running) {
@@ -336,23 +336,22 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
             playouts_.fetch_add(1, std::memory_order_relaxed);
         }
 
+        const auto root_visits = root_node_->GetVisits();
+        const auto elapsed = timer.GetDuration();
+
         if ((tag & kAnalysis) &&
                 analysis_config_.interval > 0 &&
                 analysis_config_.interval * 10 <
                     analysis_timer.GetDurationMilliseconds()) {
             // Output the analysis string for GTP interface, like sabaki...
             analysis_timer.Clock();
-            if (root_node_->GetVisits() > 1) {
+            if (root_visits > 1) {
                 DUMPING << root_node_->ToAnalysisString(
                                            root_state_, color, analysis_config_);
             }
         }
-
-        const auto elapsed = timer.GetDuration();
-        const auto curr_playouts = playouts_.load(std::memory_order_relaxed);
-
         if (param_->resign_playouts > 0 &&
-                param_->resign_playouts <= curr_playouts) {
+                AchieveCap(param_->resign_playouts, tag)) {
             // If someone already won the game, the Q value was not very effective
             // in the MCTS. Low playouts with policy network is good enough. Just
             // simply stop the tree search.
@@ -363,11 +362,10 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         if (tag & kThinking) {
             keep_running &= (elapsed < thinking_time);
 
-            const auto check_freq = std::max(
-                100.f, std::sqrt(10.f * curr_playouts));
-            if (curr_playouts - last_updating_playouts >= (int)check_freq) {
-                last_updating_playouts = curr_playouts;
-                keep_running &= HaveAlternateMoves();
+            const int check_freq = 100;
+            if (root_visits - last_updating_visits >= check_freq) {
+                last_updating_visits = root_visits;
+                keep_running &= HaveAlternateMoves(elapsed, thinking_time);
             }
         }
         keep_running &= !AchieveCap(playouts, tag);
@@ -863,9 +861,8 @@ int Search::GetSelfPlayMove() {
     // Every visit of fast search phase may be different. If the
     // reuse tag is false, it is playout cap oscillation which
     // is used by KataGo. Please see here, https://arxiv.org/abs/1902.10565v2
-    auto reuse_tag = param_->reuse_tree ?
-                         kNullTag : kUnreused;
-    auto tag = kThinking | reuse_tag;
+    auto tag = param_->reuse_tree ?
+                   kNullTag : kUnreused;
 
     const int random_moves_cnt = param_->random_moves_factor *
                                      root_state_.GetNumIntersections();
@@ -1237,7 +1234,7 @@ void Search::GatherData(const GameState &state,
     training_buffer_.emplace_back(data);
 }
 
-bool Search::AdvanceToNewRootState() {
+bool Search::AdvanceToNewRootState(Search::OptionTag tag) {
     if (!root_node_) {
         return false;
     }
@@ -1292,7 +1289,7 @@ bool Search::AdvanceToNewRootState() {
         return false;
     }
 
-    if (param_->gumbel) {
+    if ((tag & kUnreused) && param_->gumbel) {
         // Gumbel search will make tree shape weird. We need to build
         // the tree from scratch if the remaining playouts is not enough.
         // The dirichlet noise also make tree shape weird. But it should
@@ -1310,39 +1307,47 @@ bool Search::AdvanceToNewRootState() {
     return true;
 }
 
-bool Search::HaveAlternateMoves() {
+bool Search::HaveAlternateMoves(float elapsed, float limit) {
     const auto &children = root_node_->GetChildren();
     if (children.size() == 1) {
+        // Only one (pass) move.
         return false;
     }
 
-    int visited_nodes;
-    bool success = false;
-    double kld = 0;
+    int visits;
+    last_root_dist_ = GetRootDistribution(visits);
 
-    auto new_root_dist = GetRootDistribution(visited_nodes);
-
-    if (!last_root_dist_.empty()) {
-        success = ComputeKlDivergence(
-            new_root_dist, last_root_dist_, kld);
+    if (last_root_dist_.size() <= 1) {
+        // Be sure that there are at least two nodes. 
+        return true;
+    }
+    if (elapsed <= 1.0f) {
+        // A second for estimating playouts may be more precision.
+        return true;
     }
 
-    last_root_dist_ = new_root_dist;
+    auto sorted_dist = last_root_dist_;
+    std::sort(std::rbegin(sorted_dist), std::rend(sorted_dist));
 
-#if 0
-    int root_visits = root_node_->GetVisits();
-    if (success && root_visits > 1600 && visited_nodes > 1) {
-        double kldgain = param_->kldgain;
-        if (kld < kldgain) {
+    const auto remaining = limit - elapsed;
+    const auto playouts = playouts_.load(std::memory_order_relaxed);
+    const auto playouts_per_sec = playouts/elapsed;
+    const auto estimated_playouts = remaining * playouts_per_sec;
+
+    int top_visits = visits * sorted_dist[0];
+    int sec_visits = visits * sorted_dist[1];
+    double thres = 0.5;
+
+    if (sorted_dist[0] > 0.9f) {
+        // Current distribution is too sharp. We simply stop the
+        // search for saving thinking time.
+        int cap_visits = sec_visits + estimated_playouts;
+        if (int(thres * top_visits) > cap_visits) {
             return false;
         }
     }
-#endif
-    (void) success;
-
     return true;
 }
-
 
 bool Search::AchieveCap(const int cap, Search::OptionTag tag) {
     const auto playouts = playouts_.load(std::memory_order_relaxed);
@@ -1384,22 +1389,19 @@ std::string Search::GetDebugMoves(std::vector<int> moves) {
                root_state_, root_state_.GetToMove(), moves);
 }
 
-std::vector<double> Search::GetRootDistribution(int &visited_nodes) {
+std::vector<double> Search::GetRootDistribution(int &parentvisits) {
     auto result = std::vector<double>{};
     const auto &children = root_node_->GetChildren();
 
-    visited_nodes = 0;
-    int parentvisits = 0;
+    parentvisits = 0;
     for (const auto &child : children) {
-        const auto node = child.Get();
-        const auto visits = node->GetVisits();
-
+        auto node = child.Get();
+        int visits = 0;
+        if (node && node->IsActive()) {
+            visits = child.GetVisits();
+        }
         parentvisits += visits;
         result.emplace_back(visits);
-
-        if (visits > 0) {
-            visited_nodes += 1;
-        }
     }
     if (parentvisits == 0) {
         return std::vector<double>{};
