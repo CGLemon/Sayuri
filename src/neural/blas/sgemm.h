@@ -1,6 +1,6 @@
 #pragma once
 
-template <bool TA, bool TB> 
+template <bool TA, bool TB>
 class Sgemm {
 public:
     static void apply(int M, int N, int K,

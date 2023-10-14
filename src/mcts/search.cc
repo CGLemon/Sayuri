@@ -58,7 +58,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
         search_result.FromGameOver(currstate);
     }
 
-    // Terminated node, try to expand it. 
+    // Terminated node, try to expand it.
     if (node->Expandable()) {
         const auto last_move = currstate.GetLastMove();
 
@@ -144,7 +144,7 @@ void Search::PrepareRootNode(Search::OptionTag tag) {
     auto num_intersections = root_state_.GetNumIntersections();
     root_raw_probabilities_.resize(num_intersections+1);
 
-    std::copy(std::begin(netlist.probabilities), 
+    std::copy(std::begin(netlist.probabilities),
                   std::begin(netlist.probabilities) + num_intersections,
                   std::begin(root_raw_probabilities_));
     root_raw_probabilities_[num_intersections] = netlist.pass_probability;
@@ -203,7 +203,7 @@ bool Search::InputPending(Search::OptionTag tag) const {
         return dw > 1;
     }
     return false;
-#else 
+#else
     fd_set read_fds;
     FD_ZERO(&read_fds);
     FD_SET(0,&read_fds);
@@ -293,7 +293,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
                                  time_control_.IsInfiniteTime(color)) ?
                                      param_->const_time : std::numeric_limits<float>::max();
     const float thinking_time = !(tag & kThinking) ?
-                                    time_control_.GetInfiniteTime() : 
+                                    time_control_.GetInfiniteTime() :
                                     std::min(
                                         bound_time,
                                         time_control_.GetThinkingTime(
@@ -443,7 +443,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     }
     if (tag & kNoExploring) {
         std::swap(param_, no_exploring_param_);
-    } 
+    }
 
     return computation_result;
 }
@@ -451,7 +451,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
 void Search::GatherComputationResult(ComputationResult &result) const {
     const auto color = root_state_.GetToMove();
     const auto num_intersections = root_state_.GetNumIntersections();
-    const auto board_size = root_state_.GetBoardSize(); 
+    const auto board_size = root_state_.GetBoardSize();
 
     // Fill best moves, root eval and score.
     result.best_move = root_node_->GetBestMove(true);
@@ -483,7 +483,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
 
     // Fill ownership.
     auto ownership = root_node_->GetOwnership(color);
-    std::copy(std::begin(ownership), 
+    std::copy(std::begin(ownership),
                   std::begin(ownership) + num_intersections,
                   std::begin(result.root_ownership));
 
@@ -739,7 +739,7 @@ bool ShouldPass(GameState &state, ComputationResult &result, Parameters *param) 
             if (fork_state.GetState(vtx) != kEmpty &&
                     fork_state.GetLiberties(vtx) == 1) {
                 // At least one string in atari, the game
-                // is not over yet. 
+                // is not over yet.
                 return false;
             } else if (fork_state.GetState(vtx) == kEmpty) {
                 // This empty point does not belong to any
@@ -845,7 +845,7 @@ bool ShouldForbidPass(GameState &state,
             if (group_size >= kMaxEmptyGroupThreshold) {
                 // Too large empty group.
                 return true;
-            } 
+            }
         }
     }
 
@@ -854,7 +854,7 @@ bool ShouldForbidPass(GameState &state,
 
 int Search::GetSelfPlayMove() {
     // We always reuse the sub-tree at fast search phase. The
-    // kUnreused option doesn't mean discarding the sub-tree. 
+    // kUnreused option doesn't mean discarding the sub-tree.
     // It means visit cap (The search result is as same as
     // "playout cap" + "discard the tree"). The default is playouts
     // cap. If the reuse tag is true, it is visit cap oscillation.
@@ -885,7 +885,7 @@ int Search::GetSelfPlayMove() {
     }
 
     if (!network_.Valid()) {
-        // The network is dummy backend. The playout path is 
+        // The network is dummy backend. The playout path is
         // random, so we only use one tenth playouts in order
         // to reduce time.
         playouts /= 10;
@@ -923,7 +923,7 @@ int Search::GetSelfPlayMove() {
         }
     }
 
-    // If the 'discard_it' is true, we will discard the current training 
+    // If the 'discard_it' is true, we will discard the current training
     // data. It is because that the quality of current data is bad. To
     // discard it can improve the network performance.
     bool discard_it = false;
@@ -931,7 +931,7 @@ int Search::GetSelfPlayMove() {
     float root_score = result.root_score_lead;
     if (tag & kNoExploring) {
         // It is fast search of "Playout Cap Randomization". Do
-        // not record the low quality datas. 
+        // not record the low quality datas.
         discard_it = true;
     }
     if (root_eval < param_->resign_threshold ||
@@ -1029,7 +1029,7 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
     file.open(filename, std::ios_base::app);
 
     if (!file.is_open()) {
-        LOGGING << "Fail to create the file: " << filename << '!' << std::endl; 
+        LOGGING << "Fail to create the file: " << filename << '!' << std::endl;
         return;
     }
 
@@ -1127,7 +1127,7 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_s
         auto &buf = training_buffer_[i];
         const auto board_size = buf.board_size;
 
-        // Please see here, 
+        // Please see here,
         // https://github.com/lightvector/KataGo/blob/master/docs/KataGoMethods.md#short-term-value-and-score-targets
         double short_term_q = 0;
         double middle_term_q = 0;
@@ -1318,7 +1318,7 @@ bool Search::HaveAlternateMoves(float elapsed, float limit) {
     last_root_dist_ = GetRootDistribution(visits);
 
     if (last_root_dist_.size() <= 1) {
-        // Be sure that there are at least two nodes. 
+        // Be sure that there are at least two nodes.
         return true;
     }
     if (elapsed <= 1.0f) {
@@ -1358,7 +1358,7 @@ bool Search::AchieveCap(const int cap, Search::OptionTag tag) {
         // Disable the reuse-tree mode. But we use visit cap instead of
         // discarding the sub-tree. They should be equal.
         if (visits - 1 >= cap) {
-            // The visits number is greater or equal to 1 because the 
+            // The visits number is greater or equal to 1 because the
             // it always includes the root visit. We should reduce it.
             should_stop |= true;
         }

@@ -71,7 +71,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["root_policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["lag_buffer"] << Option::SetOption(0.f);
-    kOptionsMap["no_cache"] << Option::SetOption(false); 
+    kOptionsMap["no_cache"] << Option::SetOption(false);
     kOptionsMap["early_symm_cache"] << Option::SetOption(false);
     kOptionsMap["symm_pruning"] << Option::SetOption(false);
     kOptionsMap["use_stm_winrate"] << Option::SetOption(false);
@@ -138,7 +138,7 @@ void ArgsParser::InitBasicParameters() const {
         select_batchsize = select_threads/2;
     } else if (!already_set_thread && already_set_batchsize) {
         if (use_gpu) {
-            select_threads = 2 * select_batchsize; 
+            select_threads = 2 * select_batchsize;
         } else {
             select_threads = cores;
         }
@@ -146,7 +146,7 @@ void ArgsParser::InitBasicParameters() const {
         select_batchsize = select_threads/2;
     }
 
-    // The batch size of cpu pipe is always 1. 
+    // The batch size of cpu pipe is always 1.
     if (!use_gpu) {
         select_batchsize = 1;
     }
@@ -389,7 +389,7 @@ void ArgsParser::Parse(Splitter &spt) {
         if (IsParameter(res->Get<>())) {
             SetOption("kgs_hint", TransferHint(res->Get<>()));
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
-        } 
+        }
     }
 
     if (const auto res = spt.Find({"--analysis-verbose", "-a"})) {
@@ -827,7 +827,7 @@ void ArgsParser::Parse(Splitter &spt) {
 void ArgsParser::DumpHelper() const {
     LOGGING << "Arguments:" << std::endl
                 << "\t--quiet, -q\n"
-                << "\t\tDisable all diagnostic verbose.\n\n" 
+                << "\t\tDisable all diagnostic verbose.\n\n"
 
                 << "\t--analysis-verbose, -a\n"
                 << "\t\tDump the search verbose.\n\n"

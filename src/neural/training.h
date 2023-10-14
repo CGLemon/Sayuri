@@ -40,7 +40,7 @@ struct Training {
     ------- Version -------
      L1        : Version
      L2        : Mode
-     
+
      ------- Inputs data -------
      L3        : Board Size
      L4        : Komi
@@ -48,7 +48,7 @@ struct Training {
      L6        : Wave
      L7  - L43 : Binary Features
      L44       : Current Player
-    
+
      ------- Prediction data -------
      L45       : Probabilities
      L46       : Auxiliary Probabilities

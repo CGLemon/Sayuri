@@ -46,3 +46,10 @@ inline int Strings::GetLiberty(int vtx) const {
 inline int Strings::GetStones(int vtx) const {
     return stones_[vtx];
 }
+
+inline void Strings::AddStone(const int vtx, const int lib) {
+    next_[vtx] = vtx;
+    parent_[vtx] = vtx;
+    liberties_[vtx] = lib;
+    stones_[vtx] = 1;
+}

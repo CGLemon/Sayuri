@@ -11,7 +11,7 @@ void FullyConnect::Forward(const size_t input_size,
     static constexpr int batch = 1;
     Blas::DenseSgemm((int)input_size,
                      (int)output_size,
-                     batch, 
+                     batch,
                      input.data(),
                      weights.data(),
                      output.data());
@@ -31,11 +31,11 @@ std::vector<float> FullyConnect::Innerproduct(const size_t input_size,
     static constexpr int batch = 1;
     Blas::DenseSgemm((int)input_size,
                      (int)output_size,
-                     batch, 
+                     batch,
                      input.data(),
                      weights.data(),
                      output.data());
-  
+
     AddVectorBiases::Forward(output_size, output, biases, ReLU);
 
     return output;

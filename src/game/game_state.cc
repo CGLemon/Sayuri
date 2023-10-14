@@ -186,7 +186,7 @@ std::string GameState::VertexToSgf(const int vtx) const {
         return std::string{};
     }
 
-    auto out = std::ostringstream{};    
+    auto out = std::ostringstream{};
     const auto x = GetX(vtx);
     const auto y = GetBoardSize() - GetY(vtx) - 1;
 
@@ -215,7 +215,7 @@ std::string GameState::VertexToText(const int vtx) const {
         return "resign";
     }
 
-    auto out = std::ostringstream{};    
+    auto out = std::ostringstream{};
     const auto x = GetX(vtx);
     const auto y = GetY(vtx);
 
@@ -260,7 +260,9 @@ void GameState::ShowMoveTypes(int vtx, int color) const {
     } else {
         LOGGING << "White ";
     }
-    LOGGING << VertexToText(vtx) << ' ' << board_.GetMoveTypesString(vtx, color) << '\n';
+    LOGGING << VertexToText(vtx) << ' '
+                << board_.GetMoveTypesString(vtx, color)
+                << std::endl;
 }
 
 std::string GameState::GetStateString() const {
@@ -490,75 +492,6 @@ std::vector<int> GameState::GetRawOwnership() const {
     return res;
 }
 
-void GameState::FillRandomMove() {
-    const int color = GetToMove();
-    const int empty_cnt = board_.GetEmptyCount();
-    const int rand = Random<>::Get().Generate() % empty_cnt;
-    int select_move = kPass;
-
-    auto filled_area = std::vector<int>(GetNumIntersections(), kInvalid);
-    auto safe_area = std::vector<bool>(GetNumIntersections(), false);
-
-    board_.ComputeScoreArea(filled_area);
-    board_.ComputeSafeArea(safe_area, true);
-
-    for (int i = 0; i < empty_cnt; ++i) {
-        const auto rand_pick = (rand + i) % empty_cnt;
-        const auto vtx = board_.GetEmpty(rand_pick);
-
-        if (!IsLegalMove(vtx, color)) {
-            continue;
-        }
-        auto x = GetX(vtx);
-        auto y = GetY(vtx);
-
-        if (safe_area[GetIndex(x, y)]) {
-            continue;
-        }
-
-        if (board_.IsCaptureMove(vtx, color)) {
-            select_move = vtx;
-            break;
-        }
-    }
-
-    for (int i = 0; i < empty_cnt; ++i) {
-        if (select_move != kPass) break;
-
-        const auto rand_pick = (rand + i) % empty_cnt;
-        const auto vtx = board_.GetEmpty(rand_pick);
-
-        if (!IsLegalMove(vtx, color)) {
-            continue;
-        }
-
-        if (board_.IsRealEye(vtx, color)) {
-            continue;
-        }
-
-        auto x = GetX(vtx);
-        auto y = GetY(vtx);
-
-        if (safe_area[GetIndex(x, y)]) {
-            continue;
-        }
-
-        if (board_.IsSimpleEye(vtx, color) &&
-                !board_.IsCaptureMove(vtx, color) &&
-                !board_.IsEscapeMove(vtx, color)) {
-            continue;
-        }
-
-        if (filled_area[GetIndex(x, y)] != kEmpty) {
-            continue;
-        }
-
-        select_move = vtx;
-    }
-
-    PlayMoveFast(select_move, color);
-}
-
 void GameState::PlayRandomMove() {
     auto candidate_moves = std::vector<int>{};
     const int color = GetToMove();
@@ -623,7 +556,7 @@ void GameState::PlayRandomMove() {
         }
     }
 
-    // there is no legal moves
+    // there is no legal move
     if (legal_moves.empty()) {
         PlayMoveFast(kPass, color);
         return;
@@ -678,91 +611,6 @@ std::vector<float> GameState::GetGammasPolicy(const int color) const {
     }
 
     return Softmax(policy, 1.f);
-}
-
-std::vector<int> GameState::GetOwnershipAndRemovedDeadStrings(int playouts) const {
-    auto fork_state = *this;
-    fork_state.RemoveDeadStrings(playouts);
-    return fork_state.GetOwnership();
-}
-
-std::vector<int> GameState::MarKDeadStrings(int playouts) const {
-    auto num_intersections = GetNumIntersections();
-    auto buffer = std::vector<int>(num_intersections, 0);
-
-    static constexpr int kMaxPlayoutsCount = 32 * 16384;
-
-    playouts = std::min(playouts, kMaxPlayoutsCount);
-    bool already_removed = false;
-
-    for (int p = 0; p < playouts; ++p) {
-        int moves = 0;
-        auto fork_state = *this;
-        if (p%2==0) {
-            fork_state.board_.SetToMove(!GetToMove());
-        }
-        while(true) {
-            fork_state.FillRandomMove();
-
-            if (p == 0 &&
-                    moves == 0 &&
-                    fork_state.GetLastMove() == kPass) {
-                // The first move is pass. That means all dead strings
-                // are removed.
-                p = kMaxPlayoutsCount+1; // stop the playouts
-                already_removed = true;
-                break;
-            }
-
-            if (fork_state.GetPasses() >= 4) {
-                break;
-            }
-
-            if (moves++ >= 2 * num_intersections) {
-                // too many moves
-                break;
-            }
-        }
-
-        auto final_ownership = fork_state.GetOwnership();
-
-        for (int idx = 0; idx < num_intersections; ++idx) {
-            auto owner = final_ownership[idx];
-            if (owner == kBlack) {
-                buffer[idx] += 1;
-            } else if (owner == kWhite) {
-                buffer[idx] -= 1;
-            }
-        }
-    }
-
-    if (already_removed) {
-        playouts = 1; // in order to resize the thes
-    }
-
-    const auto board_size = GetBoardSize();
-    const auto thes = (int)(0.7 * playouts);
-    auto dead = std::vector<int>{};
-
-    for (int idx = 0; idx < num_intersections; ++idx) {
-        const auto x = idx % board_size;
-        const auto y = idx / board_size;
-        const auto state = GetState(x, y);
-        if (buffer[idx] >= thes) {
-            // It means that this point belongs to black.
-            if (state == kWhite) dead.emplace_back(GetVertex(x, y));
-        } else if (buffer[idx] <= -thes) {
-            // It means that this point belongs to white.
-            if (state == kBlack) dead.emplace_back(GetVertex(x, y));
-        } 
-    }
-
-    return dead;
-}
-
-void GameState::RemoveDeadStrings(int playouts) {
-    auto dead = MarKDeadStrings(playouts);
-    board_.RemoveMarkedStrings(dead);
 }
 
 void GameState::RemoveDeadStrings(std::vector<int> &dead_list) {
@@ -899,15 +747,6 @@ std::vector<bool> GameState::GetStrictSafeArea() const {
     auto result = std::vector<bool>(GetNumIntersections(), false);
     board_.ComputeSafeArea(result, false);
     return result;
-}
-
-int GameState::GetFirstPassColor() const {
-    for (auto &board : game_history_) {
-        if (board->GetLastMove() == kPass) {
-            return !(board->GetToMove());
-        }
-    }
-    return kInvalid;
 }
 
 std::uint64_t GameState::ComputeSymmetryHash(const int symm) const {

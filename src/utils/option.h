@@ -37,7 +37,7 @@ private:
     template<
         typename T,
         typename = std::enable_if_t<
-                       std::is_same<T, int>::value || 
+                       std::is_same<T, int>::value ||
                        std::is_same<T, float>::value ||
                        std::is_same<T, bool>::value ||
                        std::is_same<T, std::string>::value
@@ -90,7 +90,7 @@ private:
     template<
         typename T,
         typename = std::enable_if_t<
-                       std::is_same<T, int>::value || 
+                       std::is_same<T, int>::value ||
                        std::is_same<T, float>::value ||
                        std::is_same<T, bool>::value ||
                        std::is_same<T, std::string>::value
@@ -113,7 +113,7 @@ private:
     template<
         typename T,
         typename = std::enable_if_t<
-                       std::is_same<T, int>::value || 
+                       std::is_same<T, int>::value ||
                        std::is_same<T, float>::value ||
                        std::is_same<T, bool>::value
                    >
@@ -142,7 +142,7 @@ private:
     template<
         typename T,
         typename = std::enable_if_t<
-                       std::is_same<T, int>::value || 
+                       std::is_same<T, int>::value ||
                        std::is_same<T, float>::value ||
                        std::is_same<T, bool>::value ||
                        std::is_same<T, std::string>::value
@@ -195,7 +195,7 @@ public:
     template<
         typename T,
         typename = std::enable_if_t<
-                       std::is_same<T, int>::value || 
+                       std::is_same<T, int>::value ||
                        std::is_same<T, float>::value
                    >
     >
@@ -217,7 +217,7 @@ public:
     template<
         typename T,
         typename = std::enable_if_t<
-                       std::is_same<T, int>::value || 
+                       std::is_same<T, int>::value ||
                        std::is_same<T, float>::value ||
                        std::is_same<T, bool>::value ||
                        std::is_same<T, std::string>::value
@@ -249,7 +249,7 @@ extern std::unordered_map<std::string, Option> kOptionsMap;
 template<
     typename T,
     typename = std::enable_if_t<
-                   std::is_same<T, int>::value || 
+                   std::is_same<T, int>::value ||
                    std::is_same<T, float>::value ||
                    std::is_same<T, bool>::value ||
                    std::is_same<T, std::string>::value
@@ -265,7 +265,7 @@ inline T GetOption(std::string key, int idx=-1) {
 template<
     typename T,
     typename = std::enable_if_t<
-                   std::is_same<T, int>::value || 
+                   std::is_same<T, int>::value ||
                    std::is_same<T, float>::value ||
                    std::is_same<T, bool>::value
                >
@@ -291,7 +291,7 @@ inline bool SetOption(std::string key, std::string val, bool as_default=false) {
         }
         return true;
     }
-    return false; 
+    return false;
 }
 
 inline int GetOptionCount(std::string key) {

@@ -107,11 +107,11 @@ std::string Board::GetStateString(const VertexType color, bool is_star) const {
     auto res = std::ostringstream{};
 
     color == kBlack ? res << 'x' :
-        color == kWhite   ? res << 'o' : 
+        color == kWhite   ? res << 'o' :
         is_star == true   ? res << '+' :
         color == kEmpty   ? res << '.' :
         color == kInvalid ? res << '-' : res << "error";
- 
+
     return res.str();
 }
 
@@ -398,7 +398,7 @@ std::uint64_t Board::ComputeKoHash(std::function<int(int)> transform) const {
 }
 
 int Board::CountPliberties(const int vtx) const {
-    return (neighbours_[vtx] >> (kEmptyNeighborShift)) & kNeighborMask;
+    return (neighbours_[vtx] >> kEmptyNeighborShift) & kNeighborMask;
 }
 
 void Board::FindStringSurround(const int vtx,
@@ -496,7 +496,7 @@ std::pair<int, int> Board::GetLadderLiberties(const int vtx, const int color) co
     int potential_libs_from_captures = 0; // Total number of stones we're capturing (possibly with multiplicity).
     int num_connection_libs = 0;          // Sum over friendly groups connected to of their libs-1.
     int max_connection_libs = stone_libs; // Max over friendly groups connected to of their libs-1.
-  
+
     for (int k = 0; k < 4; ++k) {
         const auto avtx = vtx + directions_[k];
         const auto acolor = GetState(avtx);
@@ -506,7 +506,7 @@ std::pair<int, int> Board::GetLadderLiberties(const int vtx, const int color) co
             num_connection_libs += alibs;
 
             if(alibs > max_connection_libs) {
-                max_connection_libs = alibs; 
+                max_connection_libs = alibs;
             }
         } else if (acolor == opp) {
             const int aip = strings_.GetParent(avtx);
@@ -518,8 +518,8 @@ std::pair<int, int> Board::GetLadderLiberties(const int vtx, const int color) co
         }
     }
     const int lower_bound =
-        num_captures + max_connection_libs; 
-    const int upper_bound = 
+        num_captures + max_connection_libs;
+    const int upper_bound =
         stone_libs + potential_libs_from_captures + num_connection_libs;
 
     return std::make_pair(lower_bound, upper_bound);
@@ -551,7 +551,7 @@ LadderType Board::PreySelections(const int prey_color,
     // The moves must be the legal.
     selections.erase(
         std::remove_if(std::begin(selections), std::end(selections),
-            [&](int v) { return !IsLegalMove(v, prey_color); 
+            [&](int v) { return !IsLegalMove(v, prey_color);
         }),
         std::end(selections)
     );
@@ -560,7 +560,7 @@ LadderType Board::PreySelections(const int prey_color,
 
     // If there is no legal move, the ladder string dies.
     if (num_move == 0) {
-        return LadderType::kGoodForHunter; 
+        return LadderType::kGoodForHunter;
     }
 
     auto bgn = std::begin(selections);
@@ -595,7 +595,7 @@ LadderType Board::HunterSelections(const int prey_color,
         // The ladder string will be captured next move.
         return LadderType::kGoodForHunter;
     }
-  
+
     assert(libs == 2);
 
     auto buf = std::vector<int>{};
@@ -612,8 +612,8 @@ LadderType Board::HunterSelections(const int prey_color,
 
     if (!IsNeighbor(move_1, move_2)) {
         const int hunter_color = (!prey_color);
-        const int libs_1 = CountPliberties(move_1); 
-        const int libs_2 = CountPliberties(move_2); 
+        const int libs_1 = CountPliberties(move_1);
+        const int libs_2 = CountPliberties(move_2);
 
         if (libs_1 >= 3 && libs_2 >= 3) {
             // A ladder string must be only two liberties. The prey
@@ -658,7 +658,7 @@ LadderType Board::PreyMove(Board* board,
                            const int ladder_vtx, size_t& ladder_nodes, bool fork) const {
 
     if ((++ladder_nodes) >= kMaxLadderNodes) {
-        // If hit the limit, assume prey have escaped. 
+        // If hit the limit, assume prey have escaped.
         return LadderType::kGoodForPrey;
     }
 
@@ -718,7 +718,7 @@ LadderType Board::HunterMove(Board* board,
                              const int prey_vtx, const int prey_color,
                              const int ladder_vtx, size_t& ladder_nodes, bool fork) const {
     if ((++ladder_nodes) >= kMaxLadderNodes) {
-        // If hit the limit, assume prey have escaped. 
+        // If hit the limit, assume prey have escaped.
         return LadderType::kGoodForPrey;
     }
 
@@ -745,7 +745,7 @@ LadderType Board::HunterMove(Board* board,
         }
         return res;
     }
-  
+
     bool next_fork = true;
     const auto selection_size = selections.size();
     if (selection_size == 1) {
@@ -754,11 +754,11 @@ LadderType Board::HunterMove(Board* board,
     }
 
     auto best = LadderType::kGoodForNeither;
- 
+
     for (auto i = size_t{0}; i < selection_size; ++i) {
         const int vtx = selections[i];
-        auto next_res = PreyMove(ladder_board, vtx, 
-                                 prey_color, ladder_vtx, 
+        auto next_res = PreyMove(ladder_board, vtx,
+                                 prey_color, ladder_vtx,
                                  ladder_nodes, next_fork);
 
         assert(next_res != LadderType::kGoodForNeither);
@@ -971,7 +971,7 @@ bool Board::IsSeki(const int vtx) const {
         return false;
     }
 
-    int string_parent[2] = {kNullVertex, kNullVertex}; 
+    int string_parent[2] = {kNullVertex, kNullVertex};
 
     for (auto k = 0; k < 4; ++k) {
         const auto avtx = vtx + directions_[k];
@@ -1011,7 +1011,7 @@ bool Board::IsSeki(const int vtx) const {
 
     FindStringSurround(string_parent[kBlack], kBlack, lib_buf, black_sur_idx_buf);
     FindStringSurround(string_parent[kWhite], kWhite, lib_buf, white_sur_idx_buf);
- 
+
     assert(lib_buf.size() == 2 || lib_buf.size() == 3);
 
     if (lib_buf.size() == 3) {
@@ -1572,7 +1572,7 @@ void Board::ComputeReachArea(std::vector<int> &result) const {
 
             if (black[vtx] && !white[vtx]) {
                 // The point is black.
-                result[idx] = kBlack;  
+                result[idx] = kBlack;
             } else if (white[vtx] && !black[vtx]) {
                 // The white is white.
                 result[idx] = kWhite;
@@ -1636,7 +1636,7 @@ std::vector<LadderType> Board::GetLadderMap() const {
                 if (IsLadder(vtx, vital_moves)) {
                     // It is a ladder.
                     ladder.emplace_back(parent);
-                    first_found = true; 
+                    first_found = true;
                     libs = strings_.GetLiberty(parent);
                 } else {
                     // It is not a ladder.
@@ -1661,7 +1661,7 @@ std::vector<LadderType> Board::GetLadderMap() const {
                 for (const auto &v : vital_moves) {
                     const auto ax = GetX(v);
                     const auto ay = GetY(v);
-                    const auto aidx = GetIndex(ax, ay); 
+                    const auto aidx = GetIndex(ax, ay);
                     if (libs == 1) {
                         // Someone can capture this ladder string.
                         result[aidx] = LadderType::kLadderTake;
@@ -1745,11 +1745,11 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
 
             assert(state != color);
 
-            if (state == kEmpty) { 
+            if (state == kEmpty) {
                 for (int k = 0; k < 4; ++k) {
                     const auto apos = directions_[k] + pos;
 
-                    // Empty point must be adjacent my string if the it is vital, Otherwise 
+                    // Empty point must be adjacent my string if the it is vital, Otherwise
                     // the point opp's potential eye.
                     if (ocupied[apos] == color) {
                         is_vital = true;
@@ -1830,7 +1830,7 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
         if (!change) break;
     }
 
-    // Fill the pass alive groups.
+    // Fill the pass-alive groups.
     for (int i = 0; i < group_cnt; ++i) {
         const auto vtx = strings_head[i];
         int pos = vtx;
@@ -1906,7 +1906,7 @@ bool Board::IsPassAliveString(const int vtx,
                     if (state == kEmpty) {
                         for (int k = 0; k < 4; ++k) {
                             // Check that points of adjacent are empty.
-                            const auto aapos = directions_[k] + rpos;                         
+                            const auto aapos = directions_[k] + rpos;
                             if(strings_index[aapos] == my_index) {
                                 is_adjacent = true;
                                 break;
@@ -1930,7 +1930,7 @@ bool Board::IsPassAliveString(const int vtx,
         pos = strings_next[pos];
     } while(pos != vtx);
 
-    // We say a string is pass-alive. There must be two or more 
+    // We say a string is pass-alive. There must be two or more
     // vitals adjacent to it.
     return vitals_list.size() >= 2;
 }
@@ -1946,15 +1946,15 @@ bool Board::IsPassDeadRegion(const int vtx,
                                        std::vector<int> &features,
                                        std::vector<bool> &inner_regions) {
         // This is greedy algorithm, we only promise that the position is not
-        // potential eye if it return false. It is possible that the position
-        // is fake eye even if it return true. 
+        // potential eye if it returns false. It is possible that the position
+        // is fake eye even if it returns true.
 
         if (!allow_sucide && GetState(vertex) == color) {
             // My stone can not become to my eye if we forbid the sucide move.
             return false;
         }
 
-        // The potential eye is possible to become the real eye in the postion if 
+        // The potential eye is possible to become the real eye in the postion if
         // four adjacent point is mine or empty.
         std::array<int, 4> side_count = {0, 0, 0, 0};
 
@@ -1967,7 +1967,7 @@ bool Board::IsPassDeadRegion(const int vtx,
             return false;
         }
 
-        // The potential eye is possible to become the real eye in the postion if 
+        // The potential eye is possible to become the real eye in the postion if
         // three adjacent corner is mine or empty or out of border.
         std::array<int, 4> corner_count = {0, 0, 0, 0};
 
@@ -1991,13 +1991,13 @@ bool Board::IsPassDeadRegion(const int vtx,
         return true;
     };
 
-    // The inner regions is pass-alive string surrounded by the region which
-    // we want to search.
+    // The inner region is a region surrounded by a string. On the other head,
+    // it does not' touch' the border of the board.
     auto inner_regions = std::vector<bool>(features.size(), false);
 
-    // The inner regions may cause the false-eye life (Two-Headed Dragon). The 
+    // The inner region may cause the false-eye life (Two-Headed Dragon). The
     // false eyes will become the potential eyes in this condition.
-    // 
+    //
     // false-eye life: https://senseis.xmp.net/?TwoHeadedDragon
     ComputeInnerRegions(vtx, color, regions_next, inner_regions);
 
@@ -2014,7 +2014,7 @@ bool Board::IsPassDeadRegion(const int vtx,
     int eyes_count = potential_eyes.size();
 
     if (eyes_count == 2) {
-        // It is possible to be pass-dead, if there are only two potential eyes. The
+        // It is possible to be pass-dead if there are only two potential eyes. The
         // case is two eyes are adjacent to each others.
         //
         // ..ox..
@@ -2092,13 +2092,13 @@ std::vector<int> Board::ClassifyGroups(const int target,
                                        std::vector<int> &features,
                                        std::vector<int> &regions_index,
                                        std::vector<int> &regions_next) const {
-    // Set -1 is out of border area.
+    // Set out of border area as -1.
     std::fill(std::begin(regions_index), std::end(regions_index), -1);
 
-    // Set kNullVertex is out of border area.
+    // Set out of border area as kNullVertex.
     std::fill(std::begin(regions_next), std::end(regions_next), kNullVertex);
 
-    // All invalid strings (groups) 's index is 0.
+    // All invalid strings (groups) 's index are 0.
     for (int y = 0; y < board_size_; ++y) {
         for (int x = 0; x < board_size_; ++x) {
             const auto vtx = GetVertex(x, y);
@@ -2108,7 +2108,7 @@ std::vector<int> Board::ClassifyGroups(const int target,
     }
 
     auto head_list = std::vector<int>{}; // all string heads vertex postion
-    auto marked = std::vector<bool>(num_vertices_, false); // true if the vertex is usesd.
+    auto marked = std::vector<bool>(num_vertices_, false); // true if the vertex is usesd
     auto groups_index = 1; // valid index is from 1.
 
     for (int y = 0; y < board_size_; ++y) {

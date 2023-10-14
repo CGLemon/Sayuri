@@ -41,7 +41,7 @@ void Book::GenerateBook(std::string sgf_name, std::string filename) const {
 
     file.open(filename);
     if (!file.is_open()) {
-        LOGGING << "Fail to create the file: " << filename << '!' << std::endl; 
+        LOGGING << "Fail to create the file: " << filename << '!' << std::endl;
         return;
     }
 
@@ -97,9 +97,9 @@ void Book::BookDataProcess(std::string sgfstring,
     auto game_ite = GameStateIterator(state);
     int book_move_num = std::min(kMaxBookMoves, (int)game_ite.MaxMoveNumber());
 
-    // TODO: Same positions may have variant paths. We should 
+    // TODO: Same positions may have variant paths. We should
     //       consider it. But it will use too many memory and process
-    //       is slow. Try to find a better algorithm to deal with it. 
+    //       is slow. Try to find a better algorithm to deal with it.
     int i = 0;
     do {
         if (i++ >= book_move_num) {
@@ -109,14 +109,14 @@ void Book::BookDataProcess(std::string sgfstring,
         const auto vertex = game_ite.GetVertex();
         GameState& main_state = game_ite.GetState();
 
-        for (int symm = 0; symm < Symmetry::kNumSymmetris; ++symm) { 
+        for (int symm = 0; symm < Symmetry::kNumSymmetris; ++symm) {
             auto hash = main_state.ComputeSymmetryKoHash(symm);
             auto it = book_data.find(hash);
 
             const int symm_vtx = Symmetry::Get().TransformVertex(state.GetBoardSize(), symm, vertex);
 
             if (it == std::end(book_data)) {
-                // Insert new hash state in the book, also insert the 
+                // Insert new hash state in the book, also insert the
                 // new move.
 
                 VertexFrequencyList vfreq;
@@ -144,7 +144,7 @@ void Book::LoadBook(std::string book_name) {
     std::ifstream file;
     file.open(book_name);
     if (!file.is_open()) {
-        LOGGING << "Fail to load the file: " << book_name << '!' << std::endl; 
+        LOGGING << "Fail to load the file: " << book_name << '!' << std::endl;
         return;
     }
 

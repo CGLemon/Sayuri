@@ -38,7 +38,7 @@ public:
 
     std::string VertexToText(const int vtx) const;
 
-    // for debug
+    // For debug...
     void ShowMoveTypes(int vtx, int color) const;
 
     // GTP interface to play move.
@@ -58,12 +58,17 @@ public:
 
     void SetHandicap(int handicap);
 
+    // Place the handicap stone one the board. All Handicap() functions
+    // should play the stones via this function.
     bool PlayHandicapStones(std::vector<int> movelist_vertex,
                             bool kata_like_handicap_style);
 
     // Compute black final score with Tromp Taylor rule.
     float GetFinalScore(float bonus = 0) const;
 
+    // The safe area means both players do not need to play move in
+    // it. It can be efficiently to end the a game if someone refuses
+    // to play pass (or resign).
     std::vector<bool> GetStrictSafeArea() const;
 
     bool IsGameOver() const;
@@ -74,13 +79,15 @@ public:
                      std::function<bool(int, int)> AvoidToMove) const;
     bool IsNeighborColor(const int vtx, const int color) const;
 
-    // Compute ownership with Tromp Taylor rule.
+    // Compute ownership based on Tromp Taylor rule.
     std::vector<int> GetOwnership() const;
+
+    // Compute ownership based on Tromp Taylor rule but without
+    // pass-dead and pass-alive area.
     std::vector<int> GetRawOwnership() const;
 
-    std::vector<int> GetOwnershipAndRemovedDeadStrings(int playouts) const;
-    std::vector<int> MarKDeadStrings(int playouts) const;
-    void RemoveDeadStrings(int playouts);
+    // Remove the strings which is in the list. It will remove whole string
+    // if one vertex is in the dead list.
     void RemoveDeadStrings(std::vector<int> &dead_list);
 
     int GetVertex(const int x, const int y) const;
@@ -120,8 +127,6 @@ public:
     float GetGammaValue(const int vtx, const int color) const;
     std::vector<float> GetGammasPolicy(const int color) const;
 
-    int GetFirstPassColor() const;
-
     std::uint64_t GetMoveHash(const int vtx, const int color) const;
 
     void SetComment(std::string c);
@@ -137,22 +142,19 @@ private:
     // Play the move without pushing current board to the history.
     void PlayMoveFast(const int vtx, const int color);
 
-    // FillRandomMove assume that both players think the game is end. Now we
-    // try to remove the dead string.
-    void FillRandomMove();
-
     void PushComment();
 
     std::string GetStateString() const;
 
     std::vector<std::shared_ptr<const Board>> game_history_;
 
-    std::vector<std::string> comments_;
-
     std::vector<std::uint64_t> ko_hash_history_;
 
     std::vector<VertexColor> append_moves_;
 
+    std::vector<std::string> comments_;
+
+    // Comment for next move.
     std::string last_comment_;
 
     // The board handicap.
@@ -164,6 +166,7 @@ private:
     // The half komi part.
     bool komi_half_;
 
+    // True if the current komi is negtive.
     bool komi_negative_;
 
     int move_number_;

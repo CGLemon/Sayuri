@@ -11,7 +11,7 @@ static double RationalApprox(double t) {
     // The absolute value of the error should be less than 4.5 e-4.
     constexpr double c[3] = {2.515517f, 0.802853f, 0.010328f};
     constexpr double d[3] = {1.432788f, 0.189269f, 0.001308f};
-    return t - ((c[2]*t + c[1])*t + c[0]) / 
+    return t - ((c[2]*t + c[1])*t + c[0]) /
                    (((d[2]*t + d[1])*t + d[0])*t + 1.0);
 }
 
@@ -19,7 +19,7 @@ static double RationalApprox(double t) {
 static double NormalCdfInverse(double p) {
     if (p <= 0.0 || p >= 1.0) {
         auto err = std::ostringstream{};
-        err << "Invalid input argument (" << p 
+        err << "Invalid input argument (" << p
                << "); must be larger than 0 but less than 1.";
         throw std::invalid_argument(err.str());
     }
@@ -49,7 +49,7 @@ public:
     LcbEntries() = default;
 
     void Initialize(float complement_probability);
- 
+
     float CachedTQuantile(int v);
 
     static LcbEntries& Get();

@@ -566,7 +566,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         }
 
         if (symmetry <= 8 && symmetry >= 0) {
-            out << GtpSuccess(agent_->GetNetwork().GetOutputString(agent_->GetState(), Network::kDirect, symmetry));   
+            out << GtpSuccess(agent_->GetNetwork().GetOutputString(agent_->GetState(), Network::kDirect, symmetry));
         } else {
             out << GtpFail("symmetry must be from 0 to 7");
         }
@@ -1006,14 +1006,14 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
                 } else if (s == kEmpty) {
                     board_oss << ".";
                 }
-                board_oss << " \n"[board_size == x+1]; 
+                board_oss << " \n"[board_size == x+1];
             }
         }
         out << GtpSuccess(board_oss.str());
     } else if (const auto res = spt.Find("gogui-rules_board_size", 0)) {
         out << GtpSuccess(std::to_string(agent_->GetState().GetBoardSize()));
     } else if (const auto res = spt.Find("gogui-rules_legal_moves", 0)) {
-        if (agent_->GetState().IsGameOver()) { 
+        if (agent_->GetState().IsGameOver()) {
             out << GtpSuccess("");
         } else {
             const auto board_size = agent_->GetState().GetBoardSize();
@@ -1044,7 +1044,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         auto score = agent_->GetState().GetFinalScore();
 
         if (std::abs(score) < 1e-4f) {
-            out << GtpSuccess("0"); 
+            out << GtpSuccess("0");
         } else if (score < 0.f) {
             out << GtpSuccess(Format("W+%f", -score));
         } else {

@@ -19,7 +19,7 @@ public:
     // This is interface for convolution. It is not the real general
     // matrix multiply. Some parameters may be invalid.
     static void ConvolutionSgemm(const int M, const int N, const int K,
-                                 const float alpha, 
+                                 const float alpha,
                                  const float *A, const int lda,
                                  const float *B, const int ldb,
                                  const float beta,

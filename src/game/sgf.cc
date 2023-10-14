@@ -2,6 +2,7 @@
 #include "game/types.h"
 #include "utils/log.h"
 #include "utils/time.h"
+#include "version.h"
 
 #include <ctype.h>
 #include <limits>
@@ -129,9 +130,11 @@ void SgfNode::PopulateState(GameState currstate) {
 
     // time
     if (const auto res = GetPropertyValue("TM")) {
-
+        // pass...
     }
 
+
+    // append moves
     const auto& prop_pair_ab = properties_.equal_range("AB");
     for (auto pit = prop_pair_ab.first; pit != prop_pair_ab.second; ++pit) {
         const auto move = pit->second;
@@ -510,6 +513,8 @@ std::string MakePropertyVetexListString(std::string property, std::vector<int> v
 std::string Sgf::ToString(GameState &state) {
     auto out = std::ostringstream{};
     auto &history = state.GetHistory();
+    auto bot_name = GetProgramName() + 
+                        " " + GetProgramVersion();
 
     out << '(' <<';';
     out << MakePropertyString("GM", 1);
@@ -517,8 +522,8 @@ std::string Sgf::ToString(GameState &state) {
     out << MakePropertyString("SZ", state.GetBoardSize());
     out << MakePropertyString("KM", state.GetKomi());
     out << MakePropertyString("RU", "chinese");
-    out << MakePropertyString("PB", "bot");
-    out << MakePropertyString("PW", "bot");
+    out << MakePropertyString("PB", bot_name);
+    out << MakePropertyString("PW", bot_name);
     out << MakePropertyString("DT", CurrentDateTime());
     if (state.GetHandicap() != 0) {
         out << MakePropertyString("HA", state.GetHandicap());
@@ -603,7 +608,7 @@ void Sgf::CleanSgf(std::string in, std::string out) {
         } catch (const char *err) {
             // Include illegal element for this program. We directly
             // copy it.
-            fout << sgf << std::endl; 
+            fout << sgf << std::endl;
         }
     }
     fout.close();

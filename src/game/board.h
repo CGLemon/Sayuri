@@ -72,7 +72,7 @@ public:
     // Get the number stones of string.
     int GetStones(const int vtx) const;
 
-    // Get the number of empty points. 
+    // Get the number of empty points.
     int GetEmptyCount() const;
 
     // Empty index to vertex.
@@ -102,7 +102,7 @@ public:
                      std::function<bool(int, int)> AvoidToMove) const;
 
     // Return true if the move is self-atari. Notice that
-    // it is not full implement. We do not consider the 
+    // it is not full implement. We do not consider the
     // all libs from capture.
     bool IsSelfAtariMove(const int vtx, const int color) const;
 
@@ -117,7 +117,7 @@ public:
     // Reture true if the two vertex are Neighbor.
     bool IsNeighbor(const int vtx, const int avtx) const;
 
-    // Reture true if the string is ladder. The vital_moves is 
+    // Reture true if the string is ladder. The vital_moves is
     // atari move.
     bool IsLadder(const int vtx, std::vector<int> &vital_moves) const;
 
@@ -133,6 +133,7 @@ public:
     // https://senseis.xmp.net/?Seki
     bool IsSeki(const int vtx) const;
 
+    // Reture true if the specified color is adjacent to this vertex.
     bool IsNeighborColor(const int vtx, const int color) const;
 
     // Play the move assume the move is legal.
@@ -147,6 +148,7 @@ public:
     // Compute the symmetry Zobrist ko hashing.
     std::uint64_t ComputeKoHash(int symmetry) const;
 
+    // Reture the zobrist hash value for this move.
     std::uint64_t GetMoveHash(const int vtx, const int color) const;
 
     int ComputeReachGroup(int start_vertex, int spread_color,
@@ -271,10 +273,10 @@ private:
     int to_move_;
 
     // The last played move.
-    int last_move_; 
+    int last_move_;
 
     // My last played move.
-    int last_move_2_; 
+    int last_move_2_;
 
     // Can't play this move if the last move is ko move.
     int ko_move_;
@@ -314,7 +316,7 @@ private:
     // Find what move can gain liberty by Capturing.
     int FindStringLibertiesGainingCaptures(const int vtx, std::vector<int>& buf) const;
 
-    // Get the possible lowest and most liberties. 
+    // Get the possible lowest and most liberties.
     std::pair<int, int> GetLadderLiberties(const int vtx, const int color) const;
 
     // Find Prey's possible move for ladder searching.
@@ -553,7 +555,7 @@ inline std::uint64_t Board::GetHash() const {
 inline std::uint64_t Board::GetMoveHash(const int vtx, const int color) const {
     std::uint64_t hash = Zobrist::kState[color][vtx];
     if (color == to_move_) {
-        hash ^= Zobrist::kBlackToMove; 
+        hash ^= Zobrist::kBlackToMove;
     }
     return hash;
 }

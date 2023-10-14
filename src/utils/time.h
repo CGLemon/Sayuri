@@ -10,7 +10,7 @@ const std::string CurrentDateTime();
 class Timer {
 public:
     Timer();
-    void Clock();  
+    void Clock();
 
     int GetDurationSeconds() const;
     int GetDurationMilliseconds() const;

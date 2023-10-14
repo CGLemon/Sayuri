@@ -74,7 +74,7 @@ const std::vector<Pattern3Str> kPattern3Src =
 };
 
 constexpr std::uint16_t ComputePattern3HashFromList(int *buf) {
-    const std::uint16_t hash = 
+    const std::uint16_t hash =
         buf[0] << 0  | buf[1] << 2  | buf[2] << 4 |
         buf[3] << 6  /* raw[4] */   | buf[5] << 8 |
         buf[6] << 10 | buf[7] << 12 | buf[8] << 14
@@ -194,7 +194,7 @@ void Board::InitPattern3() {
 
 bool Board::MatchPattern3(const int vtx) const {
 #ifdef USE_DIRTY_HARD_CODED
-    int color = to_move_; 
+    int color = to_move_;
     int size = letter_box_size_;
     int raw[3][3];
 
@@ -389,7 +389,7 @@ std::uint64_t Board::GetPatternHash(const int vtx, const int color, const int di
     return hash;
 }
 
-std::uint64_t Board::GetSymmetryPatternHash(const int vtx, const int color, 
+std::uint64_t Board::GetSymmetryPatternHash(const int vtx, const int color,
                                             const int dist, const int symmetry) const {
     std::uint64_t hash = PatternHash[0][kInvalid][0];
 

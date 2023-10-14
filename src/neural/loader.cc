@@ -12,7 +12,7 @@
 
 #ifdef USE_FAST_PARSER
 #include "fast_float.h"
-#endif 
+#endif
 
 DNNLoder& DNNLoder::Get() {
     static DNNLoder lodaer;
@@ -178,7 +178,7 @@ void DNNLoder::ParseStruct(NetStruct &netstruct, std::istream &buffer) const {
         } else if (spt.GetWord(0)->Get<>() == "end") {
             break;
         }
-            
+
         netstruct.emplace_back(LayerShape{});
         for (auto i = size_t{1}; i < spt.GetCount(); ++i) {
             const auto s = spt.GetWord(i)->Get<int>();
@@ -228,7 +228,7 @@ void DNNLoder::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstr
         //     format. There are some error in the gammas
         //     compression process.
         //
-        // v3: Add more output heads. 
+        // v3: Add more output heads.
     }
 
     if (version_ >= 4 || version_ <= 2) {
@@ -253,7 +253,7 @@ void DNNLoder::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstr
 
         auto inner_cnt = 0;
         for (int b = 0; b < residuals; ++b) {
-            auto block_type = std::string{"ResidualBlock"}; 
+            auto block_type = std::string{"ResidualBlock"};
             inner_cnt += 4;
             if (netstruct[inner_cnt+inputs_cnt].size() == 2 /* fullyconnect layer */) {
                 block_type += "-SE";
@@ -353,7 +353,7 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
     //   2. biases
     // c). Batch normalize layer (v2)
     //   1. mean
-    //   2. standard deviation 
+    //   2. standard deviation
 
     // input layer
     const auto inputs_cnt = 2;
@@ -363,7 +363,7 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
                          input_conv_shape[0],
                          input_conv_shape[1],
                          input_conv_shape[2]);
-        
+
     const auto input_bn_shape = netstruct[1];
     FillBatchnormLayer(weights->input_bn,
                        buffer,
@@ -427,7 +427,7 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
             }
             if (outer_channels != btl_pre_conv_shape[0] ||
                     inner_channels != btl_pre_conv_shape[1] ||
-                    inner_channels != btl_pre_bn_shape[0] || 
+                    inner_channels != btl_pre_bn_shape[0] ||
                     btl_pre_conv_shape[2] != 1) {
                 throw "The Pre-Bottleneck is wrong";
             }
@@ -450,7 +450,7 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
 
         if (inner_channels != res_conv1_shape[0] ||
                 inner_channels != res_conv1_shape[1] ||
-                inner_channels != res_bn1_shape[0] || 
+                inner_channels != res_bn1_shape[0] ||
                 res_conv1_shape[2] != 3) {
             throw "The Residual Block(1) is wrong";
         }
@@ -494,7 +494,7 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
                 btl_post_bn_shape[0]);
             if (inner_channels != btl_post_conv_shape[0] ||
                     outer_channels != btl_post_conv_shape[1] ||
-                    outer_channels != btl_post_bn_shape[0] || 
+                    outer_channels != btl_post_bn_shape[0] ||
                     btl_post_conv_shape[2] != 1) {
                 throw "The Post-Bottleneck is wrong";
             }
@@ -738,7 +738,7 @@ void DNNLoder::GetWeightsFromBuffer(std::vector<float> &weights, std::istream &b
                 }
                 start_ptr = end_ptr;
             }
-#else 
+#else
             std::stringstream line_buffer(line);
             while(line_buffer >> weight) {
                 weights.emplace_back(weight);
@@ -753,7 +753,7 @@ void DNNLoder::FillFullyconnectLayer(LinearLayer &layer,
                                      const int in_size,
                                      const int out_size) const {
     auto weights = std::vector<float>{};
-    layer.Set(in_size, out_size);    
+    layer.Set(in_size, out_size);
 
     GetWeightsFromBuffer(weights, buffer);
     layer.LoadWeights(weights);
@@ -780,12 +780,12 @@ void DNNLoder::FillConvolutionLayer(ConvLayer &layer,
                                     const int in_channels,
                                     const int out_channels,
                                     const int kernel_size) const {
-    auto weights = std::vector<float>{};    
+    auto weights = std::vector<float>{};
     layer.Set(in_channels, out_channels, kernel_size);
 
     GetWeightsFromBuffer(weights, buffer);
     layer.LoadWeights(weights);
-    
+
     GetWeightsFromBuffer(weights, buffer);
     layer.LoadBiases(weights);
 }

@@ -24,7 +24,7 @@ public:
     explicit NodePointer(std::int16_t vertex, float policy);
     explicit NodePointer(NodePointer &&n);
     NodePointer& operator=(NodePointer&&);
-    
+
     // Construct with left value. Forbid it because
     // we may release same memory again.
     NodePointer(const NodePointer &) = delete;

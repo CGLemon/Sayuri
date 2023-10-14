@@ -45,7 +45,7 @@ void Random<TYPE__>::InitSeed(std::uint64_t seed) { \
 }
 
 template<RandomType T>
-thread_local std::uint64_t 
+thread_local std::uint64_t
     Random<T>::seeds_[Random<T>::kSeedSize];
 
 RANDOM_INIT__(RandomType::kSplitMix64, 1);
