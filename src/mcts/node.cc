@@ -397,7 +397,7 @@ Node *Node::ProbSelectChild(bool allow_pass) {
     return best_node->Get();
 }
 
-float Node::GetDynamicCpuctFactor(Node *node, const int visits) {
+float Node::GetDynamicCpuctFactor(Node *node, const int visits, const int parentvisits) {
     // Imported form http://www.yss-aya.com/bbs/patio.cgi?read=33&ukey=0
 
     bool cpuct_dynamic = param_->cpuct_dynamic;
@@ -417,7 +417,7 @@ float Node::GetDynamicCpuctFactor(Node *node, const int visits) {
     k = std::max(0.5, k);
     k = std::min(1.4, k);
 
-    double alpha = 1.0 / (1.0 + std::sqrt(visits/cpuct_dynamic_k_base));
+    double alpha = 1.0 / (1.0 + std::sqrt(parentvisits/cpuct_dynamic_k_base));
     k = alpha*k + (1.0-alpha) * 1.0;
     return k;
 }
@@ -517,7 +517,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
                     utility += (forced_n - visits) * 1e6;
                 }
             }
-            cpuct *= GetDynamicCpuctFactor(node, visits);
+            cpuct *= GetDynamicCpuctFactor(node, visits, parentvisits);
             denom += visits;
         }
 

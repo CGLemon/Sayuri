@@ -208,7 +208,7 @@ private:
     void Recompute(Network &network,
                    GameState &state,
                    const bool is_root);
-    float GetDynamicCpuctFactor(Node *node, const int visits);
+    float GetDynamicCpuctFactor(Node *node, const int visits, const int parentvisits);
     void ApplyDirichletNoise(const float alpha);
     void ApplyNetOutput(GameState& state,
                         const Network::Result &raw_netlist,
