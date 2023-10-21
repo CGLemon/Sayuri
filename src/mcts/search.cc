@@ -527,7 +527,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         result.target_playouts_dist =
             root_node_->GetProbLogitsCompletedQ(root_state_);
     } else {
-        float acc_target_policy = 0.0f;
+        float accm_target_policy = 0.0f;
         size_t target_cnt = 0;
         for (int idx = 0; idx < num_intersections+1; ++idx) {
             const auto x = idx % board_size;
@@ -549,7 +549,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
                     node->IsActive()) {
                 const auto prob = result.root_playouts_dist[idx];
                 result.target_playouts_dist[idx] = prob;
-                acc_target_policy += prob;
+                accm_target_policy += prob;
                 target_cnt += 1;
             } else {
                 result.target_playouts_dist[idx] = 0.0f;
@@ -562,7 +562,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
             result.target_playouts_dist = result.root_playouts_dist;
         } else {
             for (auto &prob : result.target_playouts_dist) {
-                prob /= acc_target_policy;
+                prob /= accm_target_policy;
             }
         }
     }
@@ -580,14 +580,12 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     auto dead = std::vector<std::vector<int>>{};
 
     for (int idx = 0; idx < num_intersections; ++idx) {
-        const auto x = idx % board_size;
-        const auto y = idx / board_size;
-
-        const auto vtx = root_state_.GetVertex(x,y);
+        const auto vtx = root_state_.IndexToVertex(idx);
 
         // owner value, 1 is mine, -1 is opp's.
         const auto owner = safe_area[idx] == true ?
-                               2 * (float)(safe_ownership[idx] == color) - 1 : result.root_ownership[idx];
+                               2 * (float)(safe_ownership[idx] == color) - 1 :
+                               result.root_ownership[idx];
         const auto state = root_state_.GetState(vtx);
 
 
@@ -621,37 +619,44 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     result.alive_strings = alive;
     result.dead_strings = dead;
 
-    // The capture all dead move.
-    auto remove_dead_moves = std::vector<int>{};
-    auto priority_moves = std::vector<int>{};
-
+    // Select the capture all dead move.
+    auto fill_moves = std::vector<int>{};
     auto raw_ownership = root_state_.GetRawOwnership();
+
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto vtx = root_state_.IndexToVertex(idx);
         const auto raw_owner = raw_ownership[idx];
-        const auto owner = safe_area[idx] == true ?
-                               2 * (float)(safe_ownership[idx] == color) - 1 : result.root_ownership[idx];
-        const auto state = root_state_.GetState(vtx);
 
-        if (owner > kOwnshipThreshold && root_state_.IsLegalMove(vtx, color)) {
+        // owner value, 1 is mine, -1 is opp's.
+        const auto owner = safe_area[idx] == true ?
+                               2 * (float)(safe_ownership[idx] == color) - 1 :
+                               result.root_ownership[idx];
+        if (owner > kOwnshipThreshold &&
+                root_state_.IsLegalMove(vtx, color)) {
             if (raw_owner == kEmpty && root_state_.IsNeighborColor(vtx, color)) {
-                remove_dead_moves.emplace_back(vtx);
+                // adjacent my string
+                fill_moves.emplace_back(vtx);
             }
-            if (state == kEmpty && root_state_.board_.IsCaptureMove(vtx, color)) {
-                priority_moves.emplace_back(vtx);
+            if (raw_owner == (!color)) {
+                // in the opp's eye
+                fill_moves.emplace_back(vtx);
             }
         }
     }
+    if (!fill_moves.empty()) {
+        // Randomize the remove the dead move list.
+        std::shuffle(std::begin(fill_moves),
+                         std::end(fill_moves),
+                         Random<>::Get());
 
-    if (!priority_moves.empty()) {
-        std::swap(priority_moves, remove_dead_moves);
-    }
-    std::shuffle(std::begin(remove_dead_moves),
-                     std::end(remove_dead_moves),
-                     Random<>::Get());
-    if (!remove_dead_moves.empty()) {
-        result.capture_all_dead_move =
-            *std::begin(remove_dead_moves);
+        // The capture move will be the first move.
+        std::sort(std::begin(fill_moves), std::end(fill_moves),
+                      [this, color](const int &v0, const int &v1) {
+                          int v0_cap = root_state_.board_.IsCaptureMove(v0, color);
+                          int v1_cap = root_state_.board_.IsCaptureMove(v1, color);
+                          return v0_cap > v1_cap;
+                      });
+        result.capture_all_dead_move = *std::begin(fill_moves);
     }
 }
 
