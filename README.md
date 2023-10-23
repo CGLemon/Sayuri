@@ -20,7 +20,7 @@ First, you need a executable weights. Download the last v0.6 weights [here](http
 
 Then start the program with GTP mode via the terminal/PowerShell, please enter
 
-$ ./Sayuri -w <weights file> -t 1 -b 1 -p 400
+    $ ./Sayuri -w <weights file> -t 1 -b 1 -p 400
 
 You will see the diagnostic verbose. If the verbose includes ```Network Verison``` information, it means you success to start the program. For more arguments, please give the ```--help``` option.
 
@@ -56,7 +56,7 @@ Please see this [section](./bash/README.md).
 * Leela Zero, [https://github.com/leela-zero/leela-zero](https://github.com/leela-zero/leela-zero)
 * KataGo methods, [https://github.com/lightvector/KataGo/blob/master/docs/KataGoMethods.md](https://github.com/lightvector/KataGo/blob/master/docs/KataGoMethods.md)
 * [You Tube](https://www.youtube.com/watch?v=82UclNrXGxg), playing with Pachi.
-* Supported analysis commands, [analyze](./docs/ANALYZE.md)
+* Supported analysis commands, [analyze](./docs/ANALYZE.md).
 
 ## License
 
