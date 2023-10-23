@@ -1,5 +1,7 @@
 # Reinforcement Learning
 
+Sayuri is a quite fast self-play learning system for computer Go. The current performance is apparently better than KataGo g104 which is one of fastest system in 2019s. You may see the detail [here](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJew5OFci).
+
 ## Requirements
 
 * Be sure that you had built the engine. The engine should be in the ```build``` directory. Recommend to use the ```-DUSE_ZLIB=1``` option.
@@ -8,7 +10,7 @@
 
 ## Note
 
-Use the default setting in the bash directory. The network will approach strong amateur level in 1 ~ 2 weeks on 19x19 with the RTX 2070s computer.
+Use the default setting in the bash directory. The network will reach strong amateur level in 1 ~ 2 weeks on 19x19 with the RTX 2070s computer.
 
 ## Simple Usage
 
@@ -23,10 +25,6 @@ The ```selfplay.sh``` will do the infinite loop. If you want to stop the loop, y
 
     $ touch kill.txt
 
-## Sample
+## Sample Configuration File
 
-The sample directory includes some enigne selfplay configs. The ```sample/full-gumbel-p16.txt``` will do full Gumbel learning with 16 playouts. The ```sample/full-alphazero-p400.txt``` will do full AlphaZero learning with 400 playouts.
-
-## Customization
-
-Please see this [section](./CONFIG.md). It explain the parameters.
+The sample directory includes some enigne self-play Configuration files. The ```sample/full-gumbel-p16.txt``` will do full Gumbel learning with 16 playouts. The ```sample/full-alphazero-p400.txt``` will do full AlphaZero learning with 400 playouts. You may simply reuse the files for customization learning. And please see this [section](./CONFIG.md). It explain the Configuration and training parameters.

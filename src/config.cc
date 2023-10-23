@@ -844,6 +844,9 @@ void ArgsParser::DumpHelper() const {
                 << "\t--friendly-pass\n"
                 << "\t\tDo pass move if the engine wins the game.\n\n"
 
+                << "\t--capture-all-dead\n"
+                << "\t\tTry to remove all dead strings before pass. May be not safe for game.\n\n"
+
                 << "\t--cache-memory-mib <integer>\n"
                 << "\t\tSet the NN cache size in MiB.\n\n"
 
@@ -883,7 +886,7 @@ void ArgsParser::DumpHelper() const {
                 << "\t--logfile, -l <log file name>\n"
                 << "\t\tFile to log input/output to.\n\n"
           ;
-    exit(-1);
+    exit(0);
 }
 
 void ArgsParser::DumpWarning() const {}
