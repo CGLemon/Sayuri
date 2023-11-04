@@ -36,6 +36,11 @@ bool Node::PrepareRootNode(Network &network,
     assert(HasChildren());
 
     InflateAllChildren();
+    if (!success) {
+        // The setting of root policy and children may be different,
+        // like softmax temperature, so we refill the children policy.
+        Recompute(network, state, is_root);
+    }
     if (param_->dirichlet_noise) {
         // Generate the dirichlet noise and gather it.
         const auto legal_move = children_.size();
@@ -64,6 +69,51 @@ bool Node::PrepareRootNode(Network &network,
     }
 
     return success;
+}
+
+void Node::Recompute(Network &network,
+                     GameState &state,
+                     const bool is_root) {
+    WaitExpanded();
+    if (!HasChildren()) {
+        return;
+    }
+
+    const float temp = is_root ?
+                param_->root_policy_temp : param_->policy_temp;
+    auto raw_netlist = network.GetOutput(state, Network::kRandom, temp);
+
+    const auto num_intersections = state.GetNumIntersections();
+    auto legal_accumulate = 0.f;
+
+    // Filter the illegal or pruned nodes.
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        const auto vtx = state.IndexToVertex(idx);
+        auto node = GetChild(vtx);
+        if (node) {
+            legal_accumulate +=
+                raw_netlist.probabilities[idx];
+        }
+    }
+    auto passnode = GetChild(kPass);
+    if (passnode) {
+        legal_accumulate += raw_netlist.pass_probability;
+    }
+
+    // Assign the new policy.
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        const auto vtx = state.IndexToVertex(idx);
+        auto node = GetChild(vtx);
+        if (node) {
+            const auto policy =
+                raw_netlist.probabilities[idx]/legal_accumulate;
+            node->SetPolicy(policy);
+        }
+    }
+    if (passnode) {
+        passnode->SetPolicy(
+            raw_netlist.pass_probability/legal_accumulate);
+    }
 }
 
 bool Node::ExpandChildren(Network &network,
@@ -349,7 +399,7 @@ Node *Node::ProbSelectChild(bool allow_pass) {
     return best_node->Get();
 }
 
-float Node::GetDynamicCpuctFactor(Node *node, const int visits) {
+float Node::GetDynamicCpuctFactor(Node *node, const int visits, const int parentvisits) {
     // Imported form http://www.yss-aya.com/bbs/patio.cgi?read=33&ukey=0
 
     bool cpuct_dynamic = param_->cpuct_dynamic;
@@ -369,7 +419,7 @@ float Node::GetDynamicCpuctFactor(Node *node, const int visits) {
     k = std::max(0.5, k);
     k = std::min(1.4, k);
 
-    double alpha = 1.0 / (1.0 + std::sqrt(visits/cpuct_dynamic_k_base));
+    double alpha = 1.0 / (1.0 + std::sqrt(parentvisits/cpuct_dynamic_k_base));
     k = alpha*k + (1.0-alpha) * 1.0;
     return k;
 }
@@ -380,10 +430,13 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     // assert(color == color_);
 
     // Apply the Gumbel-Top-k trick here. Mix it with PUCT
-    // search. Use the PUCT directly if there is already
-    // enough visits (playouts).
-    if (is_root && ShouldApplyGumbel()) {
-        return GumbelSelectChild(color, false);
+    // search. Use the PUCT directly if we fail to find the
+    // next Gumbel move.
+    if (is_root && param_->gumbel) {
+        auto node = GumbelSelectChild(color, false);
+        if (node) {
+            return node;
+        }
     }
 
     // Gather all parent's visits.
@@ -466,7 +519,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
                     utility += (forced_n - visits) * 1e6;
                 }
             }
-            cpuct *= GetDynamicCpuctFactor(node, visits);
+            cpuct *= GetDynamicCpuctFactor(node, visits, parentvisits);
             denom += visits;
         }
 
@@ -527,7 +580,7 @@ int Node::RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits) {
     const auto num_intersections = state.GetNumIntersections();
     auto prob = std::vector<float>(num_intersections+1, 0.f);
     auto vertices_table = std::vector<int>(num_intersections+1, kNullVertex);
-    int acc_visists = 0;
+    int accm_visists = 0;
 
     for (const auto &child : children_) {
         auto node = child.Get();
@@ -542,17 +595,17 @@ int Node::RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits) {
             idx = state.GetIndex(
                       state.GetX(vtx), state.GetY(vtx));
         }
-        acc_visists += visits;
+        accm_visists += visits;
         prob[idx] = visits;
         vertices_table[idx] = vtx;
     }
 
-    if (acc_visists == 0) {
+    if (accm_visists == 0) {
         // There is no visits. Reture the best policy move.
         return GetBestMove(true);
     }
     for (float &p : prob) {
-        p /= (float)acc_visists;
+        p /= (float)accm_visists;
     }
     MixLogitsCompletedQ(state, prob);
 
@@ -806,7 +859,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     const auto node_mem = sizeof(Node) + sizeof(Edge);
     const auto edge_mem = sizeof(Edge);
 
-    // Here are some errors to compute memory used. 
+    // Here are some errors to compute memory used.
     const auto mem_used = static_cast<double>(
         nodes * node_mem + edges * edge_mem) / (1024.f * 1024.f);
 
@@ -1039,6 +1092,8 @@ int Node::GetBestMove(bool allow_pass) {
     }
 
     if (best_move == kNullVertex) {
+        // There is no visited (non-pass) move. We use raw probabilities
+        // instead of LCB list.
         best_move = ProbSelectChild(allow_pass)->GetVertex();
     }
 
@@ -1486,160 +1541,187 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
     }
 }
 
-void Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
-                               const int color,
-                               const int parent_visits,
-                               const int max_visists,
-                               const int considered_moves,
-                               const float logit_zero,
-                               bool only_max_visit) {
-    // The variant of Sequential Halving algorithm. The input N playouts is always
-    // '(promotion visits) * (log2(considered moves) + 1) * (considered moves)' for
-    // each epoch. The variant algorithm is same as Sequential Halving if the total
-    // playous is lower than this value. Following is a example,
-    // 
-    // promotion visits = 1
-    // considered moves = 4
-    //
-    // Round 1.
-    // distribution -> 1 | 1 | 1 | 1
-    // accumulation -> 1 | 1 | 1 | 1
-    //
-    // Round 2.
-    // distribution -> 2 | 2 | 0 | 0
-    // accumulation -> 3 | 3 | 1 | 1
-    //
-    // Round 3.(1st epoch is end)
-    // distribution -> 4 | 0 | 0 | 0
-    // accumulation -> 7 | 3 | 1 | 1
-    //
-    // Round 4.
-    // distribution -> 1 | 1 | 1 | 1
-    // accumulation -> 8 | 4 | 2 | 2
-    //
-    // Round 5.
-    // distribution -> 2  | 2 | 0 | 0
-    // accumulation -> 10 | 6 | 2 | 2
-    //
-    // Round 6. (2nd epoch is end)
-    // distribution -> 4  | 0 | 0 | 0
-    // accumulation -> 14 | 6 | 2 | 2
-
-    const int prom_visits = std::max(1, param_->gumbel_prom_visits);
-    const int n = std::log2(std::max(1, considered_moves)) + 1;
-    const int adj_considered_moves = std::pow(2, n-1); // Be sure that it is pow of 2.
-
-    auto table = std::vector<int>(adj_considered_moves, 0);
-    for (int i=0, r=1, w=adj_considered_moves; i < n; ++i, w/=2, r*=2) {
-        for (int j = 0; j < w; ++j) {
-            for (int k = 0; k < r; ++k) {
-                table[adj_considered_moves-j-1] += 1;
-            }
-        }
-    }
-
-    const int visits_per_epoch = n * prom_visits * adj_considered_moves;
-    const int epoches = parent_visits / visits_per_epoch;
-    const int visits_this_epoch = parent_visits - epoches * visits_per_epoch;
-    const int rounds_this_epoch =
-        visits_this_epoch / (prom_visits * adj_considered_moves);
-
-    int height = 0;
-    int width = adj_considered_moves;
-    int offset = 0;
-    for (int i = 0, t = 1; i < rounds_this_epoch; i++, t *= 2) {
-        height += t;
-        width /= 2;
-        offset += width;
-    }
-
-    const auto parent_score = GetNetScore(color);
-    const int visits_this_epoch_remining =
-        visits_this_epoch - rounds_this_epoch * prom_visits * adj_considered_moves;
-    const int idx = offset + visits_this_epoch_remining % width;
-    const int considered_visists =
-        only_max_visit ?
-            max_visists :
-            prom_visits * (table[idx] * epoches + height) +
-                visits_this_epoch_remining / width;
-
-    for (auto &child : children_) {
-        const auto vtx = child.GetVertex();
-        const auto node = child.Get();
-        const bool is_pointer = node != nullptr;
-
-        int visits = 0;
-        if (is_pointer) {
-            visits = node->GetVisits();
-        }
-
-        if (visits == considered_visists) {
-            if (visits > 0) {
-                // The node is always pointer in this case.
-                gumbel_logits[vtx] +=
-                    TransformCompletedQ(
-                        node->GetGumbelQValue(color, parent_score), max_visists);
-            } else {
-                // The considered visists is zero. In this case, each
-                // completed Q value is same. To do nothing is Ok.
-            }
-        } else {
-            // The child's visits is not same as considered visits. Set
-            // it as logit zero (large negative value) in order to invalid
-            // this move.
-            gumbel_logits[vtx] = logit_zero;
-        }
-    }
-}
-
 bool Node::ShouldApplyGumbel() const {
-    // We simply think the parent's visits is
-    // current visits. Ignore the pruned node.
+    // We simply think the parent's visits is current
+    // visits. Include the pruned and invalid nodes.
     const int visits = GetVisits() - 1;
     return param_->gumbel &&
                param_->gumbel_playouts_threshold > visits;
 }
 
-Node *Node::GumbelSelectChild(int color, bool only_max_visit) {
-    WaitExpanded();
-    assert(HasChildren());
+bool Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
+                               const int color,
+                               const bool only_max_visits) {
+    // The variant of Sequential Halving algorithm. The input N playouts is always
+    // '(promotion visits) * (log2(considered moves) + 1) * (considered moves)' for
+    // each epoch. The variant algorithm is same as Sequential Halving if the total
+    // playous is lower than this value. Following is a example,
+    //
+    // promotion visits = 1
+    // considered moves = 4
+    //
+    // * Round 0.
+    //  accumulation -> { 0, 0, 0, 0 }
+    //
+    // * Round 1.
+    //  distribution -> { 1, 1, 1, 1 }
+    //  accumulation -> { 1, 1, 1, 1 }
+    //
+    // * Round 2.
+    //  distribution -> { 2, 2, 0, 0 }
+    //  accumulation -> { 3, 3, 1, 1 }
+    //
+    // * Round 3.(1st epoch is end)
+    //  distribution -> { 4, 0, 0, 0 }
+    //  accumulation -> { 7, 3, 1, 1 }
+    //
+    // * Round 4.
+    //  distribution -> { 1, 1, 1, 1 }
+    //  accumulation -> { 8, 4, 2, 2 }
+    //
+    // * Round 5.
+    //  distribution -> {  2, 2, 0, 0 }
+    //  accumulation -> { 10, 6, 2, 2 }
+    //
+    // * Round 6. (2nd epoch is end)
+    //  distribution -> {  4, 0, 0, 0 }
+    //  accumulation -> { 14, 6, 2, 2 }
 
-    auto gumbel_type1 = std::extreme_value_distribution<float>(0, 1);
-    auto gumbel_logits = GetZeroLogits<float>(kNumVertices+10);
-    int parentvisits = 0;
-    int max_visits = 0;
+    const int size = children_.size();
+    auto table = std::vector<std::pair<int, int>>(size);
+    gumbel_logits.resize(size, LOGIT_ZERO);
 
-    // Gather all parent's visits.
-    for (auto &child : children_) {
+    for (int i = 0; i < size; ++i) {
+        auto &child = children_[i];
         const auto node = child.Get();
         const bool is_pointer = node != nullptr;
-
-        gumbel_logits[child.GetVertex()] =
-            gumbel_type1(Random<>::Get()) + SafeLog(child.GetPolicy());
 
         if (is_pointer && node->IsValid()) {
             // The node status is pruned or active.
             const auto visits = node->GetVisits();
-            parentvisits += visits;
-            max_visits = std::max(max_visits, visits);
+
+            if (node->IsActive()) {
+                table[i].first = visits;
+                table[i].second = child.GetVertex();
+            }
         }
     }
 
+    std::stable_sort(std::rbegin(table), std::rend(table));
+    const int max_visists = table[0].first;
+
     const int considered_moves =
         std::min(param_->gumbel_considered_moves, (int)children_.size());
-    ProcessGumbelLogits(gumbel_logits, color,
-                            parentvisits, max_visits,
-                            considered_moves, LOGIT_ZERO,
-                            only_max_visit);
+    int playouts_thres = param_->gumbel_playouts_threshold;
+    const int prom_visits = std::max(1, param_->gumbel_prom_visits);
+    const int n = std::log2(std::max(1, considered_moves)) + 1;
+    const int adj_considered_moves = std::pow(2, n-1); // Be sure that it is pow of 2.
+
+    int target_visits = 0;
+    int width = adj_considered_moves;
+    int level = prom_visits;
+
+    if (only_max_visits) {
+        playouts_thres = std::max(playouts_thres, 1);
+        target_visits = max_visists;
+        goto end_loop;
+    }
+
+    // We may reuse the sub-tree. Try fill old distribution in oredr
+    // to cover the Sequential Halving distribution. For example,
+    //
+    // Original distribution
+    // { 9, 2, 0, 0 }
+    //
+    // Target Sequential Halving distribution
+    // { 7, 3, 1, 1 }
+    //
+    // Addition playouts distribution
+    // { 0, 1, 1, 1 }
+    //
+    // Result distribution
+    // { 9, 3, 1, 1 }
+    while (true) {
+        for (int i = 0; i < level; ++i) {
+            for (int j = 0; j < width; ++j) {
+                if (table[j].first <= 0) {
+                    auto vtx = table[width-1].second;
+                    target_visits = GetChild(vtx)->GetVisits();
+                    goto end_loop;
+                }
+                table[j].first -= 1;
+                playouts_thres -= 1;
+
+                if (playouts_thres <= 0) {
+                    goto end_loop;
+                }
+            }
+        }
+        if (width == 1) {
+            width = adj_considered_moves;
+            level = prom_visits;
+        } else {
+            width /= 2;
+            level *= 2;
+        }
+    }
+
+end_loop:;
+    if (playouts_thres <= 0) {
+        return false;
+    }
+
+    int count = 0;
+    const auto parent_score = GetNetScore(color);
+    auto gumbel_type1 = std::extreme_value_distribution<float>(0, 1);
+
+    for (int i = 0; i < size; ++i) {
+        auto &child = children_[i];
+        const auto node = child.Get();
+        const bool is_pointer = node != nullptr;
+
+        if (is_pointer && !node->IsActive()) {
+            // The node is pruned or invalid. Skip it.
+            continue;
+        }
+        if (target_visits == child.GetVisits()) {
+            auto logit = gumbel_type1(Random<>::Get()) +
+                             SafeLog(child.GetPolicy());
+            auto completed_q = 0.f;
+            if (is_pointer && target_visits > 0) {
+                completed_q = TransformCompletedQ(
+                    node->GetGumbelQValue(color, parent_score), max_visists);
+            }
+            gumbel_logits[i] = logit + completed_q;
+            count += 1;
+        }
+    }
+    if (count == 0) {
+        // It may occur when multi-threads search.
+        return false;
+    }
+    return true;
+}
+
+Node *Node::GumbelSelectChild(int color, bool only_max_visits) {
+    WaitExpanded();
+    assert(HasChildren());
+
+    auto gumbel_logits = std::vector<float>{};
+    if (!ProcessGumbelLogits(gumbel_logits, color, only_max_visits)) {
+        // Fail to find the next node.
+        return nullptr;
+    }
 
     Edge* best_node = nullptr;
     float best_value = std::numeric_limits<float>::lowest();
+    const int size = children_.size();
 
-    for (auto &child : children_) {
-        const auto value = gumbel_logits[child.GetVertex()];
+    for (int i = 0; i < size; ++i) {
+        const auto value = gumbel_logits[i];
         if (value > best_value) {
             best_value = value;
-            best_node = &child;
+            best_node = children_.data() + i;
         }
     }
     Inflate(*best_node);
@@ -1650,36 +1732,27 @@ int Node::GetGumbelMove(bool allow_pass) {
     WaitExpanded();
     assert(HasChildren());
 
-    int max_visits = -1;
     int num_candidates = 0;
-
     for (auto &child : children_) {
+        const auto node = child.Get();
         const int visits = child.GetVisits();
-        if (visits > max_visits) {
-            num_candidates = 0;
-            max_visits = visits;
-        }
-        if (visits == max_visits) {
+        if (visits > 0 && node->IsValid()) {
             num_candidates += 1;
-        } 
+        }
     }
 
     if (!allow_pass && num_candidates == 1) {
         // Only one candidate move. It may be the pass move.
         allow_pass = true;
     }
-
-    auto move = kNullVertex;
-
-    while (move == kNullVertex) {
-        move = GumbelSelectChild(color_, true)->GetVertex();
-
-        if (!allow_pass && move == kPass) {
-            // Select the new next move again.
-            move = kNullVertex;
+    if (!allow_pass) {
+        auto passnode = GetChild(kPass);
+        if (passnode) {
+            passnode->Invalidate();
         }
     }
-    return move;
+
+    return GumbelSelectChild(color_, true)->GetVertex();
 }
 
 void Node::SetScoreBouns(float val) {

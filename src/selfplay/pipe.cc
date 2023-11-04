@@ -61,7 +61,7 @@ bool SelfPlayPipe::SaveChunk(const int out_id,
                         data_directory_hash_,
                         filename_hash_ +
                             "_" +
-                            std::to_string(out_id) + 
+                            std::to_string(out_id) +
                             ".txt");
 
     auto oss = std::ostringstream{};
@@ -80,7 +80,7 @@ bool SelfPlayPipe::SaveChunk(const int out_id,
 
         if (!file.is_open()) {
             is_open = false;
-            LOGGING << "Fail to create the file: " << out_name << '!' << std::endl; 
+            LOGGING << "Fail to create the file: " << out_name << '!' << std::endl;
         } else {
             for (auto &data : chunk) {
                 data.StreamOut(file);
@@ -106,7 +106,7 @@ bool SelfPlayPipe::SaveNetQueries(const size_t queries) {
         is_open = true;
         file << queries << std::endl;
     } else {
-        LOGGING << "Fail to create the file: " << out_name << '!' << std::endl; 
+        LOGGING << "Fail to create the file: " << out_name << '!' << std::endl;
     }
 
     return is_open;
@@ -147,11 +147,10 @@ void SelfPlayPipe::Loop() {
         TryCreateDirectory(sgf_directory_);
     }
 
-    constexpr int kGamesPerChunk = 25;
-
     for (int g = 0; g < engine_.GetParallelGames(); ++g) {
         workers_.emplace_back(
             [this, g]() -> void {
+                constexpr int kGamesPerChunk = 25;
                 auto sgf_filename = ConcatPath(
                                         sgf_directory_, filename_hash_ + ".sgf");
                 running_threads_.fetch_add(1, std::memory_order_relaxed);

@@ -18,8 +18,6 @@ std::array<Zobrist::KEY, Zobrist::kZobristSize> Zobrist::kKoMove;
 std::array<Zobrist::KEY, 5> Zobrist::KPass;
 std::array<Zobrist::KEY, Zobrist::kZobristSize> Zobrist::kKomi;
 
-
-// Reture true if there are same elements in the array.
 template<typename T>
 bool Collision(std::vector<T> &array) {
     std::sort(std::begin(array), std::end(array));

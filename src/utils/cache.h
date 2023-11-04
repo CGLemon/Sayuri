@@ -137,6 +137,6 @@ size_t HashKeyCache<V>::GetEntrySize() const {
 template<typename V>
 bool LookupCache(HashKeyCache<V> &cache, std::uint64_t key, V& val) {
     // Interface for NN cache. Remain it for supporting the
-    // old code. 
+    // old code.
     return cache.LookupItem(key, val);
 }

@@ -186,7 +186,7 @@ std::string GameState::VertexToSgf(const int vtx) const {
         return std::string{};
     }
 
-    auto out = std::ostringstream{};    
+    auto out = std::ostringstream{};
     const auto x = GetX(vtx);
     const auto y = GetBoardSize() - GetY(vtx) - 1;
 
@@ -215,7 +215,7 @@ std::string GameState::VertexToText(const int vtx) const {
         return "resign";
     }
 
-    auto out = std::ostringstream{};    
+    auto out = std::ostringstream{};
     const auto x = GetX(vtx);
     const auto y = GetY(vtx);
 
@@ -260,7 +260,9 @@ void GameState::ShowMoveTypes(int vtx, int color) const {
     } else {
         LOGGING << "White ";
     }
-    LOGGING << VertexToText(vtx) << ' ' << board_.GetMoveTypesString(vtx, color) << '\n';
+    LOGGING << VertexToText(vtx) << ' '
+                << board_.GetMoveTypesString(vtx, color)
+                << std::endl;
 }
 
 std::string GameState::GetStateString() const {
@@ -436,11 +438,6 @@ std::vector<int> GameState::GetOwnership() const {
     return res;
 }
 
-void GameState::FillRandomMove() {
-    // this function is for go game, do nothing special in othello game
-    PlayRandomMove();
-}
-
 void GameState::PlayRandomMove() {
     // this function is for go game, do nothing special in othello game
 
@@ -483,29 +480,7 @@ std::vector<float> GameState::GetGammasPolicy(const int color) const {
         acc += gval;
     }
 
-    for (int idx = 0; idx < num_intersections; ++idx) {
-        policy[idx] /= acc;
-    } 
-
-    return policy;
-}
-
-std::vector<int> GameState::GetOwnershipAndRemovedDeadStrings(int) const {
-    // this function is for go game, do nothing special in othello game
-    return GetOwnership();
-}
-
-std::vector<int> GameState::MarKDeadStrings(int) const {
-    // this function is for go game, do nothing special in othello game
-    return std::vector<int>{};
-}
-
-void GameState::RemoveDeadStrings(int) {
-    // this function is for go game, do nothing special in othello game
-}
-
-void GameState::RemoveDeadStrings(std::vector<int> &) {
-    // this function is for go game, do nothing special in othello game
+    return Softmax(policy, 1.f);
 }
 
 float GameState::GetFinalScore(float bonus) const {
@@ -642,15 +617,6 @@ std::vector<int> GameState::GetStringList(const int vtx) const {
 std::vector<bool> GameState::GetStrictSafeArea() const {
     // this function is for go game, do nothing special in othello game
     return std::vector<bool>(GetNumIntersections(), false);
-}
-
-int GameState::GetFirstPassColor() const {
-    for (auto &board : game_history_) {
-        if (board->GetLastMove() == kPass) {
-            return !(board->GetToMove());
-        }
-    }
-    return kInvalid;
 }
 
 std::uint64_t GameState::ComputeSymmetryHash(const int symm) const {

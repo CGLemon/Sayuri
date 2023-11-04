@@ -10,7 +10,7 @@ bool EqualToZero(float v) {
     return IsSameKomi(v, 0.f);
 }
 
-template <> 
+template <>
 float AdjustKomi<float>(float komi) {
     if (EqualToZero(komi)) {
         return 0;
@@ -40,7 +40,7 @@ float AdjustKomi<float>(float komi) {
     return komi;
 }
 
-template <> 
+template <>
 float AdjustKomi<int>(float komi) {
     if (EqualToZero(komi)) {
         return 0;

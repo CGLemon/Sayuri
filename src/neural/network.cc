@@ -71,7 +71,7 @@ void Network::Initialize(const std::string &weightsfile) {
     // Parse the NN weights file.
     DNNLoder::Get().FromFile(dnn_weights, weightsfile);
 
-    // There is no weighs. Will disable the NN forward pipe. 
+    // There is no weighs. Will disable the NN forward pipe.
     if (!dnn_weights->loaded) {
         dnn_weights.reset();
         dnn_weights = nullptr;
@@ -100,7 +100,7 @@ size_t Network::SetCacheSize(size_t MiB) {
     nn_cache_.SetCapacity(num_entries);
 
     const double mem_used =
-        static_cast<double>(num_entries * entry_byte) / (1024.f * 1024.f); 
+        static_cast<double>(num_entries * entry_byte) / (1024.f * 1024.f);
     if (no_cache_) {
         LOGGING << "Disable the NN cache.\n";
     } else {
@@ -228,7 +228,7 @@ bool Network::ProbeCache(const GameState &state,
                 }
                 const int boardsize = result.board_size;
                 const int num_intersections = state.GetNumIntersections();
-                    
+
                 auto probabilities_buffer = std::vector<float>(num_intersections);
                 auto ownership_buffer = std::vector<float>(num_intersections);
 
@@ -248,7 +248,7 @@ bool Network::ProbeCache(const GameState &state,
                 }
                 return true;
             }
-        }         
+        }
     }
     return false;
 }
@@ -299,7 +299,7 @@ std::string Network::GetOutputString(const GameState &state,
     const auto bsize = result.board_size;
 
     auto out = std::ostringstream{};
- 
+
     out << "stm winrate: " << result.stm_winrate << std::endl;
     out << "wdl winrate: " << result.wdl_winrate << std::endl;
     out << "win probability: " << result.wdl[0] << std::endl;

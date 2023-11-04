@@ -84,11 +84,11 @@ std::string Board::GetStateString(const VertexType color, bool is_star) const {
     auto res = std::ostringstream{};
 
     color == kBlack ? res << 'x' :
-        color == kWhite   ? res << 'o' : 
+        color == kWhite   ? res << 'o' :
         is_star == true   ? res << '+' :
         color == kEmpty   ? res << '.' :
         color == kInvalid ? res << '-' : res << "error";
- 
+
     return res.str();
 }
 

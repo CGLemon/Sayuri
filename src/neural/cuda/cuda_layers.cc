@@ -219,7 +219,7 @@ void GemmStridedBatched(bool fp16, bool TA, bool TB,
 
 Convolution::Convolution(CudaHandles *handles,
                          const int max_batch,
-                         const int board_size, 
+                         const int board_size,
                          const int filter_size,
                          const int input_channels,
                          const int output_channels,
@@ -284,7 +284,7 @@ void Convolution::Forward(const int batch,
 #ifdef USE_CUDNN
     cudnnDataType_t cudnn_data_type = GetCudnnDataType(fp16_);
 
-    ReportCUDNNErrors(cudnnSetStream(handles_->cudnn_handle, handles_->stream));   
+    ReportCUDNNErrors(cudnnSetStream(handles_->cudnn_handle, handles_->stream));
     ReportCUDNNErrors(cudnnSetTensor4dDescriptor(in_tensor_desc_,
                                                  CUDNN_TENSOR_NCHW,
                                                  cudnn_data_type,
@@ -293,7 +293,7 @@ void Convolution::Forward(const int batch,
                                                  CUDNN_TENSOR_NCHW,
                                                  cudnn_data_type,
                                                  batch, out_channels_, height_, width_));
-  
+
     static constexpr float alpha = 1.0f, beta = 0.0f;
     ReportCUDNNErrors(cudnnConvolutionForward(
                       handles_->cudnn_handle, &alpha, in_tensor_desc_, input, filter_desc_, cuda_weights_,
@@ -410,7 +410,7 @@ void Convolution::LoadWeights(const std::vector<float> &weights,
 
     ReportCUDNNErrors(cudnnSetFilter4dDescriptor(filter_desc_, cudnn_data_type, CUDNN_TENSOR_NCHW,
                                                  out_channels_, in_channels_, filters_, filters_));
-  
+
     const size_t padding = filters_ / 2;
     ReportCUDNNErrors(cudnnSetConvolution2dDescriptor(
                       conv_desc_, padding, padding, 1, 1, 1, 1,
@@ -498,7 +498,7 @@ void Convolution::LoadWeights(const std::vector<float> &weights,
 
 FullyConnect::FullyConnect(CudaHandles *handles,
                            const int max_batch,
-                           const int inputs, 
+                           const int inputs,
                            const int outputs,
                            bool ReLU) {
     maxbatch_ = max_batch;
@@ -519,7 +519,7 @@ FullyConnect::~FullyConnect() {
 
 void FullyConnect::LoadWeights(const std::vector<float> &weights,
                                const std::vector<float> &biases) {
-    if (loaded_) { 
+    if (loaded_) {
         return;
     }
     MallocAndCopy(fp16_, &cuda_weights_, weights);
@@ -535,7 +535,7 @@ void FullyConnect::Forward(const int batch, void *output, void *input) {
     Gemm(fp16_, false, true,
          batch, outputs_, inputs_,
          1.0f,
-         input, inputs_, 
+         input, inputs_,
          cuda_weights_, inputs_,
          0.0f,
          output, outputs_,
@@ -598,7 +598,7 @@ void SEUnit::LoadWeights(const std::vector<float> &weights_w1,
                          const std::vector<float> &weights_b1,
                          const std::vector<float> &weights_w2,
                          const std::vector<float> &weights_b2) {
-    if (loaded_) { 
+    if (loaded_) {
         return;
     }
     MallocAndCopy(fp16_, &cuda_weights_w1_, weights_w1);
@@ -629,9 +629,9 @@ void SEUnit::Forward(const int batch, void *ouput, void *input,
     const size_t fc1_output_size = se_size_;
     const bool fc1_relu = true;
     Gemm(fp16_, false, true,
-         batch, fc1_output_size, fc1_input_size, 
+         batch, fc1_output_size, fc1_input_size,
          1.0f,
-         cuda_op_[0], fc1_input_size, 
+         cuda_op_[0], fc1_input_size,
          cuda_weights_w1_, fc1_input_size,
          0.0f,
          cuda_op_[1], fc1_output_size,
@@ -644,7 +644,7 @@ void SEUnit::Forward(const int batch, void *ouput, void *input,
     const size_t fc2_output_size = 2 * channels_;
     const bool fc2_relu = false;
     Gemm(fp16_, false, true,
-         batch, fc2_output_size, fc2_input_size, 
+         batch, fc2_output_size, fc2_input_size,
          1.0f,
          cuda_op_[1], fc2_input_size,
          cuda_weights_w2_, fc2_input_size,

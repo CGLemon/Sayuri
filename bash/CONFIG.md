@@ -1,4 +1,4 @@
-# Config Explanation
+#  Configuration File Explanation
 
 ## The Training Setting
 
@@ -58,7 +58,7 @@ The ```selfplay-setting.json``` controls the training process. Here are the para
 }
 ```
 
-## The Self-play Engine Config
+## The Self-play Engine Configuration File
 
 The ```selfplay-config.txt``` controls the self-play process. Here are the parameters.
 

@@ -10,14 +10,7 @@ void Strings::Reset() {
         stones_[vtx] = 0;
         liberties_[vtx] = 0;
     }
-    liberties_[kNumVertices] = KLibertiesReset; // set a large number
-}
-
-void Strings::AddStone(const int vtx, const int lib) {
-    next_[vtx] = vtx;
-    parent_[vtx] = vtx;
-    liberties_[vtx] = lib;
-    stones_[vtx] = 1;
+    liberties_[kNumVertices] = KLibertiesReset;
 }
 
 std::string Strings::GetDebugString(const int boardsize) const {

@@ -43,7 +43,7 @@ private:
             std::vector<cuda::Convolution> tower_conv;
             std::vector<cuda::SEUnit> tower_se;
 
-            // policy head 
+            // policy head
             cuda::Convolution p_ex_conv;
             cuda::GlobalPooling p_pool;
             cuda::FullyConnect p_inter;

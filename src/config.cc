@@ -71,7 +71,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["root_policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["lag_buffer"] << Option::SetOption(0.f);
-    kOptionsMap["no_cache"] << Option::SetOption(false); 
+    kOptionsMap["no_cache"] << Option::SetOption(false);
     kOptionsMap["early_symm_cache"] << Option::SetOption(false);
     kOptionsMap["symm_pruning"] << Option::SetOption(false);
     kOptionsMap["use_stm_winrate"] << Option::SetOption(false);
@@ -100,6 +100,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["resign_playouts"] << Option::SetOption(0);
     kOptionsMap["reduce_playouts"] << Option::SetOption(0);
     kOptionsMap["reduce_playouts_prob"] << Option::SetOption(0.f, 1.f, 0.f);
+    kOptionsMap["random_fastsearch_prob"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["first_pass_bonus"] << Option::SetOption(false);
     kOptionsMap["resign_discard_prob"] << Option::SetOption(0.f, 1.f, 0.f);
 
@@ -137,7 +138,7 @@ void ArgsParser::InitBasicParameters() const {
         select_batchsize = select_threads/2;
     } else if (!already_set_thread && already_set_batchsize) {
         if (use_gpu) {
-            select_threads = 2 * select_batchsize; 
+            select_threads = 2 * select_batchsize;
         } else {
             select_threads = cores;
         }
@@ -145,7 +146,7 @@ void ArgsParser::InitBasicParameters() const {
         select_batchsize = select_threads/2;
     }
 
-    // The batch size of cpu pipe is always 1. 
+    // The batch size of cpu pipe is always 1.
     if (!use_gpu) {
         select_batchsize = 1;
     }
@@ -388,7 +389,7 @@ void ArgsParser::Parse(Splitter &spt) {
         if (IsParameter(res->Get<>())) {
             SetOption("kgs_hint", TransferHint(res->Get<>()));
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
-        } 
+        }
     }
 
     if (const auto res = spt.Find({"--analysis-verbose", "-a"})) {
@@ -739,6 +740,13 @@ void ArgsParser::Parse(Splitter &spt) {
         }
     }
 
+    if (const auto res = spt.FindNext("--random-fastsearch-prob")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("random_fastsearch_prob", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
     if (const auto res = spt.FindNext("--lag-buffer")) {
         if (IsParameter(res->Get<>())) {
             SetOption("lag_buffer", res->Get<float>());
@@ -819,7 +827,7 @@ void ArgsParser::Parse(Splitter &spt) {
 void ArgsParser::DumpHelper() const {
     LOGGING << "Arguments:" << std::endl
                 << "\t--quiet, -q\n"
-                << "\t\tDisable all diagnostic verbose.\n\n" 
+                << "\t\tDisable all diagnostic verbose.\n\n"
 
                 << "\t--analysis-verbose, -a\n"
                 << "\t\tDump the search verbose.\n\n"
@@ -835,6 +843,9 @@ void ArgsParser::DumpHelper() const {
 
                 << "\t--friendly-pass\n"
                 << "\t\tDo pass move if the engine wins the game.\n\n"
+
+                << "\t--capture-all-dead\n"
+                << "\t\tTry to remove all dead strings before pass. May be not safe for game.\n\n"
 
                 << "\t--cache-memory-mib <integer>\n"
                 << "\t\tSet the NN cache size in MiB.\n\n"
@@ -875,7 +886,7 @@ void ArgsParser::DumpHelper() const {
                 << "\t--logfile, -l <log file name>\n"
                 << "\t\tFile to log input/output to.\n\n"
           ;
-    exit(-1);
+    exit(0);
 }
 
 void ArgsParser::DumpWarning() const {}

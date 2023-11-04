@@ -62,7 +62,7 @@ std::string Encoder::GetPlanesString(const GameState &state, int symmetry) const
 
                 if (std::abs(planes[offset + idx]) < std::abs(1e-4))
                     out << Format("%6c", 'x');
-                else 
+                else
                     out << Format("%6.2f", planes[offset + idx]);
             }
             out << std::endl;

@@ -76,7 +76,7 @@ public:
     FullyConnect() = default;
     FullyConnect(CudaHandles *handles,
                  const int batch,
-                 const int inputs, 
+                 const int inputs,
                  const int outputs,
                  bool ReLU);
     ~FullyConnect();
@@ -95,7 +95,7 @@ private:
 
 class GlobalPooling : public LayerBasic {
 public:
-    GlobalPooling() = default; 
+    GlobalPooling() = default;
     GlobalPooling(CudaHandles *handles,
                   bool is_value_head,
                   const int batch,
@@ -129,7 +129,7 @@ public:
 
     void Forward(const int batch, void *output, void *input,
                  void *residual, void *mask, void *sqrt_mask);
- 
+
 private:
     int se_size_;
     int channels_;

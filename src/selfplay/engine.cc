@@ -54,7 +54,7 @@ std::string Engine::SelectWeights() const {
     auto weights_list = GetFileList(weights_dir);
 
     if (!weights_list.empty()) {
-        // Seletet the last weights in this directory. 
+        // Seletet the last weights in this directory.
         std::sort(std::begin(weights_list), std::end(weights_list),
                       [weights_dir](std::string a, std::string b) {
                           auto time_a = GetFileTime(ConcatPath(weights_dir, a));
@@ -89,7 +89,7 @@ void Engine::ParseQueries() {
             tokens.emplace_back(token);
         }
 
-        if (tokens[0] == "bkp" && tokens.size() == 4) { 
+        if (tokens[0] == "bkp" && tokens.size() == 4) {
             // boardsize-komi-probabilities
             // "bkp:19:7.5:0.2"
 

@@ -49,7 +49,7 @@ public:
     template<class F, class... Args>
     auto AddTask(F&& f, Args&&... args)
         -> std::future<typename std::result_of<F(Args...)>::type>;
-    
+
     size_t GetNumThreads() const;
 
 private:
@@ -60,7 +60,7 @@ private:
 
     // Number of allocated threads.
     std::atomic<size_t> num_threads_{0};
-  
+
     // Need to keep track of threads so we can join them.
     std::vector<std::thread> workers_;
 
@@ -91,7 +91,7 @@ inline ThreadPool::ThreadPool(size_t threads) {
     for (auto t = size_t{0}; t < threads ; ++t) {
         AddThread([](){});
     }
-    // Wait some milliseconds until all the threads are constructed. 
+    // Wait some milliseconds until all the threads are constructed.
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
 }
 
@@ -133,7 +133,7 @@ auto ThreadPool::AddTask(F&& f, Args&&... args)
     auto task = std::make_shared<std::packaged_task<return_type()>>(
             std::bind(std::forward<F>(f), std::forward<Args>(args)...)
         );
-        
+
     std::future<return_type> res = task->get_future();
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);

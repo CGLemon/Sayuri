@@ -1,5 +1,7 @@
 ## Journal
 
+Record some misc things.
+
 ### About the ancient technology
 
 (August, 2022)
@@ -50,5 +52,4 @@ Thanks for [shengkelong](https://github.com/shengkelong)'s experiment. The exper
 
 (August, 2023)
 
-Base on the experience of first run. I select some better hyper-parameters. Look like that the early phase of training is better than KataGo g65 and g104 (g170 is unknown) and we don't need to tune many hyper-parameters. I think this project could be better than current KataGo in early phase after tuning more hyper-parameters.
-
+Base on the experience of first run. I select some better hyper-parameters and improve the learning methods. Seems that the early phase of training is better than KataGo g65, g104 and and may achieve the g170 performance which is one of fastest self-play system for Go game. After a few months learning, the last 15bx192c is even beter than LZ150 (superhuman).

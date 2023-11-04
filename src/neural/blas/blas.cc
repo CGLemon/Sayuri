@@ -18,7 +18,7 @@ using ConstEigenMatrixMap =
 #endif
 
 void Blas::ConvolutionSgemm(const int M, const int N, const int K,
-                            const float alpha, 
+                            const float alpha,
                             const float *A, const int lda,
                             const float *B, const int ldb,
                             const float beta,
@@ -48,7 +48,7 @@ void Blas::ConvolutionSgemm(const int M, const int N, const int K,
     (void) ldb;
     (void) ldc;
     auto C_mat = EigenMatrixMap<float>(C, N, M);
-    C_mat.noalias() = 
+    C_mat.noalias() =
         ConstEigenMatrixMap<float>(B, N, K) *
         ConstEigenMatrixMap<float>(A, K, M);
 #endif
@@ -124,12 +124,12 @@ void Blas::DenseSgemm(const int input_size,
                     input_size, inputs, 1, 0.0f, outputs, 1);
     } else {
         cblas_sgemm(CblasColMajor, CblasTrans, CblasNoTrans,
-                    output_size, batch_size,  input_size,         
-                    kAlpha,              
+                    output_size, batch_size,  input_size,
+                    kAlpha,
                     kernel, input_size,
                     inputs, input_size,
-                    kBeta, 
-                    outputs, output_size); 
+                    kBeta,
+                    outputs, output_size);
   }
 
 #endif

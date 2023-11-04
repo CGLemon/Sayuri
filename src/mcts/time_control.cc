@@ -304,7 +304,7 @@ int TimeControl::EstimateMovesExpected(int boardsize, int move_num) const {
         opening_factor * std::max(opening_move_num - side_move_num, 0);
 
     // Be sure that the moves left is not too low.
-    // Minimal moves left is 43 on 19x19. 
+    // Minimal moves left is 43 on 19x19.
     // Minimal moves left is 21 on 13x13.
     // Minimal moves left is 15 on 9x9.
     estimated_moves = std::max(estimated_moves,

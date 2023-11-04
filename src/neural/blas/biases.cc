@@ -2,7 +2,7 @@
 
 #include <cassert>
 
-void AddSpatialBiases::Forward(const size_t board_size, 
+void AddSpatialBiases::Forward(const size_t board_size,
                                const size_t channels,
                                std::vector<float> &input,
                                const std::vector<float> &biases,
@@ -17,7 +17,7 @@ void AddSpatialBiases::Forward(const size_t board_size,
         ReLU);
 }
 
-void AddSpatialBiases::Forward(const size_t board_size, 
+void AddSpatialBiases::Forward(const size_t board_size,
                                const size_t channels,
                                std::vector<float> &input,
                                const std::vector<float> &biases,
@@ -43,7 +43,7 @@ void AddSpatialBiases::Forward(const size_t board_size,
         }
         for (auto b = size_t{0}; b < spatial_size; b++) {
             float val = *input_ptr + bias;
-            if (residual_ptr) { 
+            if (residual_ptr) {
                 val += *residual_ptr;
                 residual_ptr++;
             }

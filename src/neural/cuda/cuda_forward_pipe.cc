@@ -67,7 +67,7 @@ OutputResult CudaForwardPipe::Forward(const InputData &input) {
         int offset_p = 0;
         for (int idx = 0; idx < board_size_ * board_size_; ++idx) {
             const int x = idx % board_size_;
-            const int y = idx / board_size_;  
+            const int y = idx / board_size_;
             if (x < planes_bsize && y < planes_bsize) {
                 reordered_ouput.probabilities[offset_r] = output.probabilities[offset_p];
                 reordered_ouput.ownership[offset_r] = output.ownership[offset_p];
@@ -119,7 +119,7 @@ void CudaForwardPipe::Reload(int board_size) {
     if (!already_set_gpu) {
          for (int i = 0; i < d_cnt; ++i) {
              gpus_list.emplace_back(i);
-         } 
+         }
     } else {
         auto gpus_cnt = GetOptionCount("gpus");
         for (int idx = 0; idx < gpus_cnt; ++idx) {
@@ -232,7 +232,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         const auto inner_channels = tower_ptr->apply_btl ?
                                         outer_channels/2 :
                                         outer_channels;
-    
+
         graph_->tower_conv[t_offset+0] = cuda::Convolution(
             &handles_,
             max_batch_,     // max batch size
@@ -276,7 +276,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
                 outer_channels, // output channels
                 post_use_relu   // relu
             );
-        } 
+        }
 
         if (tower_ptr->apply_se) {
             const size_t se_size = tower_ptr->se_size;

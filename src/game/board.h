@@ -56,7 +56,6 @@ public:
     bool IsLegalMove(const int vertex, const int color) const;
     bool IsLegalMove(const int vertex, const int color,
                      std::function<bool(int, int)> AvoidToMove) const;
-
     // Play the move assume the move is legal.
     void PlayMoveAssumeLegal(const int vtx, const int color);
 
@@ -68,6 +67,7 @@ public:
 
     void ExchangeToMove();
 
+    // Reture the zobrist hash value for this move.
     std::uint64_t GetMoveHash(const int vtx, const int color) const;
 
     bool IsEdge(const int vtx) const;
@@ -148,7 +148,7 @@ private:
     int last_move_;
 
     // My last played move.
-    int last_move_2_; 
+    int last_move_2_;
 
     // The passes number.
     int passes_;

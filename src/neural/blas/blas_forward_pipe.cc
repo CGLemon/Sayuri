@@ -26,7 +26,7 @@ void BlasForwardPipe::InitWinograd() {
     const auto residual_channels = weights_->residual_channels;
 
     // The input layer.
-    weights_->input_conv.GetWeights() = 
+    weights_->input_conv.GetWeights() =
         WinogradTransformF(weights_->input_conv.GetWeights(),
                                residual_channels, kInputChannels);
 
@@ -75,11 +75,11 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     int workspace1_size = 0;
 
     if (use_winograd) {
-        workspace0_size = 
+        workspace0_size =
             workspace1_size =
             WinogradConvolution3::GetWorkspaceSize(board_size, max_channels);
     } else {
-        workspace0_size = 
+        workspace0_size =
             Convolution3::GetWorkspaceSize(board_size, max_channels);
         workspace1_size = 1; // not used.
     }
@@ -91,15 +91,15 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     auto conv_in = std::vector<float>(output_channels * num_intersections);
     auto res = std::vector<float>(output_channels * num_intersections);
     auto intermediate = std::vector<float>(3 * max_intermediates);
-    auto pooling = std::vector<float>(3 * max_intermediates); 
+    auto pooling = std::vector<float>(3 * max_intermediates);
 
-    // Copy input plane to buffer. 
+    // Copy input plane to buffer.
     auto planes = std::vector<float>(plane_size);
     std::copy(std::begin(inpnts.planes),
                   std::begin(inpnts.planes) + plane_size,
                   std::begin(planes));
 
-    // Allocate the output buffers. 
+    // Allocate the output buffers.
     auto output_prob = std::vector<float>(kOuputProbabilitiesChannels * num_intersections);
     auto output_pass = std::vector<float>(kOuputPassProbability);
     auto output_ownership = std::vector<float>(kOuputOwnershipChannels * num_intersections);
@@ -265,7 +265,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     AddSpatialBiases::Forward(
         board_size, policy_extract_channels,
         policy_conv,
-        intermediate, false);    
+        intermediate, false);
 
     // The policy outs.
     Convolution1::Forward(
@@ -289,7 +289,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     // The value head.
     const auto value_extract_channels = weights_->value_extract_channels;
     auto value_conv = std::vector<float>(value_extract_channels * num_intersections);
-    
+
     Convolution1::Forward(
         board_size, output_channels, value_extract_channels,
         conv_out,

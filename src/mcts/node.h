@@ -37,7 +37,7 @@ struct AnalysisConfig {
 
     int interval{0};
     int min_moves{0};
-    int max_moves{kNumIntersections+1};
+    int max_moves{kPotentialMoves};
 
     std::vector<MoveToAvoid> avoid_moves;
     std::vector<MoveToAvoid> allow_moves;
@@ -54,7 +54,7 @@ struct AnalysisConfig {
             ownership =
             moves_ownership = false;
         min_moves = 0;
-        max_moves = kNumIntersections+1;
+        max_moves = kPotentialMoves;
         avoid_moves.clear();
         allow_moves.clear();
         interval = 0;
@@ -110,7 +110,7 @@ public:
     // Select the best PUCT value node.
     Node *PuctSelectChild(const int color, const bool is_root);
 
-    // Randomly select one child by visits. 
+    // Randomly select one child by visits.
     int RandomMoveProportionally(float temp, int min_visits);
 
     // Randomly select one child by visits and Q value.
@@ -119,7 +119,7 @@ public:
     // Update the node.
     void Update(const NodeEvals *evals);
 
-    // Get children's LCB values. 
+    // Get children's LCB values.
     std::vector<std::pair<float, int>> GetLcbUtilityList(const int color);
 
     // Get best move(vertex) with LCB value.
@@ -153,10 +153,10 @@ public:
     // Get the move probability value of this node.
     float GetPolicy() const;
 
-    // Get the network win-loss value. 
+    // Get the network win-loss value.
     float GetNetWL(const int color) const;
 
-    // Get the network final score value. 
+    // Get the network final score value.
     float GetNetScore(const int color) const;
 
     // Get the average final score value.
@@ -205,7 +205,10 @@ public:
     std::string GetPvString(GameState &state);
 
 private:
-    float GetDynamicCpuctFactor(Node *node, const int visits);
+    void Recompute(Network &network,
+                   GameState &state,
+                   const bool is_root);
+    float GetDynamicCpuctFactor(Node *node, const int visits, const int parentvisits);
     void ApplyDirichletNoise(const float alpha);
     void ApplyNetOutput(GameState& state,
                         const Network::Result &raw_netlist,
@@ -232,14 +235,10 @@ private:
     float TransformCompletedQ(const float completed_q,
                               const int max_visits) const;
     void ComputeNodeCount(size_t &nodes, size_t &edges);
-    void ProcessGumbelLogits(std::vector<float> &gumbel_logits,
+    bool ProcessGumbelLogits(std::vector<float> &gumbel_logits,
                              const int color,
-                             const int root_visits,
-                             const int max_visists,
-                             const int considered_moves,
-                             const float logit_zero,
-                             bool only_max_visit);
-    Node *GumbelSelectChild(int color, bool only_max_visit);
+                             bool only_max_visits);
+    Node *GumbelSelectChild(int color, bool only_max_visits);
     void MixLogitsCompletedQ(GameState &state, std::vector<float> &prob);
 
     void KillRootSuperkos(GameState &state);

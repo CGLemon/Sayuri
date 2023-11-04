@@ -90,7 +90,7 @@ void add_spatial(T *data, const T *biases,
 //         int batch = index / (C * spatial);
 //         int c_index = (index / spatial) % C;
 //         int s_index = index % spatial;
-// 
+//
 //         float el = (float)(data[index]);
 //         float mean = (float)(means[c_index]);
 //         float scale_stddev = (float)(stddevs[c_index]);
@@ -173,7 +173,7 @@ void add_spatial(T *data, const T *biases,
 //     const int pad = (filter_size / 2);
 //     const int output_h = H + 2 * pad - filter_size + 1;
 //     const int output_w = W + 2 * pad - filter_size + 1;
-// 
+//
 //     im2col_kernel<<<blocks, block_size, 0, stream>>>(
 //         filter_size, pad, channels, H, W, output_h, output_w, input, output);
 //
@@ -527,7 +527,7 @@ __global__ void transform_in_kernel(T *V, const T *in,
                 int b = yin + i;
                 // x is transposed here for better layout later
                 if (b >= 0 && a >= 0 && b < H && a < W) {
-                    x[j][i] = (float)(in[batch * C * spatial + 
+                    x[j][i] = (float)(in[batch * C * spatial +
                                              ch * spatial + b * W + a]);
                 } else {
                     x[j][i] = 0;
@@ -579,7 +579,7 @@ __global__ void transform_out_kernel(T *Y, const T *M,
                                      const T *mask,
                                      const int K,
                                      const int k_pad, const int p_pad,
-                                     const int board_size, 
+                                     const int board_size,
                                      const int batch_size, bool relu) {
     const int W = board_size;
     const int H = board_size;

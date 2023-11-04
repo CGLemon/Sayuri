@@ -10,8 +10,9 @@ static constexpr int kDefaultBoardSize = MAX_BOARD_SIZE;
 static constexpr float kDefaultKomi = 0.f;
 
 static constexpr int kBoardSize = MAX_BOARD_SIZE;
-static constexpr int kLetterBoxSize = kBoardSize+2;
+static constexpr int kLetterBoxSize = kBoardSize + 2;
 static constexpr int kNumIntersections = kBoardSize * kBoardSize;
+static constexpr int kPotentialMoves = kNumIntersections + 1;
 static constexpr int kNumVertices = kLetterBoxSize * kLetterBoxSize;
 
 static constexpr int kNullVertex = 0;
@@ -32,9 +33,9 @@ static_assert(kMinGTPBoardSize <= kBoardSize, "");
 #define INVAL_NUMBER (3)
 
 #define NBR_SHIFT (4)
-#define BLACK_NBR_SHIFT (BLACK_NUMBER * 4)
-#define WHITE_NBR_SHIFT (WHITE_NUMBER * 4)
-#define EMPTY_NBR_SHIFT (EMPTY_NUMBER * 4)
+#define BLACK_NBR_SHIFT (BLACK_NUMBER * NBR_SHIFT)
+#define WHITE_NBR_SHIFT (WHITE_NUMBER * NBR_SHIFT)
+#define EMPTY_NBR_SHIFT (EMPTY_NUMBER * NBR_SHIFT)
 
 #define NBR_MASK (0xf)
 #define BLACK_EYE_MASK (4 * (1 << BLACK_NBR_SHIFT))
@@ -55,7 +56,7 @@ static constexpr int kEmptyNeighborShift = EMPTY_NBR_SHIFT;
 static constexpr std::uint16_t kNeighborMask = NBR_MASK;
 static constexpr std::uint16_t kBlackEyeMask = BLACK_EYE_MASK;
 static constexpr std::uint16_t kWhiteEyeMask = WHITE_EYE_MASK;
-static constexpr int kEyeMask[2] = {BLACK_EYE_MASK, WHITE_EYE_MASK};
+static constexpr std::uint16_t kEyeMask[2] = {BLACK_EYE_MASK, WHITE_EYE_MASK};
 
 enum GameResult : std::uint8_t {
     kBlackWon = BLACK_NUMBER,

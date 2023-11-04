@@ -69,7 +69,7 @@ void ValueToColor(float val, int *r, int *g, int *b) {
 }
 
 void ValueToGray(float val, int *r, int *g, int *b) {
-    /* 
+    /*
      * val: [ 1.0                                        0.0 ]
      *   v: [  0                    145           215    255 ]
      */
