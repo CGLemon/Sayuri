@@ -245,5 +245,5 @@ void Encoder::EncoderFeatures(const GameState &state,
     auto misc_it = it + 13 * shift;
 
     FillFeatures(board.get(), state.GetToMove(), feat_it);
-    FillMisc(board.get(), state.GetToMove(), state.GetKomi(), state.GetRule(), state.GetWave(), misc_it);
+    FillMisc(board.get(), state.GetToMove(), state.GetRule(), state.GetWave(), state.GetKomi(), misc_it);
 }
