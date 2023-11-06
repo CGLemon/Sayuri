@@ -6,8 +6,8 @@
 namespace cuda {
 
 template <typename T>
-__global__ void add_vectors_kernel(T *a, T *b, T *c,
-                                   int asize, int bsize, int size, bool relu) {
+__global__ void add_vectors_kernel(T *c, const T *a, const T *b,
+                                   int size, int asize, int bsize, bool relu) {
     int i = threadIdx.x + blockDim.x * blockIdx.x;
     if (i < size) {
         float aval = (float)(a[i % asize]);
@@ -22,14 +22,14 @@ __global__ void add_vectors_kernel(T *a, T *b, T *c,
 }
 
 template <typename T>
-void add_vectors(T *a, T *b, T *c,
-                 int asize, int bsize, int size,
+void add_vectors(T *c, const T *a, const T *b,
+                 int size, int asize, int bsize,
                  bool relu, cudaStream_t stream) {
     const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(size, block_size);
 
     add_vectors_kernel<<<blocks, block_size, 0, stream>>>(
-        a, b, c, asize, bsize, size, relu);
+        c, a, b, size, asize, bsize, relu);
 
     ReportCUDAErrors(cudaGetLastError());
 }
@@ -783,7 +783,7 @@ void gemm_strided_batched<half>(bool TA, bool TB, int M, int N, int K, half ALPH
 }
 #endif
 
-template void add_vectors<float>(float* c, float* a, float* b, int size,
+template void add_vectors<float>(float *c, const float *a, const float *b, int size,
                                  int asize, int bsize, bool relu, cudaStream_t stream);
 
 template void add_spatial<float>(float *data, const float *biases,
@@ -816,8 +816,8 @@ template void winograd3_transform_out<float>(float *out, const float *M, const f
                                              bool relu, cudaStream_t stream);
 
 #ifdef ENABLE_FP16
-template void add_vectors<half>(half *c, half *a, half *b, int size, int asize,
-                                int bsize,  bool relu, cudaStream_t stream);
+template void add_vectors<half>(half *c, const  half *a, const half *b, int size,
+                                int asize, int bsize,  bool relu, cudaStream_t stream);
 
 template void add_spatial<half>(half *data, const half *biases,
                                 const half *residual, const half *mask,
