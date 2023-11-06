@@ -601,7 +601,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
 
         const auto elapsed = timer.GetDuration();
         out << GtpSuccess(
-            Format("%d -> %.2f(eval/s), bs=%d, t=%d",
+            Format("%d -> %.2f(eval/s), threads=%d, batchsize=%d",
                 count.load(),
                 count.load()/elapsed,
                 threads, batch_size));

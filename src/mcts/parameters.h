@@ -12,6 +12,8 @@ public:
     Parameters() = default;
 
     void Reset() {
+        timemanage = GetOption<std::string>("timemanage");
+
         threads = GetOption<int>("threads");
         batch_size = GetOption<int>("batch_size");
         playouts = GetOption<int>("playouts");
@@ -71,6 +73,8 @@ public:
         use_rollout = GetOption<bool>("use_rollout");
         capture_all_dead = GetOption<bool>("capture_all_dead");
     }
+
+    std::string timemanage;
 
     int threads;
     int batch_size;

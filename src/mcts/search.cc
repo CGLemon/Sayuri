@@ -1165,7 +1165,7 @@ bool Search::HaveAlternateMoves(float elapsed, float limit) {
         // Be sure that there are at least two nodes.
         return true;
     }
-    if (elapsed <= 1.0f) {
+    if (elapsed <= 1.0f || param_->timemanage == "off") {
         // A second for estimating playouts may be more precision.
         return true;
     }
@@ -1173,20 +1173,20 @@ bool Search::HaveAlternateMoves(float elapsed, float limit) {
     auto sorted_dist = last_root_dist_;
     std::sort(std::rbegin(sorted_dist), std::rend(sorted_dist));
 
-    const auto remaining = limit - elapsed;
-    const auto playouts = playouts_.load(std::memory_order_relaxed);
-    const auto playouts_per_sec = playouts/elapsed;
-    const auto estimated_playouts = remaining * playouts_per_sec;
+    const double remaining = limit - elapsed;
+    const double playouts = playouts_.load(std::memory_order_relaxed);
+    const double playouts_per_sec = playouts/elapsed;
+    const double estimated_playouts = remaining * playouts_per_sec;
 
-    int top_visits = visits * sorted_dist[0];
-    int sec_visits = visits * sorted_dist[1];
+    double top_visits = visits * sorted_dist[0];
+    double sec_visits = visits * sorted_dist[1];
     double thres = 0.5;
 
-    if (sorted_dist[0] > 0.9f) {
+    if (sorted_dist[0] > 0.9) {
         // Current distribution is too sharp. We simply stop the
         // search for saving thinking time.
-        int cap_visits = sec_visits + estimated_playouts;
-        if (int(thres * top_visits) > cap_visits) {
+        double cap_visits = sec_visits + estimated_playouts;
+        if (thres * top_visits > cap_visits) {
             return false;
         }
     }

@@ -12,18 +12,17 @@
 
 namespace cuda {
 
-void AddVectors(bool fp16, void *c, void *a, void *b,
-                int size, int asize, int bsize,
-                bool relu, cudaStream_t stream) {
+void AddVectors(bool fp16, void *c, const void *a, const void *b,
+                int size, int asize, int bsize, bool relu, cudaStream_t stream) {
     if (fp16) {
 #ifdef ENABLE_FP16
         add_vectors(
-            (half *)c, (half *)a, (half *)b,
+            (half *)c, (const half *)a, (const half *)b,
             size, asize, bsize, relu, stream);
 #endif
     } else {
         add_vectors(
-            (float *)c, (float *)a, (float *)b,
+            (float *)c, (const float *)a, (const float *)b,
             size, asize, bsize, relu, stream);
     }
 }
