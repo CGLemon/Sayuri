@@ -9,7 +9,7 @@
 namespace cuda {
 
 template <typename T>
-void add_vectors(T *c, T *a, T *b,
+void add_vectors(T *c, const T *a, const T *b,
                  int size, int asize, int bsize,
                  bool relu, cudaStream_t stream);
 

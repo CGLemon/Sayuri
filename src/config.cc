@@ -28,6 +28,8 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["fp16"] << Option::SetOption(true);
     kOptionsMap["capture_all_dead"] << Option::SetOption(false);
 
+    kOptionsMap["timemanage"] << Option::SetOption(std::string{"off"});
+
     kOptionsMap["fixed_nn_boardsize"] << Option::SetOption(0);
     kOptionsMap["defualt_boardsize"] << Option::SetOption(kDefaultBoardSize);
     kOptionsMap["defualt_komi"] << Option::SetOption(kDefaultKomi);
@@ -294,11 +296,29 @@ void ArgsParser::Parse(Splitter &spt) {
         return hint;
     };
 
+    const auto AcceptSet = [](
+        std::string in, const std::initializer_list<std::string> list) {
+        bool accept = false;
+        for (auto &v: list) {
+            if (in == v) accept = true;
+        }
+        return accept;
+    };
+
     inputs_ += (SplitterToString(spt) + ' ');
 
     if (const auto res = spt.FindNext({"--mode", "-m"})) {
-        if (IsParameter(res->Get<>())) {
+        if (IsParameter(res->Get<>()) &&
+                AcceptSet(res->Get<>(), {"gtp", "selfplay"})) {
             SetOption("mode", res->Get<>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--timemanage")) {
+        if (IsParameter(res->Get<>()) &&
+                AcceptSet(res->Get<>(), {"off", "on"})) {
+            SetOption("timemanage", res->Get<>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
