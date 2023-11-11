@@ -1,5 +1,6 @@
 --random-moves-factor 0.1
 --random-opening-prob 0.75
+--random-fastsearch-prob 0.75
 
 --komi-stddev 2.5
 --komi-big-stddev-prob 0.06

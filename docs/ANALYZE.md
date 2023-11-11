@@ -1,6 +1,6 @@
 ## Analysis Commands
 
-The analysis Commands are useful on the modern GTP interface tool, like Sabaki. It shows the current win-rate, best move and the other informations. The engine supports the following GTP analysis commands.
+The analysis Commands are useful for the modern GTP interface tool, like Sabaki. It shows the current win-rate, best move and the other informations. The engine supports the following GTP analysis commands.
 
   * `analyze, genmove_analyze [player (optional)] [interval (optional)] ...`
       * The behavior is same as ```lz-analyze```, ```lz-genmove_analyze```.

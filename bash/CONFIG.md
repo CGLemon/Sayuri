@@ -63,10 +63,16 @@ The ```selfplay-setting.json``` controls the training process. Here are the para
 The ```selfplay-config.txt``` controls the self-play process. Here are the parameters.
 
 ```
---noise                      # Enable Dirichlet noise in MCTS.
+--dirichlet-noise            # Enable Dirichlet noise in MCTS.
 
 --random-moves-factor 0.08   # Do the random move if the move number is
                              # below the (X * intersections).
+
+--random-opening-prob 0.75   # Play opening with high temperature policy in
+                             # this probability.
+
+--random-fastsearch-prob 0.75 # Play random move for reduce-playouts in this
+                              # probability.
 
 --komi-stddev 2.5            # Apply the random komi in the self-play
                              # games.

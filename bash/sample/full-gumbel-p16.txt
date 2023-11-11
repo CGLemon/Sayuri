@@ -51,11 +51,10 @@
 --early-symm-cache
 --first-pass-bonus
 
---dirichlet-noise
---dirichlet-epsilon 0.25
---dirichlet-init 0.03
---dirichlet-factor 361
-
---root-policy-temp 1.1
+# --dirichlet-noise
+# --dirichlet-epsilon 0.25
+# --dirichlet-init 0.03
+# --dirichlet-factor 361
+# --root-policy-temp 1.1
 
 --num-games 5000

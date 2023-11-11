@@ -7,22 +7,24 @@
 
 ## Let's ROCK!
 
-Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. Learning the game of Go from scratch without strategic knowledge from human with AlphaZero-based algorithm. She is strongly inspired by Leela Zero and KataGo. The board data structure, search algorithm and network format are borrowed from Leela Zero in the beginning. Current version follows the KataGo research, the engine supports variable komi and board size now. Some methods or reports you may see my HackMD articles (some are chinese).
+Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. Learning the game of Go without strategic knowledge from human with AlphaZero-based algorithm. She is strongly inspired by Leela Zero and KataGo. The board data structure, search algorithm and network format are borrowed from Leela Zero in the beginning. Current version follows the KataGo research, the engine supports variable komi and board size now. Some methods or reports you may see my articles (some are chinese).
 
 * [開發日誌](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/BJgfay0Yc)
-* [AlphaZero 之加速演算法實作](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJI9_p70i)
+* [AlphaZero 之加速演算法實作 (v0.4~v0.5)](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJI9_p70i)
 * [The performance report before UEC15](https://drive.google.com/file/d/1ATd_u-E-OnviczsDH8wVL0c3Q1NzUCKW/view?usp=share_link)
-* [Journal](./docs/JOURNAL.md).
+* [Journal](./docs/JOURNAL.md)
 
 ## Quick Start via Terminal
 
-First, you need a executable weights. Download the last v0.6 weights [here](https://drive.google.com/drive/folders/1nawHAKHTBKEpLcizaVrK4GVDSIuVqJ-Q?usp=sharing) and see the current RL progression [here](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJew5OFci). If you want to use the old network, please use the v0.5 engine.
+First, you need a executable weights. Download the last v0.6 weights [here](https://drive.google.com/drive/folders/1nawHAKHTBKEpLcizaVrK4GVDSIuVqJ-Q?usp=sharing) and see the current RL progression [here](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJew5OFci). If you want to use the older network, please use the v0.5 engine.
 
 Then start the program with GTP mode via the terminal/PowerShell, please enter
 
     $ ./Sayuri -w <weights file> -t 1 -b 1 -p 400
 
 You will see the diagnostic verbose. If the verbose includes ```Network Verison``` information, it means you success to start the program. For more arguments, please give the ```--help``` option.
+
+    $ ./Sayuri --help
 
 ## Graphical Interface
 
@@ -36,7 +38,7 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 
 ![gogui-sample01](./img/gogui-sample01.png)
 
-## Build From Souce
+## Build From Source
 
 Please see this [section](./docs/COMPILE.md).
 

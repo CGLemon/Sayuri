@@ -1,6 +1,6 @@
 # Reinforcement Learning
 
-Sayuri is a quite fast self-play learning system for computer Go. The current performance is apparently better than KataGo g104 which is one of fastest system in 2019s. You may see the detail [here](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJew5OFci).
+Sayuri is a fairly fast self-play learning system for the game of Go. The current performance is apparently better than KataGo g104 which is one of fastest system in 2019s. You may see the detail [here](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJew5OFci).
 
 ## Requirements
 
