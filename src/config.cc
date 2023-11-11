@@ -125,31 +125,46 @@ void ArgsParser::InitBasicParameters() const {
 
     // If the threads is zero, program select a reasonable number
     // and the batch size is same.
-    bool already_set_thread = GetOption<int>("threads") > 0;
-    bool already_set_batchsize = GetOption<int>("batch_size") > 0;
+    bool already_set_thread = !IsOptionDefault("threads");
     bool use_gpu = GetOption<bool>("use_gpu");
 
     const int cores = std::max((int)std::thread::hardware_concurrency(), 1);
     int select_threads = GetOption<int>("threads");
     int select_batchsize = GetOption<int>("batch_size");
 
-    // Try to select a reasonable number for threads and batch
-    // size.
-    if (!already_set_thread && !already_set_batchsize) {
+    // Try to select a reasonable number for threads and batch size.
+    //
+    // GPU case:
+    // case 1. if no args are given, use thread count of 12
+    // case 2. if number of threads are 0, use thread count of (number of cpu cores) * 2
+    // case 3. number of threads and batches are given
+    // other cases. number of threads are equal to (batch size) * 2
+    //
+    // CPU case (ingore batch size):
+    // case 1. if no args are given, use thread count of 6
+    // case 2. if number of threads are 0, use thread count of (number of cpu cores) * 1
+    // case 3. number of threads are given
+
+    // TODO: The most modern CPUs, eg i5-13500, have so many cores. Should
+    //       we use the greater 'threads_base'?
+    const int threads_base = 6;
+    if (!use_gpu) {
+        // reduce the batch size effect
+        select_batchsize = 0;
+    }
+    if (!already_set_thread && select_batchsize == 0) {
+        select_threads = (1 + (int)use_gpu) * std::min(cores, threads_base);
+    }
+    if (select_threads == 0 && select_batchsize == 0) {
         select_threads = (1 + (int)use_gpu) * cores;
         select_batchsize = select_threads/2;
-    } else if (!already_set_thread && already_set_batchsize) {
-        if (use_gpu) {
-            select_threads = 2 * select_batchsize;
-        } else {
-            select_threads = cores;
-        }
-    } else if (already_set_thread && !already_set_batchsize) {
+    } else if (select_threads == 0 && select_batchsize != 0) {
+        select_threads = (1 + (int)use_gpu) * select_batchsize;
+    } else if (select_threads != 0 && select_batchsize == 0) {
         select_batchsize = select_threads/2;
     }
-
-    // The batch size of cpu pipe is always 1.
     if (!use_gpu) {
+        // the CPU only uses one batch
         select_batchsize = 1;
     }
 
