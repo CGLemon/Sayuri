@@ -6,7 +6,7 @@
 
 class Symmetry {
 public:
-    static constexpr int kNumSymmetris  = 8;
+    static constexpr int kNumSymmetris = 8;
 
     static constexpr int kIdentitySymmetry = 0;
 

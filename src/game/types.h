@@ -19,7 +19,7 @@ static constexpr int kNullVertex = 0;
 static constexpr int kPass = kNumVertices + 1;
 static constexpr int kResign = kNumVertices + 2;
 
-static constexpr int kMaxGTPBoardSize = 37;
+static constexpr int kMaxGTPBoardSize = 25;
 static constexpr int kMinGTPBoardSize = 2;
 
 static_assert(kDefaultBoardSize <= kBoardSize, "");

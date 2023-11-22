@@ -77,6 +77,7 @@ public:
             // needed.
             if (++spins % 512 == 0) {
                 std::this_thread::yield();
+                spins = 0;
             } else {
                 SpinLoopPause();
             }

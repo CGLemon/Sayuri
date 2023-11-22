@@ -29,7 +29,6 @@ private:
 
     bool default_{false};
 
-
     void Adjust();
 
     std::string GetCurrentVal() const;
@@ -159,7 +158,7 @@ private:
         HandleInvalid();
         Adjust();
 
-        (T)(*this);
+        (void) ((T)(*this));
     }
 
     void HandleInvalid() const;

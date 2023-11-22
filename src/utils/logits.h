@@ -14,7 +14,7 @@ template<
                    std::is_floating_point<T>::value
                >
 >
-std::vector<T> Softmax(std::vector<T> &logits, float temp) {
+std::vector<T> Softmax(std::vector<T> &logits, double temp) {
     auto output = std::vector<T>{};
     output.reserve(logits.size());
 

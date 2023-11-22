@@ -31,7 +31,7 @@ typedef std::uint32_t single_float_t;
 
 template<std::float_round_style R>
 single_float_t Rounded(single_float_t value,
-                           unsigned int g, unsigned int s) {
+                       unsigned int g, unsigned int s) {
     // The 'g' is ground bit.
     // The 's' is sticky bit.
     return (R==std::round_to_nearest) ? (value+(g&(s|value))) :
@@ -111,4 +111,3 @@ inline float GetFp32(half_float_t fp16) {
     HalfToFloat(fp32, fp16);
     return fp32;
 }
-

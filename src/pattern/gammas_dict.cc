@@ -1,6 +1,5 @@
 #include "pattern/pattern.h"
 #include "pattern/gammas_dict.h"
-#include "pattern/pattern_gammas.h"
 #include "game/types.h"
 
 #include <fstream>
@@ -16,16 +15,18 @@ void GammasDict::Initialize(std::string filename) {
     std::stringstream iss;
     std::string line;
 
-    if (!filename.empty()) {
-        auto file = std::ifstream{};
-        file.open(filename.c_str());
+    if (filename.empty()) {
+        return;
+    }
 
-        if (file.is_open()) {
-            iss << file.rdbuf();
-            file.close();
-        }
+    auto file = std::ifstream{};
+    file.open(filename.c_str());
+
+    if (file.is_open()) {
+        iss << file.rdbuf();
+        file.close();
     } else {
-        iss << '\n' << kPatternGammas;
+        return;
     }
 
     while (std::getline(iss, line)) {

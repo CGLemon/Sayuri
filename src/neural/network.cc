@@ -214,7 +214,7 @@ Network::GetOutputInternal(const GameState &state, const int symmetry) {
 
 bool Network::ProbeCache(const GameState &state,
                          Network::Result &result) {
-    if (LookupCache(nn_cache_, state.GetHash(), result)) {
+    if (nn_cache_.LookupItem(state.GetHash(), result)) {
         if (result.board_size == state.GetBoardSize()) {
             return true;
         }
@@ -222,7 +222,7 @@ bool Network::ProbeCache(const GameState &state,
 
     if (state.GetBoardSize() >= state.GetMoveNumber() && early_symm_cache_) {
         for (int symm = Symmetry::kIdentitySymmetry+1; symm < Symmetry::kNumSymmetris; ++symm) {
-            if (LookupCache(nn_cache_, state.ComputeSymmetryHash(symm), result)) {
+            if (nn_cache_.LookupItem(state.ComputeSymmetryHash(symm), result)) {
                 if (result.board_size != state.GetBoardSize()) {
                     break;
                 }

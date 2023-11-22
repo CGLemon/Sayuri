@@ -26,7 +26,6 @@ bool Collision(std::vector<T> &array) {
     return ite != std::end(array);
 }
 
-
 void Zobrist::Initialize() {
     Random<kXoroShiro128Plus> rng(kInitSeed);
 

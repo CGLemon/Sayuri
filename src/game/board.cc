@@ -139,7 +139,7 @@ std::string Board::GetColumnsString(const int bsize) const {
 
 std::string Board::GetHashingString() const {
     auto out = std::ostringstream{};
-    out << std::hex
+    out << std::hex << std::uppercase
             << "Hash: " << GetHash() << " | "
             << "Ko Hash: " << GetKoHash()
             << std::dec // cancel hex
@@ -351,7 +351,6 @@ int Board::ComputeReachColor(int color, int spread_color,
     }
     return reachable;
 }
-
 
 std::uint64_t Board::ComputeHash(int komove) const {
     return ComputeHash(komove, [](const auto vertex) { return vertex; });

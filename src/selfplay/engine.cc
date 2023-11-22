@@ -94,20 +94,20 @@ void Engine::ParseQueries() {
             // "bkp:19:7.5:0.2"
 
             // Assume the query is valid.
-            BoardQuery q {
-                .board_size = std::stoi(tokens[1]),
-                .komi       = std::stof(tokens[2]),
-                .prob       = std::stof(tokens[3])};
+            BoardQuery q;
+            q.board_size = std::stoi(tokens[1]);
+            q.komi       = std::stof(tokens[2]);
+            q.prob       = std::stof(tokens[3]);
             board_queries_.emplace_back(q);
             bq_acc_prob += q.prob;
         } else if (tokens[0] == "bhp" && tokens.size() == 4) {
             // boardsize-handicaps-probabilities
             // "bhp:9:2:0.1"
 
-            HandicapQuery q {
-                .board_size    = std::stoi(tokens[1]),
-                .handicaps     = std::stoi(tokens[2]),
-                .probabilities = std::stof(tokens[3])};
+            HandicapQuery q;
+            q.board_size    = std::stoi(tokens[1]);
+            q.handicaps     = std::stoi(tokens[2]);
+            q.probabilities = std::stof(tokens[3]);
             if (q.handicaps >= 2) {
                 handicap_queries_.emplace_back(q);
             }
@@ -116,10 +116,10 @@ void Engine::ParseQueries() {
 
     int max_bsize = -1;
     if (board_queries_.empty()) {
-        BoardQuery q {
-            .board_size = GetOption<int>("defualt_boardsize"),
-            .komi = GetOption<float>("defualt_komi"),
-            .prob = 1.f };
+        BoardQuery q;
+        q.board_size = GetOption<int>("defualt_boardsize");
+        q.komi       = GetOption<float>("defualt_komi");
+        q.prob       = 1.f;
         board_queries_.emplace_back(q);
         max_bsize = q.board_size;
     } else {

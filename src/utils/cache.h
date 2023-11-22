@@ -2,6 +2,7 @@
 
 #include "utils/mutex.h"
 
+#include <cstdint>
 #include <memory>
 #include <algorithm>
 #include <vector>
@@ -21,6 +22,7 @@ public:
 
     HashKeyCache(HashKeyCache&& cache) {
         SetCapacity(cache.capacity_);
+        Clear();
         generation_ = cache.generation_;
     }
 
@@ -33,7 +35,7 @@ public:
     // Lookup the item.
     bool LookupItem(std::uint64_t key, V& val);
 
-    // Clear the hash.
+    // Clear the hash table.
     void Clear();
 
     size_t GetEntrySize() const;
@@ -43,7 +45,7 @@ private:
         Entry() : generation{0} {}
         std::uint64_t key;
         std::uint64_t generation;
-        std::unique_ptr<V> value;
+        std::unique_ptr<V> pointer;
     };
 
     SpinLock mutex_;
@@ -95,7 +97,7 @@ void HashKeyCache<V>::Insert(std::uint64_t key, const V& value) {
     Entry *new_entry = entry + min_i;
     new_entry->key = key;
     new_entry->generation = generation_;
-    new_entry->value = std::make_unique<V>(value);
+    new_entry->pointer = std::make_unique<V>(value);
 }
 
 template<typename V>
@@ -108,7 +110,7 @@ bool HashKeyCache<V>::LookupItem(std::uint64_t key, V& val) {
     for (size_t offset = 0; offset < kClusterSize; ++offset) {
         Entry *e = entry + offset;
         if (e->key == key && e->generation != 0) {
-            val = *(e->value.get());
+            val = *(e->pointer.get());
             return true;
         }
     }
@@ -122,9 +124,9 @@ void HashKeyCache<V>::Clear() {
 
     generation_ = 0;
     std::for_each(std::begin(table_), std::end(table_),
-                     [](auto &e){
+                     [](auto &e) {
                          e.generation = 0;
-                         e.value.reset(nullptr);
+                         e.pointer.reset(nullptr);
                      }
                  );
 }
@@ -132,11 +134,4 @@ void HashKeyCache<V>::Clear() {
 template<typename V>
 size_t HashKeyCache<V>::GetEntrySize() const {
     return kEntrySize;
-}
-
-template<typename V>
-bool LookupCache(HashKeyCache<V> &cache, std::uint64_t key, V& val) {
-    // Interface for NN cache. Remain it for supporting the
-    // old code.
-    return cache.LookupItem(key, val);
 }
