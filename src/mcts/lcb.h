@@ -9,8 +9,8 @@
 static double RationalApprox(double t) {
     // Abramowitz and Stegun formula 26.2.23.
     // The absolute value of the error should be less than 4.5 e-4.
-    constexpr double c[3] = {2.515517f, 0.802853f, 0.010328f};
-    constexpr double d[3] = {1.432788f, 0.189269f, 0.001308f};
+    constexpr double c[3] = {2.515517, 0.802853, 0.010328};
+    constexpr double d[3] = {1.432788, 0.189269, 0.001308};
     return t - ((c[2]*t + c[1])*t + c[0]) /
                    (((d[2]*t + d[1])*t + d[0])*t + 1.0);
 }
@@ -41,7 +41,7 @@ static double NormToTApprox(double z, double degrees_of_freedom) {
         n-=1;
         return std::sqrt(n * std::exp(z * z * (n-1.5) / ((n-1) * (n-1))) - n);
     }
-    return std::sqrt(n * std::exp(z * z * (n-0.853999327911f) / ((n-1.044042304114f) * (n-0.954115472059f))) - n);
+    return std::sqrt(n * std::exp(z * z * (n-0.853999327911) / ((n-1.044042304114) * (n-0.954115472059))) - n);
 }
 
 class LcbEntries {
@@ -66,7 +66,7 @@ inline LcbEntries& LcbEntries::Get() {
 }
 
 inline void LcbEntries::Initialize(float complement_probability) {
-    const double z = NormalCdfInverse(1.f - complement_probability);
+    const double z = NormalCdfInverse(1.0 - complement_probability);
 
     for (int i = 0; i < kEntrySize; ++i) {
         z_lookup_table_[i] = NormToTApprox(z, i);
