@@ -14,6 +14,7 @@ public:
     void Reset() {
         timemanage = GetOption<std::string>("timemanage");
 
+        tt_memory_mib = GetOption<int>("tt_memory_mib");
         threads = GetOption<int>("threads");
         batch_size = GetOption<int>("batch_size");
         playouts = GetOption<int>("playouts");
@@ -60,6 +61,7 @@ public:
         kldgain = std::stod(GetOption<std::string>("kldgain")); // not used
 
         lag_buffer = GetOption<float>("lag_buffer");
+        no_tt = GetOption<bool>("no_tt");
         ponder = GetOption<bool>("ponder");
         reuse_tree = GetOption<bool>("reuse_tree");
         friendly_pass = GetOption<bool>("friendly_pass");
@@ -76,6 +78,7 @@ public:
 
     std::string timemanage;
 
+    int tt_memory_mib;
     int threads;
     int batch_size;
     int playouts;
@@ -124,6 +127,7 @@ public:
 
     double kldgain;
 
+    bool no_tt;
     bool ponder;
     bool reuse_tree;
     bool friendly_pass;

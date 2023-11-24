@@ -47,6 +47,9 @@ void Search::Initialize() {
 
     max_playouts_ = param_->playouts;
     playouts_.store(0, std::memory_order_relaxed);
+
+    tt_ = std::make_unique<Transposition>(0);
+    SetTranspositionSize(param_->tt_memory_mib);
 }
 
 void Search::PlaySimulation(GameState &currstate, Node *const node,
@@ -94,7 +97,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
         Node *next = nullptr;
 
         // Go to the next node by PUCT algoritim.
-        next = node->PuctSelectChild(color, depth == 0);
+        next = node->PuctSelectChild(color, depth == 0, tt_.get());
 
         auto vtx = next->GetVertex();
         currstate.PlayMove(vtx, color);
@@ -105,7 +108,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
 
     // Now Update this node if it valid.
     if (search_result.IsValid()) {
-        node->Update(search_result.GetEvals());
+        node->Update(search_result.GetEvals(), tt_.get());
     }
     node->DecrementThreads();
 }
@@ -129,7 +132,7 @@ void Search::PrepareRootNode(Search::OptionTag tag) {
                              network_, root_state_, root_evals_, analysis_config_);
 
     if (!reused && success) {
-        root_node_->Update(&root_evals_);
+        root_node_->Update(&root_evals_, tt_.get());
     }
 
     // Compute the current root visits distribution. We can compute
@@ -310,6 +313,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         LOGGING << Format("Use %d threads for search\n", param_->threads);
         LOGGING << Format("Max thinking time: %.2f(sec)\n", thinking_time);
         LOGGING << Format("Max playouts number: %d\n", playouts);
+        LOGGING << Format("Transposition table size: %zu\n", tt_->GetCapacity());
     }
 
     if (thinking_time < timer.GetDuration() || AchieveCap(playouts, tag)) {
@@ -1392,6 +1396,26 @@ int Search::GetPonderPlayouts() const {
 std::string Search::GetDebugMoves(std::vector<int> moves) {
     return root_node_->GetPathVerboseString(
                root_state_, root_state_.GetToMove(), moves);
+}
+
+void Search::SetTranspositionSize(size_t MiB) {
+    const size_t mem_mib = std::min(
+                               std::max(size_t{1}, MiB), // min: 1 MB
+                               size_t{1 * 1024}          // max: 1 GB
+                           );
+
+    const size_t entry_bytes = tt_->GetEntrySize();
+    const size_t mem_bytes = mem_mib * 1024 * 1024;
+    size_t num_entries = mem_bytes / entry_bytes +
+                             bool(mem_bytes % entry_bytes);
+    if (param_->no_tt) {
+        num_entries = 0;
+    }
+    tt_->SetCapacity(num_entries);
+}
+
+void Search::ClearTranspositionTable() {
+    tt_->Clear();
 }
 
 std::vector<double> Search::GetRootDistribution(int &parentvisits) {

@@ -4,6 +4,7 @@
 #include "game/types.h"
 #include "mcts/node_pointer.h"
 #include "mcts/parameters.h"
+#include "mcts/transposition.h"
 #include "neural/network.h"
 
 #include <array>
@@ -108,7 +109,7 @@ public:
     Node *ProbSelectChild(bool allow_pass);
 
     // Select the best PUCT value node.
-    Node *PuctSelectChild(const int color, const bool is_root);
+    Node *PuctSelectChild(const int color, const bool is_root, Transposition *tt);
 
     // Randomly select one child by visits.
     int RandomMoveProportionally(float temp, int min_visits);
@@ -117,7 +118,7 @@ public:
     int RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits);
 
     // Update the node.
-    void Update(const NodeEvals *evals);
+    void Update(const NodeEvals *evals, Transposition *tt);
 
     // Get children's LCB values.
     std::vector<std::pair<float, int>> GetLcbUtilityList(const int color);
@@ -194,6 +195,8 @@ public:
     void Invalidate();
     bool IsActive() const;
     bool IsValid() const;
+
+    std::uint64_t GetHash() const;
 
     float GetKlDivergence();
     float GetTreeComplexity();
@@ -273,6 +276,8 @@ private:
 
     // Color of the node. Set kInvalid if there are no children.
     int color_{kInvalid};
+
+    std::uint64_t hash_{0ULL};
 
     Parameters *param_{nullptr};
 

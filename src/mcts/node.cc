@@ -130,6 +130,7 @@ bool Node::ExpandChildren(Network &network,
     }
 
     color_ = state.GetToMove();
+    hash_ = state.GetHash();
 
     // Get network computation result.
 
@@ -197,7 +198,7 @@ bool Node::ExpandChildren(Network &network,
                 // move hash in the opening stage. The capture move is
                 // unusual in the opening stage.
                 moves_hash.emplace_back(
-                    state.GetHash() ^ state.GetMoveHash(vtx, color_));
+                    hash_ ^ state.GetMoveHash(vtx, color_));
             } else {
                 // The pruned node is a legal move. We need accumulate
                 // the all legal moves policy.
@@ -422,7 +423,7 @@ float Node::GetDynamicCpuctFactor(Node *node, const int visits, const int parent
     return k;
 }
 
-Node *Node::PuctSelectChild(const int color, const bool is_root) {
+Node *Node::PuctSelectChild(const int color, const bool is_root, Transposition *tt) {
     WaitExpanded();
     assert(HasChildren());
     // assert(color == color_);
@@ -506,6 +507,8 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
                 const float eval = node->GetWL(color);
                 const float draw_value = node->GetDraw() * draw_factor;
                 q_value = eval + draw_value;
+
+                tt->Mix(node->GetHash(), q_value, visits, color);
 
                 // Heuristic value for score lead.
                 utility += score_utility_factor *
@@ -638,7 +641,7 @@ int Node::RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits) {
     return select_vertex;
 }
 
-void Node::Update(const NodeEvals *evals) {
+void Node::Update(const NodeEvals *evals, Transposition *tt) {
     auto WelfordDelta = [](double eval,
                            double old_acc_eval,
                            int old_visits) {
@@ -682,6 +685,8 @@ void Node::Update(const NodeEvals *evals) {
             avg_black_ownership_[idx] += diff_owner;
         }
     }
+    const auto tt_q = (old_acc_eval + eval)/(old_visits + 1);
+    tt->Update(hash_, tt_q, old_visits + 1);
 }
 
 void Node::ApplyEvals(const NodeEvals *evals) {
@@ -1167,6 +1172,10 @@ float Node::GetWL(const int color, const bool use_virtual_loss) const {
         return eval;
     }
     return 1.0f - eval;
+}
+
+std::uint64_t Node::GetHash() const {
+    return hash_;
 }
 
 void Node::InflateAllChildren() {

@@ -3,6 +3,7 @@
 #include "mcts/time_control.h"
 #include "mcts/parameters.h"
 #include "mcts/node.h"
+#include "mcts/transposition.h"
 #include "game/game_state.h"
 #include "neural/training.h"
 #include "utils/threadpool.h"
@@ -161,6 +162,10 @@ public:
     // Release the whole trees.
     void ReleaseTree();
 
+    void SetTranspositionSize(size_t MiB);
+
+    void ClearTranspositionTable();
+
     std::string GetDebugMoves(std::vector<int> moves);
 
 private:
@@ -228,6 +233,8 @@ private:
 
     // The tree search threads.
     std::unique_ptr<ThreadGroup<void>> group_;
+
+    std::unique_ptr<Transposition> tt_;
 
     std::vector<double> last_root_dist_;
 

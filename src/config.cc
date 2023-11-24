@@ -34,6 +34,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["defualt_boardsize"] << Option::SetOption(kDefaultBoardSize);
     kOptionsMap["defualt_komi"] << Option::SetOption(kDefaultKomi);
 
+    kOptionsMap["tt_memory_mib"] << Option::SetOption(10);
     kOptionsMap["cache_memory_mib"] << Option::SetOption(400);
     kOptionsMap["playouts"] << Option::SetOption(-1);
     kOptionsMap["ponder_factor"] << Option::SetOption(100);
@@ -73,6 +74,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["root_policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["lag_buffer"] << Option::SetOption(0.f);
+    kOptionsMap["no_tt"] << Option::SetOption(false);
     kOptionsMap["no_cache"] << Option::SetOption(false);
     kOptionsMap["early_symm_cache"] << Option::SetOption(false);
     kOptionsMap["symm_pruning"] << Option::SetOption(false);
@@ -363,6 +365,11 @@ void ArgsParser::Parse(Splitter &spt) {
         spt.RemoveWord(res->Index());
     }
 
+    if (const auto res = spt.Find("--no-tt")) {
+        SetOption("no_tt", true);
+        spt.RemoveWord(res->Index());
+    }
+
     if (const auto res = spt.Find("--no-cache")) {
         SetOption("no_cache", true);
         spt.RemoveWord(res->Index());
@@ -546,6 +553,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext({"--batch-size", "-b"})) {
         if (IsParameter(res->Get<>())) {
             SetOption("batch_size", res->Get<int>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--tt-memory-mib")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("tt_memory_mib", res->Get<int>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
