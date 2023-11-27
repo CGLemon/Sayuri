@@ -101,6 +101,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         }
     } else if (const auto res = spt.Find("clear_board", 0)){
         agent_->GetSearch().ReleaseTree();
+        agent_->GetSearch().ClearTranspositionTable();
         agent_->GetNetwork().ClearCache();
         agent_->GetState().ClearBoard();
         out << GtpSuccess("");
@@ -258,6 +259,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         out << GtpSuccess(std::to_string(agent_->GetState().GetBoardSize()));
     } else if (const auto res = spt.Find("clear_cache", 0)) {
         agent_->GetSearch().ReleaseTree();
+        agent_->GetSearch().ClearTranspositionTable();
         agent_->GetNetwork().ClearCache();
         out << GtpSuccess("");
     } else if (const auto res = spt.Find("final_score", 0)) {
@@ -331,6 +333,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         agent_->GetSearch().ClearTrainingBuffer();
         out << GtpSuccess("");
     }else if (const auto res = spt.Find("kgs-game_over", 0)) {
+        agent_->GetSearch().ClearTranspositionTable();
         agent_->GetNetwork().ClearCache();
         out << GtpSuccess("");
     } else if (const auto res = spt.Find("kgs-chat", 0)) {
@@ -688,6 +691,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         if (playouts > 0) {
             // clean current state
             agent_->GetSearch().ReleaseTree();
+            agent_->GetSearch().ClearTranspositionTable();
             agent_->GetNetwork().ClearCache();
             agent_->GetSearch().Computation(playouts, Search::kNullTag);
             out << GtpSuccess("done");
