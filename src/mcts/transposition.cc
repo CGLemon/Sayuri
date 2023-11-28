@@ -15,7 +15,7 @@ void Transposition::SetCapacity(size_t size) {
     table_.resize(capacity_);
 }
 
-float Transposition::Mix(std::uint64_t hash, float q, int visits, int color) {
+float Transposition::Lookup(std::uint64_t hash, float q, int visits, int color) {
     if (capacity_ == 0) {
         return q;
     }
@@ -29,10 +29,10 @@ float Transposition::Mix(std::uint64_t hash, float q, int visits, int color) {
         e.q = 1.f - e.q;
     }
 
-    double update_q = e.q;
-    double update_visits = e.visits;
-    double mix_q = q + update_visits *
-        (update_q - q) / (visits + update_visits);
+    double lookup_q = e.q;
+    double lookup_visits = e.visits;
+    double mix_q = q + lookup_visits *
+        (lookup_q - q) / (visits + lookup_visits);
 
     return mix_q;
 }
@@ -52,6 +52,7 @@ void Transposition::Update(std::uint64_t hash, float q, int visits) {
     e->hash = hash;
     e->q = q;
     e->visits = visits;
+    return;
 }
 
 void Transposition::Clear() {

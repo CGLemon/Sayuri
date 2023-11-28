@@ -508,7 +508,9 @@ Node *Node::PuctSelectChild(const int color, const bool is_root, Transposition *
                 const float draw_value = node->GetDraw() * draw_factor;
                 q_value = eval + draw_value;
 
-                tt->Mix(node->GetHash(), q_value, visits, color);
+                // Get the Q information from transposition table if the child
+                // existes in the tree. 
+                q_value = tt->Lookup(node->GetHash(), q_value, visits, color);
 
                 // Heuristic value for score lead.
                 utility += score_utility_factor *
@@ -685,6 +687,8 @@ void Node::Update(const NodeEvals *evals, Transposition *tt) {
             avg_black_ownership_[idx] += diff_owner;
         }
     }
+
+    // Synchronize the tree status.
     const auto tt_q = (old_acc_eval + eval)/(old_visits + 1);
     tt->Update(hash_, tt_q, old_visits + 1);
 }

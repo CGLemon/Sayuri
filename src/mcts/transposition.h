@@ -13,7 +13,7 @@ public:
 
     void SetCapacity(size_t size);
 
-    float Mix(std::uint64_t hash, float q, int visits, int color);
+    float Lookup(std::uint64_t hash, float q, int visits, int color);
 
     void Update(std::uint64_t hash, float q, int visits);
 
