@@ -560,4 +560,8 @@ class TrainingPipe():
             # store the last network
             self._save_current_status(num_steps)
         self.flag.set_stop_flag()
+        try:
+            planes, target = self._gather_data_from_loader(True)
+        except StopIteration:
+            pass
         print("Training is over.")

@@ -190,6 +190,7 @@ def LazyLoader(*args, **kwargs):
         print("Config is invalid. Please check your setting.")
         return None
 
+    proc_list = list()
     data_readers = list()
     batch_reader, batch_writer = mp.Pipe(duplex=False)
 
@@ -199,18 +200,21 @@ def LazyLoader(*args, **kwargs):
         data_readers.append(data_reader)
 
         # Create one SMP process.
-        mp.Process(
-            target=_load_from_files,
-            args=(config, data_writer),
-            daemon=True
-        ).start()
+        p = mp.Process(
+                target=_load_from_files,
+                args=(config, data_writer),
+                daemon=True
+            )
+        p.start()
+        proc_list.append(p)
         data_writer.close()
 
-    threading.Thread(
-        target=_gather_batch,
-        args=(config, data_readers, batch_writer),
-        daemon=True
-    ).start()
+    t = threading.Thread(
+            target=_gather_batch,
+            args=(config, data_readers, batch_writer),
+            daemon=True
+        )
+    t.start()
 
     # Do not close it because the thread and main thread share the same
     # writer.
@@ -218,10 +222,18 @@ def LazyLoader(*args, **kwargs):
 
     while True:
         if config.flag.is_stop():
+            for idx, p in enumerate(proc_list):
+                while p.is_alive():
+                    try:
+                        _ = data_readers[idx].recv()
+                        continue
+                    except:
+                        pass
+            t.join()
             batch_reader.close()
-            break
+            return
         try:
             batch = batch_reader.recv()
             yield batch
-        except GeneratorExit:
-            pass
+        except:
+            return
