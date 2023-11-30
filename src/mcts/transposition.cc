@@ -1,6 +1,7 @@
 #include "mcts/transposition.h"
 
 #include <algorithm>
+#include <cmath>
 
 Transposition::Transposition() {
     SetCapacity(0);
@@ -37,22 +38,25 @@ float Transposition::Lookup(std::uint64_t hash, float q, int visits, int color) 
     return mix_q;
 }
 
-void Transposition::Update(std::uint64_t hash, float q, int visits) {
+float Transposition::Update(std::uint64_t hash, float eval, float q, int visits) {
     if (capacity_ == 0) {
-        return;
+        return eval;
     }
 
     Entry * e = GetEntry(hash);
     if (visits < kMinVisits) {
-        return;
+        return eval;
     }
     if (e->hash == hash && e->visits > visits) {
-        return;
+        double diff = std::sqrt((double)(e->visits) - visits);
+        double update_q = e->q;
+        double mix_eval = ((double)eval * visits + update_q * diff)/(visits + diff);
+        return mix_eval;
     }
     e->hash = hash;
     e->q = q;
     e->visits = visits;
-    return;
+    return eval;
 }
 
 void Transposition::Clear() {

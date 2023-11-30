@@ -15,7 +15,7 @@ public:
 
     float Lookup(std::uint64_t hash, float q, int visits, int color);
 
-    void Update(std::uint64_t hash, float q, int visits);
+    float Update(std::uint64_t hash, float eval, float q, int visits);
 
     void Clear();
 

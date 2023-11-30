@@ -655,14 +655,18 @@ void Node::Update(const NodeEvals *evals, Transposition *tt) {
     };
 
     // type casting
-    const double eval = evals->black_wl;
+    double eval = evals->black_wl;
     const double draw = evals->draw;
     const double score = evals->black_final_score;
 
     const double old_acc_eval = accumulated_black_wl_.load(std::memory_order_relaxed);
     const double old_acc_score = accumulated_black_fs_.load(std::memory_order_relaxed);
-
     const int old_visits = visits_.load(std::memory_order_relaxed);
+
+    // Synchronize the tree status.
+    const auto tt_q = (old_acc_eval + eval)/(old_visits + 1);
+    eval = tt->Update(hash_, eval, tt_q, old_visits + 1);
+
 
     // TODO: According to Kata Go, It is not necessary to use
     //       Welford's online algorithm. The accuracy of simplify
@@ -687,10 +691,6 @@ void Node::Update(const NodeEvals *evals, Transposition *tt) {
             avg_black_ownership_[idx] += diff_owner;
         }
     }
-
-    // Synchronize the tree status.
-    const auto tt_q = (old_acc_eval + eval)/(old_visits + 1);
-    tt->Update(hash_, tt_q, old_visits + 1);
 }
 
 void Node::ApplyEvals(const NodeEvals *evals) {
