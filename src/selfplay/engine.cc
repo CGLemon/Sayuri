@@ -18,6 +18,7 @@ void Engine::Initialize() {
     handicap_fair_komi_prob_ = GetOption<float>("handicap_fair_komi_prob");
     random_opening_prob_ = GetOption<float>("random_opening_prob");
     random_moves_factor_ = GetOption<float>("random_moves_factor");
+    random_opening_temp_ = GetOption<float>("random_opening_temp");
     parallel_games_ = GetOption<int>("parallel_games");
     last_net_accm_queries_ = 0;
 
@@ -196,7 +197,7 @@ void Engine::SetHandicapGame(int g, int handicaps) {
 
     for (int i = 0; i < handicaps-1; ++i) {
         state.SetToMove(kBlack);
-        int random_move = network_->GetVertexWithPolicy(state, 0.75f, false);
+        int random_move = network_->GetVertexWithPolicy(state, 0.8f, false);
         state.AppendMove(random_move, kBlack);
     }
     state.SetHandicap(handicaps);
@@ -225,14 +226,14 @@ void Engine::SetRandomOpeningGame(int g) {
         );
 
     const float lambda = 0.69314718056f/board_size;
-    const float init_temp = 0.8f;
+    const float init_temp = random_opening_temp_;
     int times = 0;
     for (int i = 0; i < remainig_random_moves; ++i) {
         if (state.GetPasses() >= 2) {
             break;
         }
         float curr_temp = std::max(
-            init_temp * std::exp(-(lambda * times)), 0.2f);
+            init_temp * std::exp(-(lambda * times)), 0.8f);
 
         int random_move = network_->GetVertexWithPolicy(state, curr_temp, false);
         state.PlayMove(random_move);

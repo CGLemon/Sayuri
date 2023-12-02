@@ -85,6 +85,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["random_min_visits"] << Option::SetOption(1);
     kOptionsMap["random_moves_factor"] << Option::SetOption(0.f);
     kOptionsMap["random_opening_prob"] << Option::SetOption(0.f, 1.f, 0.f);
+    kOptionsMap["random_opening_temp"] << Option::SetOption(1.f, 100.f, 0.f);
 
     kOptionsMap["gumbel_c_visit"] << Option::SetOption(50.f);
     kOptionsMap["gumbel_c_scale"] << Option::SetOption(1.f);
@@ -518,6 +519,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--random-opening-prob")) {
         if (IsParameter(res->Get<>())) {
             SetOption("random_opening_prob", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--random-opening-temp")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("random_opening_temp", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
