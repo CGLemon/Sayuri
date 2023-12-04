@@ -229,8 +229,10 @@ def LazyLoader(*args, **kwargs):
                         continue
                     except:
                         pass
-            t.join()
+                data_readers[idx].close()
             batch_reader.close()
+            batch_writer.close()
+            t.join()
             return
         try:
             batch = batch_reader.recv()
