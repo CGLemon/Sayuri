@@ -54,7 +54,6 @@ void BlasForwardPipe::Load(std::shared_ptr<DNNWeights> weights) {
 OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
 
     using Convolution3 = Convolution<3>;
-    using Convolution1 = Convolution<1>;
 
     // Some useful information for network.
     const auto board_size = inpnts.board_size;

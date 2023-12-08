@@ -14,6 +14,7 @@
 #include <sstream>
 #include <iomanip>
 #include <stack>
+#include <numeric>
 
 #define VIRTUAL_LOSS_COUNT (3)
 

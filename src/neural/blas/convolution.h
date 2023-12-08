@@ -5,6 +5,19 @@
 #include <cstddef>
 #include "neural/blas/blas.h"
 
+class Convolution1 {
+public:
+    Convolution1() = delete;
+    static void Forward(const size_t board_size,
+                        const size_t input_channels,
+                        const size_t output_channels,
+                        const std::vector<float> &input,
+                        const std::vector<float> &weights,
+                        std::vector<float> &col,
+                        std::vector<float> &output);
+};
+
+
 template<unsigned int FILTERS>
 class Convolution {
 public:
