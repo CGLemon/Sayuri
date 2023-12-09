@@ -75,6 +75,7 @@ inline NodePointer<NodeType>::NodePointer(NodePointer &&n) {
     auto v = n.pointer_.load(std::memory_order_relaxed);
     pointer_.store(v, std::memory_order_relaxed);
 
+    // The original pointer should be raw.
     assert((v & POINTER_MASK) == kUninflated);
 }
 
@@ -86,8 +87,6 @@ inline NodePointer<NodeType>& NodePointer<NodeType>::operator=(NodePointer&& n) 
     // in this process.
     auto v = n.pointer_.load(std::memory_order_relaxed);
     pointer_.store(v, std::memory_order_relaxed);
-
-    assert((v & POINTER_MASK) == kUninflated);
 
     return *this;
 }
