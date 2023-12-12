@@ -714,8 +714,7 @@ void winograd3_transform_out(T *out, const T *M, const T *biases,
 template<>
 void gemm<float>(bool TA, bool TB, int M, int N, int K, float ALPHA,
                  const float *A_gpu, int lda, const float *B_gpu, int ldb,
-                 float BETA, float *C_gpu, int ldc, cublasHandle_t handle, cudaStream_t stream) {
-    ReportCUBLASErrors(cublasSetStream(handle, stream));
+                 float BETA, float *C_gpu, int ldc, cublasHandle_t handle) {
     ReportCUBLASErrors(cublasSgemm(
                            handle,
                            (TB ? CUBLAS_OP_T : CUBLAS_OP_N),
@@ -731,8 +730,7 @@ void gemm<float>(bool TA, bool TB, int M, int N, int K, float ALPHA,
 template<>
 void gemm_strided_batched<float>(bool TA, bool TB, int M, int N, int K, float ALPHA,
                                  const float *A_gpu, int lda, int strideA, const float *B_gpu, int ldb, int strideB,
-                                 float BETA, float *C_gpu, int ldc, int strideC, int batchsize, cublasHandle_t handle, cudaStream_t stream) {
-    ReportCUBLASErrors(cublasSetStream(handle, stream));
+                                 float BETA, float *C_gpu, int ldc, int strideC, int batchsize, cublasHandle_t handle) {
     ReportCUBLASErrors(cublasSgemmStridedBatched(
                            handle,
                            (TB ? CUBLAS_OP_T : CUBLAS_OP_N),
@@ -750,8 +748,7 @@ void gemm_strided_batched<float>(bool TA, bool TB, int M, int N, int K, float AL
 template<>
 void gemm<half>(bool TA, bool TB, int M, int N, int K, half ALPHA,
                 const half *A_gpu, int lda, const half *B_gpu, int ldb,
-                half BETA, half *C_gpu, int ldc, cublasHandle_t handle, cudaStream_t stream) {
-    ReportCUBLASErrors(cublasSetStream(handle, stream));
+                half BETA, half *C_gpu, int ldc, cublasHandle_t handle) {
     ReportCUBLASErrors(cublasHgemm(
                            handle,
                            (TB ? CUBLAS_OP_T : CUBLAS_OP_N),
@@ -767,8 +764,7 @@ void gemm<half>(bool TA, bool TB, int M, int N, int K, half ALPHA,
 template<>
 void gemm_strided_batched<half>(bool TA, bool TB, int M, int N, int K, half ALPHA,
                                 const half *A_gpu, int lda, int strideA, const half *B_gpu, int ldb, int strideB,
-                                half BETA, half *C_gpu, int ldc, int strideC, int batchsize, cublasHandle_t handle, cudaStream_t stream) {
-    ReportCUBLASErrors(cublasSetStream(handle, stream));
+                                half BETA, half *C_gpu, int ldc, int strideC, int batchsize, cublasHandle_t handle) {
     ReportCUBLASErrors(cublasHgemmStridedBatched(
                            handle,
                            (TB ? CUBLAS_OP_T : CUBLAS_OP_N),

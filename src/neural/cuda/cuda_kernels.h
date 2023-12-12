@@ -52,12 +52,12 @@ void winograd3_transform_out(T *out, const T *M, const T *biases,
 template <typename T>
 void gemm(bool TA, bool TB, int M, int N, int K, T ALPHA,
           const T *A_gpu, int lda, const T *B_gpu, int ldb,
-          T BETA, T *C_gpu, int ldc, cublasHandle_t handle, cudaStream_t stream);
+          T BETA, T *C_gpu, int ldc, cublasHandle_t handle);
 
 template <typename T>
 void gemm_strided_batched(bool TA, bool TB, int M, int N, int K, T ALPHA,
                           const T *A_gpu, int lda, int strideA, const T *B_gpu, int ldb, int strideB,
-                          T BETA, T *C_gpu, int ldc, int strideC, int batchsize, cublasHandle_t handle, cudaStream_t stream);
+                          T BETA, T *C_gpu, int ldc, int strideC, int batchsize, cublasHandle_t handle);
 
 } // namespace cuda
 

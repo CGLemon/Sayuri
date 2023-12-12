@@ -106,7 +106,7 @@ void CudaHandles::ApplyOnCurrentDevice() {
         fp16 = true;
     }
 #endif
-
+    ReportCUBLASErrors(cublasSetStream(cublas_handle, stream));
     gpu_id = GetDevice();
     initialized = true;
 }
