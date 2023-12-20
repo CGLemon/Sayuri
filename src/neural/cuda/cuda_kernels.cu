@@ -257,12 +257,7 @@ __global__ void global_pooling_kernel(T *output, T *input, const T *mask,
     float *sum_pool_shared = pool_shared;
     float *max_pool_shared = pool_shared + shared_size;
 
-    // clear the pool shared
-    sum_pool_shared[s] = 0.f;
-    max_pool_shared[s] = -5000.f; // crazy negative value
-
-    __syncthreads();
-
+    // assign the pool
     if (s < spatial && n < N) {
         float vmask = 1.0f;
         if (mask) {
@@ -273,9 +268,14 @@ __global__ void global_pooling_kernel(T *output, T *input, const T *mask,
 
         sum_pool_shared[s] = val;
         max_pool_shared[s] = (1.0f-vmask) * (-5000.0f) + val;
+    } else {
+        // out of the board
+        sum_pool_shared[s] = 0.f;
+        max_pool_shared[s] = -5000.f;
+    }
+    __syncthreads();
 
-        __syncthreads();
-
+    if (s < spatial && n < N) {
         for (int shift = shared_size >> 1; shift > 0; shift >>= 1) {
              if (s < shift) {
                  sum_pool_shared[s] += sum_pool_shared[s + shift];
@@ -336,17 +336,17 @@ __global__ void head_global_pooling_kernel(T *output, T *input,
     int n = nc_index / C;
     int c = nc_index % C;
 
-    // clear the pool shared
-    pool_shared[s] = 0.f;
-
+    // assign the pool
+    if (s < spatial && n < N) {
+        pool_shared[s] = (float)(input[
+                             (n * C + c) * spatial + s]);
+    } else {
+        // out of the board
+        pool_shared[s] = 0.f;
+    }
     __syncthreads();
 
     if (s < spatial && n < N) {
-        float val = (float)(input[
-                        (n * C + c) * spatial + s]);
-        pool_shared[s] = val;
-        __syncthreads();
-
         for (int shift = shared_size >> 1; shift > 0; shift >>= 1) {
              if (s < shift) {
                  pool_shared[s] += pool_shared[s + shift];
