@@ -27,4 +27,4 @@ The ```selfplay.sh``` will do the infinite loop. If you want to stop the loop, y
 
 ## Sample Configuration File
 
-The sample directory includes some enigne self-play Configuration files. The ```sample/full-gumbel-p16.txt``` will do full Gumbel learning with 16 playouts. The ```sample/full-alphazero-p400.txt``` will do full AlphaZero learning with 400 playouts. You may simply reuse the files for customization learning. And please see this [section](./CONFIG.md). It explain the Configuration and training parameters.
+The sample directory includes some enigne self-play Configuration files. The ```sample/full-gumbel-p16.txt``` will do full Gumbel learning with 16 playouts. The ```sample/full-alphazero-p400.txt``` will do full AlphaZero learning with 400 playouts. You may simply reuse the files for customization learning. And please see this [section](./CONFIG.md). It explains the configuration and training parameters.

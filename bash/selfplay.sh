@@ -8,7 +8,7 @@ LAST_STEPS_FILE="$WORKSPACE/last_steps.txt"
 SETTING_FILE="selfplay-setting.json"
 KILL_FILE="kill.txt"
 CONFIG_FILE="selfplay-config.txt"
-ENGINE_NAME="Sayuri"
+ENGINE_NAME="sayuri"
 
 safe_mkdir()
 {

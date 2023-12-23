@@ -53,3 +53,9 @@ Thanks for [shengkelong](https://github.com/shengkelong)'s experiment. The exper
 (August, 2023)
 
 Base on the experience of first run. I select some better hyper-parameters and improve the learning methods. Seems that the early phase of training is better than KataGo g65, g104 and and may achieve the g170 performance which is one of fastest self-play system for Go game. After a few months learning, the last 15bx192c is even beter than LZ150 (superhuman).
+
+### Windows Version
+
+(December, 2023)
+
+Finally  CUDA version of Sayuri can be executed on windows. Thanks for [cryptsport](https://github.com/cryptsport) and [hope366](https://github.com/hope366) donating their time to test the executable file.
