@@ -53,7 +53,7 @@ Compress the training data file. It can save memory usage during the self-play p
 
 ## Windows Version (Experiment)
 
-The Windwos version is still in progress. The performance of GPU version on Windows is slower than Linux. But it as least can well on the Windows 10/11.
+The Windwos version is still in progress. The performance of GPU version on Windows is slower than Linux. But it as least work well on the Windows 10/11.
 
 1. Download the Visual Studio (Only test the 2022 verion).
 2. Download the MinGW from [here](https://github.com/mstorsjo/llvm-mingw).
@@ -67,7 +67,7 @@ The Windwos version is still in progress. The performance of GPU version on Wind
 
 If you want to compile the CUDA-only version, you need to download the CUDA toolkit, such CUDA 12. Then use the NVCC compiler instead of GCC.
 
-        $ nvcc main.cc config.cc version.cc game/board.cc game/book.cc game/game_state.cc game/gtp.cc game/iterator.cc game/pattern_board.cc game/sgf.cc game/strings.cc game/symmetry.cc game/zobrist.cc mcts/node.cc mcts/search.cc mcts/time_control.cc neural/description.cc neural/encoder.cc neural/loader.cc neural/network.cc neural/training.cc neural/winograd_helper.cc neural/blas/batchnorm.cc neural/blas/biases.cc neural/blas/blas.cc neural/blas/blas_forward_pipe.cc neural/blas/convolution.cc neural/blas/fullyconnect.cc neural/blas/se_unit.cc neural/blas/sgemm.cc neural/blas/winograd_convolution3.cc neural/cuda/cuda_common.cc neural/cuda/cuda_forward_pipe.cc neural/cuda/cuda_layers.cc neural/cuda/cuda_kernels.cu pattern/gammas_dict.cc pattern/mm.cc pattern/mm_trainer.cc pattern/pattern.cc selfplay/engine.cc selfplay/pipe.cc summary/accuracy.cc summary/selfplay_accumulation.cc utils/filesystem.cc utils/gogui_helper.cc utils/gzip_helper.cc utils/komi.cc utils/log.cc utils/option.cc utils/parse_float.cc utils/random.cc utils/splitter.cc utils/time.cc -o sayuri  -I . -DNDEBUG -DWIN32 -DNOMINMAX -DUSE_CUDA -lcudart -lcublas -O3 -Xcompiler /O2 -Xcompiler /std:c++14
+    $ nvcc main.cc config.cc version.cc game/board.cc game/book.cc game/game_state.cc game/gtp.cc game/iterator.cc game/pattern_board.cc game/sgf.cc game/strings.cc game/symmetry.cc game/zobrist.cc mcts/node.cc mcts/search.cc mcts/time_control.cc neural/description.cc neural/encoder.cc neural/loader.cc neural/network.cc neural/training.cc neural/winograd_helper.cc neural/blas/batchnorm.cc neural/blas/biases.cc neural/blas/blas.cc neural/blas/blas_forward_pipe.cc neural/blas/convolution.cc neural/blas/fullyconnect.cc neural/blas/se_unit.cc neural/blas/sgemm.cc neural/blas/winograd_convolution3.cc neural/cuda/cuda_common.cc neural/cuda/cuda_forward_pipe.cc neural/cuda/cuda_layers.cc neural/cuda/cuda_kernels.cu pattern/gammas_dict.cc pattern/mm.cc pattern/mm_trainer.cc pattern/pattern.cc selfplay/engine.cc selfplay/pipe.cc summary/accuracy.cc summary/selfplay_accumulation.cc utils/filesystem.cc utils/gogui_helper.cc utils/gzip_helper.cc utils/komi.cc utils/log.cc utils/option.cc utils/parse_float.cc utils/random.cc utils/splitter.cc utils/time.cc -o sayuri  -I . -DNDEBUG -DWIN32 -DNOMINMAX -DUSE_CUDA -lcudart -lcublas -O3 -Xcompiler /O2 -Xcompiler /std:c++14
 
 
 
