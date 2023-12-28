@@ -32,7 +32,7 @@ do
     $ENGINE_PLAY_CMD
 
     # Train a new model.
-    TRAIN_CMD="python3 torch/parser.py -j $SETTING_FILE"
+    TRAIN_CMD="python3 torch/main.py -j $SETTING_FILE"
     $TRAIN_CMD
 
     # Stop the loop if we find the kill file.
