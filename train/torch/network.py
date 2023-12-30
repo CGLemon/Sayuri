@@ -147,8 +147,9 @@ class SqueezeAndExcitation(nn.Module):
         )
 
     def fixup_adjust(self, fixup_scale):
-        self.squeeze.linear.weight.data *= fixup_scale
-        self.excite.linear.weight.data *= fixup_scale
+        with torch.no_grad():
+            self.squeeze.linear.weight.data *= fixup_scale
+            self.excite.linear.weight.data *= fixup_scale
 
     def forward(self, x, mask_buffers):
         b, c, _, _ = x.size()
@@ -364,10 +365,6 @@ class Convolve(nn.Module):
         nn.init.xavier_normal_(self.conv.weight, gain=1.0)
         nn.init.zeros_(self.conv.bias)
 
-        # nn.init.kaiming_normal_(self.conv.weight,
-        #                         mode="fan_out",
-        #                         nonlinearity="relu")
-
     def _try_collect(self, collector):
         if collector is not None:
             collector.append(self)
@@ -415,13 +412,25 @@ class ConvBlock(nn.Module):
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.relu = relu
+        self.use_repcnn = kernel_size == 3 and \
+                              in_channels == out_channels
+        self.repcnn_merged = False
+
         self.conv = nn.Conv2d(
             in_channels,
             out_channels,
             kernel_size,
             padding="same",
-            bias=False,
+            bias=self.use_repcnn,
         )
+        if self.use_repcnn:
+            self.conv_1x1 = nn.Conv2d(
+                in_channels,
+                out_channels,
+                1,
+                padding="same",
+                bias=True,
+            )
 
         self.bn = BatchNorm2d(
             num_features=out_channels,
@@ -434,14 +443,47 @@ class ConvBlock(nn.Module):
 
     def _init_weights(self):
         nn.init.xavier_normal_(self.conv.weight, gain=1.0)
-
-        # nn.init.kaiming_normal_(self.conv.weight,
-        #                         mode="fan_out",
-        #                         nonlinearity="relu")
+        if self.use_repcnn:
+            nn.init.zeros_(self.conv.bias)
+            nn.init.xavier_normal_(self.conv_1x1.weight, gain=1.0)
+            nn.init.zeros_(self.conv_1x1.bias)
 
     def _try_collect(self, collector):
         if collector is not None:
             collector.append(self)
+
+    def _get_padding_kernel(self):
+        if not self.use_repcnn:
+            return None
+        assert self.kernel_size == 3, ""
+        assert self.out_channels == self.in_channels, ""
+        with torch.no_grad():
+            identity_as_3x3 = torch.zeros(self.out_channels, self.in_channels, 1, 1)
+            for i in range(self.out_channels):
+                identity_as_3x3[i, i, 0, 0] = 1
+            conv_1x1_as_3x3 = F.pad(self.conv_1x1.weight.data, (1, 1, 1, 1), "constant", 0) 
+            identity_as_3x3 = F.pad(identity_as_3x3, (1, 1, 1, 1), "constant", 0) 
+            return conv_1x1_as_3x3, identity_as_3x3
+
+    def merge(self):
+        if not self.use_repcnn or self.repcnn_merged:
+            return
+        with torch.no_grad():
+            conv_1x1_as_3x3, identity_as_3x3 = self._get_padding_kernel()
+            self.conv.weight.data += conv_1x1_as_3x3
+            self.conv.weight.data += identity_as_3x3
+            self.conv.bias.data += self.conv_1x1.bias.data
+            self.repcnn_merged = True
+
+    def unmerge(self):
+        if not self.use_repcnn or not self.repcnn_merged:
+            return
+        with torch.no_grad():
+            conv_1x1_as_3x3, identity_as_3x3 = self._get_padding_kernel()
+            self.conv.weight.data -= conv_1x1_as_3x3
+            self.conv.weight.data -= identity_as_3x3
+            self.conv.bias.data -= self.conv_1x1.bias.data
+            self.repcnn_merged = False
 
     def shape_to_text(self):
         out = str()
@@ -450,14 +492,19 @@ class ConvBlock(nn.Module):
         return out
 
     def tensors_to_text(self, use_bin):
+        self.merge()
+        
         bn_mean = torch.zeros(self.out_channels)
         bn_std = torch.zeros(self.out_channels)
+
         if use_bin:
             out = bytes()
         else:
             out = str()
+
         out += tensor_to_text(self.conv.weight, use_bin)
-        out += tensor_to_text(torch.zeros(self.out_channels), use_bin) # fill zero
+        if self.conv.bias:
+            out += tensor_to_text(self.conv.bias, use_bin) # fill zero
 
         # Merge four tensors (mean, variance, gamma, beta) into two tensors (
         # mean, variance).
@@ -481,6 +528,8 @@ class ConvBlock(nn.Module):
 
         out += tensor_to_text(bn_mean, use_bin)
         out += tensor_to_text(bn_std, use_bin)
+
+        self.unmerge()
         return out
 
     def accumulate_swa(self, other_layer, swa_count):
@@ -489,6 +538,23 @@ class ConvBlock(nn.Module):
             other_layer.conv.weight.data,
             swa_count
         )
+        if self.conv.bias.data:
+            self.conv.bias.data = accum_weights(
+                self.conv.bias.data,
+                other_layer.conv.bias.data,
+                swa_count
+            )
+        if self.use_repcnn:
+            self.conv_1x1.weight.data = accum_weights(
+                self.conv_1x1.weight.data,
+                other_layer.conv_1x1.weight.data,
+                swa_count
+            )
+            self.conv_1x1.bias.data = accum_weights(
+                self.conv_1x1.bias.data,
+                other_layer.conv_1x1.bias.data,
+                swa_count
+            )
         self.bn.running_mean.data = accum_weights(
             self.bn.running_mean.data,
             other_layer.bn.running_mean.data,
@@ -513,9 +579,14 @@ class ConvBlock(nn.Module):
         )
 
     def forward(self, x, mask):
-        x = self.conv(x) * mask
-        x = self.bn(x, mask)
-        return F.relu(x, inplace=True) if self.relu else x
+        out = x
+        out = self.conv(x)
+        if self.use_repcnn and not self.repcnn_merged:
+            out_1x1 = self.conv_1x1(x)
+            out = out + out_1x1 + x
+        out = out * mask
+        out = self.bn(out, mask)
+        return F.relu(out, inplace=True) if self.relu else out
 
 class ResBlock(nn.Module):
     def __init__(self, blocks,
