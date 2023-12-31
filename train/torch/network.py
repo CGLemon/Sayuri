@@ -146,11 +146,6 @@ class SqueezeAndExcitation(nn.Module):
             collector=collector
         )
 
-    def fixup_adjust(self, fixup_scale):
-        with torch.no_grad():
-            self.squeeze.linear.weight.data *= fixup_scale
-            self.excite.linear.weight.data *= fixup_scale
-
     def forward(self, x, mask_buffers):
         b, c, _, _ = x.size()
         mask, _, _ = mask_buffers
@@ -412,8 +407,13 @@ class ConvBlock(nn.Module):
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.relu = relu
+
+        # Based on, RepVGG: Making VGG-style ConvNets Great Again. We
+        # could get benefit free during the inference time.
         self.use_repcnn = kernel_size == 3 and \
                               in_channels == out_channels
+
+        # True if we merged the conv 1x1 and short cut.
         self.repcnn_merged = False
 
         self.conv = nn.Conv2d(
@@ -461,7 +461,7 @@ class ConvBlock(nn.Module):
             identity_as_3x3 = torch.zeros(self.out_channels, self.in_channels, 1, 1)
             for i in range(self.out_channels):
                 identity_as_3x3[i, i, 0, 0] = 1
-            conv_1x1_as_3x3 = F.pad(self.conv_1x1.weight.data, (1, 1, 1, 1), "constant", 0) 
+            conv_1x1_as_3x3 = F.pad(self.conv_1x1.weight, (1, 1, 1, 1), "constant", 0) 
             identity_as_3x3 = F.pad(identity_as_3x3, (1, 1, 1, 1), "constant", 0) 
             return conv_1x1_as_3x3, identity_as_3x3
 
@@ -470,9 +470,9 @@ class ConvBlock(nn.Module):
             return
         with torch.no_grad():
             conv_1x1_as_3x3, identity_as_3x3 = self._get_padding_kernel()
-            self.conv.weight.data += conv_1x1_as_3x3
-            self.conv.weight.data += identity_as_3x3
-            self.conv.bias.data += self.conv_1x1.bias.data
+            self.conv.weight += conv_1x1_as_3x3
+            self.conv.weight += identity_as_3x3
+            self.conv.bias += self.conv_1x1.bias
             self.repcnn_merged = True
 
     def unmerge(self):
@@ -480,9 +480,9 @@ class ConvBlock(nn.Module):
             return
         with torch.no_grad():
             conv_1x1_as_3x3, identity_as_3x3 = self._get_padding_kernel()
-            self.conv.weight.data -= conv_1x1_as_3x3
-            self.conv.weight.data -= identity_as_3x3
-            self.conv.bias.data -= self.conv_1x1.bias.data
+            self.conv.weight -= conv_1x1_as_3x3
+            self.conv.weight -= identity_as_3x3
+            self.conv.bias -= self.conv_1x1.bias
             self.repcnn_merged = False
 
     def shape_to_text(self):
@@ -503,7 +503,7 @@ class ConvBlock(nn.Module):
             out = str()
 
         out += tensor_to_text(self.conv.weight, use_bin)
-        if self.conv.bias:
+        if self.conv.bias is not None:
             out += tensor_to_text(self.conv.bias, use_bin) # fill zero
 
         # Merge four tensors (mean, variance, gamma, beta) into two tensors (
@@ -538,7 +538,7 @@ class ConvBlock(nn.Module):
             other_layer.conv.weight.data,
             swa_count
         )
-        if self.conv.bias.data:
+        if self.conv.bias is not None:
             self.conv.bias.data = accum_weights(
                 self.conv.bias.data,
                 other_layer.conv.bias.data,
@@ -566,7 +566,6 @@ class ConvBlock(nn.Module):
             swa_count
         )
         if self.bn.gamma is not None:
-            assert other_layer.bn.gamma is not None, ""
             self.bn.gamma.data = accum_weights(
                 self.bn.gamma.data,
                 other_layer.bn.gamma.data,
@@ -664,13 +663,14 @@ class ResBlock(nn.Module):
                 self.pre_conv_btl.conv.weight.data *= fixup_scale2
                 self.conv1.conv.weight.data *= fixup_scale2
                 self.conv2.conv.weight.data *= fixup_scale2
-                self.post_conv_btl.conv.weight.data *= 0
+                self.post_conv_btl.conv.weight.data *= 0.
             else:
                 self.conv1.conv.weight.data *= fixup_scale2
-                self.conv2.conv.weight.data *= 0
+                self.conv2.conv.weight.data *= 0.
             if self.use_se:
                 fixup_scale4 = 1.0 / (blocks ** (1.0 / 4.0)) 
-                self.se_module.fixup_adjust(fixup_scale4)
+                self.se_module.squeeze.linear.weight *= fixup_scale4
+                self.se_module.excite.linear.weight *= fixup_scale4
 
     def forward(self, inputs):
         x, mask_buffers = inputs
