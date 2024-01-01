@@ -504,7 +504,9 @@ class ConvBlock(nn.Module):
 
         out += tensor_to_text(self.conv.weight, use_bin)
         if self.conv.bias is not None:
-            out += tensor_to_text(self.conv.bias, use_bin) # fill zero
+            out += tensor_to_text(self.conv.bias, use_bin)
+        else:
+            out += tensor_to_text(torch.zeros(self.out_channels), use_bin) # fill zero
 
         # Merge four tensors (mean, variance, gamma, beta) into two tensors (
         # mean, variance).
