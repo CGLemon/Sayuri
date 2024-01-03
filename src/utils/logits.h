@@ -14,7 +14,27 @@ template<
                    std::is_floating_point<T>::value
                >
 >
-std::vector<T> Softmax(std::vector<T> &logits, double temp) {
+inline std::vector<T> GetZeroLogits(size_t size) {
+    return std::vector<T>(size, LOGIT_ZERO);
+}
+
+template<
+    typename T,
+    typename = std::enable_if_t<
+                   std::is_floating_point<T>::value
+               >
+>
+inline T SafeLog(T v) {
+    return std::log(static_cast<double>(v) + LOGIT_EPS);
+}
+
+template<
+    typename T,
+    typename = std::enable_if_t<
+                   std::is_floating_point<T>::value
+               >
+>
+std::vector<T> Softmax(std::vector<T> &logits, float temp) {
     auto output = std::vector<T>{};
     output.reserve(logits.size());
 
@@ -40,16 +60,13 @@ template<
                    std::is_floating_point<T>::value
                >
 >
-inline std::vector<T> GetZeroLogits(size_t size) {
-    return std::vector<T>(size, LOGIT_ZERO);
-}
+std::vector<T> ReSoftmax(std::vector<T> &prob, float temp) {
+    auto logits = std::vector<T>{};
+    logits.reserve(prob.size());
 
-template<
-    typename T,
-    typename = std::enable_if_t<
-                   std::is_floating_point<T>::value
-               >
->
-inline T SafeLog(T v) {
-    return std::log(static_cast<double>(v) + LOGIT_EPS);
+    for (const auto val : prob) {
+        logits.emplace_back(SafeLog(val));
+    }
+
+    return Softmax(logits, temp);
 }
