@@ -455,13 +455,14 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
         }
     }
 
+    // Cache the hyper-parameters.
     const auto cpuct_init           = param_->cpuct_init;
     const auto cpuct_base_factor    = param_->cpuct_base_factor;
     const auto cpuct_base           = param_->cpuct_base;
     const auto draw_factor          = param_->draw_factor;
     const auto score_utility_factor = param_->score_utility_factor;
     const auto score_utility_div    = param_->score_utility_div;
-    const auto noise                = is_root ? param_->dirichlet_noise  : false;
+    const auto noise                = is_root ? param_->dirichlet_noise : false;
     const auto fpu_reduction_factor = is_root ? param_->fpu_root_reduction : param_->fpu_reduction;
     const auto forced_playouts_k    = is_root ? param_->forced_playouts_k : 0.f;
 
@@ -513,7 +514,14 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
                                node->GetScoreUtility(
                                    color, score_utility_div, parent_score);
 
-                const int forced_n = forced_playouts_k * psa * (float)parentvisits;
+                // Forced Playouts method. It can help to explore the low priority
+                // child with high noise value. We think 20% is big enough and high
+                // priority child is easy to be explored with PUCT. We don't need to
+                // add any bouns for these kind of children.
+                const float psa_factor = std::min(0.2f, psa);
+                const float forced_n_factor =
+                    std::max(1e-4f, forced_playouts_k * psa_factor * (float)parentvisits);
+                const int forced_n = std::sqrt(forced_n_factor);
                 if (forced_n - visits > 0) {
                     utility += (forced_n - visits) * 1e6;
                 }
