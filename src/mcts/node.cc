@@ -1621,15 +1621,16 @@ bool Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
     int level = prom_visits;
 
     if (only_max_visits) {
+        // The case is to output the best move.
         playouts_thres = std::max(playouts_thres, 1);
         target_visits = max_visists;
         goto end_loop;
     }
 
-    // We may reuse the sub-tree. Try fill old distribution in oredr
+    // We may reuse the sub-tree. Try fill old distribution in order
     // to cover the Sequential Halving distribution. For example,
     //
-    // Original distribution
+    // Original distribution (sorted)
     // { 9, 2, 0, 0 }
     //
     // Target Sequential Halving distribution
@@ -1642,9 +1643,11 @@ bool Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
     // { 9, 3, 1, 1 }
     while (true) {
         for (int i = 0; i < level; ++i) {
+            // Keep to minus current distribution according to Sequential
+            // Halving, the first zero visits is target child.
             for (int j = 0; j < width; ++j) {
                 if (table[j].first <= 0) {
-                    auto vtx = table[width-1].second;
+                    auto vtx = table[j].second;
                     target_visits = GetChild(vtx)->GetVisits();
                     goto end_loop;
                 }
@@ -1652,11 +1655,14 @@ bool Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
                 playouts_thres -= 1;
 
                 if (playouts_thres <= 0) {
+                    // The current distribution cover the Sequential Halving
+                    // distribution. Disable the Gumbel noise.
                     goto end_loop;
                 }
             }
         }
         if (width == 1) {
+            // Go to next epoch.
             width = adj_considered_moves;
             level = prom_visits;
         } else {
