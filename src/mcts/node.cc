@@ -547,16 +547,22 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
 
 int Node::RandomMoveProportionally(float temp, int min_visits) {
     auto select_vertex = kNullVertex;
-    auto accum = float{0.0f};
-    auto accum_vector = std::vector<std::pair<float, int>>{};
+    auto norm_factor= double{0};
+    auto accum = double{0};
+    auto accum_vector = std::vector<std::pair<decltype(accum), int>>{};
 
     for (const auto &child : children_) {
         auto node = child.Get();
         const auto visits = node->GetVisits();
         const auto vertex = node->GetVertex();
         if (visits > min_visits) {
-            accum += std::pow((float)visits, (1.0 / temp));
-            accum_vector.emplace_back(std::pair<float, int>(accum, vertex));
+            if (norm_factor == 0.0) {
+                norm_factor = visits;
+            }
+            double val = visits / norm_factor;
+            accum += std::pow(val, (1.0 / temp));
+            accum_vector.emplace_back(
+                std::pair<decltype(accum), int>(accum, vertex));
         }
     }
 
@@ -569,7 +575,8 @@ int Node::RandomMoveProportionally(float temp, int min_visits) {
         }
     }
 
-    auto distribution = std::uniform_real_distribution<float>{0.0, accum};
+    auto distribution =
+        std::uniform_real_distribution<decltype(accum)>{0.0, accum};
     auto pick = distribution(Random<>::Get());
     auto size = accum_vector.size();
 
@@ -617,15 +624,16 @@ int Node::RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits) {
     MixLogitsCompletedQ(state, prob);
 
     auto select_vertex = kNullVertex;
-    auto accum = float{0.0f};
-    auto accum_vector = std::vector<std::pair<float, int>>{};
+    auto accum = double{0};
+    auto accum_vector = std::vector<std::pair<decltype(accum), int>>{};
 
     for (int idx = 0; idx < num_intersections+1; ++idx) {
         // Prune the unvisited moves.
         int vtx = vertices_table[idx];
         if (vtx != kNullVertex) {
-            accum += std::pow((float)prob[idx], (1.0 / temp));
-            accum_vector.emplace_back(std::pair<float, int>(accum, vtx));
+            accum += std::pow((decltype(accum))prob[idx], (1.0 / temp));
+            accum_vector.emplace_back(
+                std::pair<decltype(accum), int>(accum, vtx));
         }
     }
 
@@ -633,7 +641,8 @@ int Node::RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits) {
         return RandomMoveProportionally(temp, min_visits);
     }
 
-    auto distribution = std::uniform_real_distribution<float>{0.0, accum};
+    auto distribution =
+        std::uniform_real_distribution<decltype(accum)>{0.0, accum};
     auto pick = distribution(Random<>::Get());
     auto size = accum_vector.size();
 

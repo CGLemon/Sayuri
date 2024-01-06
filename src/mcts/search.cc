@@ -429,7 +429,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     computation_result.seconds = timer.GetDuration();
     computation_result.playouts = played_playouts;
 
-    // Gather computation infomation and training data.
+    // Gather computation information and training data.
     GatherComputationResult(computation_result);
 
     // Save the last game state.
@@ -456,10 +456,25 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     // Fill best moves, root eval and score.
     result.best_move = root_node_->GetBestMove(true);
     result.best_no_pass_move = root_node_->GetBestMove(false);
-    result.random_move = root_node_->
-                             RandomMoveWithLogitsQ(
-                                 root_state_,
-                                 1.f, param_->random_min_visits);
+    if (param_->gumbel) {
+        // RandomMoveWithLogitsQ() will help to prune the low
+        // visits moves. However, if there is only few candidate
+        // moves, it will make the probability too sharp. So we
+        // only enable this function for Sequential Halving
+        // process.
+        result.random_move = root_node_->
+                                 RandomMoveWithLogitsQ(
+                                     root_state_,
+                                     param_->random_moves_temp,
+                                     param_->random_min_visits);
+    } else {
+        // TODO: According to "On Strength Adjustment for MCTS-Based Programs",
+        //       pruning the low probability moves.
+        result.random_move = root_node_->
+                                 RandomMoveProportionally(
+                                     param_->random_moves_temp,
+                                     param_->random_min_visits);
+    }
     result.gumbel_move = root_node_->GetGumbelMove(true);
     result.gumbel_no_pass_move = root_node_->GetGumbelMove(false);
     result.root_score_lead = root_node_->GetFinalScore(color);
@@ -772,24 +787,38 @@ bool ShouldPass(GameState &state, ComputationResult &result, Parameters *param) 
     return false;
 }
 
-int Search::ThinkBestMove() {
-    auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
-    auto result = Computation(max_playouts_, tag);
+int Search::GetBestMove(int playouts, OptionTag tag) {
+    auto result = Computation(playouts, tag);
 
     if (ShouldResign(root_state_, result, param_.get())) {
         return kResign;
     }
 
     int best_move = result.best_move;
+    const int random_moves_cnt = param_->random_moves_factor *
+                                     root_state_.GetNumIntersections();
+    if (root_state_.GetMoveNumber() < random_moves_cnt) {
+        // TODO: It is possible the pass move. Should we prune it?
+        best_move = result.random_move;
+    }
     if (ShouldPass(root_state_, result, param_.get())) {
+        // Quickly play the move if we have already won the
+        // game.
         best_move = kPass;
     }
     if (param_->capture_all_dead &&
             best_move == kPass &&
             result.capture_all_dead_move != kNullVertex) {
+        // Refuse playing the pass move until all dead stones
+        // are removed.
         best_move = result.capture_all_dead_move;
     }
+    return best_move;
+}
 
+int Search::ThinkBestMove() {
+    auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
+    int best_move = GetBestMove(max_playouts_, tag);
     return best_move;
 }
 
@@ -998,7 +1027,7 @@ int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
 
     int playouts = ponder == true ? GetPonderPlayouts()
                                       : max_playouts_;
-    auto result = Computation(playouts, tag);
+    int best_move = GetBestMove(playouts, tag);
 
     // Disable to reuse the tree for next move.
     if (analysis_config_.MoveRestrictions()) {
@@ -1007,20 +1036,6 @@ int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
 
     // Clear config after finishing the search.
     analysis_config_.Clear();
-
-    if (ShouldResign(root_state_, result, param_.get())) {
-        return kResign;
-    }
-
-    int best_move = result.best_move;
-    if (ShouldPass(root_state_, result, param_.get())) {
-        best_move = kPass;
-    }
-    if (param_->capture_all_dead &&
-            best_move == kPass &&
-            result.capture_all_dead_move != kNullVertex) {
-        best_move = result.capture_all_dead_move;
-    }
 
     return best_move;
 }

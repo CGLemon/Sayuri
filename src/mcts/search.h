@@ -128,6 +128,9 @@ public:
     // Compute the result by monte carlo tree search.
     ComputationResult Computation(int playouts, OptionTag tag);
 
+    // The Computation function wrapper. Reture the best move only.
+    int GetBestMove(int playouts, OptionTag tag);
+
     // Get the best move.
     int ThinkBestMove();
 
@@ -161,6 +164,7 @@ public:
     // Release the whole trees.
     void ReleaseTree();
 
+    // For debug interface, show the selected a path.
     std::string GetDebugMoves(std::vector<int> moves);
 
 private:
