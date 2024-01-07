@@ -91,13 +91,10 @@ void Encoder::SymmetryPlanes(const GameState &state, std::vector<float> &planes,
 void Encoder::FillColorStones(const Board* board,
                               std::vector<float>::iterator black_it,
                               std::vector<float>::iterator white_it) const {
-    auto boardsize = board->GetBoardSize();
     auto num_intersections = board->GetNumIntersections();
 
     for (int index = 0; index < num_intersections; ++index) {
-        auto x = index % boardsize;
-        auto y = index / boardsize;
-        auto vtx = board->GetVertex(x, y);
+        auto vtx = board->IndexToVertex(index);
         auto state = board->GetState(vtx);
 
         if (state == kBlack) {
@@ -110,7 +107,6 @@ void Encoder::FillColorStones(const Board* board,
 
 void Encoder::FillMove(const Board* board,
                        std::vector<float>::iterator move_it) const {
-    auto boardsize = board->GetBoardSize();
     auto num_intersections = board->GetNumIntersections();
 
     auto last_move = board->GetLastMove();
@@ -118,9 +114,7 @@ void Encoder::FillMove(const Board* board,
         return;
     } else {
         for (int index = 0; index < num_intersections; ++index) {
-            auto x = index % boardsize;
-            auto y = index / boardsize;
-            auto vtx = board->GetVertex(x, y);
+            auto vtx = board->IndexToVertex(index);
 
             if (vtx == last_move) {
                 move_it[index] = static_cast<float>(true);
@@ -202,13 +196,10 @@ void Encoder::FillArea(const Board* board,
 
 void Encoder::FillLiberties(const Board* board,
                             std::vector<float>::iterator liberties_it) const {
-    auto boardsize = board->GetBoardSize();
     auto num_intersections = board->GetNumIntersections();
 
     for (int index = 0; index < num_intersections; ++index) {
-        auto x = index % boardsize;
-        auto y = index / boardsize;
-        auto vtx = board->GetVertex(x, y);
+        auto vtx = board->IndexToVertex(index);
         auto state = board->GetState(vtx);
 
         if (state == kBlack || state == kWhite) {

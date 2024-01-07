@@ -451,7 +451,6 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
 void Search::GatherComputationResult(ComputationResult &result) const {
     const auto color = root_state_.GetToMove();
     const auto num_intersections = root_state_.GetNumIntersections();
-    const auto board_size = root_state_.GetBoardSize();
 
     // Fill best moves, root eval and score.
     result.best_move = root_node_->GetBestMove(true);
@@ -545,14 +544,12 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         float accm_target_policy = 0.0f;
         size_t target_cnt = 0;
         for (int idx = 0; idx < num_intersections+1; ++idx) {
-            const auto x = idx % board_size;
-            const auto y = idx / board_size;
             int vertex;
 
             if (idx == num_intersections) {
                 vertex = kPass;
             } else {
-                vertex = root_state_.GetVertex(x, y);
+                vertex = root_state_.IndexToVertex(idx);
             }
 
             auto node = root_node_->GetChild(vertex);
@@ -732,8 +729,8 @@ bool ShouldPass(GameState &state, ComputationResult &result, Parameters *param) 
     if (!(param->friendly_pass) || state.GetLastMove() != kPass) {
         return false;
     }
-
-    const auto move_threshold = state.GetNumIntersections() / 3;
+    const auto num_intersections = state.GetNumIntersections();
+    const auto move_threshold = num_intersections / 3;
     if (state.GetMoveNumber() <= move_threshold) {
         // Too early to pass.
         return false;
@@ -752,23 +749,19 @@ bool ShouldPass(GameState &state, ComputationResult &result, Parameters *param) 
     fork_state.RemoveDeadStrings(dead_list);
     int num_dame = 0;
 
-    const auto board_size = fork_state.GetBoardSize();
-    for (int y = 0; y < board_size; ++y) {
-        for (int x = 0; x < board_size; ++x) {
-            const auto vtx = fork_state.GetVertex(x, y);
-            if (fork_state.GetState(vtx) != kEmpty &&
-                    fork_state.GetLiberties(vtx) == 1) {
-                // At least one string in atari, the game
-                // is not over yet.
-                return false;
-            } else if (fork_state.GetState(vtx) == kEmpty) {
-                // This empty point does not belong to any
-                // side. It is the dame.
-                num_dame += 1;
-            }
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        const auto vtx = fork_state.IndexToVertex(idx);
+        if (fork_state.GetState(vtx) != kEmpty &&
+                fork_state.GetLiberties(vtx) == 1) {
+            // At least one string in atari, the game
+            // is not over yet.
+            return false;
+        } else if (fork_state.GetState(vtx) == kEmpty) {
+            // This empty point does not belong to any
+            // side. It is the dame.
+            num_dame += 1;
         }
     }
-
     (void) num_dame;
 
     // Compute the final score.

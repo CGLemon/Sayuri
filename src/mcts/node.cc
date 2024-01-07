@@ -165,9 +165,7 @@ bool Node::ExpandChildren(Network &network,
 
     // Prune the illegal moves or some bad move.
     for (int idx = 0; idx < num_intersections; ++idx) {
-        const auto x = idx % board_size;
-        const auto y = idx / board_size;
-        const auto vtx = state.GetVertex(x, y);
+        const auto vtx = state.IndexToVertex(idx);
         const auto policy = raw_netlist.probabilities[idx];
 
         // Prune the illegal, unwise and forbidden move.
@@ -897,6 +895,8 @@ std::string Node::OwnershipToString(GameState &state, const int color, std::stri
 
     auto ownership = node->GetOwnership(color);
 
+    // TODO: A wrapper for row major iterator staring
+    //       from A19.
     out << name << ' ';
     for (int y = board_size-1; y >= 0; --y) {
         for (int x = 0; x < board_size; ++x) {

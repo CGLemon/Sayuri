@@ -431,17 +431,17 @@ bool GameState::SetFreeHandicap(std::vector<std::string> movelist) {
 
 std::vector<int> GameState::PlaceFreeHandicap(int handicap) {
     auto stones_list = std::vector<int>{};
+    auto num_intersections = GetNumIntersections();
+
     if (SetFixdHandicap(handicap)) {
-        const int board_size = GetBoardSize();
-        for (int x = 0; x < board_size; ++x) {
-            for (int y = 0; y < board_size; ++y) {
-                const auto vtx = GetVertex(x, y);
-                if (GetState(vtx) == kBlack) {
-                    stones_list.emplace_back(vtx);
-                }
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            const auto vtx = IndexToVertex(idx);
+            if (GetState(vtx) == kBlack) {
+                stones_list.emplace_back(vtx);
             }
         }
     }
+
     return stones_list;
 }
 
@@ -597,15 +597,10 @@ float GameState::GetGammaValue(const int vtx, const int color) const {
 
 std::vector<float> GameState::GetGammasPolicy(const int color) const {
     auto num_intersections = GetNumIntersections();
-    auto board_size = GetBoardSize();
-
     auto policy = std::vector<float>(num_intersections, 0);
 
     for (int idx = 0; idx < num_intersections; ++idx) {
-        const auto x = idx % board_size;
-        const auto y = idx / board_size;
-        const auto vtx = GetVertex(x,y);
-
+        const auto vtx = IndexToVertex(idx);
         const auto gval = GetGammaValue(vtx, color);
         policy[idx] = std::log(gval);
     }

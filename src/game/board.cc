@@ -241,7 +241,7 @@ void Board::SetBoardSize(int boardsize) {
     }
 
     board_size_ = boardsize;
-    letter_box_size_ = board_size_+2;
+    letter_box_size_ = board_size_ + 2;
     num_vertices_ = letter_box_size_ * letter_box_size_;
     num_intersections_ = board_size_ * board_size_;
 }
