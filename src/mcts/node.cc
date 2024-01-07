@@ -565,12 +565,15 @@ int Node::RandomMoveProportionally(float temp, int min_visits) {
     }
 
     if (accum_vector.empty()) {
-        if (min_visits > 0) {
-            return RandomMoveProportionally(temp, 0);
-        } else {
-            // There is no visits. Reture the best policy move.
-            return GetBestMove(true);
-        }
+        // All moves are pruned. In this case, we think
+        // the random move is unsafe. For example, we will
+        // set 'min_visits' as high value in the fast search
+        // phase in order to optimize strength and improve
+        // the diversity. If the visits of all candidate moves
+        // are lower than 'min_visits', all candidate moves
+        // should be unsafe. So only return the best move,
+        // the safest move.
+        return GetBestMove(true);
     }
 
     auto distribution =
@@ -607,9 +610,11 @@ int Node::RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits) {
             idx = state.GetIndex(
                       state.GetX(vtx), state.GetY(vtx));
         }
-        accm_visists += visits;
-        prob[idx] = visits;
-        vertices_table[idx] = vtx;
+        if (visits != 0) { 
+            accm_visists += visits;
+            prob[idx] = visits;
+            vertices_table[idx] = vtx;
+        }
     }
 
     if (accm_visists == 0) {
@@ -636,6 +641,7 @@ int Node::RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits) {
     }
 
     if (accum_vector.empty()) {
+        // What happened? Is it possible?
         return RandomMoveProportionally(temp, min_visits);
     }
 
