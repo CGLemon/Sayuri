@@ -510,6 +510,13 @@ void ArgsParser::Parse(Splitter &spt) {
         }
     }
 
+    if (const auto res = spt.FindNext("--random-min-visits")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("random_min_visits", res->Get<int>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
     if (const auto res = spt.FindNext("--random-moves-factor")) {
         if (IsParameter(res->Get<>())) {
             SetOption("random_moves_factor", res->Get<float>());
