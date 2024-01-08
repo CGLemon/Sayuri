@@ -566,13 +566,8 @@ int Node::RandomMoveProportionally(float temp, int min_visits) {
 
     if (accum_vector.empty()) {
         // All moves are pruned. In this case, we think
-        // the random move is unsafe. For example, we will
-        // set 'min_visits' as high value in the fast search
-        // phase in order to optimize strength and improve
-        // the diversity. If the visits of all candidate moves
-        // are lower than 'min_visits', all candidate moves
-        // should be unsafe. So only return the best move,
-        // the safest move.
+        // the random move is unsafe. Only return the best
+        // move, the safest move.
         return GetBestMove(true);
     }
 

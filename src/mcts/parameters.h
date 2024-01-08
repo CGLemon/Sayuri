@@ -73,6 +73,7 @@ public:
         analysis_verbose = GetOption<bool>("analysis_verbose");
         use_rollout = GetOption<bool>("use_rollout");
         capture_all_dead = GetOption<bool>("capture_all_dead");
+        no_exploring_phase = false;
     }
 
     std::string timemanage;
@@ -137,6 +138,7 @@ public:
     bool cpuct_dynamic;
     bool use_rollout;
     bool capture_all_dead;
+    bool no_exploring_phase;
 
     std::array<float, kNumVertices + 10> dirichlet_buffer;
 };
