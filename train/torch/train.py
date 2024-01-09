@@ -98,6 +98,7 @@ class BatchGenerator:
         wdl = np.zeros(3)
         all_q_vals = np.zeros(5)
         all_scores = np.zeros(5)
+        kld = np.zeros(1)
 
         buf = np.zeros(num_intersections)
         sqr_buf = np.zeros((nn_board_size, nn_board_size))
@@ -151,6 +152,9 @@ class BatchGenerator:
         all_scores[3] = data.mid_avg_score
         all_scores[4] = data.long_avg_score
 
+        # KLD value
+        kld[0] = data.kld
+
         return (
             input_planes,
             prob,
@@ -158,7 +162,8 @@ class BatchGenerator:
             ownership,
             wdl,
             all_q_vals,
-            all_scores
+            all_scores,
+            kld
         )
 
     def func(self, data_list):
@@ -169,9 +174,10 @@ class BatchGenerator:
         batch_wdl = list()
         batch_q_vals = list()
         batch_scores = list()
+        batch_kld = list()
 
         for data in data_list:
-            planes, prob, aux_prob, ownership, wdl, q_vals, scores = self._wrap_data(data)
+            planes, prob, aux_prob, ownership, wdl, q_vals, scores, kld = self._wrap_data(data)
 
             batch_planes.append(planes)
             batch_prob.append(prob)
@@ -180,15 +186,17 @@ class BatchGenerator:
             batch_wdl.append(wdl)
             batch_q_vals.append(q_vals)
             batch_scores.append(scores)
+            batch_kld.append(kld)
 
         batch_dict = {
-            "planes"        : torch.from_numpy(np.array(batch_planes)).float(),
-            "prob"          : torch.from_numpy(np.array(batch_prob)).float(),
-            "aux_prob"      : torch.from_numpy(np.array(batch_aux_prob)).float(),
-            "ownership"     : torch.from_numpy(np.array(batch_ownership)).float(),
-            "wdl"           : torch.from_numpy(np.array(batch_wdl)).float(),
-            "q_vals"        : torch.from_numpy(np.array(batch_q_vals)).float(),
-            "scores"        : torch.from_numpy(np.array(batch_scores)).float()
+            "planes"    : torch.from_numpy(np.array(batch_planes)).float(),
+            "prob"      : torch.from_numpy(np.array(batch_prob)).float(),
+            "aux_prob"  : torch.from_numpy(np.array(batch_aux_prob)).float(),
+            "ownership" : torch.from_numpy(np.array(batch_ownership)).float(),
+            "wdl"       : torch.from_numpy(np.array(batch_wdl)).float(),
+            "q_vals"    : torch.from_numpy(np.array(batch_q_vals)).float(),
+            "scores"    : torch.from_numpy(np.array(batch_scores)).float(),
+            "kld"       : torch.from_numpy(np.array(batch_kld)).float(),
         }
         return batch_dict
 
@@ -464,7 +472,8 @@ class TrainingPipe():
             batch_dict["ownership"],
             batch_dict["wdl"],
             batch_dict["q_vals"],
-            batch_dict["scores"]
+            batch_dict["scores"],
+            batch_dict["kld"]
         )
         return planes, target
 
