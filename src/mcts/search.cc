@@ -38,6 +38,7 @@ void Search::Initialize() {
     no_exploring_param_->dirichlet_noise = false;
     no_exploring_param_->root_policy_temp = 1.f;
     no_exploring_param_->forced_playouts_k = 0.f;
+    no_exploring_param_->no_exploring_phase = true;
 
     analysis_config_.Clear();
     last_state_ = root_state_;
@@ -455,12 +456,15 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     // Fill best moves, root eval and score.
     result.best_move = root_node_->GetBestMove(true);
     result.best_no_pass_move = root_node_->GetBestMove(false);
-    if (param_->gumbel) {
+    if (param_->gumbel || param_->no_exploring_phase) {
         // RandomMoveWithLogitsQ() will help to prune the low
         // visits moves. However, if there is only few candidate
         // moves, it will make the probability too sharp. So we
         // only enable this function for Sequential Halving
         // process.
+        // During the fast search phase (no exploring phase), the
+        // sharp probability may reduce the randomization. It helps
+        // the to optimize the the strengh and improve some diversity.
         result.random_move = root_node_->
                                  RandomMoveWithLogitsQ(
                                      root_state_,
