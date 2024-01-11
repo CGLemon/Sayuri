@@ -5,6 +5,7 @@
 #include "utils/time.h"
 #include "utils/komi.h"
 #include "utils/gogui_helper.h"
+#include "utils/filesystem.h"
 #include "pattern/mm_trainer.h"
 #include "neural/encoder.h"
 #include "summary/accuracy.h"
@@ -647,6 +648,69 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             out << GtpFail("file name is empty");
         }
 
+    } else if (const auto res = spt.Find("genopenings", 0)) {
+        auto save_dir = std::string{};
+        int num_sgfs = 0;
+        int opening_moves = agent_->GetState().GetBoardSize() / 2;
+
+        if (const auto dir = spt.GetWord(1)) {
+            save_dir = dir->Get<>();
+        }
+        if (const auto num = spt.GetWord(2)) {
+            num_sgfs = num->Get<int>();
+        }
+        if (const auto num = spt.GetWord(3)) {
+            opening_moves = num->Get<int>();
+        }
+
+        if (!save_dir.empty()) {
+            try {
+                TryCreateDirectory(save_dir);
+            } catch (char * err) {
+                (void) err;
+            }
+
+            const auto fair_result = agent_->GetSearch().Computation(400, Search::kForced);
+            const auto fair_winrate = fair_result.root_eval;
+
+            auto buf = std::vector<std::uint64_t>{};
+            int games = 0;
+            while (games < num_sgfs) {
+                agent_->GetState().ClearBoard();
+                for (int i = 0; i < opening_moves; ++i) {
+                    const int vtx =
+                        agent_->GetNetwork().GetVertexWithPolicy(
+                            agent_->GetState(), 1.2f, false);
+                    agent_->GetState().PlayMove(vtx);
+                }
+                const auto hash = agent_->GetState().GetHash();
+                if (std::find(std::begin(buf), std::end(buf), hash) != std::end(buf)) {
+                    continue;
+                }
+
+                const auto range = 0.05f;
+                const auto result = agent_->GetSearch().Computation(400, Search::kForced);
+                auto winrate_upper = fair_winrate;
+                if (result.to_move != fair_result.to_move) {
+                    winrate_upper = 1.f - winrate_upper;
+                }
+                winrate_upper += range/2.0f;
+
+                if (result.root_eval > winrate_upper ||
+                        result.root_eval < (1.f - winrate_upper)) {
+                    continue;
+                }
+                for (int symm = Symmetry::kIdentitySymmetry; symm < Symmetry::kNumSymmetris; ++symm) {
+                    buf.emplace_back(agent_->GetState().ComputeSymmetryHash(symm));
+                }
+                const auto sgf_name = std::to_string(games++) + ".sgf";
+                const auto filename = ConcatPath(save_dir, sgf_name);
+                Sgf::Get().ToFile(filename, agent_->GetState());
+            }
+            out << GtpSuccess("");
+        } else {
+            out << GtpFail("directory name is empty");
+        }
     } else if (const auto res = spt.Find("summary_accuracy", 0)) {
         auto sgf_file = std::string{};
 

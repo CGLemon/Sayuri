@@ -8,7 +8,7 @@ LAST_STEPS_FILE="$WORKSPACE/last_steps.txt"
 SETTING_FILE="selfplay-setting.json"
 KILL_FILE="kill.txt"
 CONFIG_FILE="selfplay-config.txt"
-ENGINE_NAME="Sayuri"
+ENGINE_NAME="sayuri"
 
 safe_mkdir()
 {
@@ -32,7 +32,7 @@ do
     $ENGINE_PLAY_CMD
 
     # Train a new model.
-    TRAIN_CMD="python3 torch/parser.py -j $SETTING_FILE"
+    TRAIN_CMD="python3 torch/main.py -j $SETTING_FILE"
     $TRAIN_CMD
 
     # Stop the loop if we find the kill file.

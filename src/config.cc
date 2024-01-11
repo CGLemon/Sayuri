@@ -86,7 +86,9 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["selfplay_query"] << Option::SetOption(std::string{});
     kOptionsMap["random_min_visits"] << Option::SetOption(1);
     kOptionsMap["random_moves_factor"] << Option::SetOption(0.f);
+    kOptionsMap["random_moves_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["random_opening_prob"] << Option::SetOption(0.f, 1.f, 0.f);
+    kOptionsMap["random_opening_temp"] << Option::SetOption(1.f, 100.f, 0.f);
 
     kOptionsMap["gumbel_c_visit"] << Option::SetOption(50.f);
     kOptionsMap["gumbel_c_scale"] << Option::SetOption(1.f);
@@ -515,6 +517,13 @@ void ArgsParser::Parse(Splitter &spt) {
         }
     }
 
+    if (const auto res = spt.FindNext("--random-min-visits")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("random_min_visits", res->Get<int>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
     if (const auto res = spt.FindNext("--random-moves-factor")) {
         if (IsParameter(res->Get<>())) {
             SetOption("random_moves_factor", res->Get<float>());
@@ -522,9 +531,23 @@ void ArgsParser::Parse(Splitter &spt) {
         }
     }
 
+    if (const auto res = spt.FindNext("--random-moves-temp")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("random_moves_temp", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
     if (const auto res = spt.FindNext("--random-opening-prob")) {
         if (IsParameter(res->Get<>())) {
             SetOption("random_opening_prob", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--random-opening-temp")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("random_opening_temp", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -885,7 +908,7 @@ void ArgsParser::DumpHelper() const {
                 << "\t\tThinking on opponent's time.\n\n"
 
                 << "\t--reuse-tree\n"
-                << "\t\tWill reuse the sub-tree.\n\n"
+                << "\t\tReuse the sub-tree per move.\n\n"
 
                 << "\t--early-symm-cache\n"
                 << "\t\tAccelerate the search on the opening stage.\n\n"
@@ -896,6 +919,9 @@ void ArgsParser::DumpHelper() const {
                 << "\t--capture-all-dead\n"
                 << "\t\tTry to remove all dead strings before pass. May be not safe for game.\n\n"
 
+                << "\t--use-optimistic-policy\n"
+                << "\t\tUse the optimistic policy insteal of normal policy.\n\n"
+
                 << "\t--cache-memory-mib <integer>\n"
                 << "\t\tSet the NN cache size in MiB.\n\n"
 
@@ -903,25 +929,28 @@ void ArgsParser::DumpHelper() const {
                 << "\t\tThe number of maximum playouts.\n\n"
 
                 << "\t--const-time <integer>\n"
-                << "\t\tConst time of search in seconds.\n\n"
+                << "\t\tConst time of search per move in seconds.\n\n"
 
                 << "\t--gpu, -g <integer>\n"
                 << "\t\tSelect a specific GPU device. Default is all devices.\n\n"
 
                 << "\t--threads, -t <integer>\n"
-                << "\t\tThe number of threads used. Set 0 will select a reasonable number.\n\n"
+                << "\t\tThe number of threads used. Select 0 to let engine pick a reasonable default.\n\n"
 
                 << "\t--batch-size, -b <integer>\n"
-                << "\t\tThe number of batches for a single evaluation. Set 0 will select a reasonable number.\n\n"
+                << "\t\tThe number of batches for a single evaluation. Select 0 to let engine pick a reasonable default.\n\n"
 
                 << "\t--lag-buffer <float>\n"
                 << "\t\tSafety margin for time usage in seconds.\n\n"
 
+                << "\t--cpuct-init <float>\n"
+                << "\t\tThe cPUCT term of MCTS.\n\n"
+
                 << "\t--score-utility-factor <float>\n"
-                << "\t\tScore utility heuristic value.\n\n"
+                << "\t\tScore utility heuristic term of MCTS.\n\n"
 
                 << "\t--lcb-reduction <float>\n"
-                << "\t\tReduce the LCB weights. Set 1 will select the most visits node as the best move in MCTS.\n\n"
+                << "\t\tReduce the LCB weights. Select 1 to let the most visits node as the best move in MCTS.\n\n"
 
                 << "\t--resign-threshold, -r <float>\n"
                 << "\t\tResign when winrate is less than x. Default is 0.1.\n\n"

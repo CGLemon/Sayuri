@@ -13,9 +13,7 @@ if __name__ == "__main__":
                         help="The setting json file name.", type=str)
     args = parser.parse_args()
 
-    cfg = gather_config(args.json)
-
     if args.json == None:
         print("Please give the setting json file.")
     else:
-        main(cfg)
+        main(gather_config(args.json))

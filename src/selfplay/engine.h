@@ -50,6 +50,7 @@ private:
     float handicap_fair_komi_prob_;
     float random_opening_prob_;
     float random_moves_factor_;
+    float random_opening_temp_;
     int default_playouts_;
     int parallel_games_;
 

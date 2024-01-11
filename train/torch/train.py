@@ -340,7 +340,7 @@ class TrainingPipe():
     def _save_current_status(self, steps):
         status_name = os.path.join(self.store_path, "last_status.pt")
 
-        self.validate_the_last_model(steps)
+        self._validate_the_last_model(steps)
 
         self._status_loader.set_steps(steps)
         self._status_loader.set_swa_count(self.swa_count)
@@ -468,8 +468,41 @@ class TrainingPipe():
         )
         return planes, target
 
-    def validate_the_last_model(self, steps):
-        pass
+    def _validate_the_last_model(self, steps):
+        if self.validation_lazy_loader is None:
+            return
+        self.module.train()
+
+        running_loss_dict = dict()
+        total_steps = self.validation_steps * self.macrofactor
+        clock_time = time.time()
+
+        for _ in range(total_steps):
+            planes, target = self._gather_data_from_loader(False)
+            _, all_loss_dict = self.net(
+                planes,
+                target,
+                use_symm=True,
+                loss_weight_dict=self._loss_weight_dict
+            )
+            _, all_loss_dict = self._handle_loss(all_loss_dict)
+
+            if len(running_loss_dict) == 0:
+                running_loss_dict = self._get_new_running_loss_dict(all_loss_dict)
+            running_loss_dict = self._accumulate_loss(running_loss_dict, all_loss_dict)
+
+        elapsed = time.time() - clock_time
+        log_outs = "steps: {} -> ".format(steps)
+        log_outs += "speed: {:.2f}, opt: {}, learning rate: {}, batch size: {}\n".format(
+                        self.validation_steps/elapsed,
+                        self.opt_name,
+                        self.opt.param_groups[0]["lr"],
+                        self.batchsize)
+        log_outs += self._get_loss_info(running_loss_dict)
+        log_file = os.path.join(self.store_path, "validation.log")
+        with open(log_file, 'a') as f:
+            f.write(log_outs + '\n')
+        self.module.eval()
 
     def fit_and_store(self):
         init_steps = self._load_current_status()
@@ -543,7 +576,6 @@ class TrainingPipe():
                             f.write(log_outs + '\n')
                         running_loss_dict = self._get_new_running_loss_dict(all_loss_dict)
 
-
                     if num_steps % self.swa_steps == 0:
                         self.swa_count = min(self.swa_count+1, self.swa_max_count)
                         self.swa_net.accumulate_swa(self.module, self.swa_count)
@@ -560,4 +592,8 @@ class TrainingPipe():
             # store the last network
             self._save_current_status(num_steps)
         self.flag.set_stop_flag()
+        try:
+            planes, target = self._gather_data_from_loader(True)
+        except StopIteration:
+            pass
         print("Training is over.")

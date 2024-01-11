@@ -36,6 +36,7 @@ public:
 
         random_min_visits = GetOption<int>("random_min_visits");
         random_moves_factor = GetOption<float>("random_moves_factor");
+        random_moves_temp = GetOption<float>("random_moves_temp");
 
         gumbel_c_visit = GetOption<float>("gumbel_c_visit");
         gumbel_c_scale = GetOption<float>("gumbel_c_scale");
@@ -86,6 +87,7 @@ public:
     int const_time;
     int random_min_visits;
     float random_moves_factor;
+    float random_moves_temp;
 
     float resign_threshold;
 

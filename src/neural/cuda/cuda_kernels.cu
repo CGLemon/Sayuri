@@ -1,5 +1,6 @@
 #include "neural/cuda/cuda_kernels.h"
 #include "neural/winograd_helper.h"
+#include "game/types.h"
 
 #ifdef USE_CUDA
 
@@ -256,12 +257,7 @@ __global__ void global_pooling_kernel(T *output, T *input, const T *mask,
     float *sum_pool_shared = pool_shared;
     float *max_pool_shared = pool_shared + shared_size;
 
-    // clear the pool shared
-    sum_pool_shared[s] = 0.f;
-    max_pool_shared[s] = -5000.f; // crazy negative value
-
-    __syncthreads();
-
+    // assign the pool
     if (s < spatial && n < N) {
         float vmask = 1.0f;
         if (mask) {
@@ -272,9 +268,14 @@ __global__ void global_pooling_kernel(T *output, T *input, const T *mask,
 
         sum_pool_shared[s] = val;
         max_pool_shared[s] = (1.0f-vmask) * (-5000.0f) + val;
+    } else {
+        // out of the board
+        sum_pool_shared[s] = 0.f;
+        max_pool_shared[s] = -5000.f;
+    }
+    __syncthreads();
 
-        __syncthreads();
-
+    if (s < spatial && n < N) {
         for (int shift = shared_size >> 1; shift > 0; shift >>= 1) {
              if (s < shift) {
                  sum_pool_shared[s] += sum_pool_shared[s + shift];
@@ -335,17 +336,17 @@ __global__ void head_global_pooling_kernel(T *output, T *input,
     int n = nc_index / C;
     int c = nc_index % C;
 
-    // clear the pool shared
-    pool_shared[s] = 0.f;
-
+    // assign the pool
+    if (s < spatial && n < N) {
+        pool_shared[s] = (float)(input[
+                             (n * C + c) * spatial + s]);
+    } else {
+        // out of the board
+        pool_shared[s] = 0.f;
+    }
     __syncthreads();
 
     if (s < spatial && n < N) {
-        float val = (float)(input[
-                        (n * C + c) * spatial + s]);
-        pool_shared[s] = val;
-        __syncthreads();
-
         for (int shift = shared_size >> 1; shift > 0; shift >>= 1) {
              if (s < shift) {
                  pool_shared[s] += pool_shared[s + shift];
@@ -441,71 +442,101 @@ void se_scale(T *output, const T *input, const T *residual,
     ReportCUDAErrors(cudaGetLastError());
 }
 
-__device__ __forceinline__ void multiply_bt(
-    float * o0, float * o1, float * o2, float * o3, float * o4, float * o5,
-    float i0,   float i1,   float i2,   float i3,   float i4,   float i5
-) {
-    float i3m1 = i1 * -kSqrt2 + i3 * (kSqrt2 / 2.0f);
-    float i4m2 = i2 * -2.0f + i4 * 1.0f;
+__constant__ float Bt[kWinogradAlpha * kWinogradAlpha] = {
+    1.0f,  0.0f,        -5.0f/2.0f,  0.0f,         1.0f, 0.0f,
+    0.0f, -kSqrt2,      -2.0f,       kSqrt2/2.0f,  1.0f, 0.0f,
+    0.0f,  kSqrt2,      -2.0f,      -kSqrt2/2.0f,  1.0f, 0.0f,
+    0.0f, -kSqrt2/2.0f, -1.0f/2.0f,  kSqrt2,       1.0f, 0.0f,
+    0.0f,  kSqrt2/2.0f, -1.0f/2.0f, -kSqrt2,       1.0f, 0.0f,
+    0.0f,  1.0f,         0.0f,      -5.0f/2.0f,    0.0f, 1.0f
+};
 
-    *o0 = i0 + i2 * (-5.0f/2.0f) + i4;
-    *o1 = i3m1 + i4m2;
-    *o2 = -i3m1 + i4m2;
+template <typename T>
+__device__ __forceinline__ void transform_in_mul_kernel(const T * in_pad,
+                                                        T * T1,
+                                                        T * T2) {
+    #pragma unroll
+    for (int i = 0; i < kWinogradAlpha; i++){
+        #pragma unroll
+        for (int j = 0; j < kWinogradAlpha; j++) {
+            float accm = 0;
+            #pragma unroll
+            for (int k = 0; k < kWinogradAlpha; k++) {
+                accm += Bt[i * kWinogradAlpha + k] * in_pad[j * kWinogradAlpha + k];
+            }
+            T1[i * kWinogradAlpha + j] = accm;
+        }
+    }
 
-    float i3m1_2 = i3 * (kSqrt2) + i1 * (-kSqrt2/2.0f);
-    float i4m2_2 = i2 * (-1.0f/2.0f) + i4;
-
-    *o3 = i3m1_2 + i4m2_2;
-    *o4 = -i3m1_2 + i4m2_2;
-
-    *o5 = i1 + i3 * (-5.0f/2.0f) + i5;
+    #pragma unroll
+    for (int i = 0; i < kWinogradAlpha; i++){
+        #pragma unroll
+        for (int j = 0; j < kWinogradAlpha; j++) {
+            float accm = 0;
+            #pragma unroll
+            for (int k = 0; k < kWinogradAlpha; k++) {
+                accm += T1[i * kWinogradAlpha + k] * Bt[j * kWinogradAlpha + k];
+            }
+            T2[i * kWinogradAlpha + j] = accm;
+        }
+    }
 }
 
-__device__ __forceinline__ void multiply_atv(
-    float * o,
-    float i0, float i1, float i2, float i3, float i4, float i5
-) {
-    float t1p2 = (i1 + i2) * (1.0f / 2.0f);
-    float t1m2 = (i1 - i2) * (kSqrt2/4.0f);
-    float t3p4 = i3 + i4;
-    float t3m4 = (i3 - i4) * (kSqrt2);
+__constant__ float At[kWinogradM * kWinogradAlpha] = {
+   1.0f, 1.0f,         1.0f,          1.0f,         1.0f,        0.0f,
+   0.0f, kSqrt2/2.0f, -kSqrt2/2.0f,   kSqrt2,      -kSqrt2,      0.0f,
+   0.0f, 1.0f/2.0f,    1.0f/2.0f,     2.0f,         2.0f,        0.0f,
+   0.0f, kSqrt2/4.0f, -kSqrt2/4.0f,   2.0f*kSqrt2, -2.0f*kSqrt2, 1.0f
+};
 
-    o[0] = i0 + t1p2 + t1p2 + t3p4;
-    o[1] = t1m2 + t1m2 + t3m4;
-    o[2] = t1p2 + t3p4 + t3p4;
-    o[3] = t1m2 + t3m4 + t3m4 + i5;
-}
+template <typename T>
+__device__ __forceinline__ void transform_out_mul_kernel(const T * in_pad,
+                                                         T * T1,
+                                                         T * T2,
+                                                         T bias) {
+    #pragma unroll
+    for (int i = 0; i < kWinogradM; i++){
+        #pragma unroll
+        for (int j = 0; j < kWinogradAlpha; j++) {
+            float accm = 0;
+            #pragma unroll
+            for (int k = 0; k < kWinogradAlpha; k++) {
+                accm += At[i * kWinogradAlpha + k] * in_pad[j * kWinogradAlpha +  k];
+            }
+            T1[i * kWinogradAlpha + j] = accm;
+        }
+    }
 
-__device__ __forceinline__ void multiply_at(
-    float * o0, float * o1, float * o2, float * o3,
-    float i0,   float i1,   float i2,   float i3, float i4, float i5
-) {
-    float o[4];
-    multiply_atv(o, i0, i1, i2, i3, i4, i5);
-
-    *o0 = o[0];
-    *o1 = o[1];
-    *o2 = o[2];
-    *o3 = o[3];
+    #pragma unroll
+    for (int i = 0; i < kWinogradM; i++){
+        #pragma unroll
+        for (int j = 0; j < kWinogradM; j++) {
+            float accm = bias;
+            #pragma unroll
+            for (int k = 0; k < kWinogradAlpha; k++) {
+                accm += T1[i * kWinogradAlpha + k] * At[j * kWinogradAlpha + k];
+            }
+            T2[i * kWinogradM + j] = accm;
+        }
+    }
 }
 
 // This kernel is imported from Leela Zero.
 template <typename T>
 __global__ void transform_in_kernel(T *V, const T *in,
                                     const int C,
-                                    const int Cpad, const int Ppad,
+                                    const int c_pad, const int p_pad,
                                     const int board_size, const int batch_size) {
     const int W = board_size;
     const int H = board_size;
     const int WTILES = board_size / kWinogradM + (board_size % kWinogradM != 0);
     const int P = WTILES * WTILES;
-    const int CPpad = Ppad * Cpad;
 
     const int spatial = W * H;
 
     const int index = threadIdx.x + blockDim.x * blockIdx.x;
-    const int block = index % (batch_size * P);
     const int ch = index / (batch_size * P);
+    const int block = index % (batch_size * P);
 
     const int batch = block / P;
     const int block_x = (block - P * batch) % WTILES;
@@ -517,7 +548,9 @@ __global__ void transform_in_kernel(T *V, const T *in,
 
     if (block < batch_size * P && ch < C) {
         // Cache input tile and handle zero padding
-        float x[kWinogradAlpha][kWinogradAlpha];
+        // float in_pad[kWinogradAlpha * kWinogradAlpha];
+        float T1[kWinogradAlpha * kWinogradAlpha];
+        float T2[kWinogradAlpha * kWinogradAlpha];
 
         #pragma unroll
         for (int i = 0; i < kWinogradAlpha; i++) {
@@ -527,45 +560,29 @@ __global__ void transform_in_kernel(T *V, const T *in,
                 int b = yin + i;
                 // x is transposed here for better layout later
                 if (b >= 0 && a >= 0 && b < H && a < W) {
-                    x[j][i] = (float)(in[batch * C * spatial +
-                                             ch * spatial + b * W + a]);
+                    const int offset = batch * C * spatial +
+                                           ch * spatial + b * W + a;
+                    T2[j * kWinogradAlpha + i] = (float)(in[offset]);
                 } else {
-                    x[j][i] = 0;
+                    T2[j * kWinogradAlpha + i] = 0;
                 }
             }
         }
 
         // V dimensions are [36, input_channels, batch_size * tiles].
         // Padded with zeros as necessary for SGEMM
-        // = [36, Cpad, Ppad]
+        // = [36, c_pad, p_pad]
 
-        float T1[kWinogradAlpha][kWinogradAlpha];
-        float T2[kWinogradAlpha][kWinogradAlpha];
+        transform_in_mul_kernel(T2, T1, T2);
 
-        #pragma unroll
-        for (int j = 0; j < kWinogradAlpha; j++) {
-            multiply_bt(
-                &(T1[0][j]), &(T1[1][j]), &(T1[2][j]), &(T1[3][j]), &(T1[4][j]), &(T1[5][j]),
-                x[j][0], x[j][1], x[j][2], x[j][3], x[j][4], x[j][5]
-            );
-        }
-
-        #pragma unroll
-        for (int i = 0; i < kWinogradAlpha; i++){
-            multiply_bt(
-                &(T2[i][0]),  &(T2[i][1]),  &(T2[i][2]),  &(T2[i][3]),  &(T2[i][4]),  &(T2[i][5]),
-                T1[i][0], T1[i][1], T1[i][2], T1[i][3], T1[i][4], T1[i][5]
-            );
-        }
-
-        const int offset = ch * Ppad + block;
+        const int offset = ch * p_pad + block;
 
         // Scatter each sub element in tile to separate matrices
         #pragma unroll
         for (int i = 0; i < kWinogradAlpha; i++) {
             #pragma unroll
             for (int j = 0; j < kWinogradAlpha; j++) {
-                V[(i*kWinogradAlpha + j) * CPpad + offset] = (T)(T2[i][j]);
+                V[(i*kWinogradAlpha + j) * c_pad * p_pad + offset] = (T)(T2[i * kWinogradAlpha + j]);
             }
         }
     }
@@ -587,55 +604,36 @@ __global__ void transform_out_kernel(T *Y, const T *M,
     const int P = WTILES * WTILES;
 
     const int index = threadIdx.x + blockDim.x * blockIdx.x;
-    const int block = index % (batch_size * P);
     const int k = index / (batch_size * P);
+    const int block = index % (batch_size * P);
 
     if (k < K && block < batch_size * P) {
-        float temp[kWinogradM][kWinogradAlpha];
-        float o[kWinogradM][kWinogradM];
+        // float in_pad[kWinogradAlpha * kWinogradAlpha];
+        // float T1[kWinogradM * kWinogradAlpha];
+        // float T2[kWinogradM * kWinogradM];
+        float T1[kWinogradM * kWinogradAlpha];
+        float T2[kWinogradAlpha * kWinogradAlpha];
+
         float bias = 0.f;
         if (biases) {
             bias = (float)(biases[k]);
         }
 
+        const int offset = k * p_pad + block;
+
+        #pragma unroll
+        for (int i = 0; i < kWinogradAlpha; i++){
+            #pragma unroll
+            for (int j = 0; j < kWinogradAlpha; j++) {
+                T2[j * kWinogradAlpha + i] = (float)(
+                    M[(i * kWinogradAlpha + j) * k_pad * p_pad + offset]);
+            }
+        }
+
         // M dimensions are [36, outputs, batch_size * tiles].
         // Plus zero padding from SGEMM.
 
-        // This 'offset' is for GEMM batched.
-        // const int offset = block * k_pad + k;
-
-        // This 'offset' is for GEMM strided batched.
-        const int offset = k * p_pad + block;
-
-        // Calculates transpose(A).temp_m
-        #pragma unroll
-        for (int xn = 0; xn < kWinogradAlpha; xn++) {
-            float temp_m0 = (float)(M[(0 * kWinogradAlpha + xn) * k_pad * p_pad + offset]);
-            float temp_m1 = (float)(M[(1 * kWinogradAlpha + xn) * k_pad * p_pad + offset]);
-            float temp_m2 = (float)(M[(2 * kWinogradAlpha + xn) * k_pad * p_pad + offset]);
-            float temp_m3 = (float)(M[(3 * kWinogradAlpha + xn) * k_pad * p_pad + offset]);
-            float temp_m4 = (float)(M[(4 * kWinogradAlpha + xn) * k_pad * p_pad + offset]);
-            float temp_m5 = (float)(M[(5 * kWinogradAlpha + xn) * k_pad * p_pad + offset]);
-            multiply_at(
-                &(temp[0][xn]), &(temp[1][xn]), &(temp[2][xn]), &(temp[3][xn]),
-                temp_m0, temp_m1, temp_m2, temp_m3, temp_m4, temp_m5
-            );
-        }
-
-        // Calculates temp.A
-        #pragma unroll
-        for (int i = 0; i < kWinogradM; i++){
-            float r[4];
-            multiply_atv(
-                r,
-                temp[i][0], temp[i][1], temp[i][2], temp[i][3], temp[i][4], temp[i][5]
-            );
-
-            o[i][0] = r[0] + bias;
-            o[i][1] = r[1] + bias;
-            o[i][2] = r[2] + bias;
-            o[i][3] = r[3] + bias;
-        }
+        transform_out_mul_kernel(T2, T1, T2, bias);
 
         const int batch = block / P;
         const int block_x = (block - P * batch) % WTILES;
@@ -653,7 +651,7 @@ __global__ void transform_out_kernel(T *Y, const T *M,
                     k * spatial +
                     (y + i) * W + (x + j);
                 if (y + i < H && x + j < W) {
-                    float val = o[i][j];
+                    float val = T2[i * kWinogradM + j];
                     if (residual) {
                         val += (float)(residual[out_idx]);
                     }
@@ -714,8 +712,7 @@ void winograd3_transform_out(T *out, const T *M, const T *biases,
 template<>
 void gemm<float>(bool TA, bool TB, int M, int N, int K, float ALPHA,
                  const float *A_gpu, int lda, const float *B_gpu, int ldb,
-                 float BETA, float *C_gpu, int ldc, cublasHandle_t handle, cudaStream_t stream) {
-    ReportCUBLASErrors(cublasSetStream(handle, stream));
+                 float BETA, float *C_gpu, int ldc, cublasHandle_t handle) {
     ReportCUBLASErrors(cublasSgemm(
                            handle,
                            (TB ? CUBLAS_OP_T : CUBLAS_OP_N),
@@ -731,8 +728,7 @@ void gemm<float>(bool TA, bool TB, int M, int N, int K, float ALPHA,
 template<>
 void gemm_strided_batched<float>(bool TA, bool TB, int M, int N, int K, float ALPHA,
                                  const float *A_gpu, int lda, int strideA, const float *B_gpu, int ldb, int strideB,
-                                 float BETA, float *C_gpu, int ldc, int strideC, int batchsize, cublasHandle_t handle, cudaStream_t stream) {
-    ReportCUBLASErrors(cublasSetStream(handle, stream));
+                                 float BETA, float *C_gpu, int ldc, int strideC, int batchsize, cublasHandle_t handle) {
     ReportCUBLASErrors(cublasSgemmStridedBatched(
                            handle,
                            (TB ? CUBLAS_OP_T : CUBLAS_OP_N),
@@ -750,8 +746,7 @@ void gemm_strided_batched<float>(bool TA, bool TB, int M, int N, int K, float AL
 template<>
 void gemm<half>(bool TA, bool TB, int M, int N, int K, half ALPHA,
                 const half *A_gpu, int lda, const half *B_gpu, int ldb,
-                half BETA, half *C_gpu, int ldc, cublasHandle_t handle, cudaStream_t stream) {
-    ReportCUBLASErrors(cublasSetStream(handle, stream));
+                half BETA, half *C_gpu, int ldc, cublasHandle_t handle) {
     ReportCUBLASErrors(cublasHgemm(
                            handle,
                            (TB ? CUBLAS_OP_T : CUBLAS_OP_N),
@@ -767,8 +762,7 @@ void gemm<half>(bool TA, bool TB, int M, int N, int K, half ALPHA,
 template<>
 void gemm_strided_batched<half>(bool TA, bool TB, int M, int N, int K, half ALPHA,
                                 const half *A_gpu, int lda, int strideA, const half *B_gpu, int ldb, int strideB,
-                                half BETA, half *C_gpu, int ldc, int strideC, int batchsize, cublasHandle_t handle, cudaStream_t stream) {
-    ReportCUBLASErrors(cublasSetStream(handle, stream));
+                                half BETA, half *C_gpu, int ldc, int strideC, int batchsize, cublasHandle_t handle) {
     ReportCUBLASErrors(cublasHgemmStridedBatched(
                            handle,
                            (TB ? CUBLAS_OP_T : CUBLAS_OP_N),

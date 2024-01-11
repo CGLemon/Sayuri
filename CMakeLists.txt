@@ -31,10 +31,10 @@ else()
 endif()
 
 if (_USE_CUDA)
-    project(Sayuri LANGUAGES CXX CUDA)
+    project(sayuri LANGUAGES CXX CUDA)
     cmake_minimum_required(VERSION 3.15)
 else()
-    project(Sayuri)
+    project(sayuri)
     cmake_minimum_required(VERSION 3.10)
 endif()
 
@@ -345,7 +345,7 @@ elseif(_USE_BLAS)
     message(" BLAS/OpenBLAS library be found.\n")
 endif()
 
-add_executable(Sayuri
+add_executable(sayuri
     ${BASIC_SOURCES}
     ${GAME_SOURCES}
     ${PATTERN_SOURCES}
@@ -357,14 +357,14 @@ add_executable(Sayuri
     ${CUDA_SOURCES}
     )
 
-target_link_libraries(Sayuri Threads::Threads)
-target_link_libraries(Sayuri ${BLAS_LIBRARIES})
+target_link_libraries(sayuri Threads::Threads)
+target_link_libraries(sayuri ${BLAS_LIBRARIES})
 if (USE_ZLIB)
-    target_link_libraries(Sayuri ${ZLIB_LIBRARIES})
+    target_link_libraries(sayuri ${ZLIB_LIBRARIES})
 endif()
 
 if(_USE_CUDA)
-    target_compile_definitions(Sayuri PRIVATE USE_CUDA_BACKEND)
+    target_compile_definitions(sayuri PRIVATE USE_CUDA_BACKEND)
     find_package(CUDA REQUIRED)
     if(_USE_CUDNN)
         message(STATUS "Include CuDNN library")
@@ -379,5 +379,5 @@ if(_USE_CUDA)
         message(" The cuDNN library be found.\n")
     endif()
     include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})
-    target_link_libraries(Sayuri ${CUDNN_LIBRARY} ${CUDA_CUBLAS_LIBRARIES} ${CUDA_LIBRARIES})
+    target_link_libraries(sayuri ${CUDNN_LIBRARY} ${CUDA_CUBLAS_LIBRARIES} ${CUDA_LIBRARIES})
 endif()

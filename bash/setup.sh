@@ -16,7 +16,7 @@ do
 done
 
 SOURCE_DIR=$source
-ENGINE_NAME="Sayuri"
+ENGINE_NAME="sayuri"
 
 cp "$SOURCE_DIR/build/$ENGINE_NAME" "."
 cp -r "$SOURCE_DIR/train/torch" "."

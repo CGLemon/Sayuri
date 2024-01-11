@@ -152,7 +152,7 @@ void Gemm(bool fp16, bool TA, bool TB,
           const void *B_gpu, int ldb,
           float BETA,
           void *C_gpu, int ldc,
-          cublasHandle_t handle, cudaStream_t stream) {
+          cublasHandle_t handle) {
     if (fp16) {
 #ifdef ENABLE_FP16
         half_float_t alpha = GetFp16(ALPHA);
@@ -164,7 +164,7 @@ void Gemm(bool fp16, bool TA, bool TB,
              (const half *)B_gpu, ldb,
              *(half*)&beta,
              (half *)C_gpu, ldc,
-             handle, stream);
+             handle);
 #endif
     } else {
         gemm(TA, TB,
@@ -174,7 +174,7 @@ void Gemm(bool fp16, bool TA, bool TB,
              (const float *)B_gpu, ldb,
              BETA,
              (float *)C_gpu, ldc,
-             handle, stream);
+             handle);
     }
 }
 
@@ -186,7 +186,7 @@ void GemmStridedBatched(bool fp16, bool TA, bool TB,
                         float BETA,
                         void *C_gpu, int ldc, int strideC,
                         int batchsize,
-                        cublasHandle_t handle, cudaStream_t stream) {
+                        cublasHandle_t handle) {
     if (fp16) {
 #ifdef ENABLE_FP16
         half_float_t alpha = GetFp16(ALPHA);
@@ -199,7 +199,7 @@ void GemmStridedBatched(bool fp16, bool TA, bool TB,
             *(half*)&beta,
             (half *)C_gpu, ldc, strideC,
             batchsize,
-            handle, stream
+            handle
         );
 #endif
     } else {
@@ -211,7 +211,7 @@ void GemmStridedBatched(bool fp16, bool TA, bool TB,
             BETA,
             (float *)C_gpu, ldc, strideC,
             batchsize,
-            handle, stream
+            handle
         );
     }
 }
@@ -328,7 +328,7 @@ void Convolution::Forward(const int batch,
             0.0f,
             scratch_op_other, batch_ptiles, out_channels_ * batch_ptiles,
             kWinogradTile,
-            handles_->cublas_handle, handles_->stream);
+            handles_->cublas_handle);
         Winograd3TransformOut(
             fp16_, output, scratch_op_other,
             cuda_biases_, residual, mask,
@@ -347,7 +347,7 @@ void Convolution::Forward(const int batch,
                 0.f,
                 output, spatial_size_, out_channels_ * spatial_size_,
                 batch,
-                handles_->cublas_handle, handles_->stream);
+                handles_->cublas_handle);
         } else {
             GemmStridedBatched(
                 fp16_, false, false,
@@ -358,7 +358,7 @@ void Convolution::Forward(const int batch,
                 0.f,
                 output, spatial_size_, out_channels_ * spatial_size_,
                 batch,
-                handles_->cublas_handle, handles_->stream);
+                handles_->cublas_handle);
         }
         AddSpatial(
             fp16_, output, cuda_biases_,
@@ -538,10 +538,10 @@ void FullyConnect::Forward(const int batch, void *output, void *input) {
          cuda_weights_, inputs_,
          0.0f,
          output, outputs_,
-         handles_->cublas_handle, handles_->stream);
+         handles_->cublas_handle);
     AddVectors(
         fp16_, output, cuda_biases_, output,
-        outputs_ * batch, outputs_, outputs_ * batch, relu_, handles_->stream );
+        outputs_ * batch, outputs_, outputs_ * batch, relu_, handles_->stream);
 }
 
 GlobalPooling::GlobalPooling(CudaHandles *handles,
@@ -634,7 +634,7 @@ void SEUnit::Forward(const int batch, void *ouput, void *input,
          cuda_weights_w1_, fc1_input_size,
          0.0f,
          cuda_op_[1], fc1_output_size,
-         handles_->cublas_handle, handles_->stream);
+         handles_->cublas_handle);
     AddVectors(
         fp16_, cuda_op_[1], cuda_weights_b1_, cuda_op_[1],
         fc1_output_size * batch, fc1_output_size, fc1_output_size * batch, fc1_relu, handles_->stream);
@@ -649,7 +649,7 @@ void SEUnit::Forward(const int batch, void *ouput, void *input,
          cuda_weights_w2_, fc2_input_size,
          0.0f,
          cuda_op_[2], fc2_output_size,
-         handles_->cublas_handle, handles_->stream);
+         handles_->cublas_handle);
 
     AddVectors(
         fp16_, cuda_op_[2], cuda_weights_b2_, cuda_op_[2],

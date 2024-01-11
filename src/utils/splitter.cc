@@ -227,7 +227,7 @@ bool Splitter::Reuslt::IsDigit() const {
     bool is_digit = true;
 
     for (char c : str_) {
-        is_digit &= std::isdigit(c);
+        is_digit &= (bool)std::isdigit(c);
     }
     return is_digit;
 }

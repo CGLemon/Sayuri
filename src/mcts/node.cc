@@ -14,6 +14,7 @@
 #include <sstream>
 #include <iomanip>
 #include <stack>
+#include <numeric>
 
 #define VIRTUAL_LOSS_COUNT (3)
 
@@ -165,9 +166,7 @@ bool Node::ExpandChildren(Network &network,
 
     // Prune the illegal moves or some bad move.
     for (int idx = 0; idx < num_intersections; ++idx) {
-        const auto x = idx % board_size;
-        const auto y = idx / board_size;
-        const auto vtx = state.GetVertex(x, y);
+        const auto vtx = state.IndexToVertex(idx);
         const auto policy = raw_netlist.probabilities[idx];
 
         // Prune the illegal, unwise and forbidden move.
@@ -455,13 +454,14 @@ Node *Node::PuctSelectChild(const int color, const bool is_root, Transposition *
         }
     }
 
+    // Cache the hyper-parameters.
     const auto cpuct_init           = param_->cpuct_init;
     const auto cpuct_base_factor    = param_->cpuct_base_factor;
     const auto cpuct_base           = param_->cpuct_base;
     const auto draw_factor          = param_->draw_factor;
     const auto score_utility_factor = param_->score_utility_factor;
     const auto score_utility_div    = param_->score_utility_div;
-    const auto noise                = is_root ? param_->dirichlet_noise  : false;
+    const auto noise                = is_root ? param_->dirichlet_noise : false;
     const auto fpu_reduction_factor = is_root ? param_->fpu_root_reduction : param_->fpu_reduction;
     const auto forced_playouts_k    = is_root ? param_->forced_playouts_k : 0.f;
 
@@ -517,7 +517,14 @@ Node *Node::PuctSelectChild(const int color, const bool is_root, Transposition *
                                node->GetScoreUtility(
                                    color, score_utility_div, parent_score);
 
-                const int forced_n = forced_playouts_k * psa * (float)parentvisits;
+                // Forced Playouts method. It can help to explore the low priority
+                // child with high noise value. We think 20% is big enough and high
+                // priority child is easy to be explored with PUCT. We don't need to
+                // add any bouns for these kind of children.
+                const float psa_factor = std::min(0.2f, psa);
+                const float forced_n_factor =
+                    std::max(1e-4f, forced_playouts_k * psa_factor * (float)parentvisits);
+                const int forced_n = std::sqrt(forced_n_factor);
                 if (forced_n - visits > 0) {
                     utility += (forced_n - visits) * 1e6;
                 }
@@ -543,29 +550,39 @@ Node *Node::PuctSelectChild(const int color, const bool is_root, Transposition *
 
 int Node::RandomMoveProportionally(float temp, int min_visits) {
     auto select_vertex = kNullVertex;
-    auto accum = float{0.0f};
-    auto accum_vector = std::vector<std::pair<float, int>>{};
+    auto norm_factor= double{0};
+    auto accum = double{0};
+    auto accum_vector = std::vector<std::pair<decltype(accum), int>>{};
 
     for (const auto &child : children_) {
         auto node = child.Get();
         const auto visits = node->GetVisits();
         const auto vertex = node->GetVertex();
         if (visits > min_visits) {
-            accum += std::pow((float)visits, (1.0 / temp));
-            accum_vector.emplace_back(std::pair<float, int>(accum, vertex));
+            if (norm_factor == 0.0) {
+                norm_factor = visits;
+            }
+            double val = visits / norm_factor;
+            accum += std::pow(val, (1.0 / temp));
+            accum_vector.emplace_back(
+                std::pair<decltype(accum), int>(accum, vertex));
         }
     }
 
     if (accum_vector.empty()) {
-        if (min_visits > 0) {
-            return RandomMoveProportionally(temp, 0);
-        } else {
-            // There is no visits. Reture the best policy move.
-            return GetBestMove(true);
-        }
+        // All moves are pruned. In this case, we think
+        // the random move is unsafe. For example, we will
+        // set 'min_visits' as high value in the fast search
+        // phase in order to optimize strength and improve
+        // the diversity. If the visits of all candidate moves
+        // are lower than 'min_visits', all candidate moves
+        // should be unsafe. So only return the best move,
+        // the safest move.
+        return GetBestMove(true);
     }
 
-    auto distribution = std::uniform_real_distribution<float>{0.0, accum};
+    auto distribution =
+        std::uniform_real_distribution<decltype(accum)>{0.0, accum};
     auto pick = distribution(Random<>::Get());
     auto size = accum_vector.size();
 
@@ -598,9 +615,11 @@ int Node::RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits) {
             idx = state.GetIndex(
                       state.GetX(vtx), state.GetY(vtx));
         }
-        accm_visists += visits;
-        prob[idx] = visits;
-        vertices_table[idx] = vtx;
+        if (visits != 0) { 
+            accm_visists += visits;
+            prob[idx] = visits;
+            vertices_table[idx] = vtx;
+        }
     }
 
     if (accm_visists == 0) {
@@ -613,23 +632,26 @@ int Node::RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits) {
     MixLogitsCompletedQ(state, prob);
 
     auto select_vertex = kNullVertex;
-    auto accum = float{0.0f};
-    auto accum_vector = std::vector<std::pair<float, int>>{};
+    auto accum = double{0};
+    auto accum_vector = std::vector<std::pair<decltype(accum), int>>{};
 
     for (int idx = 0; idx < num_intersections+1; ++idx) {
         // Prune the unvisited moves.
         int vtx = vertices_table[idx];
         if (vtx != kNullVertex) {
-            accum += std::pow((float)prob[idx], (1.0 / temp));
-            accum_vector.emplace_back(std::pair<float, int>(accum, vtx));
+            accum += std::pow((decltype(accum))prob[idx], (1.0 / temp));
+            accum_vector.emplace_back(
+                std::pair<decltype(accum), int>(accum, vtx));
         }
     }
 
     if (accum_vector.empty()) {
+        // What happened? Is it possible?
         return RandomMoveProportionally(temp, min_visits);
     }
 
-    auto distribution = std::uniform_real_distribution<float>{0.0, accum};
+    auto distribution =
+        std::uniform_real_distribution<decltype(accum)>{0.0, accum};
     auto pick = distribution(Random<>::Get());
     auto size = accum_vector.size();
 
@@ -888,6 +910,8 @@ std::string Node::OwnershipToString(GameState &state, const int color, std::stri
 
     auto ownership = node->GetOwnership(color);
 
+    // TODO: A wrapper for row major iterator staring
+    //       from A19.
     out << name << ' ';
     for (int y = board_size-1; y >= 0; --y) {
         for (int x = 0; x < board_size; ++x) {
@@ -1633,15 +1657,16 @@ bool Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
     int level = prom_visits;
 
     if (only_max_visits) {
+        // The case is to output the best move.
         playouts_thres = std::max(playouts_thres, 1);
         target_visits = max_visists;
         goto end_loop;
     }
 
-    // We may reuse the sub-tree. Try fill old distribution in oredr
+    // We may reuse the sub-tree. Try fill old distribution in order
     // to cover the Sequential Halving distribution. For example,
     //
-    // Original distribution
+    // Original distribution (sorted)
     // { 9, 2, 0, 0 }
     //
     // Target Sequential Halving distribution
@@ -1654,9 +1679,11 @@ bool Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
     // { 9, 3, 1, 1 }
     while (true) {
         for (int i = 0; i < level; ++i) {
+            // Keep to minus current distribution according to Sequential
+            // Halving, the first zero visits is target child.
             for (int j = 0; j < width; ++j) {
                 if (table[j].first <= 0) {
-                    auto vtx = table[width-1].second;
+                    auto vtx = table[j].second;
                     target_visits = GetChild(vtx)->GetVisits();
                     goto end_loop;
                 }
@@ -1664,11 +1691,14 @@ bool Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
                 playouts_thres -= 1;
 
                 if (playouts_thres <= 0) {
+                    // The current distribution cover the Sequential Halving
+                    // distribution. Disable the Gumbel noise.
                     goto end_loop;
                 }
             }
         }
         if (width == 1) {
+            // Go to next epoch.
             width = adj_considered_moves;
             level = prom_visits;
         } else {

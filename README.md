@@ -11,24 +11,24 @@ Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network a
 
 * [開發日誌](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/BJgfay0Yc)
 * [AlphaZero 之加速演算法實作 (v0.4~v0.5)](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJI9_p70i)
-* [The performance report before UEC15](https://drive.google.com/file/d/1ATd_u-E-OnviczsDH8wVL0c3Q1NzUCKW/view?usp=share_link)
+* [The performance report before UEC15 (v0.6)](https://drive.google.com/file/d/1ATd_u-E-OnviczsDH8wVL0c3Q1NzUCKW/view?usp=share_link)
 * [Journal](./docs/JOURNAL.md)
 
 ## Quick Start via Terminal
 
-First, you need a executable weights. Download the last v0.6 weights [here](https://drive.google.com/drive/folders/1nawHAKHTBKEpLcizaVrK4GVDSIuVqJ-Q?usp=sharing) and see the current RL progression [here](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJew5OFci). If you want to use the older network, please use the v0.5 engine.
+First, you need a executable weights. Download the last v0.6 weights [here](https://drive.google.com/drive/folders/1nawHAKHTBKEpLcizaVrK4GVDSIuVqJ-Q?usp=sharing) and see the current RL progression [here](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJew5OFci). If you want to use the older network, please use the v0.5 engine at the ```save-last-v050``` branch.
 
 Then start the program with GTP mode via the terminal/PowerShell, please enter
 
-    $ ./Sayuri -w <weights file> -t 1 -b 1 -p 400
+    $ ./sayuri -w <weights file> -t 1 -b 1 -p 400
 
-You will see the diagnostic verbose. If the verbose includes ```Network Verison``` information, it means you success to start the program. For more arguments, please give the ```--help``` option.
+You will see the diagnostic verbose. If the verbose includes ```Network Verison``` information, it means you success to execute the program with GPT mode. For more arguments, please give the ```--help``` option.
 
-    $ ./Sayuri --help
+    $ ./sayuri --help
 
 ## Graphical Interface
 
-Sayuri is not complete engine. You need a graphical interface for playing with her. She supports any GTP (version 2) interface application. [Sabaki](https://sabaki.yichuanshen.de/) and [GoGui](https://github.com/Remi-Coulom/gogui) are recommended that because Sayuri supports some specific analysis commands. 
+Sayuri is not complete engine. You need a graphical interface for playing with her. She supports any GTP (version 2) interface application. [Sabaki](https://sabaki.yichuanshen.de/) and [GoGui](https://github.com/Remi-Coulom/gogui) are recommended because Sayuri supports some specific analysis commands. 
 
 * Sabaki analysis mode
 
@@ -48,11 +48,11 @@ Please see this [section](./bash/README.md).
 
 ## Todo
 
-* Support Windows platform (CUDA version).
 * Support NHWC format.
 * Support distributed computation.
+* Support KataGo analysis mode.
 
-## Other Linkings
+## Other Resources
 
 * Go Text Protocol, [https://www.gnu.org/software/gnugo/gnugo_19.html](https://www.gnu.org/software/gnugo/gnugo_19.html)
 * Leela Zero, [https://github.com/leela-zero/leela-zero](https://github.com/leela-zero/leela-zero)
