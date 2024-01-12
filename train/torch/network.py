@@ -52,9 +52,6 @@ def tensor_to_text(t: torch.Tensor, use_bin):
         return tensor_to_bin(t)
     return " ".join([str(w) for w in tensor_to_list(t)]) + "\n"
 
-def accum_weights(val, w, n):
-    return val.detach() * (n / (n + 1.)) + w.detach() * (1. / (n + 1.))
-
 # It is imported from KataGo.
 class SoftPlusWithGradientFloorFunction(torch.autograd.Function):
     """
@@ -321,18 +318,6 @@ class FullyConnect(nn.Module):
         out += tensor_to_text(self.linear.bias, use_bin)
         return out
 
-    def accumulate_swa(self, other_layer, swa_count):
-        self.linear.weight.data = accum_weights(
-            self.linear.weight.data,
-            other_layer.linear.weight.data,
-            swa_count
-        )
-        self.linear.bias.data = accum_weights(
-            self.linear.bias.data,
-            other_layer.linear.bias.data,
-            swa_count
-        )
-
     def forward(self, x):
         x = self.linear(x)
         return F.relu(x, inplace=True) if self.relu else x
@@ -383,18 +368,6 @@ class Convolve(nn.Module):
         out += tensor_to_text(self.conv.weight, use_bin)
         out += tensor_to_text(self.conv.bias, use_bin)
         return out
-
-    def accumulate_swa(self, other_layer, swa_count):
-        self.conv.weight.data = accum_weights(
-            self.conv.weight.data,
-            other_layer.conv.weight.data,
-            swa_count
-        )
-        self.conv.bias.data = accum_weights(
-            self.conv.bias.data,
-            other_layer.conv.bias.data,
-            swa_count
-        )
 
     def forward(self, x, mask):
         x = self.conv(x) * mask
@@ -482,35 +455,6 @@ class ConvBlock(nn.Module):
         out += tensor_to_text(bn_mean, use_bin)
         out += tensor_to_text(bn_std, use_bin)
         return out
-
-    def accumulate_swa(self, other_layer, swa_count):
-        self.conv.weight.data = accum_weights(
-            self.conv.weight.data,
-            other_layer.conv.weight.data,
-            swa_count
-        )
-        self.bn.running_mean.data = accum_weights(
-            self.bn.running_mean.data,
-            other_layer.bn.running_mean.data,
-            swa_count
-        )
-        self.bn.running_var.data = accum_weights(
-            self.bn.running_var.data,
-            other_layer.bn.running_var.data,
-            swa_count
-        )
-        if self.bn.gamma is not None:
-            assert other_layer.bn.gamma is not None, ""
-            self.bn.gamma.data = accum_weights(
-                self.bn.gamma.data,
-                other_layer.bn.gamma.data,
-                swa_count
-            )
-        self.bn.beta.data = accum_weights(
-            self.bn.beta.data,
-            other_layer.bn.beta.data,
-            swa_count
-        )
 
     def forward(self, x, mask):
         x = self.conv(x) * mask
@@ -963,20 +907,19 @@ class Network(nn.Module):
                 layer.bn.update_renorm_clips(curr_steps)
 
     def accumulate_swa(self, other_network, swa_count):
-        a_size = len(self.layers_collector)
-        b_size = len(other_network.layers_collector)
+        def accum_weights(v, w, n):
+            # EMA formula
+            if n <= 0:
+                decay = 0.
+            else:
+                decay = n / (n + 1.)
+            return decay * v.detach() + (1. - decay) * w.detach()
 
-        if a_size != b_size:
-            raise Exception("The weights are not same size")
+        for a, b in zip(self.parameters(), other_network.parameters()):
+            a.data = accum_weights(a.data, b.data, swa_count)
 
-        for i in range(a_size):
-            this_layer = self.layers_collector[i]
-            other_layer = other_network.layers_collector[i]
-
-            assert isinstance(this_layer, FullyConnect) or \
-                       isinstance(this_layer, Convolve) or \
-                       isinstance(this_layer, ConvBlock), ""
-            this_layer.accumulate_swa(other_layer, swa_count)
+        for a, b in zip(self.buffers(), other_network.buffers()):
+            a.data = accum_weights(a.data, b.data, swa_count)
 
     def simple_info(self):
         info = str()
