@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstdint>
 #include <cstddef>
+#include <atomic>
 
 #include "game/types.h"
 
@@ -23,8 +24,10 @@ public:
 
     size_t GetCapacity() const;
 
+    void UpdateRootVisits(int v);
+
 private:
-    static constexpr int kMinVisits = 1;
+    int GetMinVisits() const;
 
     struct Entry {
         Entry() : hash(0ULL), q(0.0), visits(0) {}
@@ -37,4 +40,5 @@ private:
 
     std::vector<Entry> table_;
     size_t capacity_;
+    std::atomic<int> root_visits_{0};
 };

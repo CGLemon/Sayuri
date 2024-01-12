@@ -39,14 +39,16 @@ float Transposition::Lookup(std::uint64_t hash, float q, int visits, int color) 
 }
 
 float Transposition::Update(std::uint64_t hash, float eval, float q, int visits) {
+    // assume the color is black.
+
     if (capacity_ == 0) {
+        return eval;
+    }
+    if (visits < GetMinVisits()) {
         return eval;
     }
 
     Entry * e = GetEntry(hash);
-    if (visits < kMinVisits) {
-        return eval;
-    }
     if (e->hash == hash && e->visits > visits) {
         double diff = std::sqrt((double)(e->visits) - visits);
         double update_q = e->q;
@@ -79,4 +81,20 @@ size_t Transposition::GetEntrySize() const {
 
 size_t Transposition::GetCapacity() const {
     return capacity_;
+}
+
+void Transposition::UpdateRootVisits(int v) {
+    root_visits_.store(v, std::memory_order_relaxed);
+}
+
+int Transposition::GetMinVisits() const {
+    // TODO: We should tune these value.
+    int v = root_visits_.load(std::memory_order_relaxed);
+    int c = static_cast<int>(capacity_);
+    if (v >= c) {
+        return v;
+    }
+    int half_c = 0.5 * c; // half space is buffer
+    int remaining = std::max(1, half_c - v);
+    return 1 + std::min(half_c / remaining, 100);
 }

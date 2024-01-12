@@ -151,6 +151,8 @@ void Search::PrepareRootNode(Search::OptionTag tag) {
                   std::begin(netlist.probabilities) + num_intersections,
                   std::begin(root_raw_probabilities_));
     root_raw_probabilities_[num_intersections] = netlist.pass_probability;
+
+    tt_->UpdateRootVisits(visits);
 }
 
 void Search::ReleaseTree() {
@@ -342,6 +344,8 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
 
         const auto root_visits = root_node_->GetVisits();
         const auto elapsed = timer.GetDuration();
+
+        tt_->UpdateRootVisits(root_visits);
 
         if ((tag & kAnalysis) &&
                 analysis_config_.interval > 0 &&
@@ -1407,10 +1411,11 @@ std::string Search::GetDebugMoves(std::vector<int> moves) {
 }
 
 void Search::SetTranspositionSize(size_t MiB) {
-    const size_t mem_mib = std::min(
-                               std::max(size_t{1}, MiB), // min: 1 MB
-                               size_t{1 * 1024}          // max: 1 GB
-                           );
+    const size_t mem_mib =
+        std::min(
+            std::max(size_t{10}, MiB), // min: 10 MB ~ 655360 entries
+            size_t{10 * 1024}          // max: 10 GB ~ 671088640 entries
+        );
 
     const size_t entry_bytes = tt_->GetEntrySize();
     const size_t mem_bytes = mem_mib * 1024 * 1024;

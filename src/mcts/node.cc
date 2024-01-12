@@ -689,7 +689,6 @@ void Node::Update(const NodeEvals *evals, Transposition *tt) {
     const auto tt_q = (old_acc_eval + eval)/(old_visits + 1);
     eval = tt->Update(hash_, eval, tt_q, old_visits + 1);
 
-
     // TODO: According to Kata Go, It is not necessary to use
     //       Welford's online algorithm. The accuracy of simplify
     //       algorithm is enough.
