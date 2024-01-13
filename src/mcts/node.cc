@@ -619,7 +619,7 @@ int Node::RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits) {
     for (float &p : prob) {
         p /= (float)accm_visists;
     }
-    MixLogitsCompletedQ(state, prob);
+    MixLogitsCompletedQ(state, prob, 1.0f);
 
     auto select_vertex = kNullVertex;
     auto accum = double{0};
@@ -1424,11 +1424,13 @@ std::vector<float> Node::GetProbLogitsCompletedQ(GameState &state) {
         v /= acc;
     }
 
-    MixLogitsCompletedQ(state, prob);
+    MixLogitsCompletedQ(state, prob, param_->gumbel_approx_temp);
     return prob;
 }
 
-void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
+void Node::MixLogitsCompletedQ(GameState &state,
+                               std::vector<float> &prob,
+                               float temp) {
     const auto num_intersections = state.GetNumIntersections();
     const auto color = state.GetToMove();
 
@@ -1442,9 +1444,10 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
     auto logits_q = GetZeroLogits<float>(num_intersections+1);
 
     int max_visits = 0;
-    int parentvisits = 0;
-    float weighted_q = 0.f;
-    float weighted_pi = 0.f;
+    int parentvisits = 0;;
+    auto q_list = std::vector<float>{};
+    auto pi_list = std::vector<float>{};
+    auto visits_list = std::vector<float>{};
 
     // Gather some basic informations.
     for (auto & child : children_) {
@@ -1458,11 +1461,25 @@ void Node::MixLogitsCompletedQ(GameState &state, std::vector<float> &prob) {
         parentvisits += visits;
         max_visits = std::max(max_visits, visits);
 
-       if (visits > 0) {
-           weighted_q += child.GetPolicy() *
-                             node->GetGumbelQValue(color, parent_score);
-           weighted_pi += child.GetPolicy();
-       }
+        if (visits > 0) {
+            q_list.emplace_back(
+                node->GetGumbelQValue(color, parent_score));
+        } else {
+            q_list.emplace_back(0.f);
+        }
+        pi_list.emplace_back(child.GetPolicy());
+        visits_list.emplace_back(visits);
+    }
+
+    pi_list = ReSoftmax(pi_list, temp);
+    float weighted_q = 0.f;
+    float weighted_pi = 0.f;
+
+    for (int i = 0; i < (int)visits_list.size(); ++i) {
+        if (visits_list[i] > 0) {
+            weighted_q += pi_list[i] * q_list[i];
+            weighted_pi += pi_list[i]; 
+        }
     }
 
     // Compute the all children's completed Q.

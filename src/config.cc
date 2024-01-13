@@ -88,6 +88,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["random_opening_prob"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["random_opening_temp"] << Option::SetOption(1.f, 100.f, 0.f);
 
+    kOptionsMap["gumbel_approx_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["gumbel_c_visit"] << Option::SetOption(50.f);
     kOptionsMap["gumbel_c_scale"] << Option::SetOption(1.f);
     kOptionsMap["gumbel_prom_visits"] << Option::SetOption(1);
@@ -437,6 +438,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.Find({"--dirichlet-noise", "--noise", "-n"})) {
         SetOption("dirichlet_noise", true);
         spt.RemoveWord(res->Index());
+    }
+
+    if (const auto res = spt.FindNext("--gumbel-approx-temp")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("gumbel_approx_temp", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
     }
 
     if (const auto res = spt.FindNext("--gumbel-c-visit")) {
