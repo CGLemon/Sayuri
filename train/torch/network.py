@@ -850,7 +850,7 @@ class Network(nn.Module):
             soft_weight = loss_weight_dict["soft"]
 
         p_prob, p_aux_prob, p_soft_prob, p_soft_aux_prob, p_optimistic_prob, p_ownership, p_wdl, p_q_vals, p_scores, p_errors = pred
-        t_prob, t_aux_prob, t_ownership, t_wdl, t_q_vals, t_scores = target
+        t_prob, t_aux_prob, t_ownership, t_wdl, t_q_vals, t_scores, kld = target
 
         def make_soft_porb(prob, t=4):
             soft_prob = torch.pow(prob, 1/t)
@@ -904,7 +904,7 @@ class Network(nn.Module):
             max=1.0,
         )
         b, _ = optimistic_weight.shape
-        optimistic_weight = torch.reshape(optimistic_weight, (b, ))
+        optimistic_weight = torch.reshape(optimistic_weight, (b, )) * torch.reshape(kld, (b, ))
         optimistic_loss = 1 * cross_entropy(p_optimistic_prob, t_prob, optimistic_weight)
 
         # ownership loss
