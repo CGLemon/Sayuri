@@ -5,8 +5,8 @@
 #include <type_traits>
 #include <cmath>
 
-#define LOGIT_EPS  (1e-8f)
-#define LOGIT_ZERO (-1e6f)
+#define LOGIT_EPS  (1e-8)
+#define LOGIT_ZERO (-1e6)
 
 template<
     typename T,
@@ -34,13 +34,13 @@ template<
                    std::is_floating_point<T>::value
                >
 >
-std::vector<T> Softmax(std::vector<T> &logits, float temp) {
+std::vector<T> Softmax(std::vector<T> &logits, double temp) {
     auto output = std::vector<T>{};
     output.reserve(logits.size());
 
     const auto alpha = *std::max_element(
                            std::begin(logits), std::end(logits));
-    auto denom = 0.0f;
+    double denom = 0.0;
 
     for (const auto logit : logits) {
         auto val = std::exp((logit - alpha) / temp);
@@ -60,13 +60,20 @@ template<
                    std::is_floating_point<T>::value
                >
 >
-std::vector<T> ReSoftmax(std::vector<T> &prob, float temp) {
-    auto logits = std::vector<T>{};
-    logits.reserve(prob.size());
+std::vector<T> ReSoftmax(std::vector<T> &prob, double temp) {
+    auto output = std::vector<T>{};
+    output.reserve(prob.size());
 
-    for (const auto val : prob) {
-        logits.emplace_back(SafeLog(val));
+    double denom = 0.0;
+
+    for (const auto p : prob) {
+        auto val = std::pow(p, 1.0 / temp);
+        denom += val;
+        output.emplace_back(val);
     }
 
-    return Softmax(logits, temp);
+    for (auto &out : output) {
+        out /= denom;
+    }
+    return output;
 }
