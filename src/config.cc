@@ -83,6 +83,8 @@ void ArgsParser::InitOptionsMap() const {
     // self-play options
     kOptionsMap["selfplay_query"] << Option::SetOption(std::string{});
     kOptionsMap["random_min_visits"] << Option::SetOption(1);
+    kOptionsMap["random_min_ratio"] << Option::SetOption(0.f, 1.f, 0.f);
+    kOptionsMap["random_q_decay"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["random_moves_factor"] << Option::SetOption(0.f);
     kOptionsMap["random_moves_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["random_opening_prob"] << Option::SetOption(0.f, 1.f, 0.f);
@@ -521,6 +523,20 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--random-min-visits")) {
         if (IsParameter(res->Get<>())) {
             SetOption("random_min_visits", res->Get<int>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--random-min-ratio")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("random_min_ratio", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--random-q-decay")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("random_q_decay", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

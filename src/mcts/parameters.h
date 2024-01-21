@@ -34,6 +34,8 @@ public:
         forced_playouts_k = GetOption<float>("forced_playouts_k");
 
         random_min_visits = GetOption<int>("random_min_visits");
+        random_min_ratio = GetOption<float>("random_min_ratio");
+        random_q_decay = GetOption<float>("random_q_decay");
         random_moves_factor = GetOption<float>("random_moves_factor");
         random_moves_temp = GetOption<float>("random_moves_temp");
 
@@ -85,6 +87,8 @@ public:
     int ponder_factor;
     int const_time;
     int random_min_visits;
+    float random_min_ratio;
+    float random_q_decay;
     float random_moves_factor;
     float random_moves_temp;
 

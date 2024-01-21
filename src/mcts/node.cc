@@ -543,11 +543,33 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     return best_node->Get();
 }
 
-int Node::RandomMoveProportionally(float temp, int min_visits) {
+int Node::RandomMoveProportionally(float temp,
+                                   float q_decay,
+                                   float min_ratio,
+                                   int min_visits) {
     auto select_vertex = kNullVertex;
     auto norm_factor= double{0};
     auto accum = double{0};
     auto accum_vector = std::vector<std::pair<decltype(accum), int>>{};
+    auto max_n = int{0};
+    auto max_q = double{0};
+
+    for (const auto &child : children_) {
+        auto node = child.Get();
+        const auto visits = node->GetVisits();
+         if (visits > max_n && visits >= 1) {
+             double q = node->GetWL(kBlack, false);
+
+             max_n = visits;
+             max_q = std::min(
+                 q_decay * (std::max(q, 1.0 - q) - 0.5) + 0.5,
+                 0.99);
+         }
+    }
+
+    temp = std::max(temp - std::log(max_q / (1 - max_q)), 0.01);
+    min_visits = std::max(
+        static_cast<int>(std::round(max_n * min_ratio)), min_visits);
 
     for (const auto &child : children_) {
         auto node = child.Get();
@@ -586,7 +608,7 @@ int Node::RandomMoveProportionally(float temp, int min_visits) {
     return select_vertex;
 }
 
-int Node::RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits) {
+int Node::RandomMoveWithLogitsQ(GameState &state, float temp) {
     const auto num_intersections = state.GetNumIntersections();
     auto prob = std::vector<float>(num_intersections+1, 0.f);
     auto vertices_table = std::vector<int>(num_intersections+1, kNullVertex);
@@ -637,7 +659,7 @@ int Node::RandomMoveWithLogitsQ(GameState &state, int temp, int min_visits) {
 
     if (accum_vector.empty()) {
         // What happened? Is it possible?
-        return RandomMoveProportionally(temp, min_visits);
+        return RandomMoveProportionally(temp, 0.f, 0.f, 0);
     }
 
     auto distribution =

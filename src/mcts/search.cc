@@ -467,15 +467,16 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         // the to optimize the the strengh and improve some diversity.
         result.random_move = root_node_->
                                  RandomMoveWithLogitsQ(
-                                     root_state_,
-                                     param_->random_moves_temp,
-                                     param_->random_min_visits);
+                                     root_state_, 1.f);
     } else {
-        // TODO: According to "On Strength Adjustment for MCTS-Based Programs",
-        //       pruning the low probability moves.
+        // According to "On Strength Adjustment for MCTS-Based Programs",
+        // pruning the low visits moves. It can help to avoid to play the
+        // blunder move. The Elo range should be between around 0 ~ 1000.
         result.random_move = root_node_->
                                  RandomMoveProportionally(
                                      param_->random_moves_temp,
+                                     param_->random_q_decay,
+                                     param_->random_min_ratio,
                                      param_->random_min_visits);
     }
     result.gumbel_move = root_node_->GetGumbelMove(true);
