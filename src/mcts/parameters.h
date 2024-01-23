@@ -61,6 +61,7 @@ public:
         random_fastsearch_prob = GetOption<float>("random_fastsearch_prob");
         resign_discard_prob = GetOption<float>("resign_discard_prob");
 
+        relative_rank = GetOption<int>("relative_rank");
         kldgain = std::stod(GetOption<std::string>("kldgain")); // not used
 
         lag_buffer = GetOption<float>("lag_buffer");
@@ -131,6 +132,7 @@ public:
     float lag_buffer;
     float resign_discard_prob;
 
+    int relative_rank;
     double kldgain;
 
     bool ponder;

@@ -2156,7 +2156,6 @@ std::vector<int> Board::GatherVertices(std::vector<bool> &buf) const {
 }
 
 void Board::GenerateCandidateMoves(std::vector<int> &moves_set, int color) const {
-    moves_set.clear();
     auto buf = std::vector<int>{};
 
     for (const auto vtx : {last_move_, last_move_2_}) {

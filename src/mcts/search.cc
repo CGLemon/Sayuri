@@ -1276,6 +1276,10 @@ bool Search::AdvanceToNewRootState(Search::OptionTag tag) {
         return false;
     }
 
+    if (param_->relative_rank >= 0) {
+        return false;
+    }
+
     while (!move_list.empty()) {
         int vtx = move_list.top();
 

@@ -52,6 +52,8 @@ bool Node::PrepareRootNode(Network &network,
         ApplyDirichletNoise(alpha);
     }
 
+    RandomPruneChildren(state);
+
     // Remove all superkos at the root. In the most case,
     // it will help simplify the state.
     KillRootSuperkos(state);
@@ -114,6 +116,75 @@ void Node::Recompute(Network &network,
     if (passnode) {
         passnode->SetPolicy(
             raw_netlist.pass_probability/legal_accumulate);
+    }
+}
+
+void Node::RandomPruneChildren(GameState &state) {
+    // The formula is imported from katrain.
+
+    if (param_->relative_rank < 0) {
+        return;
+    }
+    const auto rank = 15.f - std::min(20, param_->relative_rank);
+    const auto num_intersections = state.GetNumIntersections();
+    const auto num_legal_moves = static_cast<int>(children_.size());
+
+    const auto override_top =
+        0.8f * (1.f - 0.5f * (num_intersections - num_legal_moves) / num_intersections);
+    const auto orig_calib_avemodrank =
+        0.063015f + 0.7624f * num_intersections /
+            std::pow(10.f, -0.05737f * rank + 1.9482f);
+    const auto norm_leg_moves =
+        static_cast<float>(num_legal_moves) / num_intersections;
+    const auto factor =
+        3.002f * norm_leg_moves * norm_leg_moves -
+        norm_leg_moves -
+        0.034889f * rank -
+        0.5097f;
+    const auto modified_calib_avemodrank = (
+        0.3931f +
+        0.6559f *
+        norm_leg_moves *
+        std::exp(-1 * (factor * factor)) -
+        0.01093f * rank) * orig_calib_avemodrank;
+    int n_moves = std::round(
+        num_intersections * norm_leg_moves /
+        (1.31165f * (modified_calib_avemodrank + 1.f) - 0.082653f));
+    n_moves = std::max(1, n_moves);
+    n_moves = std::min(num_legal_moves, n_moves);
+
+    auto vertices = std::vector<int>{};
+    for (const auto &child : children_) {
+        vertices.emplace_back(child.GetVertex());
+    }
+
+    std::shuffle(std::begin(vertices),
+        std::end(vertices), Random<>::Get());
+    vertices.resize(n_moves);
+
+    const auto color = state.GetToMove();
+    if (state.GetMoveNumber() >= 0.5f * state.GetBoardSize()) {
+        state.board_.GenerateCandidateMoves(vertices, color);
+    }
+
+    for (const auto &child : children_) {
+        const auto node = child.Get();
+        const auto vtx = node->GetVertex();
+        const auto policy = node->GetPolicy();
+
+        node->SetActive(true);
+        if (policy > override_top) {
+            continue;
+        }
+        auto it = std::find(std::begin(vertices),
+                      std::end(vertices), vtx);
+        if (it == std::end(vertices)) {
+            node->SetActive(false);
+        } else {
+            auto last = std::end(vertices) - 1;
+            std::swap(it, last);
+            vertices.pop_back();
+        }
     }
 }
 

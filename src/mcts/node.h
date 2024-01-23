@@ -208,6 +208,7 @@ public:
     std::string GetPvString(GameState &state);
 
 private:
+    void RandomPruneChildren(GameState &state);
     void Recompute(Network &network,
                    GameState &state,
                    const bool is_root);
