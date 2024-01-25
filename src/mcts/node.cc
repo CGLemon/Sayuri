@@ -123,6 +123,25 @@ void Node::RandomPruneChildren(GameState &state) {
     if (param_->relative_rank < 0) {
         return;
     }
+    auto WeightedSelection = [](std::vector<std::pair<double, int>> accum_vector,
+                                int n_moves) {
+        auto distribution =
+            std::uniform_real_distribution<double>{1e-8, 1.0};
+        for (auto &it : accum_vector) {
+            double val = std::log(distribution(Random<>::Get()));
+            double denom = 1.0f + it.first;
+            it.first = val / denom;
+        }
+        std::sort(std::rbegin(accum_vector), std::rend(accum_vector));
+
+        auto vertices = std::vector<int>{};
+        vertices.resize(n_moves);
+
+        for (int i = 0; i < n_moves; ++i) {
+            vertices[i] = accum_vector[i].second;
+        }
+        return vertices;
+    };
 
     // The formula is imported from katrain.
     const auto rank = 15.f - std::min(20, param_->relative_rank);
@@ -153,14 +172,12 @@ void Node::RandomPruneChildren(GameState &state) {
     n_moves = std::max(1, n_moves);
     n_moves = std::min(num_legal_moves, n_moves);
 
-    auto vertices = std::vector<int>{};
+    auto selection_vector = std::vector<std::pair<double, int>>{};
     for (const auto &child : children_) {
-        vertices.emplace_back(child.GetVertex());
+        selection_vector.emplace_back(
+            child.GetPolicy(), child.GetVertex());
     }
-
-    std::shuffle(std::begin(vertices),
-        std::end(vertices), Random<>::Get());
-    vertices.resize(n_moves);
+    auto vertices = WeightedSelection(selection_vector, n_moves);
 
     for (const auto &child : children_) {
         const auto node = child.Get();
