@@ -475,7 +475,6 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         result.random_move = root_node_->
                                  RandomMoveProportionally(
                                      param_->random_moves_temp,
-                                     param_->random_q_decay,
                                      param_->random_min_ratio,
                                      param_->random_min_visits);
     }

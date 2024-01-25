@@ -120,11 +120,11 @@ void Node::Recompute(Network &network,
 }
 
 void Node::RandomPruneChildren(GameState &state) {
-    // The formula is imported from katrain.
-
     if (param_->relative_rank < 0) {
         return;
     }
+
+    // The formula is imported from katrain.
     const auto rank = 15.f - std::min(20, param_->relative_rank);
     const auto num_intersections = state.GetNumIntersections();
     const auto num_legal_moves = static_cast<int>(children_.size());
@@ -161,11 +161,6 @@ void Node::RandomPruneChildren(GameState &state) {
     std::shuffle(std::begin(vertices),
         std::end(vertices), Random<>::Get());
     vertices.resize(n_moves);
-
-    const auto color = state.GetToMove();
-    if (state.GetMoveNumber() >= 0.5f * state.GetBoardSize()) {
-        state.board_.GenerateCandidateMoves(vertices, color);
-    }
 
     for (const auto &child : children_) {
         const auto node = child.Get();
@@ -615,7 +610,6 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
 }
 
 int Node::RandomMoveProportionally(float temp,
-                                   float q_decay,
                                    float min_ratio,
                                    int min_visits) {
     auto select_vertex = kNullVertex;
@@ -623,22 +617,10 @@ int Node::RandomMoveProportionally(float temp,
     auto accum = double{0};
     auto accum_vector = std::vector<std::pair<decltype(accum), int>>{};
     auto max_n = int{0};
-    auto max_q = double{0};
 
     for (const auto &child : children_) {
-        auto node = child.Get();
-        const auto visits = node->GetVisits();
-         if (visits > max_n && visits >= 1) {
-             double q = node->GetWL(kBlack, false);
-
-             max_n = visits;
-             max_q = std::min(
-                 q_decay * (std::max(q, 1.0 - q) - 0.5) + 0.5,
-                 0.99);
-         }
+        max_n = std::max(max_n, child.GetVisits());
     }
-
-    temp = std::max(temp - std::log(max_q / (1 - max_q)), 0.01);
     min_visits = std::max(
         static_cast<int>(std::round(max_n * min_ratio)), min_visits);
 
@@ -730,7 +712,7 @@ int Node::RandomMoveWithLogitsQ(GameState &state, float temp) {
 
     if (accum_vector.empty()) {
         // What happened? Is it possible?
-        return RandomMoveProportionally(temp, 0.f, 0.f, 0);
+        return RandomMoveProportionally(temp, 0.f, 0);
     }
 
     auto distribution =

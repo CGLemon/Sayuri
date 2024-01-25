@@ -112,7 +112,6 @@ public:
 
     // Randomly select one child by visits.
     int RandomMoveProportionally(float temp,
-                                 float q_decay,
                                  float min_ratio,
                                  int min_visits);
 
