@@ -971,14 +971,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         const auto num_intersections = board_size * board_size;
         const auto color = agent_->GetState().GetToMove();
 
-        std::vector<float> gammas;
-        for (int idx = 0; idx < num_intersections; ++idx) {
-            const auto x = idx % board_size;
-            const auto y = idx / board_size;
-            const auto vtx = agent_->GetState().GetVertex(x,y);
-            gammas.emplace_back(agent_->GetState().GetGammaValue(vtx, color));
-        }
-        float max_gamma = *std::max_element(std::begin(gammas), std::end(gammas));
+        std::vector<float> gammas = agent_->GetState().GetGammasPolicy(color);
 
         auto gammas_map = std::ostringstream{};
         for (int idx = 0; idx < num_intersections; ++idx) {
@@ -989,7 +982,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             const auto x = idx % board_size;
             const auto y = idx / board_size;
             const auto vtx = agent_->GetState().GetVertex(x,y);
-            const auto gnval = gammas[idx] / max_gamma;
+            const auto gnval = gammas[idx];
             gammas_map << GoguiColor(gnval, agent_->GetState().VertexToText(vtx));
         }
         out << GtpSuccess(gammas_map.str());
