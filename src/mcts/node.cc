@@ -15,6 +15,8 @@
 #include <iomanip>
 #include <stack>
 #include <numeric>
+#include <unordered_set>
+#include <unordered_map>
 
 #define VIRTUAL_LOSS_COUNT (3)
 
@@ -123,27 +125,51 @@ void Node::RandomPruneChildren(GameState &state) {
     if (param_->relative_rank < 0) {
         return;
     }
-    auto WeightedSelection = [](std::vector<std::pair<double, int>> accum_vector,
-                                int n_moves) {
+    auto WeightedSelection = [](std::vector<std::pair<double, int>> selection_vector,
+                                int n_moves,
+                                double thres_policy) -> std::unordered_set<int> {
         auto distribution =
             std::uniform_real_distribution<double>{1e-8, 1.0};
-        for (auto &it : accum_vector) {
-            double val = std::log(distribution(Random<>::Get()));
-            double denom = 1.0f + it.first;
-            it.first = val / denom;
-        }
-        std::sort(std::rbegin(accum_vector), std::rend(accum_vector));
+        bool include_priority_node = false;
+        bool success = false;
 
-        auto vertices = std::vector<int>{};
-        vertices.resize(n_moves);
-
-        for (int i = 0; i < n_moves; ++i) {
-            vertices[i] = accum_vector[i].second;
+        auto moveset = std::unordered_set<int>{};
+        auto movepolicy = std::unordered_map<int, double>{};
+        for (auto &it : selection_vector) {
+            double policy = it.first;
+            movepolicy[it.second] = policy;
+            if (policy > thres_policy) {
+                include_priority_node = true;
+            }
         }
-        return vertices;
+
+        while (!success) {
+            auto sample_vector = selection_vector;
+            for (auto &it : sample_vector) {
+                double val = std::log(distribution(Random<>::Get()));
+                double denom = 1.0 + it.first;
+                it.first = val / denom;
+            }
+            std::sort(std::rbegin(sample_vector), std::rend(sample_vector));
+
+            moveset.clear();
+            success = !include_priority_node;
+            for (int i = 0; i < n_moves; ++i) {
+                int vtx = sample_vector[i].second;
+                moveset.insert(vtx);
+                if (include_priority_node &&
+                        movepolicy[vtx] > thres_policy) {
+                    success = true;
+                }
+            }
+        }
+        return moveset;
     };
 
-    // The formula is imported from katrain.
+    // The formula is imported from katrain. You may see
+    // the issues here,
+    // 1. https://github.com/sanderland/katrain/issues/44
+    // 2. https://github.com/sanderland/katrain/issues/74
     const auto rank = 15.f - std::min(20, param_->relative_rank);
     const auto num_intersections = state.GetNumIntersections();
     const auto num_legal_moves = static_cast<int>(children_.size());
@@ -177,25 +203,27 @@ void Node::RandomPruneChildren(GameState &state) {
         selection_vector.emplace_back(
             child.GetPolicy(), child.GetVertex());
     }
-    auto vertices = WeightedSelection(selection_vector, n_moves);
+
+    // TODO: Find the better 'thres_policy' value.
+    auto thres_policy = std::max(0.0, 
+        0.01 * (0.2 * param_->relative_rank - 1.0));
+    auto moveset = WeightedSelection(
+        selection_vector, n_moves, thres_policy);
 
     for (const auto &child : children_) {
         const auto node = child.Get();
         const auto vtx = node->GetVertex();
         const auto policy = node->GetPolicy();
 
-        node->SetActive(true);
+        if (!node->IsActive()) {
+            continue;
+        }
         if (policy > override_top) {
             continue;
         }
-        auto it = std::find(std::begin(vertices),
-                      std::end(vertices), vtx);
-        if (it == std::end(vertices)) {
+        auto it = moveset.find(vtx);
+        if (it == std::end(moveset)) {
             node->SetActive(false);
-        } else {
-            auto last = std::end(vertices) - 1;
-            std::swap(it, last);
-            vertices.pop_back();
         }
     }
 }
@@ -697,7 +725,7 @@ int Node::RandomMoveWithLogitsQ(GameState &state, float temp) {
             idx = state.GetIndex(
                       state.GetX(vtx), state.GetY(vtx));
         }
-        if (visits != 0) { 
+        if (visits != 0) {
             accm_visists += visits;
             prob[idx] = visits;
             vertices_table[idx] = vtx;
@@ -1570,7 +1598,7 @@ void Node::MixLogitsCompletedQ(GameState &state,
     for (int i = 0; i < (int)visits_list.size(); ++i) {
         if (visits_list[i] > 0) {
             weighted_q += pi_list[i] * q_list[i];
-            weighted_pi += pi_list[i]; 
+            weighted_pi += pi_list[i];
         }
     }
 
