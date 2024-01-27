@@ -54,7 +54,8 @@ bool Node::PrepareRootNode(Network &network,
         ApplyDirichletNoise(alpha);
     }
 
-    RandomPruneChildren(state);
+    // Adjust the strength by pruning children.
+    RandomPruneRootChildren(state);
 
     // Remove all superkos at the root. In the most case,
     // it will help simplify the state.
@@ -121,13 +122,14 @@ void Node::Recompute(Network &network,
     }
 }
 
-void Node::RandomPruneChildren(GameState &state) {
+void Node::RandomPruneRootChildren(GameState &state) {
     if (param_->relative_rank < 0) {
         return;
     }
     auto WeightedSelection = [](std::vector<std::pair<double, int>> selection_vector,
                                 int n_moves,
                                 double thres_policy) -> std::unordered_set<int> {
+        // Random select n moves with policy weighted.
         auto distribution =
             std::uniform_real_distribution<double>{1e-8, 1.0};
         bool include_priority_node = false;
@@ -148,7 +150,7 @@ void Node::RandomPruneChildren(GameState &state) {
             for (auto &it : sample_vector) {
                 double val = std::log(distribution(Random<>::Get()));
                 double denom = 1.0 + it.first;
-                it.first = val / denom;
+                it.first = val / denom; // magic
             }
             std::sort(std::rbegin(sample_vector), std::rend(sample_vector));
 
@@ -159,6 +161,8 @@ void Node::RandomPruneChildren(GameState &state) {
                 moveset.insert(vtx);
                 if (include_priority_node &&
                         movepolicy[vtx] > thres_policy) {
+                    // At least one node must be higher than threshold
+                    // policy if the policy exsits.
                     success = true;
                 }
             }
@@ -166,13 +170,26 @@ void Node::RandomPruneChildren(GameState &state) {
         return moveset;
     };
 
-    // The formula is imported from katrain. You may see
-    // the issues here,
+    // Gather all legal moves.
+    auto selection_vector = std::vector<std::pair<double, int>>{};
+    for (const auto &child : children_) {
+        const auto node = child.Get();
+        if (node->IsActive()) {
+            selection_vector.emplace_back(
+                child.GetPolicy(), child.GetVertex());
+        }
+    }
+
+    // The formula is imported from katrain. Random select
+    // k candidate moves. We can choose the low k number to
+    // limit veiw of network. It may be effective to reduce
+    // the netowork strength. You may see the issues here,
     // 1. https://github.com/sanderland/katrain/issues/44
     // 2. https://github.com/sanderland/katrain/issues/74
-    const auto rank = 15.f - std::min(20, param_->relative_rank);
+    const auto relative_rank = std::min(25, param_->relative_rank);
+    const auto rank = 15.f - relative_rank;
     const auto num_intersections = state.GetNumIntersections();
-    const auto num_legal_moves = static_cast<int>(children_.size());
+    const auto num_legal_moves = static_cast<int>(selection_vector.size());
 
     const auto override_top =
         0.8f * (1.f - 0.5f * (num_intersections - num_legal_moves) / num_intersections);
@@ -181,7 +198,7 @@ void Node::RandomPruneChildren(GameState &state) {
             std::pow(10.f, -0.05737f * rank + 1.9482f);
     const auto norm_leg_moves =
         static_cast<float>(num_legal_moves) / num_intersections;
-    const auto factor =
+    const auto avemodrank_exp =
         3.002f * norm_leg_moves * norm_leg_moves -
         norm_leg_moves -
         0.034889f * rank -
@@ -190,7 +207,7 @@ void Node::RandomPruneChildren(GameState &state) {
         0.3931f +
         0.6559f *
         norm_leg_moves *
-        std::exp(-1 * (factor * factor)) -
+        std::exp(-1 * (avemodrank_exp * avemodrank_exp)) -
         0.01093f * rank) * orig_calib_avemodrank;
     int n_moves = std::round(
         num_intersections * norm_leg_moves /
@@ -198,15 +215,9 @@ void Node::RandomPruneChildren(GameState &state) {
     n_moves = std::max(1, n_moves);
     n_moves = std::min(num_legal_moves, n_moves);
 
-    auto selection_vector = std::vector<std::pair<double, int>>{};
-    for (const auto &child : children_) {
-        selection_vector.emplace_back(
-            child.GetPolicy(), child.GetVertex());
-    }
-
     // TODO: Find the better 'thres_policy' value.
-    auto thres_policy = std::max(0.0, 
-        0.01 * (0.2 * param_->relative_rank - 1.0));
+    const auto thres_policy = std::max(0.0, 
+        0.01 * (0.1 * relative_rank - 1.0));
     auto moveset = WeightedSelection(
         selection_vector, n_moves, thres_policy);
 
@@ -223,7 +234,7 @@ void Node::RandomPruneChildren(GameState &state) {
         }
         auto it = moveset.find(vtx);
         if (it == std::end(moveset)) {
-            node->SetActive(false);
+            node->SetActive(false); // prune it
         }
     }
 }
@@ -1928,7 +1939,7 @@ void Node::KillRootSuperkos(GameState &state) {
 
         if (vtx != kPass &&
                 fork_state.IsSuperko()) {
-            // Prune the superko move.
+            // Kill the superko move.
             child.Get()->Invalidate();
         }
     }

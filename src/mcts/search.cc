@@ -1276,6 +1276,8 @@ bool Search::AdvanceToNewRootState(Search::OptionTag tag) {
     }
 
     if (param_->relative_rank >= 0) {
+        // This option will prune most legal children. Avoid to
+        // reuse the pruned children. We most discard tree.
         return false;
     }
 
