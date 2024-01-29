@@ -1578,7 +1578,7 @@ void Node::MixLogitsCompletedQ(GameState &state,
     int parentvisits = 0;;
     auto q_list = std::vector<float>{};
     auto pi_list = std::vector<float>{};
-    auto visits_list = std::vector<float>{};
+    auto visits_list = std::vector<int>{};
 
     // Gather some basic informations.
     for (auto & child : children_) {
