@@ -634,7 +634,7 @@ float GameState::GetFinalScore(const int color) const {
 float GameState::GetFinalScore(const int color,
                                const std::vector<int> &ownership) const {
     float black_score = static_cast<float>(
-       board_.ComputeScoreOnBoard(kBlack, ownership)) - GetKomi();
+       board_.ComputeScoreOnBoard(kBlack, scoring_rule_, ownership)) - GetKomi();
     return color == kBlack ? black_score : -black_score;
 }
 

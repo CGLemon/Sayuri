@@ -61,6 +61,9 @@ public:
 
 private:
     void TryRemoveDeadString(Network &network, GameState &currstate) {
+        if (currstate.GetScoringRule() != kTerritory) {
+            return;
+        }
         constexpr float kOwnshipThreshold = 0.75f;
 
         auto netlist = network.GetOutput(currstate, Network::kRandom, 1);

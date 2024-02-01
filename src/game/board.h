@@ -161,7 +161,8 @@ public:
 
     // Compute score on board (without komi) based on Tromp Taylor rule.
     int ComputeScoreOnBoard(const int color, const int scoring) const;
-    int ComputeScoreOnBoard(const int color, const std::vector<int> &score_area) const;
+    int ComputeScoreOnBoard(const int color, const int scoring,
+                            const std::vector<int> &score_area) const;
 
     // Compute score area based on Tromp Taylor rule.
     void ComputeScoreArea(std::vector<int> &result) const;

@@ -1533,10 +1533,11 @@ int Board::ComputeScoreOnBoard(const int color, const int scoring) const {
         // default: area
         ComputeScoreArea(score_area);
     }
-    return ComputeScoreOnBoard(color, score_area);
+    return ComputeScoreOnBoard(color, scoring, score_area);
 }
 
-int Board::ComputeScoreOnBoard(const int color, const std::vector<int> &score_area) const {
+int Board::ComputeScoreOnBoard(const int color, const int scoring,
+                               const std::vector<int> &score_area) const {
     int black_score_lead = 0;
 
     for (int y = 0; y < board_size_; ++y) {
@@ -1548,6 +1549,10 @@ int Board::ComputeScoreOnBoard(const int color, const std::vector<int> &score_ar
                 --black_score_lead;
             }
         }
+    }
+    if (scoring == kTerritory) {
+        black_score_lead += prisoners_[kBlack];
+        black_score_lead -= prisoners_[kWhite];
     }
     return color == kBlack ? black_score_lead : -black_score_lead;
 }
