@@ -1068,7 +1068,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             out << GtpSuccess("white");
         }
     } else if (const auto res = spt.Find("gogui-rules_final_result", 0)) {
-        auto score = agent_->GetState().GetFinalScore();
+        auto score = agent_->GetState().GetFinalScore(kBlack);
 
         if (std::abs(score) < 1e-4f) {
             out << GtpSuccess("0");

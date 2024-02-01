@@ -63,8 +63,10 @@ public:
     bool PlayHandicapStones(std::vector<int> movelist_vertex,
                             bool kata_like_handicap_style);
 
-    // Compute black final score with Tromp Taylor rule.
-    float GetFinalScore(float bonus = 0) const;
+    // Compute final score based on Tromp Taylor rule.
+    float GetFinalScore(const int color) const;
+    float GetFinalScore(const int color,
+                        const std::vector<int> &ownership) const;
 
     // The safe area means both players do not need to play move in
     // it. It can be efficiently to end the a game if someone refuses

@@ -769,11 +769,7 @@ bool ShouldPass(GameState &state, ComputationResult &result, Parameters *param) 
     (void) num_dame;
 
     // Compute the final score.
-    float score = fork_state.GetFinalScore();
-
-    if (state.GetToMove() == kWhite) {
-        score = 0 - score;
-    }
+    const auto score = fork_state.GetFinalScore(state.GetToMove());
 
     if (score > 0.1f) {
         // We already win the game. We will play the pass move.
@@ -1061,22 +1057,11 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
 
 void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_state) {
 
-    // Compute the final status positions. We do not remove the dead stones.
+    // Compute the final status positions.
     auto ownership = end_state.GetOwnership();
-
     auto num_intersections = end_state.GetNumIntersections();
     auto winner = kUndecide;
-    auto black_final_score = 0.f;
-
-    // Compute the final score.
-    for (const auto owner : ownership) {
-        if (owner == kBlack) {
-            black_final_score += 1;
-        } else if (owner == kWhite) {
-            black_final_score -= 1;
-        }
-    }
-    black_final_score -= end_state.GetKomi();
+    auto black_final_score = end_state.GetFinalScore(kBlack, ownership);
 
     // Get the player who won the game.
     if (std::abs(black_final_score) < 1e-4f) {

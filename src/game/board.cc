@@ -1524,11 +1524,15 @@ std::vector<int> Board::GetStringList(const int vtx) const {
     return result;
 }
 
-int Board::ComputeScoreOnBoard() const {
+int Board::ComputeScoreOnBoard(const int color) const {
     auto score_area = std::vector<int>(GetNumIntersections(), kInvalid);
-    int black_score_lead = 0;
-
     ComputeScoreArea(score_area);
+
+    return ComputeScoreOnBoard(color, score_area);
+}
+
+int Board::ComputeScoreOnBoard(const int color, const std::vector<int> &score_area) const {
+    int black_score_lead = 0;
 
     for (int y = 0; y < board_size_; ++y) {
         for (int x = 0; x < board_size_; ++x) {
@@ -1540,11 +1544,7 @@ int Board::ComputeScoreOnBoard() const {
             }
         }
     }
-    return black_score_lead;
-}
-
-float Board::ComputeFinalScore(float komi) const {
-    return static_cast<float>(ComputeScoreOnBoard()) - komi;
+    return color == kBlack ? black_score_lead : -black_score_lead;
 }
 
 void Board::ComputeReachArea(std::vector<int> &result) const {

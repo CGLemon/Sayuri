@@ -31,29 +31,26 @@ public:
             nn_evals_ = std::make_unique<NodeEvals>();
         }
 
-        auto black_score = 0;
         auto ownership = state.GetOwnership();
 
         for (int idx = 0; idx < (int)ownership.size(); ++idx) {
             auto owner = ownership[idx];
             if (owner == kBlack) {
-                black_score += 1;
                 nn_evals_->black_ownership[idx] = 1;
             } else if (owner == kWhite) {
-                black_score -= 1;
                 nn_evals_->black_ownership[idx] = -1;
             } else {
                 nn_evals_->black_ownership[idx] = 0;
             }
         }
 
-        auto black_final_score = (float)black_score - state.GetKomi();
-        nn_evals_->black_final_score = black_final_score;
+        nn_evals_->black_final_score =
+            state.GetFinalScore(kBlack, ownership);
 
-        if (black_final_score > 1e-4) {
+        if (nn_evals_->black_final_score > 1e-4) {
             nn_evals_->black_wl = 1.0f;
             nn_evals_->draw = 0.0f;
-        } else if (black_final_score < -1e-4) {
+        } else if (nn_evals_->black_final_score < -1e-4) {
             nn_evals_->black_wl = 0.0f;
             nn_evals_->draw = 0.0f;
         } else {

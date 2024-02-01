@@ -534,7 +534,7 @@ std::string Sgf::ToString(GameState &state) {
         out << MakePropertyString("C", state.GetComment(0));
     }
 
-    const auto score = state.GetFinalScore();
+    const auto score = state.GetFinalScore(kBlack);
     const auto pass_end = state.GetPasses() >= 2;
 
     if (pass_end) {
