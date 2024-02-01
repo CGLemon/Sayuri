@@ -24,13 +24,13 @@ public:
         nn_evals_ = std::make_unique<NodeEvals>(nn_evals);
     }
 
-    void FromGameOver(GameState &state) {
+    void FromGameOver(Network &network, GameState &state) {
         assert(state.GetPasses() >= 2);
 
         if (nn_evals_ == nullptr) {
             nn_evals_ = std::make_unique<NodeEvals>();
         }
-
+        TryRemoveDeadString(network, state);
         auto ownership = state.GetOwnership();
 
         for (int idx = 0; idx < (int)ownership.size(); ++idx) {
@@ -60,6 +60,41 @@ public:
     }
 
 private:
+    void TryRemoveDeadString(Network &network, GameState &currstate) {
+        constexpr float kOwnshipThreshold = 0.75f;
+
+        auto netlist = network.GetOutput(currstate, Network::kRandom, 1);
+        auto color = currstate.GetToMove();
+        auto num_intersections = currstate.GetNumIntersections();
+
+        auto safe_ownership = currstate.GetOwnership();
+        auto safe_area = currstate.GetStrictSafeArea();
+        auto dead = std::vector<int>{};
+
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            const auto vtx = currstate.IndexToVertex(idx);
+
+            // owner value, 1 is mine, -1 is opp's.
+            const auto owner = safe_area[idx] == true ?
+                                   2 * (float)(safe_ownership[idx] == color) - 1 :
+                                   netlist.ownership[idx];
+            const auto state = currstate.GetState(vtx);
+
+            if (owner > kOwnshipThreshold) {
+                // It is my territory.
+                if ((!color) == state) {
+                    dead.emplace_back(vtx);
+                }
+            } else if (owner < -kOwnshipThreshold) {
+                // It is opp's territory.
+                if (color == state) {
+                   dead.emplace_back(vtx);
+                }
+            }
+        }
+        currstate.RemoveDeadStrings(dead);
+    }
+
     std::unique_ptr<NodeEvals> nn_evals_{nullptr};
 };
 

@@ -160,11 +160,14 @@ public:
     void RemoveMarkedStrings(std::vector<int> &marked);
 
     // Compute score on board (without komi) based on Tromp Taylor rule.
-    int ComputeScoreOnBoard(const int color) const;
+    int ComputeScoreOnBoard(const int color, const int scoring) const;
     int ComputeScoreOnBoard(const int color, const std::vector<int> &score_area) const;
 
     // Compute score area based on Tromp Taylor rule.
     void ComputeScoreArea(std::vector<int> &result) const;
+
+    // Compute score area based on Japanese-like rule.
+    void ComputeScoreTerritory(std::vector<int> &result) const;
 
     // Compute black area and white area.
     void ComputeReachArea(std::vector<int> &result) const;

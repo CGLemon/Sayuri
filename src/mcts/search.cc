@@ -56,7 +56,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
 
     const bool end_by_passes = currstate.GetPasses() >= 2;
     if (end_by_passes) {
-        search_result.FromGameOver(currstate);
+        search_result.FromGameOver(network_, currstate);
     }
 
     // Terminated node, try to expand it.

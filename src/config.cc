@@ -80,6 +80,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["use_stm_winrate"] << Option::SetOption(false);
     kOptionsMap["use_optimistic_policy"] << Option::SetOption(false);
     kOptionsMap["use_rollout"] << Option::SetOption(false);
+    kOptionsMap["scoring_rule"] << Option::SetOption(static_cast<int>(kArea));
 
     // self-play options
     kOptionsMap["selfplay_query"] << Option::SetOption(std::string{});
@@ -339,6 +340,18 @@ void ArgsParser::Parse(Splitter &spt) {
         if (IsParameter(res->Get<>()) &&
                 AcceptSet(res->Get<>(), {"off", "on"})) {
             SetOption("timemanage", res->Get<>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--scoring-rule")) {
+        if (IsParameter(res->Get<>()) &&
+                AcceptSet(res->Get<>(), {"area", "territory"})) {
+            if (res->Get<>() == "area") {
+                SetOption("scoring_rule", static_cast<int>(kArea));
+            } else if (res->Get<>() == "territory") {
+                SetOption("scoring_rule", static_cast<int>(kTerritory));
+            }
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

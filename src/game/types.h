@@ -79,6 +79,11 @@ enum LadderType {
     kNotLadder,
 };
 
+enum ScoringRuleType {
+    kArea,
+    kTerritory
+};
+
 static constexpr int KLibertiesReset = 16384;
 
 #undef MAX_BOARD_SIZE

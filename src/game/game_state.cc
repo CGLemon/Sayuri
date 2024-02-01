@@ -280,7 +280,8 @@ std::string GameState::GetStateString() const {
     out << "Move Number: " << move_number_ << ", ";
     out << "Komi: " << GetKomi() << ", ";
     out << "Board Size: " << GetBoardSize() << ", ";
-    out << "Handicap: " << GetHandicap();
+    out << "Handicap: " << GetHandicap() << ", ";
+    out << "Rule: " << (scoring_rule_ == kArea ? "CN" : "JP" );
 
     out << "}" << std::endl;
     return out.str();
@@ -331,6 +332,14 @@ void GameState::SetToMove(const int color) {
 
 void GameState::SetHandicap(int handicap) {
     handicap_ = handicap;
+}
+
+void GameState::SetRule(int scoring) {
+    if (scoring == kArea || scoring == kTerritory) {
+        scoring_rule_ = static_cast<ScoringRuleType>(scoring);
+    } else {
+        LOGGING << "Only accept for Chinese or Japanese rules." << std::endl;
+    }
 }
 
 bool GameState::IsGameOver() const {
@@ -479,8 +488,12 @@ bool GameState::PlayHandicapStones(std::vector<int> movelist_vertex,
 std::vector<int> GameState::GetOwnership() const {
     auto res = std::vector<int>(GetNumIntersections(), kInvalid);
 
-    board_.ComputeScoreArea(res);
-
+    if (scoring_rule_ == kTerritory) {
+        board_.ComputeScoreTerritory(res);
+    } else {
+        // default: area
+        board_.ComputeScoreArea(res);
+    }
     return res;
 }
 
@@ -614,7 +627,7 @@ void GameState::RemoveDeadStrings(std::vector<int> &dead_list) {
 
 float GameState::GetFinalScore(const int color) const {
     float black_score = static_cast<float>(
-       board_.ComputeScoreOnBoard(kBlack)) - GetKomi();
+       board_.ComputeScoreOnBoard(kBlack, scoring_rule_)) - GetKomi();
     return color == kBlack ? black_score : -black_score;
 }
 
@@ -747,6 +760,10 @@ std::vector<int> GameState::GetStringList(const int vtx) const {
     return board_.GetStringList(vtx);
 }
 
+int GameState::GetScoringRule() const {
+    return scoring_rule_;
+}
+
 std::vector<bool> GameState::GetStrictSafeArea() const {
     auto result = std::vector<bool>(GetNumIntersections(), false);
     board_.ComputeSafeArea(result, false);
@@ -818,7 +835,7 @@ float GameState::GetWave() const {
 }
 
 float GameState::GetRule() const {
-    return 0.f;
+    return static_cast<float>(scoring_rule_ == kArea);
 }
 
 bool GameState::IsNeighborColor(const int vtx, const int color) const {

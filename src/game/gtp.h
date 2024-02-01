@@ -54,6 +54,7 @@ public:
         agent_ = std::make_unique<Agent>();
         agent_->GetState().Reset(GetOption<int>("defualt_boardsize"),
                                      GetOption<float>("defualt_komi"));
+        agent_->GetState().SetRule(GetOption<int>("scoring_rule"));
         agent_->GetNetwork().Initialize(GetOption<std::string>("weights_file"));
         agent_->ApplySearch();
 

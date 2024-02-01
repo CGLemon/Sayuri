@@ -30,6 +30,8 @@ public:
 
     void SetWinner(GameResult result);
 
+    void SetRule(int scoring);
+
     int TextToVertex(std::string text) const;
 
     int TextToColor(std::string text) const;
@@ -117,6 +119,7 @@ public:
     int GetState(const int x, const int y) const;
     int GetLiberties(const int vtx) const;
     std::vector<int> GetStringList(const int vtx) const;
+    int GetScoringRule() const;
 
     std::uint64_t ComputeSymmetryHash(const int symm) const;
     std::uint64_t ComputeSymmetryKoHash(const int symm) const;
@@ -155,6 +158,8 @@ private:
     std::vector<VertexColor> append_moves_;
 
     std::vector<std::string> comments_;
+
+    ScoringRuleType scoring_rule_;
 
     // Comment for next move.
     std::string last_comment_;

@@ -1524,10 +1524,15 @@ std::vector<int> Board::GetStringList(const int vtx) const {
     return result;
 }
 
-int Board::ComputeScoreOnBoard(const int color) const {
+int Board::ComputeScoreOnBoard(const int color, const int scoring) const {
     auto score_area = std::vector<int>(GetNumIntersections(), kInvalid);
-    ComputeScoreArea(score_area);
 
+    if (scoring == kTerritory) {
+        ComputeScoreTerritory(score_area);
+    } else {
+        // default: area
+        ComputeScoreArea(score_area);
+    }
     return ComputeScoreOnBoard(color, score_area);
 }
 
@@ -1596,6 +1601,22 @@ void Board::ComputeScoreArea(std::vector<int> &result) const {
         for (int i = 0; i < num_intersections_; ++i) {
             if (pass_alive[i]) {
                 result[i] = c;
+            }
+        }
+    }
+}
+
+void Board::ComputeScoreTerritory(std::vector<int> &result) const {
+    // assume we remove all dead strings
+    ComputeScoreArea(result);
+
+    for (int y = 0; y < board_size_; ++y) {
+        for (int x = 0; x < board_size_; ++x) {
+            const auto idx = GetIndex(x, y);
+            const auto vtx = GetVertex(x, y);
+            if ((state_[vtx] == kBlack && result[idx] == kBlack) ||
+                    (state_[vtx] == kWhite && result[idx] == kWhite)) {
+                result[idx] = kEmpty;
             }
         }
     }
