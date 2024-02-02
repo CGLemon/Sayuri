@@ -260,8 +260,8 @@ void Board::RemoveMarkedStrings(std::vector<int> &marked) {
         }
     }
 
-    IncrementPrisoner(kBlack, removed_stones[kBlack]);
-    IncrementPrisoner(kWhite, removed_stones[kWhite]);
+    IncreasePrisoner(kBlack, removed_stones[kWhite]);
+    IncreasePrisoner(kWhite, removed_stones[kBlack]);
 }
 
 int Board::ComputeReachGroup(int start_vertex, int spread_color, std::vector<bool> &buf) const {
@@ -1399,7 +1399,7 @@ int Board::RemoveString(const int ip) {
     return removed;
 }
 
-void Board::IncrementPrisoner(const int color, const int val) {
+void Board::IncreasePrisoner(const int color, const int val) {
     const int old_prisoners = prisoners_[color];
     const int new_prisoners = old_prisoners + val;
     prisoners_[color] = new_prisoners;
@@ -1445,11 +1445,11 @@ int Board::UpdateBoard(const int vtx, const int color) {
         assert(captured_stones == 0);
         const int sucide_stones = RemoveString(vtx);
 
-        IncrementPrisoner(!color, sucide_stones);
+        IncreasePrisoner(!color, sucide_stones);
     }
 
     if (captured_stones != 0) {
-        IncrementPrisoner(color, captured_stones);
+        IncreasePrisoner(color, captured_stones);
     }
 
     // move last vertex in list to our position

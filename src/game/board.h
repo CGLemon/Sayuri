@@ -369,7 +369,7 @@ private:
     // Remove a string from board.
     int RemoveString(const int ip);
 
-    void IncrementPrisoner(const int color, const int val);
+    void IncreasePrisoner(const int color, const int val);
 
     // Update the board after doing a legal move.
     int UpdateBoard(const int vtx, const int color);
