@@ -521,7 +521,7 @@ std::string Sgf::ToString(GameState &state) {
     out << MakePropertyString("FF", 4);
     out << MakePropertyString("SZ", state.GetBoardSize());
     out << MakePropertyString("KM", state.GetKomi());
-    out << MakePropertyString("RU", "chinese");
+    out << MakePropertyString("RU", state.GetRuleString());
     out << MakePropertyString("PB", bot_name);
     out << MakePropertyString("PW", bot_name);
     out << MakePropertyString("DT", CurrentDateTime());

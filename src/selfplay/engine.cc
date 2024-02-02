@@ -112,6 +112,17 @@ void Engine::ParseQueries() {
             if (q.handicaps >= 2) {
                 handicap_queries_.emplace_back(q);
             }
+        } else if (tokens[0] == "srs") {
+            // scoring rule set
+            for (int i = 1; i < (int)tokens.size(); ++i) {
+                auto scoring = kArea; // default
+                if (tokens[i] == "area") {
+                    scoring = kArea;
+                } else if (tokens[i] == "territory") {
+                    scoring = kTerritory;
+                }
+                scoring_set_.emplace_back(scoring);
+            }
         }
     }
 
@@ -130,18 +141,45 @@ void Engine::ParseQueries() {
         }
     }
 
+    if (scoring_set_.empty()) {
+        scoring_set_.emplace_back(kArea);
+    }
+    std::sort(std::begin(scoring_set_), std::end(scoring_set_));
+    scoring_set_.erase(std::unique(std::begin(scoring_set_), std::end(scoring_set_)),
+                       std::end(scoring_set_));
+
+
     // Adjust the matched NN size.
     network_->Reload(max_bsize);
 }
 
 void Engine::SaveSgf(std::string filename, int g) {
     Handel(g);
+    auto &state = game_pool_[g];
+    state.RewriteComment(state.GetRuleString(), 0);
     Sgf::Get().ToFile(filename, game_pool_[g]);
 }
 
 void Engine::GatherTrainingData(std::vector<Training> &chunk, int g) {
     Handel(g);
-    search_pool_[g]->GatherTrainingBuffer(chunk, game_pool_[g]);
+    auto &state = game_pool_[g];
+    auto last_state = state; // copy
+
+    if (state.GetScoringRule() == kTerritory) {
+        // Keep playing until all dead strings are removed.
+        while (state.GetLastMove() == kPass) {
+            state.UndoMove();
+        }
+        state.SetRule(kArea);
+        while (!state.IsGameOver()) {
+            auto tag = Search::kNoExploring | Search::kNoBuffer;
+            state.PlayMove(
+                search_pool_[g]->GetSelfPlayMove(tag));
+        }
+    }
+
+    search_pool_[g]->GatherTrainingBuffer(chunk, state);
+    state = last_state;
 }
 
 void Engine::PrepareGame(int g) {
@@ -149,6 +187,7 @@ void Engine::PrepareGame(int g) {
     auto &state = game_pool_[g];
 
     state.ClearBoard();
+    state.SetRule(kArea);
 
     constexpr std::uint32_t kRange = 1000000;
     std::uint32_t rand = Random<>::Get().RandFix<kRange>();
@@ -166,6 +205,11 @@ void Engine::PrepareGame(int g) {
     int query_boardsize = board_queries_[select_bk_idx].board_size;
     float query_komi = board_queries_[select_bk_idx].komi;
     state.Reset(query_boardsize, query_komi);
+
+    auto candi_scoring_set = scoring_set_;
+    std::shuffle(std::begin(candi_scoring_set),
+        std::end(candi_scoring_set), Random<>::Get());
+    state.SetRule(*std::begin(candi_scoring_set));
 
     const int h = GetHandicaps(g);
     if (h > 0) {

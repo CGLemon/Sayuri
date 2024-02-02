@@ -1527,12 +1527,8 @@ std::vector<int> Board::GetStringList(const int vtx) const {
 int Board::ComputeScoreOnBoard(const int color, const int scoring) const {
     auto score_area = std::vector<int>(GetNumIntersections(), kInvalid);
 
-    if (scoring == kTerritory) {
-        ComputeScoreTerritory(score_area);
-    } else {
-        // default: area
-        ComputeScoreArea(score_area);
-    }
+    ComputeScoreArea(score_area);
+
     return ComputeScoreOnBoard(color, scoring, score_area);
 }
 
@@ -1551,6 +1547,20 @@ int Board::ComputeScoreOnBoard(const int color, const int scoring,
         }
     }
     if (scoring == kTerritory) {
+        for (int y = 0; y < board_size_; ++y) {
+            for (int x = 0; x < board_size_; ++x) {
+                const auto vtx = GetVertex(x, y);
+                const auto idx = GetIndex(x, y);
+                if (score_area[idx] == kBlack ||
+                        score_area[idx] == kWhite) {
+                    if (GetState(vtx) == kBlack) {
+                       --black_score_lead;
+                    } else if (GetState(vtx) == kWhite) {
+                        ++black_score_lead;
+                    }
+                }
+            }
+        }
         black_score_lead += prisoners_[kBlack];
         black_score_lead -= prisoners_[kWhite];
     }
@@ -1606,22 +1616,6 @@ void Board::ComputeScoreArea(std::vector<int> &result) const {
         for (int i = 0; i < num_intersections_; ++i) {
             if (pass_alive[i]) {
                 result[i] = c;
-            }
-        }
-    }
-}
-
-void Board::ComputeScoreTerritory(std::vector<int> &result) const {
-    // assume we remove all dead strings
-    ComputeScoreArea(result);
-
-    for (int y = 0; y < board_size_; ++y) {
-        for (int x = 0; x < board_size_; ++x) {
-            const auto idx = GetIndex(x, y);
-            const auto vtx = GetVertex(x, y);
-            if ((state_[vtx] == kBlack && result[idx] == kBlack) ||
-                    (state_[vtx] == kWhite && result[idx] == kWhite)) {
-                result[idx] = kEmpty;
             }
         }
     }

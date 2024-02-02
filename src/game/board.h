@@ -167,9 +167,6 @@ public:
     // Compute score area based on Tromp Taylor rule.
     void ComputeScoreArea(std::vector<int> &result) const;
 
-    // Compute score area based on Japanese-like rule.
-    void ComputeScoreTerritory(std::vector<int> &result) const;
-
     // Compute black area and white area.
     void ComputeReachArea(std::vector<int> &result) const;
 

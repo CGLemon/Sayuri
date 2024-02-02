@@ -826,6 +826,11 @@ bool ShouldForbidPass(GameState &state,
         return true;
     }
 
+    if (state.GetScoringRule() == kTerritory) {
+        // rule accepts pass
+        return false;
+    }
+
     int to_move = result.to_move;
     auto safe_ownership = state.GetOwnership();
 
@@ -879,7 +884,7 @@ bool ShouldForbidPass(GameState &state,
     return false;
 }
 
-int Search::GetSelfPlayMove() {
+int Search::GetSelfPlayMove(OptionTag tag) {
     // We always reuse the sub-tree at fast search phase. The
     // kUnreused option doesn't mean discarding the sub-tree.
     // It means visit cap (The search result is as same as
@@ -888,8 +893,9 @@ int Search::GetSelfPlayMove() {
     // Every visit of fast search phase may be different. If the
     // reuse tag is false, it is playout cap oscillation which
     // is used by KataGo. Please see here, https://arxiv.org/abs/1902.10565v2
-    auto tag = param_->reuse_tree ?
-                   kNullTag : kUnreused;
+    if (!(param_->reuse_tree)) {
+        tag = tag | kUnreused;
+    }
 
     const int random_moves_cnt = param_->random_moves_factor *
                                      root_state_.GetNumIntersections();
@@ -990,8 +996,9 @@ int Search::GetSelfPlayMove() {
             root_eval, root_score, record_kld, discard_char));
 
     // Push the data to buffer.
-    GatherData(root_state_, result, discard_it);
-
+    if (!(tag & kNoBuffer)) {
+        GatherData(root_state_, result, discard_it);
+    }
     return move;
 }
 

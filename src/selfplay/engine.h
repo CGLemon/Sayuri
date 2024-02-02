@@ -54,9 +54,9 @@ private:
     int default_playouts_;
     int parallel_games_;
 
-
     std::vector<BoardQuery> board_queries_;
     std::vector<HandicapQuery> handicap_queries_;
+    std::vector<ScoringRuleType> scoring_set_;
 
     std::unique_ptr<Network> network_{nullptr};
     std::vector<std::unique_ptr<Search>> search_pool_;

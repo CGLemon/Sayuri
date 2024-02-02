@@ -281,7 +281,7 @@ std::string GameState::GetStateString() const {
     out << "Komi: " << GetKomi() << ", ";
     out << "Board Size: " << GetBoardSize() << ", ";
     out << "Handicap: " << GetHandicap() << ", ";
-    out << "Rule: " << (scoring_rule_ == kArea ? "CN" : "JP" );
+    out << "Rule: " << GetRuleString();
 
     out << "}" << std::endl;
     return out.str();
@@ -488,12 +488,8 @@ bool GameState::PlayHandicapStones(std::vector<int> movelist_vertex,
 std::vector<int> GameState::GetOwnership() const {
     auto res = std::vector<int>(GetNumIntersections(), kInvalid);
 
-    if (scoring_rule_ == kTerritory) {
-        board_.ComputeScoreTerritory(res);
-    } else {
-        // default: area
-        board_.ComputeScoreArea(res);
-    }
+    board_.ComputeScoreArea(res);
+
     return res;
 }
 
@@ -835,7 +831,17 @@ float GameState::GetWave() const {
 }
 
 float GameState::GetRule() const {
-    return static_cast<float>(scoring_rule_ == kArea);
+    return static_cast<float>(scoring_rule_ == kTerritory);
+}
+
+std::string GameState::GetRuleString() const {
+    if (scoring_rule_ == kArea) {
+        return "chinese";
+    }
+    if (scoring_rule_ == kTerritory) {
+        return "japanese";
+    }
+    return "unknown";
 }
 
 bool GameState::IsNeighborColor(const int vtx, const int color) const {

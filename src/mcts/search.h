@@ -30,8 +30,8 @@ public:
         if (nn_evals_ == nullptr) {
             nn_evals_ = std::make_unique<NodeEvals>();
         }
-        TryRemoveDeadString(network, state);
         auto ownership = state.GetOwnership();
+        TryRecoverOwnershipMap(network, state, ownership);
 
         for (int idx = 0; idx < (int)ownership.size(); ++idx) {
             auto owner = ownership[idx];
@@ -60,42 +60,40 @@ public:
     }
 
 private:
-    void TryRemoveDeadString(Network &network, GameState &currstate) {
-        if (currstate.GetScoringRule() != kTerritory) {
+    void TryRecoverOwnershipMap(Network &network,
+                                GameState &state,
+                                std::vector<int> &ownership) {
+        if (state.GetScoringRule() != kTerritory) {
             return;
         }
         constexpr float kOwnshipThreshold = 0.75f;
 
-        auto netlist = network.GetOutput(currstate, Network::kRandom, 1);
-        auto color = currstate.GetToMove();
-        auto num_intersections = currstate.GetNumIntersections();
-
-        auto safe_ownership = currstate.GetOwnership();
-        auto safe_area = currstate.GetStrictSafeArea();
-        auto dead = std::vector<int>{};
+        auto netlist = network.GetOutput(state, Network::kRandom, 1);
+        auto color = state.GetToMove();
+        auto num_intersections = state.GetNumIntersections();
+        auto safe_area = state.GetStrictSafeArea();
 
         for (int idx = 0; idx < num_intersections; ++idx) {
-            const auto vtx = currstate.IndexToVertex(idx);
-
-            // owner value, 1 is mine, -1 is opp's.
-            const auto owner = safe_area[idx] == true ?
-                                   2 * (float)(safe_ownership[idx] == color) - 1 :
-                                   netlist.ownership[idx];
-            const auto state = currstate.GetState(vtx);
-
-            if (owner > kOwnshipThreshold) {
-                // It is my territory.
-                if ((!color) == state) {
-                    dead.emplace_back(vtx);
-                }
-            } else if (owner < -kOwnshipThreshold) {
-                // It is opp's territory.
-                if (color == state) {
-                   dead.emplace_back(vtx);
-                }
+            const auto vtx = state.IndexToVertex(idx);
+            float black_owner = netlist.ownership[idx]; // -1 ~ 1
+            if (color == kWhite) {
+                black_owner = 0.f - black_owner;
+            }
+            if (safe_area[idx]) {
+                continue;
+            }
+            if (state.GetState(vtx) == kEmpty &&
+                    ownership[idx] != kEmpty) {
+                continue;
+            }
+            if (black_owner > kOwnshipThreshold) {
+                ownership[idx] = kBlack;
+            } else if (black_owner < -kOwnshipThreshold) {
+                ownership[idx] = kWhite;
+            } else {
+                ownership[idx] = kEmpty;
             }
         }
-        currstate.RemoveDeadStrings(dead);
     }
 
     std::unique_ptr<NodeEvals> nn_evals_{nullptr};
@@ -147,7 +145,8 @@ public:
         kAnalysis    = 1 << 3, // use the analysis mode
         kForced      = 1 << 4, // remove double pass move before search
         kUnreused    = 1 << 5, // don't reuse the tree
-        kNoExploring = 1 << 6  // disable any exploring setting
+        kNoExploring = 1 << 6, // disable any exploring setting
+        kNoBuffer    = 1 << 7  // don't push data to training buffer
     };
 
     // Enable OptionTag operations.
@@ -169,11 +168,11 @@ public:
     // Get the best move.
     int ThinkBestMove();
 
-    // Get the self-play move.
-    int GetSelfPlayMove();
-
     // Will dump analysis information.
     int Analyze(bool ponder, AnalysisConfig &analysis_config);
+
+    // Get the self-play move.
+    int GetSelfPlayMove(OptionTag tag = Search::kNullTag);
 
     // Try to do the pondor.
     void TryPonder();

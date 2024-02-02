@@ -140,6 +140,7 @@ public:
 
     float GetWave() const;
     float GetRule() const;
+    std::string GetRuleString() const;
 
 private:
     using VertexColor = std::pair<int, int>;
