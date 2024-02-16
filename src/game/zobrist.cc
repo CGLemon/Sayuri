@@ -16,6 +16,7 @@ std::array<std::array<Zobrist::KEY, Zobrist::kZobristSize * 2>, 2> Zobrist::kPri
 
 std::array<Zobrist::KEY, Zobrist::kZobristSize> Zobrist::kKoMove;
 std::array<Zobrist::KEY, 5> Zobrist::KPass;
+std::array<Zobrist::KEY, 2> Zobrist::KScoringRule;
 std::array<Zobrist::KEY, Zobrist::kZobristSize> Zobrist::kKomi;
 
 template<typename T>
@@ -39,31 +40,30 @@ void Zobrist::Initialize() {
 
         for (int i = 0; i < 4; ++i) {
             for (int j = 0; j < kZobristSize; ++j) {
-                Zobrist::kState[i][j] = rng.Generate();
-                buf.emplace_back(Zobrist::kState[i][j]);
+                buf.emplace_back(kState[i][j] = rng.Generate());
             }
         }
 
         for (int i = 0; i < 2; ++i) {
             for (int j = 0; j < kZobristSize * 2; ++j) {
-                Zobrist::kPrisoner[i][j] = rng.Generate();
-                buf.emplace_back(Zobrist::kPrisoner[i][j]);
+                buf.emplace_back(kPrisoner[i][j] = rng.Generate());
             }
         }
 
         for (int i = 0; i < kZobristSize; ++i) {
-            Zobrist::kKoMove[i] = rng.Generate();
-            buf.emplace_back(Zobrist::kKoMove[i]);
+            buf.emplace_back(kKoMove[i] = rng.Generate());
         }
 
         for (int i = 0; i < 5; ++i) {
-            Zobrist::KPass[i] = rng.Generate();
-            buf.emplace_back(Zobrist::KPass[i]);
+            buf.emplace_back(KPass[i] = rng.Generate());
+        }
+
+        for (int i = 0; i < 2; ++i) {
+            buf.emplace_back(KScoringRule[i] = rng.Generate());
         }
 
         for (int i = 0; i < kZobristSize; ++i) {
-            Zobrist::kKomi[i] = rng.Generate();
-            buf.emplace_back(Zobrist::kKomi[i]);
+            buf.emplace_back(kKomi[i] = rng.Generate());
         }
 
         if (!Collision(buf)) {

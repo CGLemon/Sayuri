@@ -11,9 +11,12 @@
 #include <random>
 #include <cmath>
 
-void GameState::Reset(const int boardsize, const float komi) {
+void GameState::Reset(const int boardsize,
+                      const float komi,
+                      const int scoring) {
     board_.Reset(boardsize);
     SetKomi(komi);
+    SetRule(scoring);
     ko_hash_history_.clear();
     game_history_.clear();
     append_moves_.clear();
@@ -29,8 +32,19 @@ void GameState::Reset(const int boardsize, const float komi) {
     last_comment_.clear();
 }
 
+void GameState::SetBoardSize(const int boardsize) {
+    int scoring = GetScoringRule();
+    float komi = GetKomi();
+
+    Reset(boardsize, komi, scoring);
+}
+
 void GameState::ClearBoard() {
-    Reset(GetBoardSize(), GetKomi());
+    int scoring = GetScoringRule();
+    int boardsize = GetBoardSize();
+    float komi = GetKomi();
+
+    Reset(boardsize, komi, scoring);
 }
 
 void GameState::PlayMoveFast(const int vtx, const int color) {
@@ -334,9 +348,10 @@ void GameState::SetHandicap(int handicap) {
     handicap_ = handicap;
 }
 
-void GameState::SetRule(int scoring) {
+void GameState::SetRule(const int scoring) {
     if (scoring == kArea || scoring == kTerritory) {
         scoring_rule_ = static_cast<ScoringRuleType>(scoring);
+        scoring_hash_ = Zobrist::KScoringRule[scoring];
     } else {
         LOGGING << "Only accept for Chinese or Japanese rules." << std::endl;
     }
@@ -716,7 +731,7 @@ std::uint64_t GameState::GetKoHash() const {
 }
 
 std::uint64_t GameState::GetHash() const {
-    return board_.GetHash() ^ komi_hash_;
+    return board_.GetHash() ^ komi_hash_ ^ scoring_hash_;
 }
 
 std::uint64_t GameState::GetMoveHash(const int vtx, const int color) const {
@@ -767,7 +782,7 @@ std::vector<bool> GameState::GetStrictSafeArea() const {
 }
 
 std::uint64_t GameState::ComputeSymmetryHash(const int symm) const {
-    return board_.ComputeSymmetryHash(board_.GetKoMove(), symm) ^ komi_hash_;
+    return board_.ComputeSymmetryHash(board_.GetKoMove(), symm) ^ komi_hash_ ^ scoring_hash_;
 }
 
 std::uint64_t GameState::ComputeSymmetryKoHash(const int symm) const {

@@ -11,7 +11,12 @@ class GameState {
 public:
     Board board_;
 
-    void Reset(const int boardsize, const float komi);
+    void Reset(const int boardsize,
+               const float komi,
+               const int scoring);
+
+    // GTP interface to reset the boardsize.
+    void SetBoardSize(const int boardsize);
 
     // GTP interface to clear the board.
     void ClearBoard();
@@ -30,7 +35,7 @@ public:
 
     void SetWinner(GameResult result);
 
-    void SetRule(int scoring);
+    void SetRule(const int scoring);
 
     int TextToVertex(std::string text) const;
 
@@ -180,6 +185,8 @@ private:
     int move_number_;
 
     std::uint64_t komi_hash_;
+
+    std::uint64_t scoring_hash_;
 
     int winner_;
 };

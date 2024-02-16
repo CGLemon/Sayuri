@@ -240,7 +240,7 @@ void Encoder::FillLadder(const Board* board,
 
 void Encoder::FillMisc(const Board* board,
                        const int to_move,
-                       float rule, float wave, float komi,
+                       int scoring, float wave, float komi,
                        std::vector<float>::iterator misc_it) const {
     auto num_intersections = board->GetNumIntersections();
 
@@ -248,9 +248,10 @@ void Encoder::FillMisc(const Board* board,
         komi = 0.0f - komi;
     }
 
-    // rule
+    // scoring rule
+    float scoring_val = scoring == kArea ? 0.f : 1.f; 
     std::fill(misc_it+ 0 * num_intersections,
-                  misc_it+ 1 * num_intersections, rule);
+                  misc_it+ 1 * num_intersections, scoring_val);
 
     // wave
     std::fill(misc_it+ 1 * num_intersections,
@@ -290,6 +291,6 @@ void Encoder::EncoderFeatures(const GameState &state,
     FillArea(board.get(), color, area_it);
     FillLiberties(board.get(), liberties_it);
     FillLadder(board.get(), ladder_it);
-    FillMisc(board.get(), color, state.GetRule(),
+    FillMisc(board.get(), color, state.GetScoringRule(),
                  state.GetWave(), state.GetKomi(), misc_it);
 }

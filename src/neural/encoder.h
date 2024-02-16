@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <array>
+#include "game/types.h"
 #include "game/symmetry.h"
 #include "game/game_state.h"
 #include "neural/network_basic.h"
@@ -69,7 +70,7 @@ private:
 
     void FillMisc(const Board* board,
                   const int color,
-                  float rule, float wave, float komi,
+                  int scoring, float wave, float komi,
                   std::vector<float>::iterator color_it) const;
 
     void EncoderFeatures(const GameState &state,

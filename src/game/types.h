@@ -79,9 +79,9 @@ enum LadderType {
     kNotLadder,
 };
 
-enum ScoringRuleType {
-    kArea,
-    kTerritory
+enum ScoringRuleType : std::uint8_t {
+    kArea      = 0,
+    kTerritory = 1
 };
 
 static constexpr int KLibertiesReset = 16384;

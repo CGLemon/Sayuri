@@ -94,7 +94,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         if (bsize <= kBoardSize &&
                 bsize <= kMaxGTPBoardSize &&
                 bsize >= kMinGTPBoardSize) {
-            agent_->GetState().Reset(bsize, agent_->GetState().GetKomi());
+            agent_->GetState().SetBoardSize(bsize);
             agent_->GetNetwork().Reload(bsize);
             out << GtpSuccess("");
         } else {

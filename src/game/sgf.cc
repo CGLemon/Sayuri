@@ -107,7 +107,7 @@ void SgfNode::PopulateState(GameState currstate) {
         }
 
         const auto bsize = std::stoi(*res);
-        GetState().Reset(bsize, GetState().GetKomi());
+        GetState().SetBoardSize(bsize);
     }
 
     // komi

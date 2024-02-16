@@ -22,6 +22,7 @@ public:
     static std::array<KEY, kZobristSize> kKoMove;
     static std::array<std::array<KEY, kZobristSize * 2>, 2> kPrisoner;
     static std::array<KEY, 5> KPass;
+    static std::array<KEY, 2> KScoringRule;
     static std::array<KEY, kZobristSize> kKomi;
 
     static void Initialize();

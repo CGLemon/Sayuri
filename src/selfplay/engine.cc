@@ -31,7 +31,8 @@ void Engine::Initialize() {
     for (int i = 0; i < parallel_games_; ++i) {
         game_pool_.emplace_back(GameState{});
         game_pool_[i].Reset(GetOption<int>("defualt_boardsize"),
-                                GetOption<float>("defualt_komi"));
+                                GetOption<float>("defualt_komi"),
+                                GetOption<int>("scoring_rule"));
     }
 
     search_pool_.clear();
@@ -204,12 +205,13 @@ void Engine::PrepareGame(int g) {
     }
     int query_boardsize = board_queries_[select_bk_idx].board_size;
     float query_komi = board_queries_[select_bk_idx].komi;
-    state.Reset(query_boardsize, query_komi);
 
     auto candi_scoring_set = scoring_set_;
     std::shuffle(std::begin(candi_scoring_set),
         std::end(candi_scoring_set), Random<>::Get());
-    state.SetRule(*std::begin(candi_scoring_set));
+    int query_scoring = *std::begin(candi_scoring_set);
+
+    state.Reset(query_boardsize, query_komi, query_scoring);
 
     const int h = GetHandicaps(g);
     if (h > 0) {
