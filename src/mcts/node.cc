@@ -6,6 +6,7 @@
 #include "utils/format.h"
 #include "utils/logits.h"
 #include "utils/kldivergence.h"
+#include "utils/ai_style.h"
 #include "game/symmetry.h"
 
 #include <cassert>
@@ -15,8 +16,6 @@
 #include <iomanip>
 #include <stack>
 #include <numeric>
-#include <unordered_set>
-#include <unordered_map>
 
 #define VIRTUAL_LOSS_COUNT (3)
 
@@ -126,115 +125,33 @@ void Node::RandomPruneRootChildren(GameState &state) {
     if (param_->relative_rank < 0) {
         return;
     }
-    auto WeightedSelection = [](std::vector<std::pair<double, int>> selection_vector,
-                                int n_moves,
-                                double thres_policy) -> std::unordered_set<int> {
-        // Random select n moves with policy weighted.
-        auto distribution =
-            std::uniform_real_distribution<double>{1e-8, 1.0};
-        bool include_priority_node = false;
-        bool success = false;
-
-        auto moveset = std::unordered_set<int>{};
-        auto movepolicy = std::unordered_map<int, double>{};
-        for (auto &it : selection_vector) {
-            double policy = it.first;
-            movepolicy[it.second] = policy;
-            if (policy > thres_policy) {
-                include_priority_node = true;
-            }
-        }
-
-        while (!success) {
-            auto sample_vector = selection_vector;
-            for (auto &it : sample_vector) {
-                double val = std::log(distribution(Random<>::Get()));
-                double denom = 1.0 + it.first;
-                it.first = val / denom; // magic
-            }
-            std::sort(std::rbegin(sample_vector), std::rend(sample_vector));
-
-            moveset.clear();
-            success = !include_priority_node;
-            for (int i = 0; i < n_moves; ++i) {
-                int vtx = sample_vector[i].second;
-                moveset.insert(vtx);
-                if (include_priority_node &&
-                        movepolicy[vtx] > thres_policy) {
-                    // At least one node must be higher than threshold
-                    // policy if the policy exsits.
-                    success = true;
-                }
-            }
-        }
-        return moveset;
-    };
-
-    // Gather all legal moves.
-    auto selection_vector = std::vector<std::pair<double, int>>{};
+    auto selection = SelectionVector<Node *>{};
     for (const auto &child : children_) {
         const auto node = child.Get();
         if (node->IsActive()) {
-            selection_vector.emplace_back(
-                child.GetPolicy(), child.GetVertex());
+            selection.emplace_back(
+                child.GetPolicy(), node);
         }
     }
 
-    // The formula is imported from katrain. Random select
-    // k candidate moves. We can choose the low k number to
-    // limit veiw of network. It may be effective to reduce
-    // the netowork strength. You may see the issues here,
-    // 1. https://github.com/sanderland/katrain/issues/44
-    // 2. https://github.com/sanderland/katrain/issues/74
-    const auto relative_rank = std::min(25, param_->relative_rank);
-    const auto rank = 15.f - relative_rank;
-    const auto num_intersections = state.GetNumIntersections();
-    const auto num_legal_moves = static_cast<int>(selection_vector.size());
+    selection = GetRelativeRankVector(
+        selection, param_->relative_rank, state.GetNumIntersections());
 
-    const auto override_top =
-        0.8f * (1.f - 0.5f * (num_intersections - num_legal_moves) / num_intersections);
-    const auto orig_calib_avemodrank =
-        0.063015f + 0.7624f * num_intersections /
-            std::pow(10.f, -0.05737f * rank + 1.9482f);
-    const auto norm_leg_moves =
-        static_cast<float>(num_legal_moves) / num_intersections;
-    const auto avemodrank_exp =
-        3.002f * norm_leg_moves * norm_leg_moves -
-        norm_leg_moves -
-        0.034889f * rank -
-        0.5097f;
-    const auto modified_calib_avemodrank = (
-        0.3931f +
-        0.6559f *
-        norm_leg_moves *
-        std::exp(-1 * (avemodrank_exp * avemodrank_exp)) -
-        0.01093f * rank) * orig_calib_avemodrank;
-    int n_moves = std::round(
-        num_intersections * norm_leg_moves /
-        (1.31165f * (modified_calib_avemodrank + 1.f) - 0.082653f));
-    n_moves = std::max(1, n_moves);
-    n_moves = std::min(num_legal_moves, n_moves);
-
-    // TODO: Find the better 'thres_policy' value.
-    const auto thres_policy = std::max(0.0, 
-        0.01 * (0.1 * relative_rank - 1.0));
-    auto moveset = WeightedSelection(
-        selection_vector, n_moves, thres_policy);
-
+    // prune all active node first
     for (const auto &child : children_) {
         const auto node = child.Get();
-        const auto vtx = node->GetVertex();
-        const auto policy = node->GetPolicy();
-
         if (!node->IsActive()) {
             continue;
         }
-        if (policy > override_top) {
-            continue;
-        }
-        auto it = moveset.find(vtx);
-        if (it == std::end(moveset)) {
-            node->SetActive(false); // prune it
+        node->SetActive(false);
+    }
+
+    // activate the selection children
+    for (auto &it : selection) {
+        const auto node = it.second;
+
+        if (node->IsPruned()) {
+            node->SetActive(true);
         }
     }
 }
