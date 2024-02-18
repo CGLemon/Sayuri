@@ -106,8 +106,6 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "summary_accuracy",
 
-    "summary_selfplay",
-
     "genopenings",
 
     "debug_search",
@@ -129,6 +127,8 @@ static std::vector<std::string> kGtpCommandsList = {
     "gogui-gammas_heatmap",
 
     "gogui-ladder_map",
+
+    "gogui-book_rating",
 
     "gogui-rules_game_id",
 

@@ -9,7 +9,6 @@
 #include "pattern/mm_trainer.h"
 #include "neural/encoder.h"
 #include "summary/accuracy.h"
-#include "summary/selfplay_accumulation.h"
 
 #include <iomanip>
 #include <iostream>
@@ -723,23 +722,6 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             report_out << Format(
                 "the final accuracy %.2f%, totally %d positions",
                 report.GetAccuracy() * 100, report.num_positions);
-            out << GtpSuccess(report_out.str());
-        }
-    } else if (const auto res = spt.Find("summary_selfplay", 0)) {
-        auto sgf_file = std::string{};
-
-        if (const auto sgf = spt.GetWord(1)) {
-            sgf_file = sgf->Get<>();
-        }
-
-        if (sgf_file.empty()) {
-            out << GtpFail("file name is empty");
-        } else {
-            auto report = ComputeSelfplayAccumulation(sgf_file);
-            auto report_out = std::ostringstream{};
-            report_out << Format(
-                "accumulation playouts is %zu, number games is %d",
-                 report.accm_playouts, report.num_games);
             out << GtpSuccess(report_out.str());
         }
     } else if (const auto res = spt.Find("debug_search", 0)) {

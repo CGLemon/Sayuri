@@ -249,7 +249,7 @@ void Encoder::FillMisc(const Board* board,
     }
 
     // scoring rule
-    float scoring_val = scoring == kArea ? 0.f : 1.f; 
+    float scoring_val = scoring == kArea ? 0.f : 1.f;
     std::fill(misc_it+ 0 * num_intersections,
                   misc_it+ 1 * num_intersections, scoring_val);
 

@@ -115,7 +115,6 @@ set(MCTS_SOURCES
 
 set(SUMMARY_SOURCES
     ${SUMMARY_SOURCES_DIR}/accuracy.cc
-    ${SUMMARY_SOURCES_DIR}/selfplay_accumulation.cc
     )
 
 set(SELFPLAY_SOURCES
