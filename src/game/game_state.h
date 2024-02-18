@@ -106,6 +106,8 @@ public:
     int IndexToVertex(int idx) const;
     int VertexToIndex(int vtx) const;
 
+    float GetKomiWithPenalty() const;
+    float GetPenalty() const;
     float GetKomi() const;
     int GetWinner() const;
     int GetHandicap() const;
@@ -144,7 +146,6 @@ public:
     std::string GetComment(size_t i) const;
 
     float GetWave() const;
-    float GetRule() const;
     std::string GetRuleString() const;
 
 private:

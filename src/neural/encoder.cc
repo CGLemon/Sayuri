@@ -291,6 +291,10 @@ void Encoder::EncoderFeatures(const GameState &state,
     FillArea(board.get(), color, area_it);
     FillLiberties(board.get(), liberties_it);
     FillLadder(board.get(), ladder_it);
-    FillMisc(board.get(), color, state.GetScoringRule(),
-                 state.GetWave(), state.GetKomi(), misc_it);
+    FillMisc(board.get(),
+                 color,
+                 state.GetScoringRule(),
+                 state.GetWave(),
+                 state.GetKomiWithPenalty(),
+                 misc_it);
 }

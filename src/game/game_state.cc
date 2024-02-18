@@ -673,6 +673,23 @@ int GameState::VertexToIndex(int vtx) const {
     return board_.VertexToIndex(vtx);
 }
 
+float GameState::GetKomiWithPenalty() const {
+    return GetKomi() + GetPenalty();
+}
+
+float GameState::GetPenalty() const {
+    float penalty = 0.f;
+    if (scoring_rule_ == kTerritory) {
+        penalty += (
+            board_.GetPrisoner(kWhite) -
+            board_.GetPrisoner(kBlack));
+    }
+
+    // TODO: Should we add handicap penalty?
+
+    return penalty;
+}
+
 float GameState::GetKomi() const {
     float komi = static_cast<float>(komi_integer_) +
                      static_cast<float>(komi_half_) * 0.5f;
@@ -843,10 +860,6 @@ float GameState::GetWave() const {
         wave = delta - 2.f;
     }
     return wave;
-}
-
-float GameState::GetRule() const {
-    return static_cast<float>(scoring_rule_ == kTerritory);
 }
 
 std::string GameState::GetRuleString() const {

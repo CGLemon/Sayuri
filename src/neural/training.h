@@ -35,7 +35,7 @@ struct Training {
     bool discard{false};
 
  /*
-    Output format is here. Every v2 data package is 54 lines.
+    Output format is here. Every v2 data package is 53 lines.
 
     ------- Version -------
      L1        : Version

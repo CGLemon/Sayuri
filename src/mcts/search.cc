@@ -1226,7 +1226,7 @@ void Search::GatherData(const GameState &state,
     data.discard = discard;
 
     data.board_size = result.board_size;
-    data.komi = result.komi;
+    data.komi = state.GetKomiWithPenalty();
     data.side_to_move = result.to_move;
 
     // Map the root eval from [0 ~ 1] to [-1 ~ 1]
@@ -1237,7 +1237,7 @@ void Search::GatherData(const GameState &state,
     data.planes = Encoder::Get().GetPlanes(state);
     data.probabilities = result.target_playouts_dist;
     data.wave = state.GetWave();
-    data.rule = state.GetRule();
+    data.rule = state.GetScoringRule() == kArea ? 0.f : 1.f; 
     data.kld = result.policy_kld;
 
     training_buffer_.emplace_back(data);
