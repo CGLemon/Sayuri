@@ -667,7 +667,7 @@ int Node::RandomMoveWithLogitsQ(GameState &state, float temp) {
     for (float &p : prob) {
         p /= (float)accm_visists;
     }
-    MixLogitsCompletedQ(state, prob, 1.0f);
+    MixLogitsCompletedQ(state, prob);
 
     auto select_vertex = kNullVertex;
     auto accum = double{0};
@@ -1472,13 +1472,12 @@ std::vector<float> Node::GetProbLogitsCompletedQ(GameState &state) {
         v /= acc;
     }
 
-    MixLogitsCompletedQ(state, prob, param_->gumbel_approx_temp);
+    MixLogitsCompletedQ(state, prob);
     return prob;
 }
 
 void Node::MixLogitsCompletedQ(GameState &state,
-                               std::vector<float> &prob,
-                               float temp) {
+                               std::vector<float> &prob) {
     const auto num_intersections = state.GetNumIntersections();
     const auto color = state.GetToMove();
 
@@ -1493,9 +1492,8 @@ void Node::MixLogitsCompletedQ(GameState &state,
 
     int max_visits = 0;
     int parentvisits = 0;;
-    auto q_list = std::vector<float>{};
-    auto pi_list = std::vector<float>{};
-    auto visits_list = std::vector<int>{};
+    float weighted_q = 0.f;
+    float weighted_pi = 0.f;
 
     // Gather some basic informations.
     for (auto & child : children_) {
@@ -1510,23 +1508,9 @@ void Node::MixLogitsCompletedQ(GameState &state,
         max_visits = std::max(max_visits, visits);
 
         if (visits > 0) {
-            q_list.emplace_back(
-                node->GetGumbelQValue(color, parent_score));
-        } else {
-            q_list.emplace_back(0.f);
-        }
-        pi_list.emplace_back(child.GetPolicy());
-        visits_list.emplace_back(visits);
-    }
-
-    pi_list = ReSoftmax(pi_list, temp);
-    float weighted_q = 0.f;
-    float weighted_pi = 0.f;
-
-    for (int i = 0; i < (int)visits_list.size(); ++i) {
-        if (visits_list[i] > 0) {
-            weighted_q += pi_list[i] * q_list[i];
-            weighted_pi += pi_list[i];
+            weighted_q += child.GetPolicy() *
+                              node->GetGumbelQValue(color, parent_score);
+            weighted_pi += child.GetPolicy();
         }
     }
 

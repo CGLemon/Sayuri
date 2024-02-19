@@ -243,8 +243,7 @@ private:
                              bool only_max_visits);
     Node *GumbelSelectChild(int color, bool only_max_visits);
     void MixLogitsCompletedQ(GameState &state,
-                             std::vector<float> &prob,
-                             float temp);
+                             std::vector<float> &prob);
 
     void KillRootSuperkos(GameState &state);
 

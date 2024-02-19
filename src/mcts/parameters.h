@@ -38,7 +38,6 @@ public:
         random_moves_factor = GetOption<float>("random_moves_factor");
         random_moves_temp = GetOption<float>("random_moves_temp");
 
-        gumbel_approx_temp = GetOption<float>("gumbel_approx_temp");
         gumbel_c_visit = GetOption<float>("gumbel_c_visit");
         gumbel_c_scale = GetOption<float>("gumbel_c_scale");
         gumbel_prom_visits = GetOption<int>("gumbel_prom_visits");
@@ -104,7 +103,6 @@ public:
     float draw_factor;
     float forced_playouts_k;
 
-    float gumbel_approx_temp;
     float gumbel_c_visit;
     float gumbel_c_scale;
     int gumbel_prom_visits;
