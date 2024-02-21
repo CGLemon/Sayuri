@@ -37,6 +37,8 @@ public:
 
     void SetRule(const int scoring);
 
+    void SetTerritoryHelper(const std::vector<int> &ownership);
+
     int TextToVertex(std::string text) const;
 
     int TextToColor(std::string text) const;
@@ -73,7 +75,7 @@ public:
     // Compute final score based on Tromp Taylor rule.
     float GetFinalScore(const int color) const;
     float GetFinalScore(const int color,
-                        const std::vector<int> &ownership) const;
+                        const std::vector<int> &territory_helper);
 
     // The safe area means both players do not need to play move in
     // it. It can be efficiently to end the a game if someone refuses
@@ -165,6 +167,8 @@ private:
     std::vector<VertexColor> append_moves_;
 
     std::vector<std::string> comments_;
+
+    std::vector<int> territory_helper_;
 
     ScoringRuleType scoring_rule_;
 

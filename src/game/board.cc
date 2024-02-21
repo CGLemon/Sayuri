@@ -1524,17 +1524,31 @@ std::vector<int> Board::GetStringList(const int vtx) const {
     return result;
 }
 
-int Board::ComputeScoreOnBoard(const int color, const int scoring) const {
-    auto score_area = std::vector<int>(GetNumIntersections(), kInvalid);
-
-    ComputeScoreArea(score_area);
-
-    return ComputeScoreOnBoard(color, scoring, score_area);
-}
-
 int Board::ComputeScoreOnBoard(const int color, const int scoring,
-                               const std::vector<int> &score_area) const {
+                               const std::vector<int> &territory_helper) const {
     int black_score_lead = 0;
+
+    auto score_area = std::vector<int>(num_intersections_, kInvalid);
+
+    if (scoring == kTerritory) {
+        auto fork_board = new Board(*this);
+        auto dead_list = std::vector<int>{}; 
+        for (int y = 0; y < board_size_; ++y) {
+            for (int x = 0; x < board_size_; ++x) {
+                const auto vtx = GetVertex(x, y);
+                const auto idx = GetIndex(x, y);
+                if ((territory_helper[idx] == kBlack && GetState(vtx) == kWhite) ||
+                        (territory_helper[idx] == kWhite && GetState(vtx) == kBlack)) {
+                    dead_list.emplace_back(vtx);
+                }
+            }
+        }
+        fork_board->RemoveMarkedStrings(dead_list);
+        fork_board->ComputeScoreArea(score_area);
+        delete fork_board;
+    } else {
+        ComputeScoreArea(score_area);
+    }
 
     for (int y = 0; y < board_size_; ++y) {
         for (int x = 0; x < board_size_; ++x) {
@@ -1546,6 +1560,7 @@ int Board::ComputeScoreOnBoard(const int color, const int scoring,
             }
         }
     }
+
     if (scoring == kTerritory) {
         for (int y = 0; y < board_size_; ++y) {
             for (int x = 0; x < board_size_; ++x) {

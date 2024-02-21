@@ -159,10 +159,9 @@ public:
     // Remove the marked strings from board.
     void RemoveMarkedStrings(std::vector<int> &marked);
 
-    // Compute score on board (without komi) based on Tromp Taylor rule.
-    int ComputeScoreOnBoard(const int color, const int scoring) const;
+    // Compute score on board (without komi).
     int ComputeScoreOnBoard(const int color, const int scoring,
-                            const std::vector<int> &score_area) const;
+                            const std::vector<int> &territory_helper) const;
 
     // Compute score area based on Tromp Taylor rule.
     void ComputeScoreArea(std::vector<int> &result) const;

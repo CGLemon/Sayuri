@@ -30,6 +30,7 @@ void GameState::Reset(const int boardsize,
     handicap_ = 0;
     move_number_ = 0;
     last_comment_.clear();
+    territory_helper_ = std::vector<int>(GetNumIntersections(), kEmpty);
 }
 
 void GameState::SetBoardSize(const int boardsize) {
@@ -357,6 +358,10 @@ void GameState::SetRule(const int scoring) {
     }
 }
 
+void GameState::SetTerritoryHelper(const std::vector<int> &ownership) {
+     territory_helper_ = ownership;
+}
+
 bool GameState::IsGameOver() const {
     return winner_ != kUndecide || GetPasses() >= 2;
 }
@@ -638,15 +643,14 @@ void GameState::RemoveDeadStrings(std::vector<int> &dead_list) {
 
 float GameState::GetFinalScore(const int color) const {
     float black_score = static_cast<float>(
-       board_.ComputeScoreOnBoard(kBlack, scoring_rule_)) - GetKomi();
+       board_.ComputeScoreOnBoard(kBlack, scoring_rule_, territory_helper_)) - GetKomi();
     return color == kBlack ? black_score : -black_score;
 }
 
 float GameState::GetFinalScore(const int color,
-                               const std::vector<int> &ownership) const {
-    float black_score = static_cast<float>(
-       board_.ComputeScoreOnBoard(kBlack, scoring_rule_, ownership)) - GetKomi();
-    return color == kBlack ? black_score : -black_score;
+                               const std::vector<int> &territory_helper) {
+    SetTerritoryHelper(territory_helper);
+    return GetFinalScore(color);
 }
 
 int GameState::GetVertex(const int x, const int y) const {
@@ -679,11 +683,6 @@ float GameState::GetKomiWithPenalty() const {
 
 float GameState::GetPenalty() const {
     float penalty = 0.f;
-    if (scoring_rule_ == kTerritory) {
-        penalty += (
-            board_.GetPrisoner(kWhite) -
-            board_.GetPrisoner(kBlack));
-    }
 
     // TODO: Should we add handicap penalty?
 
@@ -829,6 +828,10 @@ void GameState::PushComment() {
 }
 
 float GameState::GetWave() const {
+    if (scoring_rule_ == kTerritory) {
+        return 0.f;
+    }
+
     float curr_komi = GetKomi();
     if (GetToMove() == kWhite) {
         curr_komi = 0.f - curr_komi;

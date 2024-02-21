@@ -163,24 +163,7 @@ void Engine::SaveSgf(std::string filename, int g) {
 
 void Engine::GatherTrainingData(std::vector<Training> &chunk, int g) {
     Handel(g);
-    auto &state = game_pool_[g];
-    auto last_state = state; // copy
-
-    if (state.GetScoringRule() == kTerritory) {
-        // Keep playing until all dead strings are removed.
-        while (state.GetLastMove() == kPass) {
-            state.UndoMove();
-        }
-        state.SetRule(kArea);
-        while (!state.IsGameOver()) {
-            auto tag = Search::kNoExploring | Search::kNoBuffer;
-            state.PlayMove(
-                search_pool_[g]->GetSelfPlayMove(tag));
-        }
-    }
-
-    search_pool_[g]->GatherTrainingBuffer(chunk, state);
-    state = last_state;
+    search_pool_[g]->GatherTrainingBuffer(chunk);
 }
 
 void Engine::PrepareGame(int g) {
@@ -227,6 +210,7 @@ void Engine::Selfplay(int g) {
     while (!state.IsGameOver()) {
         state.PlayMove(search_pool_[g]->GetSelfPlayMove());
     }
+    search_pool_[g]->UpdateTerritoryHelper();
 }
 
 void Engine::SetNormalGame(int g) {

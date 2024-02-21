@@ -1044,7 +1044,7 @@ void Search::ClearTrainingBuffer() {
     training_buffer_.clear();
 }
 
-void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
+void Search::SaveTrainingBuffer(std::string filename) {
     auto file = std::ofstream{};
     file.open(filename, std::ios_base::app);
 
@@ -1054,7 +1054,7 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
     }
 
     auto chunk = std::vector<Training>{};
-    GatherTrainingBuffer(chunk, end_state);
+    GatherTrainingBuffer(chunk);
 
     for (auto &buf : chunk) {
         buf.StreamOut(file);
@@ -1062,13 +1062,32 @@ void Search::SaveTrainingBuffer(std::string filename, GameState &end_state) {
     file.close();
 }
 
-void Search::GatherTrainingBuffer(std::vector<Training> &chunk, GameState &end_state) {
+void Search::UpdateTerritoryHelper() {
+    auto temp_state = root_state_; // copy
+
+    if (root_state_.GetScoringRule() == kTerritory) {
+        // Keep playing until all dead strings are removed.
+        while (root_state_.GetLastMove() == kPass) {
+            root_state_.UndoMove();
+        }
+        root_state_.SetRule(kArea);
+        while (!root_state_.IsGameOver()) {
+            auto tag = Search::kNoExploring | Search::kNoBuffer;
+            root_state_.PlayMove(GetSelfPlayMove(tag));
+        }
+    }
+    auto end_state = root_state_;
+    root_state_ = temp_state;
+    root_state_.SetTerritoryHelper(end_state.GetOwnership());
+}
+
+void Search::GatherTrainingBuffer(std::vector<Training> &chunk) {
 
     // Compute the final status positions.
-    auto ownership = end_state.GetOwnership();
-    auto num_intersections = end_state.GetNumIntersections();
+    auto ownership = root_state_.GetOwnership();
+    auto num_intersections = root_state_.GetNumIntersections();
     auto winner = kUndecide;
-    auto black_final_score = end_state.GetFinalScore(kBlack, ownership);
+    auto black_final_score = root_state_.GetFinalScore(kBlack);
 
     // Get the player who won the game.
     if (std::abs(black_final_score) < 1e-4f) {

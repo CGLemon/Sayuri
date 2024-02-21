@@ -306,12 +306,16 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         agent_->GetState().SetToMove(color);
         auto move = agent_->GetSearch().GetSelfPlayMove();
         agent_->GetState().PlayMove(move);
+        if (agent_->GetState().IsGameOver()) {
+            agent_->GetSearch().UpdateTerritoryHelper();
+        }
         out << GtpSuccess(agent_->GetState().VertexToText(move));
     } else if (const auto res = spt.Find("selfplay", 0)) {
         while (!agent_->GetState().IsGameOver()) {
             agent_->GetState().PlayMove(agent_->GetSearch().GetSelfPlayMove());
             agent_->GetState().ShowBoard();
         }
+        agent_->GetSearch().UpdateTerritoryHelper();
         out << GtpSuccess("");
     } else if (const auto res = spt.Find("dump_training_buffer", 0)) {
         auto filename = std::string{};
@@ -324,7 +328,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         } else if (filename.empty()) {
             out << GtpFail("invalid file name");
         } else {
-            agent_->GetSearch().SaveTrainingBuffer(filename, agent_->GetState());
+            agent_->GetSearch().SaveTrainingBuffer(filename);
             out << GtpSuccess("");
         }
     } else if (const auto res = spt.Find("clear_training_buffer", 0)) {

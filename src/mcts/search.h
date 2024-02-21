@@ -187,10 +187,10 @@ public:
     void TimeLeft(const int color, const int time, const int stones);
 
     // Save the self-play training data.
-    void SaveTrainingBuffer(std::string filename, GameState &state);
+    void SaveTrainingBuffer(std::string filename);
 
     // Output the self-play training data.
-    void GatherTrainingBuffer(std::vector<Training> &chunk, GameState &state);
+    void GatherTrainingBuffer(std::vector<Training> &chunk);
 
     // Clear the training data in the buffer.
     void ClearTrainingBuffer();
@@ -200,6 +200,10 @@ public:
 
     // For debug interface, show the selected a path.
     std::string GetDebugMoves(std::vector<int> moves);
+
+    // Keep playing for territory scoring rule and update
+    // the territory helpe.
+    void UpdateTerritoryHelper();
 
 private:
     // Try to reuse the sub-tree.
