@@ -3,19 +3,28 @@
 #include "utils/random.h"
 
 #include <algorithm>
+#include <array>
 #include <utility>
 #include <random>
 #include <unordered_set>
 #include <unordered_map>
 #include <cmath>
+#include <tuple>
 
 enum class SytleType {
     kNormal,
-    kRandom
+    kRandom,
+    kLocal,
+    kTenuki,
+    kTerritory,
+    kInfluence
 };
 
 template<typename T>
-using SelectionVector = std::vector<std::pair<double, T>>;
+using SelectionItem = std::tuple<double, std::array<int, 2>, T>;
+
+template<typename T>
+using SelectionVector = std::vector<SelectionItem<T>>;
 
 template<typename T>
 SelectionVector<T> WeightedSelection(SelectionVector<T> selection_vector,
@@ -26,8 +35,8 @@ SelectionVector<T> WeightedSelection(SelectionVector<T> selection_vector,
 
     for (auto &it : selection_vector) {
         double val = std::log(distribution(Random<>::Get()));
-        double denom = 1.0 + it.first;
-        it.first = val / denom; // magic
+        double denom = 1.0 + std::get<0>(it);
+        std::get<0>(it) = val / denom; // magic
     }
     std::sort(std::rbegin(selection_vector),
                   std::rend(selection_vector));
@@ -71,7 +80,12 @@ int GetMaxMoves(int relative_rank, int num_intersections, int num_legal_moves) {
 }
 
 template<typename T>
-void RewritePriority(SelectionVector<T> &selection, SytleType sytle) {
+void RewritePriority(SelectionVector<T> &selection,
+                     SytleType sytle,
+                     std::array<int, 2> last_move,
+                     int board_size) {
+    // The formula is imported from katrain.
+
     if (sytle == SytleType::kNormal) {
         // origin policy only
         return;
@@ -79,8 +93,50 @@ void RewritePriority(SelectionVector<T> &selection, SytleType sytle) {
 
     if (sytle == SytleType::kRandom) {
         for (auto &it : selection) {
-            it.first = 0.f;
+            std::get<0>(it) = 0.f;
         }
+        return;
+    }
+
+    if ((sytle == SytleType::kLocal ||
+             sytle == SytleType::kTenuki) &&
+             last_move[0] >= 0) {
+        for (auto &it : selection) {
+            double dx = std::abs(std::get<1>(it)[0] - last_move[0]);
+            double dy = std::abs(std::get<1>(it)[1] - last_move[1]);
+            double var = std::pow(7.5, 2.0);
+            double gaussian = std::exp(-0.5 * (dx * dx + dy * dy) / var);
+            std::get<0>(it) = gaussian;
+
+            if (sytle == SytleType::kTenuki) {
+                std::get<0>(it) = 1.0 - std::get<0>(it);
+            }
+        }
+        return;
+    }
+
+    if (sytle == SytleType::kTerritory ||
+            sytle == SytleType::kInfluence) {
+        for (auto &it : selection) {
+            double thr_line = 3.5;
+            double x = std::get<1>(it)[0];
+            double y = std::get<1>(it)[1];
+            double weight = 0.0;
+
+            if (sytle == SytleType::kTerritory) {
+                x = std::min(x, board_size - 1 - x);
+                y = std::min(y, board_size - 1 - y);
+                double p = std::max(0.0, std::min(x, y) - thr_line);
+                weight = std::pow(1.0 / 2.0, p);
+            } else if (sytle == SytleType::kInfluence) {
+                x = std::max(0.0, thr_line - std::min(x, board_size - 1 - x));
+                y = std::max(0.0, thr_line - std::min(y, board_size - 1 - y));
+                double p = x + y;
+                weight = std::pow(1.0 / 10.0, p);
+            }
+            std::get<0>(it) *= weight;
+        }
+        return;
     }
 }
 
@@ -93,10 +149,10 @@ SelectionVector<T> SaveHighPriorityItem(SelectionVector<T> &selection,
     auto saved = SelectionVector<T>{};
 
     for (auto &it : selection) {
-        double priority = it.first;
+        double priority = std::get<0>(it);
         if (priority > override_top) {
             saved.emplace_back(it);
-        } 
+        }
     }
 
     // FIXME: Seem the std::remove_if has some bugs.
@@ -115,13 +171,15 @@ SelectionVector<T> SaveHighPriorityItem(SelectionVector<T> &selection,
 template<typename T>
 SelectionVector<T> GetRelativeRankVector(SelectionVector<T> selection,
                                          int relative_rank,
-                                         int num_intersections,
+                                         int board_size,
+                                         std::array<int, 2> last_move,
                                          SytleType sytle = SytleType::kNormal) {
     int num_legal_moves = selection.size();
+    int num_intersections = board_size * board_size;
     auto saved = SaveHighPriorityItem(
         selection, num_intersections, num_legal_moves);
 
-    RewritePriority(selection, sytle);
+    RewritePriority(selection, sytle, last_move, board_size);
 
     int n_moves = GetMaxMoves<25>(
         relative_rank, num_intersections, num_legal_moves);

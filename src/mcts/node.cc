@@ -125,17 +125,35 @@ void Node::RandomPruneRootChildren(GameState &state) {
     if (param_->relative_rank < 0) {
         return;
     }
+    if (state.GetBoardSize() != 19) {
+        return;
+    }
+
+    auto GetCoord = [](GameState &state, int vtx) {
+        auto coord = std::array<int, 2>({-1, -1});
+        if (vtx != kPass
+                && vtx != kResign
+                && vtx != kNullVertex) {
+            coord[0] = state.GetX(vtx);
+            coord[1] = state.GetY(vtx);
+        }
+        return coord;
+    };
+
     auto selection = SelectionVector<Node *>{};
     for (const auto &child : children_) {
         const auto node = child.Get();
         if (node->IsActive()) {
+            auto coord = GetCoord(state, node->GetVertex());
             selection.emplace_back(
-                child.GetPolicy(), node);
+                child.GetPolicy(), coord, node);
         }
     }
 
     selection = GetRelativeRankVector(
-        selection, param_->relative_rank, state.GetNumIntersections());
+        selection, param_->relative_rank,
+        state.GetBoardSize(),
+        GetCoord(state, state.GetLastMove()));
 
     // prune all active node first
     for (const auto &child : children_) {
@@ -148,7 +166,7 @@ void Node::RandomPruneRootChildren(GameState &state) {
 
     // activate the selection children
     for (auto &it : selection) {
-        const auto node = it.second;
+        const auto node = std::get<2>(it);
 
         if (node->IsPruned()) {
             node->SetActive(true);
