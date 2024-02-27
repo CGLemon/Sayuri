@@ -298,6 +298,9 @@ class TrainingPipe():
                 weight_decay=self.weight_decay,
             )
 
+        if not os.path.isdir(self.store_path):
+            os.makedirs(self.weights_path)
+
         self.weights_path = os.path.join(self.store_path, "weights")
         if not os.path.isdir(self.weights_path):
             os.mkdir(self.weights_path)
@@ -305,6 +308,10 @@ class TrainingPipe():
         self.swa_weights_path = os.path.join(self.store_path, "swa")
         if not os.path.isdir(self.swa_weights_path):
             os.mkdir(self.swa_weights_path)
+
+        self.checkpoint_path = os.path.join(self.store_path, "checkpoint")
+        if not os.path.isdir(self.checkpoint_path):
+            os.mkdir(self.checkpoint_path)
 
         info_file = os.path.join(self.store_path, "info.txt")
         with open(info_file, 'w') as f:
@@ -325,8 +332,13 @@ class TrainingPipe():
         return curr_lr
 
     def _load_current_status(self):
-        status_name = os.path.join(self.store_path, "last_status.pt")
-        self._status_loader.load(status_name, device=torch.device("cpu"))
+        sort_fn = os.path.getmtime
+        files = gather_filenames(self.checkpoint_path, 1, sort_key_fn=sort_fn)
+        if len(files) == 0:
+            self._status_loader.reset()
+        else:
+            status_name = files.pop()
+            self._status_loader.load(status_name, device=torch.device("cpu"))
         self._status_loader.load_model(self.module)
         self._status_loader.load_swa_model(self.swa_net)
         self._status_loader.load_optimizer(self.opt)
@@ -346,16 +358,15 @@ class TrainingPipe():
         return last_steps
 
     def _save_current_status(self, steps):
-        status_name = os.path.join(self.store_path, "last_status.pt")
-
         self._validate_the_last_model(steps)
 
+        checkpoint = os.path.join(self.checkpoint_path, "s{}-status.pt".format(steps))
         self._status_loader.set_steps(steps)
         self._status_loader.set_swa_count(self.swa_count)
         self._status_loader.save_model(self.module)
         self._status_loader.save_swa_model(self.swa_net)
         self._status_loader.save_optimizer(self.opt)
-        self._status_loader.save(status_name)
+        self._status_loader.save(checkpoint)
 
         weights_name = os.path.join(self.weights_path, "s{}.bin.txt".format(steps))
         cpu_module = self.module.to("cpu")

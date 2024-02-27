@@ -11,11 +11,12 @@ class StatusLoader:
         self.steps_name = "steps"
         self.swa_count_name = "swa_count"
 
+    def reset(self):
+        self.state_dict = dict()
+
     def load(self, filename, device=torch.device("cpu")):
         if os.path.isfile(filename):
             self.state_dict = torch.load(filename, map_location=device)
-        else:
-            self.state_dict = dict()
 
     def save(self, filename):
         torch.save(self.state_dict, filename)
