@@ -642,8 +642,9 @@ void GameState::RemoveDeadStrings(std::vector<int> &dead_list) {
 }
 
 float GameState::GetFinalScore(const int color) const {
+    float komi_with_handicap = GetKomi() + handicap_;
     float black_score = static_cast<float>(
-       board_.ComputeScoreOnBoard(kBlack, scoring_rule_, territory_helper_)) - GetKomi();
+       board_.ComputeScoreOnBoard(kBlack, scoring_rule_, territory_helper_)) - komi_with_handicap;
     return color == kBlack ? black_score : -black_score;
 }
 
@@ -684,7 +685,11 @@ float GameState::GetKomiWithPenalty() const {
 float GameState::GetPenalty() const {
     float penalty = 0.f;
 
-    // TODO: Should we add handicap penalty?
+    if (scoring_rule_ == kTerritory) {
+        penalty += board_.GetPrisoner(kWhite);
+        penalty -= board_.GetPrisoner(kBlack);
+    }
+    penalty += handicap_;
 
     return penalty;
 }
@@ -832,7 +837,7 @@ float GameState::GetWave() const {
         return 0.f;
     }
 
-    float curr_komi = GetKomi();
+    float curr_komi = GetKomiWithPenalty();
     if (GetToMove() == kWhite) {
         curr_komi = 0.f - curr_komi;
     }
