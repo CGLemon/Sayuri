@@ -1,22 +1,39 @@
+#!/bin/bash
+
 usage()
 {
-    echo "usage: -s <int> | source directory"
+    echo "usage: -s <path> | source directory"
+    exit 1
 }
 
-if [ "$1" = "-h" ] || [ $# = 0 ]; then
+SOURCE_DIR=""
+
+while :; do
+    case $1 in
+        -h|--help) shift; usage
+        ;;
+        -s) shift; SOURCE_DIR="$1"
+        ;;
+        "") break
+        ;;
+        *) echo "Unknown argument: $1"; usage
+        ;;
+    esac
+    shift
+done
+
+if [ "$SOURCE_DIR" = "" ]; then
     usage
+fi
+
+ENGINE_PATH="$SOURCE_DIR/build/sayuri"
+TORCH_PATH="$SOURCE_DIR/train/torch"
+
+if  [ ! -x ${ENGINE_PATH} ]; then
+    echo "The ${ENGINE_PATH} does not exists!"
     exit 1
 fi
 
-while getopts s: flag
-do
-    case "${flag}" in
-        s) source=${OPTARG};;
-    esac
-done
-
-SOURCE_DIR=$source
-ENGINE_NAME="sayuri"
-
-cp "$SOURCE_DIR/build/$ENGINE_NAME" "."
-cp -r "$SOURCE_DIR/train/torch" "."
+cp "$ENGINE_PATH" "."
+cp -r "$TORCH_PATH" "."
+echo "copy done!"
