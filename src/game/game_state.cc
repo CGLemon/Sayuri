@@ -689,8 +689,9 @@ float GameState::GetPenalty() const {
         penalty += board_.GetPrisoner(kWhite);
         penalty -= board_.GetPrisoner(kBlack);
     }
-    penalty += handicap_;
-
+    if (scoring_rule_ == kArea) {
+        penalty += handicap_;
+    }
     return penalty;
 }
 
