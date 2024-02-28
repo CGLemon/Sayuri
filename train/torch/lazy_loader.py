@@ -24,28 +24,23 @@ class ShuffleBuffer:
         return item
 
 class DataLoader:
-    def __init__(self, filenames, data_writer, down_sample_rate, stream_loader, stream_parser):
-        self.done = filenames
-        self.tasks = list()
-
+    def __init__(self, data_writer, file_loader, stream_loader, stream_parser):
+        self.file = file_loader
         self.parser = stream_parser
         self.loader = stream_loader
         self.writer = data_writer
+
         self.stream = None
-
-        # Use a random sample input data reader. This helps improve the spread of
-        # games in the shuffle buffer.
-        self.rate = down_sample_rate
-
-        assert len(filenames) != 0, ""
+        self.tasks = list()
 
     def _open_new_stream(self):
         if len(self.tasks) == 0:
-            self.tasks, self.done = self.done, self.tasks
+            self.tasks = self.file.func()
             random.shuffle(self.tasks)
 
+        assert len(self.tasks) != 0, ""
+
         filename = self.tasks.pop()
-        self.done.append(filename)
 
         return self.loader.func(filename)
 
@@ -61,28 +56,22 @@ class DataLoader:
                 self.stream = None
                 continue
 
-            if self.rate > 1:
-                # Apply the down-sample.
-                if random.randint(0, self.rate-1) != 0:
-                    continue
-
             self.writer.send(data)
             break
 
 class LoaderConfig:
     def __init__(self):
-        self.filenames = list()
+        self.file_loader = None
         self.stream_loader = None
         self.stream_parser = None
         self.batch_generator = None
-        self.down_sample_rate = 16
         self.num_workers = 0
         self.buffer_size = 0
         self.batch_size = 0
         self.flag = None
 
     def valid(self):
-        if len(self.filenames) <= 0 or \
+        if self.file_loader is None or \
             self.stream_loader is None or \
             self.stream_parser is None or \
             self.batch_generator is None or \
@@ -113,14 +102,13 @@ class LoaderFlag:
             self.flag.value = self.STOP
 
 def _load_from_files(config, data_writer):
-    # Load the data from disk. Suggest to design a heavy stream parser instead 
-    # of heavy batch generator. It is because that N workers execute the 
+    # Load the data from disk. Suggest to design a heavy stream parser instead
+    # of heavy batch generator. It is because that N workers execute the
     # parser function, only one worker executes generator function.
 
     loader = DataLoader(
-                 filenames = config.filenames,
                  data_writer = data_writer,
-                 down_sample_rate = config.down_sample_rate,
+                 file_loader = config.file_loader,
                  stream_loader = config.stream_loader,
                  stream_parser = config.stream_parser
              )
@@ -176,11 +164,10 @@ def _gather_batch(config, data_readers, batch_writer):
 def LazyLoader(*args, **kwargs):
     config = LoaderConfig()
 
-    config.filenames = kwargs.get("filenames", list())
+    config.file_loader = kwargs.get("file_loader", None)
     config.stream_loader = kwargs.get("stream_loader", None)
     config.stream_parser = kwargs.get("stream_parser", None)
     config.batch_generator = kwargs.get("batch_generator",None)
-    config.down_sample_rate = kwargs.get("down_sample_rate",  0)
     config.num_workers = kwargs.get("num_workers", 0)
     config.buffer_size = kwargs.get("buffer_size", 0)
     config.batch_size = kwargs.get("batch_size", 0)

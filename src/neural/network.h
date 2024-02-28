@@ -24,6 +24,7 @@ public:
     using PolicyVertexPair = std::pair<float, int>;
 
     void Initialize(const std::string &weights);
+    void Update(const std::string &weights);
     void Destroy();
     bool Valid() const;
 

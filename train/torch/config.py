@@ -55,7 +55,7 @@ def parse_training_config(json_data, config):
     config.steps_per_epoch = train.get("StepsPerEpoch", 1000)
     config.validation_steps = train.get("ValidationSteps", 100)
     config.verbose_steps = train.get("VerboseSteps", 1000)
-    config.max_steps = train.get("MaxStepsPerRunning", 16384000)
+    config.max_steps = train.get("MaxStepsPerRunning", 1048576000)
     config.fixup_batch_norm = train.get("FixUpBatchNorm", False)
     config.down_sample_rate = train.get("DownSampleRate", 16)
     config.num_chunks  = train.get("NumberChunks", None)

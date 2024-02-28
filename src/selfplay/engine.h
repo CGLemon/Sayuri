@@ -20,6 +20,9 @@ public:
     int GetParallelGames() const;
     size_t GetNetReportQueries();
 
+    bool ShouldUpdateWeights() const;
+    void UpdateNetwork();
+
 private:
     struct BoardQuery {
         int board_size;
@@ -62,6 +65,8 @@ private:
     std::unique_ptr<Network> network_{nullptr};
     std::vector<std::unique_ptr<Search>> search_pool_;
     std::vector<GameState> game_pool_;
+
+    std::string curr_weights_;
 
     size_t last_net_accm_queries_;
 };

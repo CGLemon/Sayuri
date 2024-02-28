@@ -86,6 +86,29 @@ void Network::Initialize(const std::string &weightsfile) {
     num_queries_.store(0, std::memory_order_relaxed);
 }
 
+void Network::Update(const std::string &weightsfile) {
+    if (!pipe_) {
+        return;
+    }
+    no_cache_ = GetOption<bool>("no_cache");
+    auto dnn_weights = std::make_shared<DNNWeights>();
+
+    pipe_->Destroy();
+
+    // Parse the NN weights file.
+    DNNLoder::Get().FromFile(dnn_weights, weightsfile);
+
+    // There is no weighs. Will disable the NN forward pipe.
+    if (!dnn_weights->loaded) {
+        dnn_weights.reset();
+        dnn_weights = nullptr;
+        no_cache_ = false; // Disable cache because it is not
+                           // effect on dummy forwarding pipe.
+    }
+
+    pipe_->Load(dnn_weights);
+}
+
 size_t Network::SetCacheSize(size_t MiB) {
     const size_t mem_mib = std::min(
                                std::max(size_t{5}, MiB), // min:   5 MB

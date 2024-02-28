@@ -30,6 +30,20 @@ def gather_filenames(root, num_chunks=None, sort_key_fn=None):
             chunks = chunks[:num_chunks]
     return chunks
 
+class FileLoader:
+    def __init__(self, filepath, num_chunks):
+        self.filepath = filepath
+        self.num_chunks = num_chunks
+        self.sort_fn = os.path.getmtime
+
+    def func(self):
+        files = gather_filenames(
+            self.filepath,
+            self.num_chunks,
+            sort_key_fn=self.sort_fn
+        )
+        return files
+
 class StreamLoader:
     def __init__(self):
         pass
@@ -381,22 +395,21 @@ class TrainingPipe():
             self.swa_net = self.swa_net.to(self.device)
 
     def _init_loader(self):
+        self._t_file_loader = FileLoader(self.train_dir, self.num_chunks)
+        self._v_file_loader = FileLoader(self.validation_dir, self.num_chunks//10)
         self._stream_loader = StreamLoader()
         self._stream_parser = StreamParser(self.down_sample_rate)
         self._batch_gen = BatchGenerator(self.cfg.boardsize, self.cfg.input_channels)
 
-        sort_fn = os.path.getmtime
-        chunks = gather_filenames(self.train_dir, self.num_chunks, sort_fn)
-
+        chunks = self._t_file_loader.func()
         print("Load the last {} chunks...".format(len(chunks)))
 
         self.flag = LoaderFlag()
         self.train_lazy_loader = LazyLoader(
-            filenames = chunks,
+            file_loader = self._t_file_loader,
             stream_loader = self._stream_loader,
             stream_parser = self._stream_parser,
             batch_generator = self._batch_gen,
-            down_sample_rate = 0,
             num_workers = self.num_workers,
             buffer_size = self.train_buffer_size,
             batch_size = self.macrobatchsize,
@@ -408,11 +421,10 @@ class TrainingPipe():
 
         if self.validation_dir is not None:
             self.validation_lazy_loader = LazyLoader(
-                filenames = gather_filenames(self.validation_dir, len(chunks)//10, sort_fn),
+                file_loader = self._v_file_loader,
                 stream_loader = self._stream_loader,
                 stream_parser = self._stream_parser,
                 batch_generator = self._batch_gen,
-                down_sample_rate = 0,
                 num_workers = self.num_workers,
                 buffer_size = self.validation_buffer_size,
                 batch_size = self.macrobatchsize,

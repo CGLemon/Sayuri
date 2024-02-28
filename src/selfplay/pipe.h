@@ -30,6 +30,9 @@ private:
     std::atomic<int> played_games_;
     std::atomic<int> running_threads_;
 
+    std::atomic<int> playing_games_;
+    std::atomic<bool> waiting_update_weights_;
+
     int chunk_games_;
     int max_games_;
     Engine engine_;

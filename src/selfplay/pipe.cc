@@ -24,6 +24,8 @@ void SelfPlayPipe::Initialize() {
     accmulate_games_.store(0, std::memory_order_relaxed);
     played_games_.store(0, std::memory_order_relaxed);
     running_threads_.store(0, std::memory_order_relaxed);
+    playing_games_.store(0, std::memory_order_relaxed);
+    waiting_update_weights_.store(false, std::memory_order_relaxed);
 
     chunk_games_ = 0;
 
@@ -156,6 +158,8 @@ void SelfPlayPipe::Loop() {
                 running_threads_.fetch_add(1, std::memory_order_relaxed);
 
                 while (accmulate_games_.fetch_add(1) < max_games_) {
+                    playing_games_.fetch_add(1);
+
                     engine_.PrepareGame(g);
                     engine_.Selfplay(g);
 
@@ -182,13 +186,31 @@ void SelfPlayPipe::Loop() {
                         LOGGING << '[' << CurrentDateTime() << ']' << " Played " << played_games << " games." << std::endl;
                         SaveNetQueries(engine_.GetNetReportQueries());
                     }
+                    playing_games_.fetch_sub(1);
+
+                    // Try update the last weights.
+                    if (g == 0) {
+                        auto should_update = engine_.ShouldUpdateWeights();
+                        waiting_update_weights_.store(should_update);
+                        if (should_update) {
+                            std::lock_guard<std::mutex> lock(log_mutex_);
+                            LOGGING << "We have the new weights. Wati for updating weights." << std::endl;
+                        }
+                    }
+                    while (waiting_update_weights_.load()) {
+                        std::this_thread::yield();
+                        if (g == 0 && playing_games_.load() == 0) {
+                            std::lock_guard<std::mutex> lock(log_mutex_);
+                            LOGGING << "Updating done!" << std::endl; 
+                            waiting_update_weights_.store(false);
+                        }
+                    }
                 }
 
+                // The last thread saves the remaining training data.
                 {
                     std::lock_guard<std::mutex> lock(data_mutex_);
                     running_threads_.fetch_sub(1, std::memory_order_relaxed);
-
-                    // The last thread saves the remaining training data.
                     if (!chunk_.empty() &&
                             running_threads_.load(std::memory_order_relaxed) == 0) {
                         SaveChunk(chunk_games_/kGamesPerChunk, chunk_);

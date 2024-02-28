@@ -25,7 +25,8 @@ void Engine::Initialize() {
     if (!network_) {
         network_ = std::make_unique<Network>();
     }
-    network_->Initialize(SelectWeights());
+    curr_weights_ = SelectWeights();
+    network_->Initialize(curr_weights_);
 
     game_pool_.clear();
     for (int i = 0; i < parallel_games_; ++i) {
@@ -328,6 +329,18 @@ size_t Engine::GetNetReportQueries() {
         curr_net_accm_queries - last_net_accm_queries_;
     last_net_accm_queries_ = curr_net_accm_queries;
     return report_queries;
+}
+
+bool Engine::ShouldUpdateWeights() const {
+    return SelectWeights() != curr_weights_;
+}
+
+void Engine::UpdateNetwork() {
+    auto new_weights = SelectWeights();
+
+    if (new_weights != curr_weights_) {
+
+    }
 }
 
 void Engine::Handel(int g) {
