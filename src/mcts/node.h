@@ -241,7 +241,7 @@ private:
     bool ProcessGumbelLogits(std::vector<float> &gumbel_logits,
                              const int color,
                              bool only_max_visits);
-    Node *GumbelSelectChild(int color, bool only_max_visits);
+    Node *GumbelSelectChild(int color, bool only_max_visits, bool allow_pass);
     void MixLogitsCompletedQ(GameState &state,
                              std::vector<float> &prob);
 

@@ -487,7 +487,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     // search. Use the PUCT directly if we fail to find the
     // next Gumbel move.
     if (is_root && param_->gumbel) {
-        auto node = GumbelSelectChild(color, false);
+        auto node = GumbelSelectChild(color, false, true);
         if (node) {
             return node;
         }
@@ -1793,7 +1793,7 @@ end_loop:;
     return true;
 }
 
-Node *Node::GumbelSelectChild(int color, bool only_max_visits) {
+Node *Node::GumbelSelectChild(int color, bool only_max_visits, bool allow_pass) {
     WaitExpanded();
     assert(HasChildren());
 
@@ -1804,15 +1804,26 @@ Node *Node::GumbelSelectChild(int color, bool only_max_visits) {
     }
 
     Edge* best_node = nullptr;
+    Edge* best_node_no_pass = nullptr;
     float best_value = std::numeric_limits<float>::lowest();
     const int size = children_.size();
 
     for (int i = 0; i < size; ++i) {
+        auto &child = children_[i];
         const auto value = gumbel_logits[i];
+
         if (value > best_value) {
             best_value = value;
-            best_node = children_.data() + i;
+            best_node = &child;
+            if (child.GetVertex() != kPass) {
+                best_node_no_pass = &child;
+            }
         }
+    }
+
+    if (!allow_pass && best_node_no_pass) {
+        Inflate(*best_node_no_pass);
+        return best_node_no_pass->Get();
     }
     Inflate(*best_node);
     return best_node->Get();
@@ -1835,14 +1846,8 @@ int Node::GetGumbelMove(bool allow_pass) {
         // Only one candidate move. It may be the pass move.
         allow_pass = true;
     }
-    if (!allow_pass) {
-        auto passnode = GetChild(kPass);
-        if (passnode) {
-            passnode->Invalidate();
-        }
-    }
 
-    return GumbelSelectChild(color_, true)->GetVertex();
+    return GumbelSelectChild(color_, true, allow_pass)->GetVertex();
 }
 
 void Node::SetScoreBouns(float val) {
