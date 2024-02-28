@@ -339,7 +339,8 @@ void Engine::UpdateNetwork() {
     auto new_weights = SelectWeights();
 
     if (new_weights != curr_weights_) {
-
+        curr_weights_ = new_weights;
+        network_->Update(curr_weights_);
     }
 }
 

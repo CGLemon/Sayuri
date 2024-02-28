@@ -200,8 +200,9 @@ void SelfPlayPipe::Loop() {
                     while (waiting_update_weights_.load()) {
                         std::this_thread::yield();
                         if (g == 0 && playing_games_.load() == 0) {
+                            engine_.UpdateNetwork();
                             std::lock_guard<std::mutex> lock(log_mutex_);
-                            LOGGING << "Updating done!" << std::endl; 
+                            LOGGING << "Updating done!" << std::endl;
                             waiting_update_weights_.store(false);
                         }
                     }
