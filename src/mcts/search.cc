@@ -1041,7 +1041,7 @@ int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
 }
 
 void Search::ClearTrainingBuffer() {
-    training_buffer_.clear();
+    training_data_buffer_.clear();
 }
 
 void Search::SaveTrainingBuffer(std::string filename) {
@@ -1053,7 +1053,7 @@ void Search::SaveTrainingBuffer(std::string filename) {
         return;
     }
 
-    auto chunk = std::vector<Training>{};
+    auto chunk = std::vector<TrainingData>{};
     GatherTrainingBuffer(chunk);
 
     for (auto &buf : chunk) {
@@ -1081,7 +1081,7 @@ void Search::UpdateTerritoryHelper() {
     root_state_.SetTerritoryHelper(end_state.GetOwnership());
 }
 
-void Search::GatherTrainingBuffer(std::vector<Training> &chunk) {
+void Search::GatherTrainingBuffer(std::vector<TrainingData> &chunk) {
 
     // Compute the final status positions.
     auto ownership = root_state_.GetOwnership();
@@ -1099,11 +1099,11 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk) {
     }
 
     // Set the most buffer values.
-    const int buf_size = training_buffer_.size();
+    const int buf_size = training_data_buffer_.size();
     for (int i = 0; i < buf_size; ++i) {
         assert(winner != kUndecide);
 
-        auto &buf = training_buffer_[i];
+        auto &buf = training_data_buffer_[i];
         if (winner == kDraw) {
             buf.final_score = 0;
             buf.result = 0;
@@ -1135,7 +1135,7 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk) {
             if (w_index < 0 || w_index >= buf_size) {
                 continue;
             }
-            auto &w_buf = training_buffer_[w_index];
+            auto &w_buf = training_data_buffer_[w_index];
 
             if (w_buf.side_to_move == buf.side_to_move) {
                 window_q_sum += w_buf.q_value;
@@ -1152,7 +1152,7 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk) {
 
     // Compute the short, middle and long term average values
     for (int i = 0; i < buf_size; ++i) {
-        auto &buf = training_buffer_[i];
+        auto &buf = training_data_buffer_[i];
         const auto board_size = buf.board_size;
 
         // Please see here,
@@ -1174,7 +1174,7 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk) {
 
         for (int h = 0; h < long_time_horizon; ++h) {
             int buf_idx = std::min(i+h, buf_size-1);
-            auto &curr_buf = training_buffer_[buf_idx];
+            auto &curr_buf = training_data_buffer_[buf_idx];
 
             if (curr_buf.side_to_move == buf.side_to_move) {
                 if (h < short_time_horizon) {
@@ -1217,29 +1217,29 @@ void Search::GatherTrainingBuffer(std::vector<Training> &chunk) {
     aux_prob[num_intersections] = 1.f;
 
     for (int i = buf_size-1; i >= 0; --i) {
-        auto &buf = training_buffer_[i];
+        auto &buf = training_data_buffer_[i];
         buf.auxiliary_probabilities = aux_prob;
         aux_prob = buf.probabilities;
     }
 
     // output the the data.
-    for (auto &buf : training_buffer_) {
+    for (auto &buf : training_data_buffer_) {
         chunk.emplace_back(buf);
     }
 
     // Release the buffer.
-    training_buffer_.clear();
+    training_data_buffer_.clear();
 }
 
 void Search::GatherData(const GameState &state,
                         ComputationResult &result,
                         bool discard) {
-    if (training_buffer_.size() > 9999) {
+    if (training_data_buffer_.size() > 9999) {
         // To many data in the buffer.
         return;
     }
 
-    auto data = Training{};
+    auto data = TrainingData{};
     data.version = GetTrainingVersion();
     data.mode = GetTrainingMode();
     data.discard = discard;
@@ -1259,7 +1259,7 @@ void Search::GatherData(const GameState &state,
     data.rule = state.GetScoringRule() == kArea ? 0.f : 1.f; 
     data.kld = result.policy_kld;
 
-    training_buffer_.emplace_back(data);
+    training_data_buffer_.emplace_back(data);
 }
 
 bool Search::AdvanceToNewRootState(Search::OptionTag tag) {

@@ -161,7 +161,7 @@ void Engine::SaveSgf(std::string filename, int g) {
     Sgf::Get().ToFile(filename, game_pool_[g]);
 }
 
-void Engine::GatherTrainingData(std::vector<Training> &chunk, int g) {
+void Engine::GatherTrainingData(std::vector<TrainingData> &chunk, int g) {
     Handel(g);
     search_pool_[g]->GatherTrainingBuffer(chunk);
 }

@@ -4,7 +4,7 @@
 #include "mcts/parameters.h"
 #include "mcts/node.h"
 #include "game/game_state.h"
-#include "neural/training.h"
+#include "neural/training_data.h"
 #include "utils/threadpool.h"
 #include "utils/operators.h"
 #include "utils/time.h"
@@ -146,7 +146,7 @@ public:
         kForced      = 1 << 4, // remove double pass move before search
         kUnreused    = 1 << 5, // don't reuse the tree
         kNoExploring = 1 << 6, // disable any exploring setting
-        kNoBuffer    = 1 << 7  // don't push data to training buffer
+        kNoBuffer    = 1 << 7  // don't push data to training data buffer
     };
 
     // Enable OptionTag operations.
@@ -190,7 +190,7 @@ public:
     void SaveTrainingBuffer(std::string filename);
 
     // Output the self-play training data.
-    void GatherTrainingBuffer(std::vector<Training> &chunk);
+    void GatherTrainingBuffer(std::vector<TrainingData> &chunk);
 
     // Clear the training data in the buffer.
     void ClearTrainingBuffer();
@@ -238,7 +238,7 @@ private:
     int max_playouts_; 
 
     // Self-play training data.
-    std::vector<Training> training_buffer_;
+    std::vector<TrainingData> training_data_buffer_;
 
     // True if it is searhing.
     std::atomic<bool> running_; 

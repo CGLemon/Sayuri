@@ -3,6 +3,7 @@
 #include "game/game_state.h"
 #include "game/types.h"
 #include "mcts/search.h"
+#include "neural/training_data.h"
 
 #include <vector>
 #include <memory>
@@ -12,7 +13,7 @@ public:
     void Initialize();
 
     void SaveSgf(std::string filename, int g);
-    void GatherTrainingData(std::vector<Training> &chunk, int g);
+    void GatherTrainingData(std::vector<TrainingData> &chunk, int g);
     void PrepareGame(int g);
     void Selfplay(int g);
 

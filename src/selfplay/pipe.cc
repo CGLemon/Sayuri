@@ -56,7 +56,7 @@ void SelfPlayPipe::Initialize() {
 }
 
 bool SelfPlayPipe::SaveChunk(const int out_id,
-                             std::vector<Training> &chunk) {
+                             std::vector<TrainingData> &chunk) {
     auto out_name = ConcatPath(
                         data_directory_hash_,
                         filename_hash_ +

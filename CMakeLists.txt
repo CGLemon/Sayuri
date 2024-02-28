@@ -87,7 +87,7 @@ set(NEURAL_SOURCES
     ${NEURAL_SOURCES_DIR}/description.cc
     ${NEURAL_SOURCES_DIR}/encoder.cc
     ${NEURAL_SOURCES_DIR}/network.cc
-    ${NEURAL_SOURCES_DIR}/training.cc
+    ${NEURAL_SOURCES_DIR}/training_data.cc
     ${NEURAL_SOURCES_DIR}/winograd_helper.cc
     ${NEURAL_SOURCES_DIR}/blas/sgemm.cc
     ${NEURAL_SOURCES_DIR}/blas/blas.cc

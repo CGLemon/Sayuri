@@ -3,7 +3,7 @@
 #include <vector>
 #include <iostream>
 
-struct Training {
+struct TrainingData {
     int version;
     int mode;
     int board_size;

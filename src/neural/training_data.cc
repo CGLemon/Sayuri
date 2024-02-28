@@ -1,5 +1,5 @@
 #include "game/types.h"
-#include "neural/training.h"
+#include "neural/training_data.h"
 #include "neural/encoder.h"
 
 void ArrayStreamOut(std::ostream &out, const std::vector<float> &arr) {
@@ -57,7 +57,7 @@ void PlanesStreamOut(std::ostream &out, const std::vector<float> &arr) {
     }
 }
 
-void Training::StreamOut(std::ostream &out) const {
+void TrainingData::StreamOut(std::ostream &out) const {
     if (discard) {
         return;
     }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "selfplay/engine.h"
+#include "neural/training_data.h"
 
 #include <vector>
 #include <thread>
@@ -16,14 +17,14 @@ private:
     void Loop();
 
     bool SaveChunk(const int out_id,
-                   std::vector<Training> &chunk);
+                   std::vector<TrainingData> &chunk);
 
     bool SaveNetQueries(const size_t queries);
 
     std::mutex data_mutex_;
     std::mutex log_mutex_;
 
-    std::vector<Training> chunk_;
+    std::vector<TrainingData> chunk_;
 
     std::atomic<int> accmulate_games_;
     std::atomic<int> played_games_;
