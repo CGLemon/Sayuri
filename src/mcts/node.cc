@@ -526,7 +526,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     const float numerator     = std::sqrt(float(parentvisits));
     const float fpu_reduction = fpu_reduction_factor * std::sqrt(total_visited_policy);
     const float fpu_value     = GetNetWL(color) - fpu_reduction;
-    const float parent_score  = GetNetScore(color);
+    const float parent_score  = GetFinalScore(color);
 
     Edge* best_node = nullptr;
     float best_value = std::numeric_limits<float>::lowest();
@@ -1114,7 +1114,7 @@ std::vector<std::pair<float, int>> Node::GetLcbUtilityList(const int color) {
     const auto lcb_reduction = std::min(
         std::max(0.f, param_->lcb_reduction), 1.f);
     int parentvisits = 0;
-    const auto parent_score = GetNetScore(color);
+    const auto parent_score = GetFinalScore(color);
     const auto score_utility_factor = param_->score_utility_factor;
     const auto score_utility_div = param_->score_utility_div;
 
@@ -1505,7 +1505,7 @@ void Node::MixLogitsCompletedQ(GameState &state,
         return;
     }
 
-    const auto parent_score = GetNetScore(color);
+    const auto parent_score = GetFinalScore(color);
     auto logits_q = GetZeroLogits<float>(num_intersections+1);
 
     int max_visits = 0;
@@ -1762,7 +1762,7 @@ end_loop:;
     }
 
     int count = 0;
-    const auto parent_score = GetNetScore(color);
+    const auto parent_score = GetFinalScore(color);
     auto gumbel_type1 = std::extreme_value_distribution<float>(0, 1);
 
     for (int i = 0; i < size; ++i) {
