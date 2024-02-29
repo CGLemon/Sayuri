@@ -88,6 +88,9 @@ The ```selfplay-config.txt``` controls the self-play process. Here are the param
                              # It means 10% 9x9 games is handicap. The
                              # max handicap size is 2.
 
+--selfplay-query srs:area      # The self-play game will use area scoring and
+--selfplay-query srs:territory # territory scoring.
+
 --selfplay-query bkp:7:9:0.1 # It means 10% games are 7x7 with komi 9.
 
 --playouts 150               # The main playouts.

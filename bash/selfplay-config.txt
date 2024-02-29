@@ -1,5 +1,6 @@
 --random-moves-factor 0.1
 --random-opening-prob 0.75
+--random-opening-temp 1.2
 --random-fastsearch-prob 0.75
 
 --komi-stddev 2.5
@@ -19,6 +20,8 @@
 --score-utility-factor 0.1
 --score-utility-div 20
 
+--forced-playouts-k 2
+
 --selfplay-query bkp:19:7:0.54  --selfplay-query bhp:19:6:0.1
 --selfplay-query bkp:18:7:0.08  --selfplay-query bhp:18:6:0.1
 --selfplay-query bkp:17:7:0.08  --selfplay-query bhp:17:5:0.1
@@ -33,10 +36,14 @@
 --selfplay-query bkp:8:10:0.01
 --selfplay-query bkp:7:9:0.01
 
+--selfplay-query srs:area
+--selfplay-query srs:territory
+
 --playouts 150
 
 --gumbel
 --gumbel-playouts-threshold 50
+--gumbel-prom-visits 1
 --always-completed-q-policy
 
 --reduce-playouts 50
