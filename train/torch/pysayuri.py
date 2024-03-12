@@ -502,13 +502,14 @@ class Board(object):
                    self.sl[self.id[nv]].lib_cnt == 1:
                    # Prey can capture surround strings. Simply
                    # think it is not ladder.
-                   return False, n  
+                   return False, n
             v_tmp = self.next[v_tmp]
             if v_tmp == v:
                 break
 
         prey_move = next(iter(self.sl[self.id[v]].libs))
-        self.play(prey_move) # prey play
+        if not self.play(prey_move): # prey play
+            return True, n # The prey string can not escape...
         lib_cnt = self.sl[self.id[v]].lib_cnt
 
         if lib_cnt == 1:
@@ -535,11 +536,11 @@ class Board(object):
 
             for lv in candidate:
                 b_ladder = self.copy()
-                b_ladder.play(lv) # hunter plays
-                if b_ladder.sl[b_ladder.id[lv]].lib_cnt != 1: # not self-atari
-                    val, n = b_ladder._ladder_search(v, n)
-                    if val:
-                        break
+                if b_ladder.play(lv): # hunter plays
+                    if b_ladder.sl[b_ladder.id[lv]].lib_cnt != 1: # not self-atari
+                        val, n = b_ladder._ladder_search(v, n)
+                        if val:
+                            break
             return val, n
         # Too many libs, it is not ladder.
         return False, n
@@ -565,11 +566,11 @@ class Board(object):
             for lv in self.sl[self.id[v]].libs:
                 b_ladder = self.copy()
                 b_ladder.to_move = int(c == 0) # hunter color
-                b_ladder.play(lv) # hunter play
-                if b_ladder.sl[b_ladder.id[lv]].lib_cnt != 1: # not self-atari
-                    res, n = b_ladder._ladder_search(v, n)
-                    if res:
-                        vital_moves.append(lv)
+                if b_ladder.play(lv): # hunter play
+                    if b_ladder.sl[b_ladder.id[lv]].lib_cnt != 1: # not self-atari
+                        res, n = b_ladder._ladder_search(v, n)
+                        if res:
+                            vital_moves.append(lv)
         return len(vital_moves) != 0, vital_moves
 
     def _get_ladder_map(self):
@@ -803,13 +804,16 @@ class Board(object):
         out += "komi: {:.2f}".format(self.komi)
         return out + "\n"
 
+def stderr_write(val):
+    sys.stderr.write(val)
+    sys.stderr.flush()
+
 def load_checkpoint(json_path, checkpoint, use_swa):
     cfg = gather_config(json_path)
     cfg.boardsize = BOARD_SIZE
     net = Network(cfg)
 
-    sys.stderr.write(net.simple_info() + "\n")
-    sys.stderr.flush()
+    stderr_write(net.simple_info())
 
     if checkpoint is not None:
         loader = StatusLoader()
@@ -938,6 +942,51 @@ def gogui_ownership_influence(ownership, board):
             out += " {} {:.2f}".format(get_move_text(x, y), val)
     return out
 
+def gogui_ladder_heatmap(laddermap, board):
+    def value_to_code(val):
+        def hsv2rgb(h,s,v):
+            return tuple(round(i * 255) for i in colorsys.hsv_to_rgb(h,s,v))
+
+        h1, h2 = 145, 215
+        w = h2 - h1
+        w2 = 20
+
+        h = (1.0 - val) * (242 - w + w2)
+        s = 1.0
+        v = 1.0
+
+        if (h1 <= h and h <= h1 + w2):
+            h = h1 + (h - h1) * w / w2
+            m = w / 2
+            v -= (m - abs(h - (h1 + m))) * 0.2 / m
+        elif h >= h1 + w2:
+            h += w - w2
+
+        h0 = 100
+        m0 = (h2 - h0) / 2
+        if h0 <= h and h <= h2:
+            v -= (m0 - abs(h - (h0 + m0))) * 0.2 / m0
+        r, g, b = hsv2rgb(h/360, s, v)
+        return "#{0:02x}{1:02x}{2:02x}".format(r, g, b)
+
+    out = str()
+    for y in range(board.board_size):
+        for x in range(board.board_size): 
+            ladder = laddermap[board.get_vertex(x, y)]
+            if ladder == LADDER_ATAR:
+                val = 0.2
+            elif ladder == LADDER_TAKE:
+                val = 0.4
+            elif ladder == LADDER_ESCP:
+                val = 0.8
+            elif ladder == LADDER_DEAD:
+                val = 1.0
+            else:
+                val = 0.0
+            out += "COLOR {} {}\n".format(value_to_code(val), get_move_text(x, y))
+    out = out[:-1]
+    return out
+
 def get_vertex_from_pred(prob, board):
     prob = prob[0].cpu().detach().numpy()
     prob = get_valid_spat(prob, board)
@@ -965,6 +1014,13 @@ def gtp_loop(args):
 
     board = Board(BOARD_SIZE, KOMI, SCORING_AREA)
     net = load_checkpoint(args.json, args.checkpoint, args.use_swa)
+
+    use_gpu = args.use_gpu and torch.cuda.is_available()
+    device = torch.device("cuda") if use_gpu else torch.device("cpu")
+    net = net.to(device)
+
+    if use_gpu:
+        stderr_write("Use the GPU...\n")
 
     while True:
         inputs = sys.stdin.readline().strip().split()
@@ -1040,9 +1096,8 @@ def gtp_loop(args):
                 c = WHITE
             board.to_move = c
 
-            planes = torch.from_numpy(board.get_features()).float()
-            planes = torch.unsqueeze(planes, 0)
-            pred, _ = net.forward(planes)
+            planes = torch.from_numpy(board.get_features()).float().to(device)
+            pred, _ = net.forward(torch.unsqueeze(planes, 0))
             prob, _, _, _, _, _, _, _, _, _ = pred
             move, vtx = get_vertex_from_pred(prob, board)
             board.play(vtx)
@@ -1064,7 +1119,8 @@ def gtp_loop(args):
                 "gfx/Optimistic Policy Rating/gogui-optimistic_policy_rating",
                 "gfx/Optimistic Policy Heatmap/gogui-optimistic_policy_heatmap",
                 "gfx/Ownership Heatmap/gogui-ownership_heatmap",
-                "gfx/Ownership Influence/gogui-ownership_influence"
+                "gfx/Ownership Influence/gogui-ownership_influence",
+                "gfx/Ladder Heatmap/gogui-ladder_heatmap"
             ]
             out = str()
             for i in supported_list:
@@ -1072,60 +1128,56 @@ def gtp_loop(args):
             out = out[:-1]
             gtp_print(out)
         elif main == "gogui-policy_rating":
-            planes = torch.from_numpy(board.get_features()).float()
-            planes = torch.unsqueeze(planes, 0)
-            pred, _ = net.forward(planes)
+            planes = torch.from_numpy(board.get_features()).float().to(device)
+            pred, _ = net.forward(torch.unsqueeze(planes, 0))
             prob, _, _, _, _, _, _, _, _, _ = pred
             out = gogui_policy_rating(prob, board)
             gtp_print(out)
         elif main == "gogui-policy_heatmap":
-            planes = torch.from_numpy(board.get_features()).float()
-            planes = torch.unsqueeze(planes, 0)
-            pred, _ = net.forward(planes)
+            planes = torch.from_numpy(board.get_features()).float().to(device)
+            pred, _ = net.forward(torch.unsqueeze(planes, 0))
             prob, _, _, _, _, _, _, _, _, _ = pred
             out = gogui_policy_heatmap(prob, board)
             gtp_print(out)
         elif main == "gogui-opp_policy_rating":
-            planes = torch.from_numpy(board.get_features()).float()
-            planes = torch.unsqueeze(planes, 0)
-            pred, _ = net.forward(planes)
+            planes = torch.from_numpy(board.get_features()).float().to(device)
+            pred, _ = net.forward(torch.unsqueeze(planes, 0))
             _, prob, _, _, _, _, _, _, _, _ = pred
             out = gogui_policy_rating(prob, board)
             gtp_print(out)
         elif main == "gogui-opp_policy_heatmap":
-            planes = torch.from_numpy(board.get_features()).float()
-            planes = torch.unsqueeze(planes, 0)
-            pred, _ = net.forward(planes)
+            planes = torch.from_numpy(board.get_features()).float().to(device)
+            pred, _ = net.forward(torch.unsqueeze(planes, 0))
             _, prob, _, _, _, _, _, _, _, _ = pred
             out = gogui_policy_heatmap(prob, board)
             gtp_print(out)
         elif main == "gogui-optimistic_policy_rating":
-            planes = torch.from_numpy(board.get_features()).float()
-            planes = torch.unsqueeze(planes, 0)
-            pred, _ = net.forward(planes)
+            planes = torch.from_numpy(board.get_features()).float().to(device)
+            pred, _ = net.forward(torch.unsqueeze(planes, 0))
             _, _, _, _, prob, _, _, _, _, _ = pred
             out = gogui_policy_rating(prob, board)
             gtp_print(out)
         elif main == "gogui-optimistic_policy_heatmap":
-            planes = torch.from_numpy(board.get_features()).float()
-            planes = torch.unsqueeze(planes, 0)
-            pred, _ = net.forward(planes)
+            planes = torch.from_numpy(board.get_features()).float().to(device)
+            pred, _ = net.forward(torch.unsqueeze(planes, 0))
             _, _, _, _, prob, _, _, _, _, _ = pred
             out = gogui_policy_heatmap(prob, board)
             gtp_print(out)
         elif main == "gogui-ownership_heatmap":
-            planes = torch.from_numpy(board.get_features()).float()
-            planes = torch.unsqueeze(planes, 0)
-            pred, _ = net.forward(planes)
+            planes = torch.from_numpy(board.get_features()).float().to(device)
+            pred, _ = net.forward(torch.unsqueeze(planes, 0))
             _, _, _, _, _, ownership, _, _, _, _ = pred
             out = gogui_ownership_heatmap(ownership, board)
             gtp_print(out)
         elif main == "gogui-ownership_influence":
-            planes = torch.from_numpy(board.get_features()).float()
-            planes = torch.unsqueeze(planes, 0)
-            pred, _ = net.forward(planes)
+            planes = torch.from_numpy(board.get_features()).float().to(device)
+            pred, _ = net.forward(torch.unsqueeze(planes, 0))
             _, _, _, _, _, ownership, _, _, _, _ = pred
             out = gogui_ownership_influence(ownership, board)
+            gtp_print(out)
+        elif main == "gogui-ladder_heatmap":
+            laddermap = board._get_ladder_map()
+            out = gogui_ladder_heatmap(laddermap, board)
             gtp_print(out)
         else:
             gtp_print("unknown command", False)
@@ -1135,8 +1187,10 @@ if __name__ == "__main__":
     parser.add_argument("-j", "--json", metavar="<string>",
                         help="The setting json file name.", type=str)
     parser.add_argument("-c", "--checkpoint", metavar="<string>",
-                        help="", type=str)
-    parser.add_argument("--use-swa", help="",
+                        help="The path of checkpoint.", type=str)
+    parser.add_argument("--use-swa", help="Use the SWA weights.",
+                        action="store_true", default=False)
+    parser.add_argument("--use-gpu", help="Use the GPU.",
                         action="store_true", default=False)
     args = parser.parse_args()
     gtp_loop(args)
