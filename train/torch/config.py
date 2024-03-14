@@ -3,7 +3,7 @@ import os
 import torch
 
 class Config:
-    def __init__(self):
+    def __init__(self, filename):
         self.num_workers = None
         self.use_gpu = None
         self.batchsize = None
@@ -25,6 +25,7 @@ class Config:
         self.residual_channels = None
         self.policy_extract = None
         self.value_extract = None
+        self.se_ratio = None
         self.optimizer = None
         self.nntype = None
         self.input_channels = None
@@ -35,73 +36,66 @@ class Config:
         self.swa_max_count = None
         self.swa_steps = None
 
-def parse_training_config(json_data, config):
-    train = json_data.get("Train", None)
+        self.read(filename)
 
-    config.optimizer = train.get("Optimizer", "SGD")
-    config.use_gpu = train.get("UseGPU", None)
-    config.weight_decay = train.get("WeightDecay", 1e-4)
-    config.lr_schedule = train.get("LearningRateSchedule", [[0, 0.2]])
+    def read(self, filename):
+        if filename != None:
+            with open(filename, 'r') as f:
+                data = json.load(f)
+            self.parse_training_config(data)
+            self.parse_nn_config(data)
 
-    config.train_dir = train.get("TrainDirectory", None)
-    config.validation_dir = train.get("ValidationDirectory", None)
-    config.store_path = train.get("StorePath", None)
-    config.batchsize = train.get("BatchSize", 512)
-    config.buffersize = train.get("BufferSize", 16 * 1000)
-    config.macrofactor = train.get("MacroFactor", 1)
-    config.macrobatchsize = config.batchsize // config.macrofactor
+    def parse_training_config(self, json_data):
+        train = json_data.get("Train", None)
 
-    config.num_workers = train.get("Workers", max(os.cpu_count()-2, 1))
-    config.steps_per_epoch = train.get("StepsPerEpoch", 1000)
-    config.validation_steps = train.get("ValidationSteps", 100)
-    config.verbose_steps = train.get("VerboseSteps", 1000)
-    config.max_steps = train.get("MaxStepsPerRunning", 16384000)
-    config.fixup_batch_norm = train.get("FixUpBatchNorm", False)
-    config.down_sample_rate = train.get("DownSampleRate", 16)
-    config.num_chunks  = train.get("NumberChunks", None)
-    config.soft_loss_weight  = train.get("SoftLossWeight", 0.1)
-    config.swa_max_count  = train.get("SwaMaxCount", 16)
-    config.swa_steps  = train.get("SwaSteps", 100)
+        self.optimizer = train.get("Optimizer", "SGD")
+        self.use_gpu = train.get("UseGPU", None)
+        self.weight_decay = train.get("WeightDecay", 1e-4)
+        self.lr_schedule = train.get("LearningRateSchedule", [[0, 0.2]])
 
-    assert config.train_dir != None, ""
-    assert config.store_path != None, ""
+        self.train_dir = train.get("TrainDirectory", None)
+        self.validation_dir = train.get("ValidationDirectory", None)
+        self.store_path = train.get("StorePath", None)
+        self.batchsize = train.get("BatchSize", 512)
+        self.buffersize = train.get("BufferSize", 16 * 1000)
+        self.macrofactor = train.get("MacroFactor", 1)
+        self.macrobatchsize = self.batchsize // self.macrofactor
 
-    if config.use_gpu == None:
-        if torch.cuda.is_available():
-            config.use_gpu = True
+        self.num_workers = train.get("Workers", max(os.cpu_count()-2, 1))
+        self.steps_per_epoch = train.get("StepsPerEpoch", 1000)
+        self.validation_steps = train.get("ValidationSteps", 100)
+        self.verbose_steps = train.get("VerboseSteps", 1000)
+        self.max_steps = train.get("MaxStepsPerRunning", 16384000)
+        self.fixup_batch_norm = train.get("FixUpBatchNorm", False)
+        self.down_sample_rate = train.get("DownSampleRate", 16)
+        self.num_chunks  = train.get("NumberChunks", None)
+        self.soft_loss_weight  = train.get("SoftLossWeight", 0.1)
+        self.swa_max_count  = train.get("SwaMaxCount", 16)
+        self.swa_steps  = train.get("SwaSteps", 100)
 
-    return config
+        assert self.train_dir != None, ""
+        assert self.store_path != None, ""
 
-def parse_nn_config(json_data, config):
-    network = json_data.get("NeuralNetwork", None)
+        if self.use_gpu == None:
+            if torch.cuda.is_available():
+                self.use_gpu = True
 
-    config.boardsize = network.get("MaxBoardSize", 19)
+    def parse_nn_config(self, json_data):
+        network = json_data.get("NeuralNetwork", None)
 
-    config.nntype = network.get("NNType", None)
-    config.input_channels = network.get("InputChannels", 43)
-    config.residual_channels = network.get("ResidualChannels", None)
-    config.policy_extract = network.get("PolicyExtract", None)
-    config.value_extract = network.get("ValueExtract", None)
+        self.boardsize = network.get("MaxBoardSize", 19)
+        self.nntype = network.get("NNType", None)
+        self.input_channels = network.get("InputChannels", 43)
+        self.residual_channels = network.get("ResidualChannels", None)
+        self.policy_extract = network.get("PolicyExtract", None)
+        self.value_extract = network.get("ValueExtract", None)
+        self.se_ratio = network.get("SeRatio", 1)
 
-    assert config.input_channels != None, ""
-    assert config.residual_channels != None, ""
-    assert config.policy_extract != None, ""
-    assert config.value_extract != None, ""
+        assert self.input_channels != None, ""
+        assert self.residual_channels != None, ""
+        assert self.policy_extract != None, ""
+        assert self.value_extract != None, ""
 
-    stack = network.get("Stack", None)
-    for s in stack:
-        config.stack.append(s)
-    return config
-
-def json_loader(filename):
-    with open(filename, 'r') as f:
-        data = json.load(f)
-    return data
-
-def gather_config(filename):
-    cfg = Config()
-    if filename != None:
-        data = json_loader(filename)
-        cfg = parse_training_config(data, cfg)
-        cfg = parse_nn_config(data, cfg)
-    return cfg
+        stack = network.get("Stack", None)
+        for s in stack:
+            self.stack.append(s)

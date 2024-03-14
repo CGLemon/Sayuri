@@ -1,7 +1,7 @@
 import argparse
 
 from train import TrainingPipe
-from config import gather_config
+from config import Config
 
 def main(cfg):
     pipe = TrainingPipe(cfg)
@@ -16,4 +16,4 @@ if __name__ == "__main__":
     if args.json == None:
         print("Please give the setting json file.")
     else:
-        main(gather_config(args.json))
+        main(Config(args.json))

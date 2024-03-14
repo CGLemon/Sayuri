@@ -579,6 +579,7 @@ class Network(nn.Module):
         self.ysize = cfg.boardsize
         self.policy_extract = cfg.policy_extract
         self.value_extract = cfg.value_extract
+        self.se_ratio = cfg.se_ratio
         self.value_misc = 15
         self.policy_outs = 5
         self.stack = cfg.stack
@@ -613,11 +614,12 @@ class Network(nn.Module):
                 if component == "ResidualBlock":
                     has_basic_block = True
                 elif component == "BottleneckBlock":
-                    bottleneck_channels = main_channels//2
-                    assert main_channels%2 == 0, ""
+                    bottleneck_channels = main_channels // 2
+                    assert main_channels % 2 == 0, ""
                     has_basic_block = True
                 elif component == "SE":
-                    se_size = main_channels
+                    se_size = main_channels // self.se_ratio
+                    assert main_channels % self.se_ratio == 0, ""
                 elif component == "FixUp":
                     use_fixup = True
                 else:
