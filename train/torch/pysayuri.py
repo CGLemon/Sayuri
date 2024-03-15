@@ -1,6 +1,6 @@
 from network import Network, CRAZY_NEGATIVE_VALUE
 from status_loader import StatusLoader
-from config import gather_config
+from config import Config
 
 import colorsys
 import torch
@@ -516,9 +516,8 @@ class Board(object):
             # The prey string is dead. It is ladder.
             return True, n
         elif lib_cnt == 2:
-            val = False
-            forbid = list()
-            candidate = list()
+            res = False
+            candidate = list(self.sl[self.id[v]].libs)
 
             for lv in self.sl[self.id[v]].libs:
                 virtual_libs = 0
@@ -526,22 +525,19 @@ class Board(object):
                      if self.state[lv + d] == EMPTY:
                          virtual_libs += 1
                 if virtual_libs > 2:
-                    # Prey will get to many libs, not ladder.
-                    continue
-                forbid.append(lv)
-
-            for lv in self.sl[self.id[v]].libs:
-                if lv not in forbid:
-                    candidate.append(lv)
+                    # Prey will get to many libs. Hunter must play
+                    # here.
+                    candidate = [lv]
+                    break
 
             for lv in candidate:
                 b_ladder = self.copy()
                 if b_ladder.play(lv): # hunter plays
                     if b_ladder.sl[b_ladder.id[lv]].lib_cnt != 1: # not self-atari
-                        val, n = b_ladder._ladder_search(v, n)
-                        if val:
+                        res, n = b_ladder._ladder_search(v, n)
+                        if res:
                             break
-            return val, n
+            return res, n
         # Too many libs, it is not ladder.
         return False, n
 
@@ -809,7 +805,7 @@ def stderr_write(val):
     sys.stderr.flush()
 
 def load_checkpoint(json_path, checkpoint, use_swa):
-    cfg = gather_config(json_path)
+    cfg = Config(json_path)
     cfg.boardsize = BOARD_SIZE
     net = Network(cfg)
 
@@ -1088,6 +1084,7 @@ def gtp_loop(args):
                 board.play(vtx)
             gtp_print("")
         elif main == "genmove":
+            # TODO: Support MCTS?
             color = inputs[1]
             c = INVLD
             if color.lower()[:1] == "b":
