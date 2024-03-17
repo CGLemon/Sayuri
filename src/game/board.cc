@@ -1529,26 +1529,7 @@ int Board::ComputeScoreOnBoard(const int color, const int scoring,
     int black_score_lead = 0;
 
     auto score_area = std::vector<int>(num_intersections_, kInvalid);
-
-    if (scoring == kTerritory) {
-        auto fork_board = new Board(*this);
-        auto dead_list = std::vector<int>{}; 
-        for (int y = 0; y < board_size_; ++y) {
-            for (int x = 0; x < board_size_; ++x) {
-                const auto vtx = GetVertex(x, y);
-                const auto idx = GetIndex(x, y);
-                if ((territory_helper[idx] == kBlack && GetState(vtx) == kWhite) ||
-                        (territory_helper[idx] == kWhite && GetState(vtx) == kBlack)) {
-                    dead_list.emplace_back(vtx);
-                }
-            }
-        }
-        fork_board->RemoveMarkedStrings(dead_list);
-        fork_board->ComputeScoreArea(score_area);
-        delete fork_board;
-    } else {
-        ComputeScoreArea(score_area);
-    }
+    ComputeScoreArea(score_area, scoring, territory_helper);
 
     for (int y = 0; y < board_size_; ++y) {
         for (int x = 0; x < board_size_; ++x) {
@@ -1618,12 +1599,32 @@ void Board::ComputeReachArea(std::vector<int> &result) const {
     }
 }
 
-void Board::ComputeScoreArea(std::vector<int> &result) const {
-
+void Board::ComputeScoreArea(std::vector<int> &result,
+                             const int scoring,
+                             const std::vector<int> &territory_helper) const {
+    if (scoring == kTerritory) {
+        auto fork_board = new Board(*this);
+        auto dead_list = std::vector<int>{};
+        for (int y = 0; y < board_size_; ++y) {
+            for (int x = 0; x < board_size_; ++x) {
+                const auto vtx = GetVertex(x, y);
+                const auto idx = GetIndex(x, y);
+                if ((territory_helper[idx] == kBlack && GetState(vtx) == kWhite) ||
+                        (territory_helper[idx] == kWhite && GetState(vtx) == kBlack)) {
+                    dead_list.emplace_back(vtx);
+                }
+            }
+        }
+        fork_board->RemoveMarkedStrings(dead_list);
+        fork_board->ComputeScoreArea(
+            result, kArea, territory_helper);
+        delete fork_board;
+        return;
+    }
     ComputeReachArea(result);
     auto pass_alive = std::vector<bool>(num_intersections_);
 
-    for (int c = 0; c < 2; ++c) {
+    for (int c: {kBlack, kWhite}) {
 
         std::fill(std::begin(pass_alive), std::end(pass_alive), false);
         ComputePassAliveArea(pass_alive, c, true, true);

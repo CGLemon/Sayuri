@@ -171,8 +171,9 @@ void Encoder::FillArea(const Board* board,
 
     auto ownership = std::vector<int>(num_intersections, kInvalid);
     auto safe_area = std::vector<bool>(num_intersections, false);
+    auto virtual_helper = std::vector<int>(num_intersections, kEmpty);
 
-    board->ComputeScoreArea(ownership);
+    board->ComputeScoreArea(ownership, kArea, virtual_helper);
     board->ComputeSafeArea(safe_area, false);
 
     for (int index = 0; index < num_intersections; ++index) {

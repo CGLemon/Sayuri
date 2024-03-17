@@ -508,7 +508,8 @@ bool GameState::PlayHandicapStones(std::vector<int> movelist_vertex,
 std::vector<int> GameState::GetOwnership() const {
     auto res = std::vector<int>(GetNumIntersections(), kInvalid);
 
-    board_.ComputeScoreArea(res);
+    board_.ComputeScoreArea(
+        res, scoring_rule_, territory_helper_);
 
     return res;
 }

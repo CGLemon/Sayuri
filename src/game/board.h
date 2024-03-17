@@ -164,7 +164,9 @@ public:
                             const std::vector<int> &territory_helper) const;
 
     // Compute score area based on Tromp Taylor rule.
-    void ComputeScoreArea(std::vector<int> &result) const;
+    void ComputeScoreArea(std::vector<int> &result,
+                          const int scoring,
+                          const std::vector<int> &territory_helper) const;
 
     // Compute black area and white area.
     void ComputeReachArea(std::vector<int> &result) const;
