@@ -63,18 +63,22 @@ private:
     void TryRecoverOwnershipMap(Network &network,
                                 GameState &state,
                                 std::vector<int> &ownership) {
-        if (state.GetScoringRule() != kTerritory) {
+        auto fork_state = state;
+        while (fork_state.GetPasses() >= 2) {
+            fork_state.UndoMove();
+        }
+        if (fork_state.GetScoringRule() != kTerritory) {
             return;
         }
         constexpr float kOwnshipThreshold = 0.75f;
 
-        auto netlist = network.GetOutput(state, Network::kRandom, 1);
-        auto color = state.GetToMove();
-        auto num_intersections = state.GetNumIntersections();
-        auto safe_area = state.GetStrictSafeArea();
+        auto netlist = network.GetOutput(fork_state, Network::kRandom, 1);
+        auto color = fork_state.GetToMove();
+        auto num_intersections = fork_state.GetNumIntersections();
+        auto safe_area = fork_state.GetStrictSafeArea();
 
         for (int idx = 0; idx < num_intersections; ++idx) {
-            const auto vtx = state.IndexToVertex(idx);
+            const auto vtx = fork_state.IndexToVertex(idx);
             float black_owner = netlist.ownership[idx]; // -1 ~ 1
             if (color == kWhite) {
                 black_owner = 0.f - black_owner;
@@ -82,7 +86,7 @@ private:
             if (safe_area[idx]) {
                 continue;
             }
-            if (state.GetState(vtx) == kEmpty &&
+            if (fork_state.GetState(vtx) == kEmpty &&
                     ownership[idx] != kEmpty) {
                 continue;
             }
