@@ -37,7 +37,6 @@
 --selfplay-query bkp:7:9:0.01
 
 --selfplay-query srs:area
---selfplay-query srs:territory
 
 --playouts 150
 

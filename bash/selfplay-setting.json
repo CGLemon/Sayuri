@@ -3,8 +3,8 @@
         "NNType": "Residual",
         "MaxBoardSize": 19,
         "ResidualChannels": 96,
-        "PolicyExtract": 16,
-        "ValueExtract": 16,
+        "PolicyExtract": 24,
+        "ValueExtract": 24,
 
         "Stack" : [
             "ResidualBlock",
@@ -23,7 +23,7 @@
         "ValidationSteps": 100,
         "VerboseSteps" : 1000,
         "MaxStepsPerRunning": 4000,
-        "Workers": 4,
+        "Workers": 12,
         "BatchSize": 256,
         "BufferSize" : 524288,
         "DownSampleRate": 16,
