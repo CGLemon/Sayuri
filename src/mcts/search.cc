@@ -820,7 +820,7 @@ bool ShouldForbidPass(GameState &state,
                       NodeEvals &root_evals) {
 
     const auto num_intersections = state.GetNumIntersections();
-    const auto move_threshold = num_intersections / 3;
+    const auto move_threshold = num_intersections / 6;
     if (state.GetMoveNumber() <= move_threshold) {
         // Too early to pass.
         return true;

@@ -75,7 +75,7 @@ public:
     // Compute final score based on Tromp Taylor rule.
     float GetFinalScore(const int color) const;
     float GetFinalScore(const int color,
-                        const std::vector<int> &territory_helper);
+                        const std::vector<int> &territory_helper) const;
 
     // The safe area means both players do not need to play move in
     // it. It can be efficiently to end the a game if someone refuses

@@ -643,16 +643,15 @@ void GameState::RemoveDeadStrings(std::vector<int> &dead_list) {
 }
 
 float GameState::GetFinalScore(const int color) const {
-    float komi_with_handicap = GetKomi() + handicap_;
-    float black_score = static_cast<float>(
-       board_.ComputeScoreOnBoard(kBlack, scoring_rule_, territory_helper_)) - komi_with_handicap;
-    return color == kBlack ? black_score : -black_score;
+    return GetFinalScore(color, territory_helper_);
 }
 
 float GameState::GetFinalScore(const int color,
-                               const std::vector<int> &territory_helper) {
-    SetTerritoryHelper(territory_helper);
-    return GetFinalScore(color);
+                               const std::vector<int> &territory_helper) const {
+    float komi = GetKomiWithPenalty();
+    float black_score = static_cast<float>(
+       board_.ComputeScoreOnBoard(kBlack, scoring_rule_, territory_helper)) - komi;
+    return color == kBlack ? black_score : -black_score;
 }
 
 int GameState::GetVertex(const int x, const int y) const {

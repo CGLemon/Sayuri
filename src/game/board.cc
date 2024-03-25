@@ -1557,8 +1557,6 @@ int Board::ComputeScoreOnBoard(const int color, const int scoring,
                 }
             }
         }
-        black_score_lead += prisoners_[kBlack];
-        black_score_lead -= prisoners_[kWhite];
     }
     return color == kBlack ? black_score_lead : -black_score_lead;
 }

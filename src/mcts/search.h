@@ -70,6 +70,7 @@ private:
         if (fork_state.GetScoringRule() != kTerritory) {
             return;
         }
+        fork_state.SetRule(kArea);
         constexpr float kOwnshipThreshold = 0.75f;
 
         auto netlist = network.GetOutput(fork_state, Network::kRandom, 1);
@@ -78,16 +79,11 @@ private:
         auto safe_area = fork_state.GetStrictSafeArea();
 
         for (int idx = 0; idx < num_intersections; ++idx) {
-            const auto vtx = fork_state.IndexToVertex(idx);
             float black_owner = netlist.ownership[idx]; // -1 ~ 1
             if (color == kWhite) {
                 black_owner = 0.f - black_owner;
             }
             if (safe_area[idx]) {
-                continue;
-            }
-            if (fork_state.GetState(vtx) == kEmpty &&
-                    ownership[idx] != kEmpty) {
                 continue;
             }
             if (black_owner > kOwnshipThreshold) {
