@@ -7,9 +7,9 @@ class StatusLoader:
         self.model_name = "model"
         self.swa_model_name = "swa_model"
         self.optimizer_name = "optimizer"
-
         self.steps_name = "steps"
         self.swa_count_name = "swa_count"
+        self.json_str_name = "json_str"
 
     def reset(self):
         self.state_dict = dict()
@@ -36,6 +36,9 @@ class StatusLoader:
     def get_swa_count(self):
         return self.state_dict.get(self.swa_count_name, 0)
 
+    def get_json_str(self):
+        return self.state_dict.get(self.json_str_name, None)
+
     def set_model_dict(self, model_dict):
         self.state_dict[self.model_name] = model_dict
 
@@ -50,6 +53,9 @@ class StatusLoader:
 
     def set_swa_count(self, c):
         self.state_dict[self.swa_count_name] = c
+
+    def set_json_str(self, s):
+        self.state_dict[self.json_str_name] = s
 
     def load_model(self, network):
         model_dict = self.get_model_dict()

@@ -3,7 +3,8 @@ import os
 import torch
 
 class Config:
-    def __init__(self, filename):
+    def __init__(self, inputs, is_file=True):
+        self.raw_data = str()
         self.num_workers = None
         self.use_gpu = None
         self.batchsize = None
@@ -36,14 +37,21 @@ class Config:
         self.swa_max_count = None
         self.swa_steps = None
 
-        self.read(filename)
+        if is_file:
+            self.read(inputs)
+        else:
+            self.parse(inputs)
 
     def read(self, filename):
-        if filename != None:
-            with open(filename, 'r') as f:
-                data = json.load(f)
-            self.parse_training_config(data)
-            self.parse_nn_config(data)
+        with open(filename, "r") as f:
+           json_str = f.read()
+        self.parse(json_str)
+
+    def parse(self, json_str):
+        self.json_str = json_str
+        jdata = json.loads(self.json_str)
+        self.parse_training_config(jdata)
+        self.parse_nn_config(jdata)
 
     def parse_training_config(self, json_data):
         train = json_data.get("Train", None)

@@ -363,6 +363,7 @@ class TrainingPipe():
         checkpoint = os.path.join(self.checkpoint_path, "s{}-status.pt".format(steps))
         self._status_loader.set_steps(steps)
         self._status_loader.set_swa_count(self.swa_count)
+        self._status_loader.set_json_str(self.cfg.json_str)
         self._status_loader.save_model(self.module)
         self._status_loader.save_swa_model(self.swa_net)
         self._status_loader.save_optimizer(self.opt)

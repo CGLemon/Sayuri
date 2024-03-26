@@ -805,15 +805,24 @@ def stderr_write(val):
     sys.stderr.flush()
 
 def load_checkpoint(json_path, checkpoint, use_swa):
-    cfg = Config(json_path)
+    cfg = None
+    if json_path is None and not checkpoint is None:
+        loader = StatusLoader()
+        loader.load(checkpoint)
+        cfg = Config(loader.get_json_str(), False)
+    else:
+        cfg = Config(json_path)
+
+    if cfg is None:
+        raise Exception("The config file does not exist.")
+
     cfg.boardsize = BOARD_SIZE
     net = Network(cfg)
-
     stderr_write(net.simple_info())
 
-    if checkpoint is not None:
+    if not checkpoint is None:
         loader = StatusLoader()
-        loader.load(checkpoint, device=torch.device("cpu"))
+        loader.load(checkpoint)
         loader.load_model(net)
         if use_swa:
             loader.load_swa_model(net)
