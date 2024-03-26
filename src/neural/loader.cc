@@ -5,6 +5,7 @@
 #include "utils/format.h"
 #include "utils/parse_float.h"
 #include "utils/option.h"
+#include "utils/time.h"
 #include "config.h"
 
 #include <iostream>
@@ -23,6 +24,7 @@ void DNNLoder::FromFile(std::shared_ptr<DNNWeights> weights, std::string filenam
     auto file = std::ifstream{};
     auto buffer = std::stringstream{};
     auto line = std::string{};
+    Timer timer;
 
     if (filename.empty()) {
         LOGGING << "There is no weights file." << std::endl;
@@ -32,23 +34,23 @@ void DNNLoder::FromFile(std::shared_ptr<DNNWeights> weights, std::string filenam
     file.open(filename, std::ifstream::binary | std::ifstream::in);
 
     if (!file.is_open()) {
-        LOGGING << "Couldn't open file:" << ' ' << filename << '!' << std::endl;
+        LOGGING << Format("Couldn't open weights file, %s!", filename.c_str())
+                    << std::endl;
         return;
     }
 
-    char c;
-    while (file.get(c)) {
-        // Copy the file data to buffer.
-        buffer << c;
-    }
-
+    buffer << file.rdbuf();
     file.close();
 
     try {
+        LOGGING << Format("Load the weights file from, %s.", filename.c_str())
+                    << std::endl;
         Parse(weights, buffer);
+        LOGGING << Format("Done! Load the weights file in %.2f sec.",
+                              timer.GetDurationMilliseconds()/1000.f)
+                    << std::endl;
     } catch (const char *err) {
         // Should be not happned.
-
         LOGGING << "Fail to load the network file!" << std::endl
                     << Format("    Cause: %s.", err) << std::endl;
     }
@@ -66,7 +68,7 @@ void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) 
     * end
     *
     * get parameters
-    *   (The network weights are here. It is must be in)
+    *   (The network weights are here. It is must be in
     *    the last scope.)
     * end
     * end
@@ -98,27 +100,17 @@ void DNNLoder::Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer) 
             } else if (spt.GetWord(1)->Get<>() == "struct") {
                 ParseStruct(netstruct, buffer);
             } else if (spt.GetWord(1)->Get<>() == "parameters") {
+                // load the parameters later...
                 break;
             }
         } else if (spt.GetWord(0)->Get<std::string>() == "end") {
             // do nothing...
         }
     }
-
-    buffer.clear();
-    buffer.seekg(0, std::ios::beg);
-
     CkeckMisc(netinfo, netstack, netstruct);
 
     // Now start to parse the weights.
-    while (std::getline(buffer, line)) {
-        const auto spt = Splitter(line);
-        if (spt.GetWord(0)->Get<>() == "get") {
-            if (spt.GetWord(1)->Get<>() == "parameters") {
-                FillWeights(netinfo, netstack, netstruct, weights, buffer);
-            }
-        }
-    }
+    FillWeights(netinfo, netstack, netstruct, weights, buffer);
 }
 
 void DNNLoder::ParseInfo(NetInfo &netinfo, std::istream &buffer) const {
@@ -324,10 +316,8 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
                            std::istream &buffer) const {
 
     weights->input_channels = std::stoi(netinfo["InputChannels"]);
-
     weights->residual_blocks = std::stoi(netinfo["ResidualBlocks"]);
     weights->residual_channels = std::stoi(netinfo["ResidualChannels"]);
-
     weights->policy_extract_channels = std::stoi(netinfo["PolicyExtract"]);
     weights->value_extract_channels = std::stoi(netinfo["ValueExtract"]);
 
@@ -634,10 +624,10 @@ void DNNLoder::FillWeights(NetInfo &netinfo,
     if (spt.GetWord(0)->Get<std::string>() != "end") {
         throw "Not end? Weights file format is not acceptable";
     }
+    weights->winograd = GetOption<bool>("winograd");
     weights->loaded = true;
     DumpInfo(weights);
     ProcessWeights(weights);
-    weights->winograd = GetOption<bool>("winograd");
 }
 
 void DNNLoder::ProcessWeights(std::shared_ptr<DNNWeights> weights) const {
