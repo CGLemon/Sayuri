@@ -155,16 +155,6 @@ SelectionVector<T> SaveHighPriorityItem(SelectionVector<T> &selection,
         }
     }
 
-    // FIXME: Seem the std::remove_if has some bugs.
-    //
-    // auto it = std::remove_if(std::begin(selection), std::end(selection),
-    //                              [override_top](auto &it) {
-    //                                  double priority = it.first;
-    //                                  return priority > override_top;
-    //                              });
-    // saved.insert(std::begin(saved), it, std::end(selection));
-    // selection.erase(it, std::end(selection));
-
     return saved;
 }
 
