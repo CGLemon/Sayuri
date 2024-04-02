@@ -818,6 +818,7 @@ def load_checkpoint(json_path, checkpoint, use_swa):
 
     cfg.boardsize = BOARD_SIZE
     net = Network(cfg)
+    stderr_write("Load the weights from: {}\n".format(checkpoint))
     stderr_write(net.simple_info())
 
     if not checkpoint is None:
@@ -863,7 +864,7 @@ def gogui_policy_rating(prob, board):
         for x in range(board.board_size):
             val = prob[board.get_index(x, y)]
             if val > 1./board.num_intersections:
-                out += "LABEL {} {}\n".format(get_move_text(x, y), round(100 * val))
+                out += "LABEL {} {}\n".format(get_move_text(x, y), round(100. * val))
     out = out[:-1]
     return out
 
@@ -1025,7 +1026,7 @@ def gtp_loop(args):
     net = net.to(device)
 
     if use_gpu:
-        stderr_write("Use the GPU...\n")
+        stderr_write("Enable the GPU device...\n")
 
     while True:
         inputs = sys.stdin.readline().strip().split()
@@ -1122,6 +1123,8 @@ def gtp_loop(args):
                 "gfx/Policy Heatmap/gogui-policy_heatmap",
                 "gfx/Opponent Policy Rating/gogui-opp_policy_rating",
                 "gfx/Opponent Policy Heatmap/gogui-opp_policy_heatmap",
+                "gfx/Soft Policy Rating/gogui-soft_policy_rating",
+                "gfx/Soft Policy Heatmap/gogui-soft_policy_heatmap",
                 "gfx/Optimistic Policy Rating/gogui-optimistic_policy_rating",
                 "gfx/Optimistic Policy Heatmap/gogui-optimistic_policy_heatmap",
                 "gfx/Ownership Heatmap/gogui-ownership_heatmap",
@@ -1155,6 +1158,18 @@ def gtp_loop(args):
             planes = torch.from_numpy(board.get_features()).float().to(device)
             pred, _ = net.forward(torch.unsqueeze(planes, 0))
             _, prob, _, _, _, _, _, _, _, _ = pred
+            out = gogui_policy_heatmap(prob, board)
+            gtp_print(out)
+        elif main == "gogui-soft_policy_rating":
+            planes = torch.from_numpy(board.get_features()).float().to(device)
+            pred, _ = net.forward(torch.unsqueeze(planes, 0))
+            _, _, prob, _, _, _, _, _, _, _ = pred
+            out = gogui_policy_rating(prob, board)
+            gtp_print(out)
+        elif main == "gogui-soft_policy_heatmap":
+            planes = torch.from_numpy(board.get_features()).float().to(device)
+            pred, _ = net.forward(torch.unsqueeze(planes, 0))
+            _, _, prob, _, _, _, _, _, _, _ = pred
             out = gogui_policy_heatmap(prob, board)
             gtp_print(out)
         elif main == "gogui-optimistic_policy_rating":
