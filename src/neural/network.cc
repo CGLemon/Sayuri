@@ -310,7 +310,7 @@ std::string Network::GetOutputString(const GameState &state,
     out << "score error: " << result.score_error << std::endl;
 
     out << "probabilities: " << std::endl;
-    for (int y = 0; y < bsize; ++y) {
+    for (int y = bsize - 1; y >= 0; --y) {
         for (int x = 0; x < bsize; ++x) {
             out << Format("%10.6f", result.probabilities[state.GetIndex(x,y)]);
         }
@@ -319,7 +319,7 @@ std::string Network::GetOutputString(const GameState &state,
     out << Format("pass probabilities: %.6f\n", result.pass_probability);
 
     out << "ownership: " << std::endl;
-    for (int y = 0; y < bsize; ++y) {
+    for (int y = bsize - 1; y >= 0; --y) {
         for (int x = 0; x < bsize; ++x) {
             out << Format("%10.6f", result.ownership[state.GetIndex(x,y)]);
         }

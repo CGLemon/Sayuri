@@ -303,7 +303,7 @@ std::string GameState::GetStateString() const {
 }
 
 void GameState::ShowBoard() const {
-    LOGGING << board_.GetBoardString(board_.GetLastMove(), true);
+    LOGGING << board_.GetBoardString(board_.GetLastMove(), false);
     LOGGING << GetStateString();
 }
 
