@@ -11,11 +11,7 @@ Splitter::Splitter(std::string &input, const size_t max) {
 }
 
 Splitter::Splitter(int argc, char** argv) {
-    auto oss = std::ostringstream{};
-    for (int i = 0; i < argc; ++i) {
-        oss << argv[i] << " ";
-    }
-    Parse(std::forward<std::string>(oss.str()), kMaxBufferSize);
+    Parse(argc, argv, kMaxBufferSize);
 }
 
 bool Splitter::Valid() const {
@@ -27,7 +23,7 @@ void Splitter::Parse(std::string &input, const size_t max) {
     auto stream = std::istringstream{input};
     auto in = std::string{};
     while (stream >> in) {
-        bufffer_.emplace_back(std::make_shared<std::string>(in));
+        buffer_.emplace_back(std::make_shared<std::string>(in));
         count_++;
         if (count_ >= max) break;
     }
@@ -38,9 +34,16 @@ void Splitter::Parse(std::string &&input, const size_t max) {
     auto stream = std::istringstream{input};
     auto in = std::string{};
     while (stream >> in) {
-        bufffer_.emplace_back(std::make_shared<std::string>(in));
+        buffer_.emplace_back(std::make_shared<std::string>(in));
         count_++;
         if (count_ >= max) break;
+    }
+}
+
+void Splitter::Parse(int argc, char** argv, const size_t max) {
+    count_ = std::min((size_t)argc, max);
+    for (auto i = size_t{0}; i < count_; ++i) {
+        buffer_.emplace_back(std::make_shared<std::string>(argv[i]));
     }
 }
 
@@ -52,7 +55,7 @@ std::shared_ptr<Splitter::Reuslt> Splitter::GetWord(size_t id) const {
     if (!Valid() || id >= count_) {
         return nullptr;
     }
-    return std::make_shared<Reuslt>(Reuslt(*bufffer_[id], (int)id));
+    return std::make_shared<Reuslt>(*buffer_[id], (int)id);
 }
 
 std::shared_ptr<Splitter::Reuslt> Splitter::GetSlice(size_t b) const {
@@ -68,8 +71,8 @@ std::shared_ptr<Splitter::Reuslt> Splitter::GetSlice(size_t b, size_t e) const {
      }
 
      auto out = std::ostringstream{};
-     auto begin = std::next(std::begin(bufffer_), b);
-     auto end = std::next(std::begin(bufffer_), e);
+     auto begin = std::next(std::begin(buffer_), b);
+     auto end = std::next(std::begin(buffer_), e);
      auto stop = std::prev(end, 1);
 
      if (begin != end) {
@@ -78,7 +81,7 @@ std::shared_ptr<Splitter::Reuslt> Splitter::GetSlice(size_t b, size_t e) const {
      }
 
      out << **stop;
-     return std::make_shared<Reuslt>(Reuslt(out.str(), -1));
+     return std::make_shared<Reuslt>(out.str(), -1);
 }
 
 std::shared_ptr<Splitter::Reuslt> Splitter::Find(const std::string input, int id) const {
@@ -87,57 +90,27 @@ std::shared_ptr<Splitter::Reuslt> Splitter::Find(const std::string input, int id
     }
 
     if (id < 0) {
-        for (auto i = size_t{0}; i < GetCount(); ++i) {
+        // Only return first match result.
+        for (auto i = size_t{0}; i < count_; ++i) {
             const auto res = GetWord(i);
             if (res->str_ == input) {
                 return res;
             }
         }
     } else {
-        if (const auto res = GetWord((size_t)id)) {
+        // Only check the specific string.
+        if (const auto res = GetWord(id)) {
             return res->str_ == input ? res : nullptr;
         }
     }
+    // Don't match any string.
     return nullptr;
 }
 
 std::shared_ptr<Splitter::Reuslt> Splitter::Find(const std::initializer_list<std::string> inputs, int id) const {
     for (const auto &in : inputs) {
+        // Only return first match result.
         if (const auto res = Find(in, id)) {
-            return res;
-        }
-    }
-    return nullptr;
-}
-
-std::shared_ptr<Splitter::Reuslt> Splitter::FindLower(const std::string input, int id) const {
-    if (!Valid()) {
-        return nullptr;
-    }
-
-    auto lower = input;
-    for (auto & c: lower) {
-        c = std::tolower(c);
-    }
-
-    if (id < 0) {
-        for (auto i = size_t{0}; i < GetCount(); ++i) {
-            const auto res = GetWord(i);
-            if (res->str_ == lower) {
-                return res;
-            }
-        }
-    } else {
-        if (const auto res = GetWord((size_t)id)) {
-            return res->str_ == lower ? res : nullptr;
-        }
-    }
-    return nullptr;
-}
-
-std::shared_ptr<Splitter::Reuslt> Splitter::FindLower(const std::initializer_list<std::string> inputs, int id) const {
-    for (const auto &in : inputs) {
-        if (const auto res = FindLower(in, id)) {
             return res;
         }
     }
@@ -147,7 +120,7 @@ std::shared_ptr<Splitter::Reuslt> Splitter::FindLower(const std::initializer_lis
 std::shared_ptr<Splitter::Reuslt> Splitter::FindNext(const std::string input) const {
     const auto res = Find(input);
 
-    if (!res || res->idx_+1 > (int)GetCount()) {
+    if (!res || res->idx_+1 > (int)count_) {
         return nullptr;
     }
     return GetWord(res->idx_+1);
@@ -168,41 +141,44 @@ std::shared_ptr<Splitter::Reuslt> Splitter::FindDigit(int id) const {
     }
 
     if (id < 0) {
-        for (auto i = size_t{0}; i < GetCount(); ++i) {
+        // Only return first match result.
+        for (auto i = size_t{0}; i < count_; ++i) {
             const auto res = GetWord(i);
             if (res->IsDigit()) {
                 return res;
             }
         }
     } else {
-        if (const auto res = GetWord((size_t)id)) {
+        // Only check the specific string.
+        if (const auto res = GetWord(id)) {
             return res->IsDigit() ? res : nullptr;
         }
     }
+    // Don't match any string.
     return nullptr;
 }
 
 std::shared_ptr<Splitter::Reuslt> Splitter::RemoveWord(size_t id) {
-    if (id > GetCount()) {
+    if (id > count_) {
         return nullptr;
     }
 
-    const auto str_ = *bufffer_[id];
-    bufffer_.erase(std::begin(bufffer_)+id);
+    const auto str_ = *buffer_[id];
+    buffer_.erase(std::begin(buffer_)+id);
     count_--;
 
-    return std::make_shared<Reuslt>(Reuslt(str_, -1));
+    return std::make_shared<Reuslt>(str_, -1);
 }
 
 std::shared_ptr<Splitter::Reuslt> Splitter::RemoveSlice(size_t b, size_t e) {
-    if (b > GetCount() || e > GetCount() || b > e) {
+    if (b > count_ || e > count_ || b > e) {
         return nullptr;
     }
     if (b == e) {
         return RemoveWord(e);
     }
     auto out = GetSlice(b, e);
-    bufffer_.erase(std::begin(bufffer_)+b, std::begin(bufffer_)+e);
+    buffer_.erase(std::begin(buffer_)+b, std::begin(buffer_)+e);
     count_ -= (e-b);
     return out;
 }

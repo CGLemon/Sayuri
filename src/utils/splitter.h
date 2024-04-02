@@ -10,6 +10,7 @@ class Splitter {
 public:
     class Reuslt {
     public:
+        Reuslt() = delete;
         Reuslt(const std::string &s, const int i) : str_(s), idx_(i) {};
 
         Reuslt(const std::string &&s, const int i) :
@@ -44,8 +45,6 @@ public:
     std::shared_ptr<Reuslt> GetSlice(size_t begin, size_t end) const;
     std::shared_ptr<Reuslt> Find(const std::string input, int id = -1) const;
     std::shared_ptr<Reuslt> Find(const std::initializer_list<std::string> inputs, int id = -1) const;
-    std::shared_ptr<Reuslt> FindLower(const std::string input, int id = -1) const;
-    std::shared_ptr<Reuslt> FindLower(const std::initializer_list<std::string> inputs, int id = -1) const;
     std::shared_ptr<Reuslt> FindNext(const std::string input) const;
     std::shared_ptr<Reuslt> FindNext(const std::initializer_list<std::string> inputs) const;
     std::shared_ptr<Reuslt> FindDigit(int id = -1) const;
@@ -53,9 +52,10 @@ public:
     std::shared_ptr<Reuslt> RemoveSlice(size_t begin, size_t end);
 
 private:
-    std::vector<std::shared_ptr<const std::string>> bufffer_;
+    std::vector<std::shared_ptr<const std::string>> buffer_;
     size_t count_;
 
     void Parse(std::string &input, const size_t max);
     void Parse(std::string &&input, const size_t max);
+    void Parse(int argc, char** argv, const size_t max);
 };
