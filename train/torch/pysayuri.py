@@ -851,6 +851,29 @@ def get_valid_spat(net_pred, board):
 def get_move_text(x, y):
     return "{}{}".format("ABCDEFGHJKLMNOPQRST"[x], y+1)
 
+def gogui_policy_order(prob, board):
+    def np_softmax(x):
+        return np.exp(x) / np.sum(np.exp(x), axis=0)
+
+    prob = prob[0].cpu().detach().numpy()
+    prob = get_valid_spat(prob, board)
+    prob = np_softmax(prob)
+
+    ordered_list = list()
+    for idx in range(board.num_intersections):
+        ordered_list.append((prob[idx], idx))
+
+    out = str()
+    ordered_list.sort(reverse=True, key=lambda x: x[0])
+    for order in range(12):
+        _, idx = ordered_list[order]
+        vtx = board.index_to_vertex(idx)
+        x = board.get_x(vtx)
+        y = board.get_y(vtx)
+        out += "LABEL {} {}\n".format(get_move_text(x, y), order+1)
+    out = out[:-1]
+    return out
+
 def gogui_policy_rating(prob, board):
     def np_softmax(x):
         return np.exp(x) / np.sum(np.exp(x), axis=0)
@@ -1121,12 +1144,16 @@ def gtp_loop(args):
             supported_list = [
                 "gfx/Policy Rating/gogui-policy_rating",
                 "gfx/Policy Heatmap/gogui-policy_heatmap",
+                "gfx/Policy Order/gogui-policy_order",
                 "gfx/Opponent Policy Rating/gogui-opp_policy_rating",
                 "gfx/Opponent Policy Heatmap/gogui-opp_policy_heatmap",
+                "gfx/Opponent Policy Order/gogui-opp_policy_order",
                 "gfx/Soft Policy Rating/gogui-soft_policy_rating",
                 "gfx/Soft Policy Heatmap/gogui-soft_policy_heatmap",
+                "gfx/Soft Policy Order/gogui-soft_policy_order",
                 "gfx/Optimistic Policy Rating/gogui-optimistic_policy_rating",
                 "gfx/Optimistic Policy Heatmap/gogui-optimistic_policy_heatmap",
+                "gfx/Optimistic Policy Order/gogui-optimistic_policy_order",
                 "gfx/Ownership Heatmap/gogui-ownership_heatmap",
                 "gfx/Ownership Influence/gogui-ownership_influence",
                 "gfx/Ladder Heatmap/gogui-ladder_heatmap"
@@ -1148,6 +1175,12 @@ def gtp_loop(args):
             prob, _, _, _, _, _, _, _, _, _ = pred
             out = gogui_policy_heatmap(prob, board)
             gtp_print(out)
+        elif main == "gogui-policy_order":
+            planes = torch.from_numpy(board.get_features()).float().to(device)
+            pred, _ = net.forward(torch.unsqueeze(planes, 0))
+            prob, _, _, _, _, _, _, _, _, _ = pred
+            out = gogui_policy_order(prob, board)
+            gtp_print(out)
         elif main == "gogui-opp_policy_rating":
             planes = torch.from_numpy(board.get_features()).float().to(device)
             pred, _ = net.forward(torch.unsqueeze(planes, 0))
@@ -1159,6 +1192,12 @@ def gtp_loop(args):
             pred, _ = net.forward(torch.unsqueeze(planes, 0))
             _, prob, _, _, _, _, _, _, _, _ = pred
             out = gogui_policy_heatmap(prob, board)
+            gtp_print(out)
+        elif main == "gogui-opp_policy_order":
+            planes = torch.from_numpy(board.get_features()).float().to(device)
+            pred, _ = net.forward(torch.unsqueeze(planes, 0))
+            _, prob, _, _, _, _, _, _, _, _ = pred
+            out = gogui_policy_order(prob, board)
             gtp_print(out)
         elif main == "gogui-soft_policy_rating":
             planes = torch.from_numpy(board.get_features()).float().to(device)
@@ -1172,6 +1211,12 @@ def gtp_loop(args):
             _, _, prob, _, _, _, _, _, _, _ = pred
             out = gogui_policy_heatmap(prob, board)
             gtp_print(out)
+        elif main == "gogui-soft_policy_order":
+            planes = torch.from_numpy(board.get_features()).float().to(device)
+            pred, _ = net.forward(torch.unsqueeze(planes, 0))
+            _, _, prob, _, _, _, _, _, _, _ = pred
+            out = gogui_policy_order(prob, board)
+            gtp_print(out)
         elif main == "gogui-optimistic_policy_rating":
             planes = torch.from_numpy(board.get_features()).float().to(device)
             pred, _ = net.forward(torch.unsqueeze(planes, 0))
@@ -1183,6 +1228,12 @@ def gtp_loop(args):
             pred, _ = net.forward(torch.unsqueeze(planes, 0))
             _, _, _, _, prob, _, _, _, _, _ = pred
             out = gogui_policy_heatmap(prob, board)
+            gtp_print(out)
+        elif main == "gogui-optimistic_policy_order":
+            planes = torch.from_numpy(board.get_features()).float().to(device)
+            pred, _ = net.forward(torch.unsqueeze(planes, 0))
+            _, _, _, _, prob, _, _, _, _, _ = pred
+            out = gogui_policy_order(prob, board)
             gtp_print(out)
         elif main == "gogui-ownership_heatmap":
             planes = torch.from_numpy(board.get_features()).float().to(device)
