@@ -143,10 +143,6 @@ class SqueezeAndExcitation(nn.Module):
             collector=collector
         )
 
-    def fixup_adjust(self, fixup_scale):
-        self.squeeze.linear.weight.data *= fixup_scale
-        self.excite.linear.weight.data *= fixup_scale
-
     def forward(self, x, mask_buffers):
         b, c, _, _ = x.size()
         mask, _, _ = mask_buffers
@@ -322,7 +318,6 @@ class FullyConnect(nn.Module):
         x = self.linear(x)
         return F.relu(x, inplace=True) if self.relu else x
 
-
 class Convolve(nn.Module):
     def __init__(self, in_channels,
                        out_channels,
@@ -373,13 +368,11 @@ class Convolve(nn.Module):
         x = self.conv(x) * mask
         return F.relu(x, inplace=True) if self.relu else x
 
-
 class ConvBlock(nn.Module):
     def __init__(self, in_channels,
                        out_channels,
                        kernel_size,
                        use_gamma,
-                       fixup,
                        relu=True,
                        collector=None):
         super(ConvBlock, self).__init__()
@@ -399,8 +392,7 @@ class ConvBlock(nn.Module):
         self.bn = BatchNorm2d(
             num_features=out_channels,
             eps=1e-5,
-            use_gamma=use_gamma,
-            fixup=fixup
+            use_gamma=use_gamma
         )
         self._init_weights()
         self._try_collect(collector)
@@ -461,45 +453,31 @@ class ConvBlock(nn.Module):
         x = self.bn(x, mask)
         return F.relu(x, inplace=True) if self.relu else x
 
-class ResBlock(nn.Module):
-    def __init__(self, blocks,
-                       channels,
-                       fixup,
+class BottleneckBlock(nn.Module):
+    def __init__(self, channels,
                        *args,
                        **kwargs):
-        super(ResBlock, self).__init__()
-
-        # The inner layers channels.
-        self.inner_channels = channels
-
-        # The main ResBlock channels. We say a 15x192
-        # resnet. The 192 is outer_channel.
-        self.outer_channels = channels
+        super(BottleneckBlock, self).__init__()
 
         bottleneck_channels = kwargs.get("bottleneck_channels", None)
         se_size = kwargs.get("se_size", None)
         collector = kwargs.get("collector", None)
 
-        self.use_btl = bottleneck_channels is not None
+        assert bottleneck_channels is not None, ""
         self.use_se = se_size is not None
 
-        if self.use_btl:
-            self.inner_channels = bottleneck_channels
-            self.pre_conv_btl = ConvBlock(
-                in_channels=self.outer_channels,
-                out_channels=self.inner_channels,
-                kernel_size=1,
-                use_gamma=False,
-                fixup=fixup,
-                relu=True,
-                collector=collector
-            )
+        # The inner layers channels.
+        self.inner_channels = bottleneck_channels
+
+        # The main ResidualBlock channels. We say a 15x192
+        # resnet. The 192 is outer_channel.
+        self.outer_channels = channels
+
         self.conv1 = ConvBlock(
-            in_channels=self.inner_channels,
+            in_channels=self.outer_channels,
             out_channels=self.inner_channels,
-            kernel_size=3,
+            kernel_size=1,
             use_gamma=False,
-            fixup=fixup,
             relu=True,
             collector=collector
         )
@@ -507,22 +485,26 @@ class ResBlock(nn.Module):
             in_channels=self.inner_channels,
             out_channels=self.inner_channels,
             kernel_size=3,
-            use_gamma=False if self.use_btl else True,
-            fixup=fixup,
-            relu=True if self.use_btl else False,
+            use_gamma=False,
+            relu=True,
             collector=collector
         )
-        if self.use_btl:
-            self.post_conv_btl = ConvBlock(
-                in_channels=self.inner_channels,
-                out_channels=self.outer_channels,
-                kernel_size=1,
-                use_gamma=True,
-                fixup=fixup,
-                relu=False,
-                collector=collector
-            )
-
+        self.conv3 = ConvBlock(
+            in_channels=self.inner_channels,
+            out_channels=self.inner_channels,
+            kernel_size=3,
+            use_gamma=False,
+            relu=True,
+            collector=collector
+        )
+        self.conv4 = ConvBlock(
+            in_channels=self.inner_channels,
+            out_channels=self.outer_channels,
+            kernel_size=1,
+            use_gamma=True,
+            relu=False,
+            collector=collector
+        )
         if self.use_se:
             self.se_module = SqueezeAndExcitation(
                 channels=self.outer_channels,
@@ -530,38 +512,64 @@ class ResBlock(nn.Module):
                 collector=collector
             )
 
-        if fixup:
-            # re-scale the weights
-            fixup_scale2 = 1.0 / math.sqrt(blocks)
-            if self.use_btl:
-                self.pre_conv_btl.conv.weight.data *= fixup_scale2
-                self.conv1.conv.weight.data *= fixup_scale2
-                self.conv2.conv.weight.data *= fixup_scale2
-                self.post_conv_btl.conv.weight.data *= 0
-            else:
-                self.conv1.conv.weight.data *= fixup_scale2
-                self.conv2.conv.weight.data *= 0
-            if self.use_se:
-                fixup_scale4 = 1.0 / (blocks ** (1.0 / 4.0)) 
-                self.se_module.fixup_adjust(fixup_scale4)
-
     def forward(self, inputs):
         x, mask_buffers = inputs
-
         mask, _, _ = mask_buffers
 
         out = x
-        if self.use_btl:
-            out = self.pre_conv_btl(out, mask)
         out = self.conv1(out, mask)
         out = self.conv2(out, mask)
-        if self.use_btl:
-            out = self.post_conv_btl(out, mask)
-
+        out = self.conv3(out, mask)
+        out = self.conv4(out, mask)
         if self.use_se:
             out = self.se_module(out, mask_buffers)
         out = out + x
+        return F.relu(out, inplace=True), mask_buffers
 
+class ResidualBlock(nn.Module):
+    def __init__(self, channels,
+                       *args,
+                       **kwargs):
+        super(ResidualBlock, self).__init__()
+
+        se_size = kwargs.get("se_size", None)
+        collector = kwargs.get("collector", None)
+
+        self.channels = channels
+        self.use_se = se_size is not None
+        self.conv1 = ConvBlock(
+            in_channels=self.channels,
+            out_channels=self.channels,
+            kernel_size=3,
+            use_gamma=False,
+            relu=True,
+            collector=collector
+        )
+        self.conv2 = ConvBlock(
+            in_channels=self.channels,
+            out_channels=self.channels,
+            kernel_size=3,
+            use_gamma=True,
+            relu=False,
+            collector=collector
+        )
+        if self.use_se:
+            self.se_module = SqueezeAndExcitation(
+                channels=self.channels,
+                se_size=se_size,
+                collector=collector
+            )
+
+    def forward(self, inputs):
+        x, mask_buffers = inputs
+        mask, _, _ = mask_buffers
+
+        out = x
+        out = self.conv1(out, mask)
+        out = self.conv2(out, mask)
+        if self.use_se:
+            out = self.se_module(out, mask_buffers)
+        out = out + x
         return F.relu(out, inplace=True), mask_buffers
 
 class Network(nn.Module):
@@ -571,7 +579,6 @@ class Network(nn.Module):
         self.layers_collector = list()
 
         self.nntype = cfg.nntype
-        self.fixup = cfg.fixup_batch_norm
 
         self.input_channels = cfg.input_channels
         self.residual_channels = cfg.residual_channels
@@ -596,7 +603,6 @@ class Network(nn.Module):
             out_channels=self.residual_channels,
             kernel_size=3,
             use_gamma=True,
-            fixup=self.fixup,
             relu=True,
             collector=self.layers_collector
         )
@@ -605,35 +611,31 @@ class Network(nn.Module):
         main_channels = self.residual_channels
         nn_stack = list()
         for s in self.stack:
-            has_basic_block = False
-            use_fixup = self.fixup
+            block = None
             se_size = None
             bottleneck_channels = None
 
             for component in s.strip().split('-'):
                 if component == "ResidualBlock":
-                    has_basic_block = True
+                    block = ResidualBlock
                 elif component == "BottleneckBlock":
                     bottleneck_channels = main_channels // 2
                     assert main_channels % 2 == 0, ""
-                    has_basic_block = True
+                    block = BottleneckBlock
                 elif component == "SE":
                     se_size = main_channels // self.se_ratio
                     assert main_channels % self.se_ratio == 0, ""
-                elif component == "FixUp":
-                    use_fixup = True
                 else:
                     raise Exception("Invalid NN structure.")
 
-            if not has_basic_block:
+            if block is None:
                 raise Exception("There is no basic block.")
 
-            nn_stack.append(ResBlock(blocks=len(self.stack),
-                                     channels=main_channels,
-                                     fixup=use_fixup,
-                                     bottleneck_channels=bottleneck_channels,
-                                     se_size=se_size,
-                                     collector=self.layers_collector))
+            nn_stack.append(
+                block(channels=main_channels,
+                      bottleneck_channels=bottleneck_channels,
+                      se_size=se_size,
+                      collector=self.layers_collector))
 
         if main_channels != self.residual_channels:
             raise Exception("Invalid block stack.")
@@ -646,7 +648,6 @@ class Network(nn.Module):
             out_channels=self.policy_extract,
             kernel_size=1,
             use_gamma=False,
-            fixup=self.fixup,
             relu=True,
             collector=self.layers_collector
         )
@@ -676,7 +677,6 @@ class Network(nn.Module):
             out_channels=self.value_extract,
             kernel_size=1,
             use_gamma=False,
-            fixup=self.fixup,
             relu=True,
             collector=self.layers_collector
         )

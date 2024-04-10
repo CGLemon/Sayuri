@@ -5,6 +5,7 @@
         "ResidualChannels": 64,
         "PolicyExtract": 16,
         "ValueExtract": 16,
+        "SeRatio" : 2,
 
         "Stack" : [
             "ResidualBlock",
@@ -39,7 +40,6 @@
             [1024000, 1e-5]
          ],
 
-        "FixUpBatchNorm": false,
         "ValidationDirectory": "validate-dir",
         "TrainDirectory": "train-dir",
         "StorePath" : "workspace"

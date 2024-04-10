@@ -74,7 +74,6 @@ class Config:
         self.validation_steps = train.get("ValidationSteps", 100)
         self.verbose_steps = train.get("VerboseSteps", 1000)
         self.max_steps = train.get("MaxStepsPerRunning", 16384000)
-        self.fixup_batch_norm = train.get("FixUpBatchNorm", False)
         self.down_sample_rate = train.get("DownSampleRate", 16)
         self.num_chunks  = train.get("NumberChunks", None)
         self.soft_loss_weight  = train.get("SoftLossWeight", 0.1)
