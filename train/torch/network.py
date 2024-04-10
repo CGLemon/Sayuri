@@ -453,6 +453,46 @@ class ConvBlock(nn.Module):
         x = self.bn(x, mask)
         return F.relu(x, inplace=True) if self.relu else x
 
+class DepthwiseConvBlock(nn.Module):
+    def __init__(self, in_channels,
+                       out_channels,
+                       kernel_size,
+                       use_gamma,
+                       relu=True,
+                       collector=None):
+        super(DepthwiseConvBlock, self).__init__()
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.relu = relu
+        self.conv = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size,
+            groups=in_channels,
+            padding="same",
+            bias=False,
+        )
+        self.bn = BatchNorm2d(
+            num_features=out_channels,
+            eps=1e-5,
+            use_gamma=use_gamma
+        )
+        self._init_weights()
+
+    def _init_weights(self):
+        nn.init.xavier_normal_(self.conv.weight, gain=1.0)
+
+        # nn.init.kaiming_normal_(self.conv.weight,
+        #                         mode="fan_out",
+        #                         nonlinearity="relu")
+
+    def forward(self, x, mask):
+        x = self.conv(x) * mask
+        x = self.bn(x, mask)
+        return F.relu(x, inplace=True) if self.relu else x
+
 class BottleneckBlock(nn.Module):
     def __init__(self, channels,
                        *args,
@@ -572,6 +612,61 @@ class ResidualBlock(nn.Module):
         out = out + x
         return F.relu(out, inplace=True), mask_buffers
 
+class MixerBlock(nn.Module):
+    def __init__(self, channels,
+                       *args,
+                       **kwargs):
+        super(MixerBlock, self).__init__()
+        se_size = kwargs.get("se_size", None)
+        collector = kwargs.get("collector", None)
+
+        self.channels = channels
+        self.use_se = se_size is not None
+
+        self.depthwise_conv = DepthwiseConvBlock(
+            in_channels=self.channels,
+            out_channels=self.channels,
+            kernel_size=7,
+            use_gamma=True,
+            relu=False,
+            collector=collector
+        )
+        self.ffn1 = ConvBlock(
+            in_channels=self.channels,
+            out_channels=2 * self.channels,
+            kernel_size=1,
+            use_gamma=False,
+            relu=True,
+            collector=collector
+        )
+        self.ffn2 = ConvBlock(
+            in_channels=2 * self.channels,
+            out_channels=self.channels,
+            kernel_size=1,
+            use_gamma=True,
+            relu=False,
+            collector=collector
+        )
+        if self.use_se:
+            self.se_module = SqueezeAndExcitation(
+                channels=self.channels,
+                se_size=se_size,
+                collector=collector
+            )
+
+    def forward(self, inputs):
+        x, mask_buffers = inputs
+        mask, _, _ = mask_buffers
+
+        x = F.relu(self.depthwise_conv(x, mask) + x, inplace=True)
+        out = x
+        out = self.ffn1(out, mask)
+        out = self.ffn2(out, mask)
+        if self.use_se:
+            out = self.se_module(out, mask_buffers)
+        out = out + x
+        return F.relu(out, inplace=True), mask_buffers
+
 class Network(nn.Module):
     def __init__(self, cfg):
         super(Network, self).__init__()
@@ -622,6 +717,8 @@ class Network(nn.Module):
                     bottleneck_channels = main_channels // 2
                     assert main_channels % 2 == 0, ""
                     block = BottleneckBlock
+                elif component == "MixerBlock":
+                    block = MixerBlock
                 elif component == "SE":
                     se_size = main_channels // self.se_ratio
                     assert main_channels % self.se_ratio == 0, ""
