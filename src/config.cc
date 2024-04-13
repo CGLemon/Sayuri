@@ -329,7 +329,7 @@ void ArgsParser::Parse(Splitter &spt) {
 
     if (const auto res = spt.FindNext({"--mode", "-m"})) {
         if (IsParameter(res->Get<>()) &&
-                AcceptSet(res->Get<>(), {"gtp", "selfplay"})) {
+                AcceptSet(res->Get<>(), {"gtp", "selfplay", "analysis"})) {
             SetOption("mode", res->Get<>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }

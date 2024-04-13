@@ -57,6 +57,7 @@ set(PATTERN_SOURCES_DIR ${SOURCE_DIR}/pattern)
 set(MCTS_SOURCES_DIR ${SOURCE_DIR}/mcts)
 set(SUMMARY_SOURCES_DIR ${SOURCE_DIR}/summary)
 set(SELFPLAY_SOURCES_DIR ${SOURCE_DIR}/selfplay)
+set(ANALYSIS_SOURCES_DIR ${SOURCE_DIR}/analysis)
 set(UTILS_SOURCES_DIR ${SOURCE_DIR}/utils)
 
 set(IncludePath "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -122,6 +123,11 @@ set(SELFPLAY_SOURCES
     ${SELFPLAY_SOURCES_DIR}/engine.cc
     )
 
+set(ANALYSIS_SOURCES
+    ${ANALYSIS_SOURCES_DIR}/analysis.cc
+    ${ANALYSIS_SOURCES_DIR}/group.cc
+    )
+
 set(UTILS_SOURCES
     ${UTILS_SOURCES_DIR}/log.cc
     ${UTILS_SOURCES_DIR}/parse_float.cc
@@ -133,6 +139,7 @@ set(UTILS_SOURCES
     ${UTILS_SOURCES_DIR}/komi.cc
     ${UTILS_SOURCES_DIR}/gogui_helper.cc
     ${UTILS_SOURCES_DIR}/gzip_helper.cc
+    ${UTILS_SOURCES_DIR}/simple_json.cc
     )
 
 if(DEBUG_MODE)
@@ -352,6 +359,7 @@ add_executable(sayuri
     ${UTILS_SOURCES}
     ${SUMMARY_SOURCES}
     ${SELFPLAY_SOURCES}
+    ${ANALYSIS_SOURCES}
     ${CUDA_SOURCES}
     )
 

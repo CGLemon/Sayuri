@@ -23,6 +23,10 @@ void StartSelfplayLoop() {
     auto loop = std::make_unique<SelfPlayPipe>();
 }
 
+void StartAnalysisLoop() {
+    auto loop = std::make_unique<Analysis>();
+}
+
 int main(int argc, char **argv) {
     ArgsParser(argc, argv);
 
@@ -34,6 +38,8 @@ int main(int argc, char **argv) {
         StartGtpLoop();
     } else if (GetOption<std::string>("mode") == "selfplay") {
         StartSelfplayLoop();
+    } else if (GetOption<std::string>("mode") == "analysis") {
+        StartAnalysisLoop();
     }
     return 0;
 }
