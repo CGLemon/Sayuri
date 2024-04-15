@@ -448,7 +448,7 @@ int DNNLoader::FillBlock(int offset,
         tower_ptr->se_size = se_squeeze_shape[1];
 
         const auto channels = weights_->residual_channels;
-        if (channels != se_squeeze_shape[0] ||
+        if (3 * channels != se_squeeze_shape[0] ||
                 2 * channels != se_excite_shape[1]) {
             throw "The SE module size is wrong";
         }
