@@ -69,7 +69,7 @@ void Network::Initialize(const std::string &weightsfile) {
     auto dnn_weights = std::make_shared<DNNWeights>();
 
     // Parse the NN weights file.
-    DNNLoder::Get().FromFile(dnn_weights, weightsfile);
+    DNNLoader::Get().FromFile(dnn_weights, weightsfile);
 
     // There is no weighs. Will disable the NN forward pipe.
     if (!dnn_weights->loaded) {

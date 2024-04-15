@@ -1,15 +1,16 @@
 #pragma once
 
 #include "neural/description.h"
+#include "utils/splitter.h"
 
 #include <string>
 #include <memory>
 #include <fstream>
 #include <unordered_map>
 
-class DNNLoder {
+class DNNLoader {
 public:
-    static DNNLoder& Get();
+    static DNNLoader& Get();
 
     void FromFile(std::shared_ptr<DNNWeights> weights, std::string filename);
 
@@ -19,20 +20,23 @@ private:
     using NetStruct = std::vector<LayerShape>;
     using NetInfo = std::unordered_map<std::string, std::string>;
 
-    void Parse(std::shared_ptr<DNNWeights> weights, std::istream &buffer);
+    void Parse(std::istream &buffer);
     void ParseInfo(NetInfo &netinfo, std::istream &buffer) const;
     void ParseStack(NetStack &netstack, std::istream &buffer) const;
     void ParseStruct(NetStruct &netstruct, std::istream &buffer) const;
     void CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstruct);
-    void DumpInfo(std::shared_ptr<DNNWeights> weights) const;
+    void DumpInfo() const;
 
     void FillWeights(NetInfo &netinfo,
                      NetStack &netstack,
                      NetStruct &netstruct,
-                     std::shared_ptr<DNNWeights> weights,
                      std::istream &buffer) const;
+    int FillBlock(int offset,
+                  Splitter block_spt,
+                  NetStruct &netstruct,
+                  std::istream &buffer) const;
 
-    void ProcessWeights(std::shared_ptr<DNNWeights> weights) const;
+    void ProcessWeights() const;
     void GetWeightsFromBuffer(std::vector<float> &weights, std::istream &buffer) const;
 
     void FillFullyconnectLayer(LinearLayer &layer,
@@ -49,7 +53,7 @@ private:
                               const int in_channels,
                               const int out_channels,
                               const int kernel_size) const;
-
+    DNNWeights * weights_;
     bool use_binary_;
     int version_;
 };

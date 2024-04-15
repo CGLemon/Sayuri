@@ -513,10 +513,18 @@ class BottleneckBlock(nn.Module):
         # resnet. The 192 is outer_channel.
         self.outer_channels = channels
 
-        self.conv1 = ConvBlock(
+        self.pre_btl_conv = ConvBlock(
             in_channels=self.outer_channels,
             out_channels=self.inner_channels,
             kernel_size=1,
+            use_gamma=False,
+            relu=True,
+            collector=collector
+        )
+        self.conv1 = ConvBlock(
+            in_channels=self.inner_channels,
+            out_channels=self.inner_channels,
+            kernel_size=3,
             use_gamma=False,
             relu=True,
             collector=collector
@@ -529,15 +537,7 @@ class BottleneckBlock(nn.Module):
             relu=True,
             collector=collector
         )
-        self.conv3 = ConvBlock(
-            in_channels=self.inner_channels,
-            out_channels=self.inner_channels,
-            kernel_size=3,
-            use_gamma=False,
-            relu=True,
-            collector=collector
-        )
-        self.conv4 = ConvBlock(
+        self.post_btl_conv = ConvBlock(
             in_channels=self.inner_channels,
             out_channels=self.outer_channels,
             kernel_size=1,
@@ -557,10 +557,10 @@ class BottleneckBlock(nn.Module):
         mask, _, _ = mask_buffers
 
         out = x
+        out = self.pre_btl_conv(out, mask)
         out = self.conv1(out, mask)
         out = self.conv2(out, mask)
-        out = self.conv3(out, mask)
-        out = self.conv4(out, mask)
+        out = self.post_btl_conv(out, mask)
         if self.use_se:
             out = self.se_module(out, mask_buffers)
         out = out + x
