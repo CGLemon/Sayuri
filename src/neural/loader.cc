@@ -292,13 +292,17 @@ void DNNLoader::DumpInfo() const {
     out << "Residual Channels: " << weights_->residual_channels << '\n';
 
     for (int i = 0; i < weights_->residual_blocks; ++i) {
+        auto tower_ptr =  weights_->tower[i].get();
+
         out << "  block " << i+1 << ": ";
-        if (weights_->tower[i].apply_btl) {
+        if (tower_ptr->IsResidualBlock()) {
+            out << "ResidualBlock";
+        } else  if (tower_ptr->IsBottleneckBlock()) {
             out << "BottleneckBlock";
         } else {
-            out << "ResidualBlock";
+            continue; // unknown block
         }
-        if (weights_->tower[i].apply_se) {
+        if (tower_ptr->apply_se) {
             out << "-SE";
         }
         out << '\n';
@@ -322,25 +326,62 @@ int DNNLoader::FillBlock(int offset,
     };
 
     // Push the basic block.
-    if (SplitterFound(block_spt, "ResidualBlock") ||
-            SplitterFound(block_spt, "BottleneckBlock")) {
-        weights_->tower.emplace_back(ResidualBlock{});
+    if (SplitterFound(block_spt, "ResidualBlock")) {
+        weights_->tower.emplace_back(std::make_unique<ResidualBlock>());
+    } else if (SplitterFound(block_spt, "BottleneckBlock")) {
+        weights_->tower.emplace_back(std::make_unique<BottleneckBlock>());
     } else {
         throw "Need the ResidualBlock or BottleneckBlock";
     }
-    auto tower_ptr = weights_->tower.data() + weights_->tower.size() - 1;
-    tower_ptr->apply_btl = SplitterFound(block_spt, "BottleneckBlock");
+    auto tower_ptr = std::rbegin(weights_->tower)->get();
     tower_ptr->apply_se = SplitterFound(block_spt, "SE");
 
-    if (tower_ptr->apply_btl) {
-        // bottleneck block
-        // 1). Convolution layer
+    if (tower_ptr->IsResidualBlock()) {
+        // residual block
+        // 1). Convolution layer with 3x3 kernel
         // 2). Batch normalize layer
-        // 3). Convolution layer
+        // 3). Convolution layer with 3x3 kernel
         // 4). Batch normalize layer
-        // 5). Convolution layer
+
+        // 1st layers.
+        const auto res_conv1_shape = netstruct[offset++];
+        const auto res_bn1_shape = netstruct[offset++];
+        FillConvolutionLayer(tower_ptr->conv1, buffer,
+            res_conv1_shape[0], res_conv1_shape[1], res_conv1_shape[2]);
+        FillBatchnormLayer(tower_ptr->bn1, buffer,
+            res_bn1_shape[0]);
+
+        // 2nd layers.
+        const auto res_conv2_shape = netstruct[offset++];
+        const auto res_bn2_shape = netstruct[offset++];
+        FillConvolutionLayer(tower_ptr->conv2, buffer,
+            res_conv2_shape[0], res_conv2_shape[1], res_conv2_shape[2]);
+        FillBatchnormLayer(tower_ptr->bn2, buffer,
+            res_bn2_shape[0]);
+
+        const auto channels = weights_->residual_channels;
+        const auto kernel = 3;
+        if (channels != res_conv1_shape[0] ||
+                channels != res_conv1_shape[1] ||
+                channels != res_bn1_shape[0] ||
+                channels != res_conv2_shape[0] ||
+                channels != res_conv2_shape[1] ||
+                channels != res_bn2_shape[0]) {
+            throw "The channels of residual block is wrong.";
+        }
+        if (kernel != res_conv1_shape[2] ||
+                kernel != res_conv2_shape[2]) {
+            throw "The kernel of residual block is wrong.";
+        }
+    } else if (tower_ptr->IsBottleneckBlock()) {
+        // bottleneck block
+        // 1). Convolution layer with 1x1 kernel
+        // 2). Batch normalize layer
+        // 3). Convolution layer with 3x3 kernel
+        // 4). Batch normalize layer
+        // 5). Convolution layer with 3x3 kernel
         // 6). Batch normalize layer
-        // 7). Convolution layer
+        // 7). Convolution layer with 1x1 kernel
         // 8). Batch normalize layer
 
         // pre-bottleneck layers
@@ -378,6 +419,7 @@ int DNNLoader::FillBlock(int offset,
         const auto outer_channels = weights_->residual_channels;
         const auto inner_channels = pre_btl_conv_shape[1];
         const auto kernel = 3;
+        tower_ptr->bottleneck_channels = inner_channels;
         if (outer_channels != pre_btl_conv_shape[0] ||
                 outer_channels != post_btl_conv_shape[1] ||
                 outer_channels != post_btl_bn_shape[0]) {
@@ -392,45 +434,10 @@ int DNNLoader::FillBlock(int offset,
             throw "The inner channels of bottleneck block is wrong.";
         }
         if (kernel != res_conv1_shape[2] ||
-                kernel != res_conv2_shape[2]) {
+                kernel != res_conv2_shape[2] ||
+                1 != pre_btl_conv_shape[2] ||
+                1 != post_btl_bn_shape[2]) {
             throw "The kernel of bottleneck block is wrong.";
-        }
-    } else {
-        // residual block
-        // 1). Convolution layer
-        // 2). Batch normalize layer
-        // 3). Convolution layer
-        // 4). Batch normalize layer
-
-        // 1st layers.
-        const auto res_conv1_shape = netstruct[offset++];
-        const auto res_bn1_shape = netstruct[offset++];
-        FillConvolutionLayer(tower_ptr->conv1, buffer,
-            res_conv1_shape[0], res_conv1_shape[1], res_conv1_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn1, buffer,
-            res_bn1_shape[0]);
-
-        // 2nd layers.
-        const auto res_conv2_shape = netstruct[offset++];
-        const auto res_bn2_shape = netstruct[offset++];
-        FillConvolutionLayer(tower_ptr->conv2, buffer,
-            res_conv2_shape[0], res_conv2_shape[1], res_conv2_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn2, buffer,
-            res_bn2_shape[0]);
-
-        const auto channels = weights_->residual_channels;
-        const auto kernel = 3;
-        if (channels != res_conv1_shape[0] ||
-                channels != res_conv1_shape[1] ||
-                channels != res_bn1_shape[0] ||
-                channels != res_conv2_shape[0] ||
-                channels != res_conv2_shape[1] ||
-                channels != res_bn2_shape[0]) {
-            throw "The channels of residual block is wrong.";
-        }
-        if (kernel != res_conv1_shape[2] ||
-                kernel != res_conv2_shape[2]) {
-            throw "The kernel of residual block is wrong.";
         }
     }
 
@@ -503,8 +510,9 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
             input_conv_shape[2] != 3) {
         throw "The input layers are wrong";
     }
-    auto t_offset = 2;
+    auto t_offset = 2; // include 'input_conv' and 'input_bn'
 
+    // block tower
     for (int b = 0; b < weights_->residual_blocks; ++b) {
         const auto block_spt = Splitter(netstack[b]);
         t_offset = FillBlock(t_offset, block_spt, netstruct, buffer);
@@ -620,6 +628,7 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
 
 void DNNLoader::ProcessWeights() const {
     const auto ProcessConvBlock = [](ConvLayer &conv, BatchNormLayer &bn) {
+        // Merge the BatchNormLayer into ConvLayer.
         for (auto idx = size_t{0};
                  idx < conv.GetBiases().size(); ++idx) {
             conv.GetBiases()[idx] -= bn.GetMeans()[idx];
@@ -639,18 +648,16 @@ void DNNLoader::ProcessWeights() const {
     // input layers
     ProcessConvBlock(weights_->input_conv, weights_->input_bn);
 
-    // residual tower
-    for (auto &residual : weights_->tower) {
-        // 1st layers
-        ProcessConvBlock(residual.conv1, residual.bn1);
-        ProcessConvBlock(residual.conv2, residual.bn2);
-
-        // bottleneck layers
-        if (residual.apply_btl) {
-            ProcessConvBlock(
-                residual.pre_btl_conv, residual.pre_btl_bn);
-            ProcessConvBlock(
-                residual.post_btl_conv, residual.post_btl_bn);
+    // block tower
+    for (auto &block : weights_->tower) {
+        if (block->IsResidualBlock()) {
+            ProcessConvBlock(block->conv1, block->bn1);
+            ProcessConvBlock(block->conv2, block->bn2);
+        } else if (block->IsBottleneckBlock()) {
+            ProcessConvBlock(block->conv1, block->bn1);
+            ProcessConvBlock(block->conv2, block->bn2);
+            ProcessConvBlock(block->pre_btl_conv, block->pre_btl_bn);
+            ProcessConvBlock(block->post_btl_conv, block->post_btl_bn);
         }
     }
 

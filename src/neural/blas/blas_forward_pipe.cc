@@ -30,19 +30,21 @@ void BlasForwardPipe::InitWinograd() {
         WinogradTransformF(weights_->input_conv.GetWeights(),
                                residual_channels, kInputChannels);
 
-    // The residual tower.
-    for (auto &residual : weights_->tower) {
-        const auto outer_channels = residual_channels;
-        const auto inner_channels = residual.apply_btl ?
-                                        outer_channels/2 :
-                                        outer_channels;
-        residual.conv1.GetWeights() =
-            WinogradTransformF(residual.conv1.GetWeights(),
-                                   inner_channels, inner_channels);
-
-        residual.conv2.GetWeights() =
-            WinogradTransformF(residual.conv2.GetWeights(),
-                                   inner_channels, inner_channels);
+    // The block tower.
+    for (auto &block : weights_->tower) {
+        if (block->IsResidualBlock()) {
+            int channels = residual_channels;
+            block->conv1.GetWeights() = WinogradTransformF(
+                block->conv1.GetWeights(), channels, channels);
+            block->conv2.GetWeights() = WinogradTransformF(
+                block->conv2.GetWeights(), channels, channels);
+        } else if (block->IsBottleneckBlock()) {
+            int channels = block->bottleneck_channels;
+            block->conv1.GetWeights() = WinogradTransformF(
+                block->conv1.GetWeights(), channels, channels);
+            block->conv2.GetWeights() = WinogradTransformF(
+                block->conv2.GetWeights(), channels, channels);
+        }
     }
     weights_->winograd_initialized = true;
 }
@@ -51,8 +53,152 @@ void BlasForwardPipe::Load(std::shared_ptr<DNNWeights> weights) {
     weights_ = weights;
 }
 
-OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
+void BlasForwardPipe::ResidualBlockForward(int board_size,
+                                           BlockBasic * tower_ptr,
+                                           bool use_winograd,
+                                           std::vector<float> &res,
+                                           std::vector<float> &conv_in,
+                                           std::vector<float> &conv_out,
+                                           std::vector<float> &workspace0,
+                                           std::vector<float> &workspace1) {
+    using Convolution3 = Convolution<3>;
+    const auto zero_vec = std::vector<float>{};
+    const auto channels = weights_->residual_channels;
 
+    // 1st conv3
+    if (use_winograd) {
+            WinogradConvolution3::Forward(
+                board_size, channels, channels,
+                conv_in,
+                tower_ptr->conv1.GetWeights(),
+                workspace0, workspace1, conv_out);
+    } else {
+        Convolution3::Forward(
+            board_size, channels, channels,
+            conv_in,
+            tower_ptr->conv1.GetWeights(),
+            workspace0, conv_out);
+    }
+    AddSpatialBiases::Forward(
+        board_size, channels,
+        conv_out,
+        tower_ptr->conv1.GetBiases(), true);
+
+    std::swap(conv_in, res);
+    std::swap(conv_out, conv_in);
+
+    // 2nd conv3
+    if (use_winograd) {
+        WinogradConvolution3::Forward(
+            board_size, channels, channels,
+            conv_in,
+            tower_ptr->conv2.GetWeights(),
+            workspace0, workspace1, conv_out);
+    } else {
+        Convolution3::Forward(
+            board_size, channels, channels,
+            conv_in,
+            tower_ptr->conv2.GetWeights(),
+            workspace0, conv_out);
+    }
+
+    auto &last_skip = tower_ptr->apply_se ? zero_vec : res;
+    bool last_relu = !(tower_ptr->apply_se);
+
+    AddSpatialBiases::Forward(
+        board_size, channels,
+        conv_out,
+        tower_ptr->conv2.GetBiases(),
+        last_skip, last_relu);
+}
+
+void BlasForwardPipe::BottleneckBlockForward(int board_size,
+                                             BlockBasic * tower_ptr,
+                                             bool use_winograd,
+                                             std::vector<float> &res,
+                                             std::vector<float> &conv_in,
+                                             std::vector<float> &conv_out,
+                                             std::vector<float> &workspace0,
+                                             std::vector<float> &workspace1) {
+    using Convolution3 = Convolution<3>;
+    const auto zero_vec = std::vector<float>{};
+    const auto outer_channels = weights_->residual_channels;
+    const auto inner_channels = tower_ptr->bottleneck_channels;
+
+    // The pre-bottleneck conv1.
+    Convolution1::Forward(
+        board_size, outer_channels, inner_channels,
+        conv_in,
+        tower_ptr->pre_btl_conv.GetWeights(),
+        workspace0, conv_out);
+    AddSpatialBiases::Forward(
+        board_size, inner_channels,
+        conv_out,
+        tower_ptr->pre_btl_conv.GetBiases(), true);
+
+    std::swap(conv_in, res);
+    std::swap(conv_out, conv_in);
+
+    // 1st conv3
+    if (use_winograd) {
+        WinogradConvolution3::Forward(
+            board_size, inner_channels, inner_channels,
+            conv_in,
+            tower_ptr->conv1.GetWeights(),
+            workspace0, workspace1, conv_out);
+    } else {
+        Convolution3::Forward(
+            board_size, inner_channels, inner_channels,
+            conv_in,
+            tower_ptr->conv1.GetWeights(),
+            workspace0, conv_out);
+    }
+    AddSpatialBiases::Forward(
+        board_size, inner_channels,
+        conv_out,
+        tower_ptr->conv1.GetBiases(), true);
+
+    std::swap(conv_out, conv_in);
+
+    // 2nd conv3
+    if (use_winograd) {
+        WinogradConvolution3::Forward(
+            board_size, inner_channels, inner_channels,
+            conv_in,
+            tower_ptr->conv2.GetWeights(),
+            workspace0, workspace1, conv_out);
+    } else {
+        Convolution3::Forward(
+            board_size, inner_channels, inner_channels,
+            conv_in,
+            tower_ptr->conv2.GetWeights(),
+            workspace0, conv_out);
+    }
+    AddSpatialBiases::Forward(
+        board_size, inner_channels,
+        conv_out,
+        tower_ptr->conv2.GetBiases(), true);
+
+    std::swap(conv_out, conv_in);
+
+    // The post-bottleneck conv1.
+    Convolution1::Forward(
+        board_size, inner_channels, outer_channels,
+        conv_in,
+        tower_ptr->post_btl_conv.GetWeights(),
+        workspace0, conv_out);
+
+    auto &last_skip = tower_ptr->apply_se ? zero_vec : res;
+    bool last_relu = !(tower_ptr->apply_se);
+
+    AddSpatialBiases::Forward(
+        board_size, outer_channels,
+        conv_out,
+        tower_ptr->post_btl_conv.GetBiases(),
+        last_skip, last_relu);
+}
+
+OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     using Convolution3 = Convolution<3>;
 
     // Some useful information for network.
@@ -66,7 +212,6 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     const auto plane_size = kInputChannels * num_intersections;
     const auto max_intermediates = std::max(weights_->policy_extract_channels,
                                                 weights_->value_extract_channels);
-    const auto zero_vec = std::vector<float>{};
 
     // Allocate the forward pipe buffers.
     bool use_winograd = weights_->winograd;
@@ -124,109 +269,29 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
         conv_out,
         weights_->input_conv.GetBiases(), true);
 
-    // The residual tower.
-    const auto residuals =  weights_->residual_blocks;
-    for (int i = 0; i < residuals; ++i) {
-        const auto tower_ptr = weights_->tower.data() + i;
-        const auto outer_channels = weights_->residual_channels;
-        const auto inner_channels = tower_ptr->apply_btl ?
-                                        outer_channels/2 :
-                                        outer_channels;
-        if (tower_ptr->apply_btl) {
-            std::swap(conv_out, conv_in);
-
-            // The pre-bottleneck conv1.
-            Convolution1::Forward(
-                board_size, outer_channels, inner_channels,
-                conv_in,
-                tower_ptr->pre_btl_conv.GetWeights(),
-                workspace0, conv_out);
-            AddSpatialBiases::Forward(
-                board_size, inner_channels,
-                conv_out,
-                tower_ptr->pre_btl_conv.GetBiases(), true);
-
-            std::swap(conv_in, res);
-        }
-
+    // The block tower.
+    const auto blocks = weights_->residual_blocks;
+    for (int i = 0; i < blocks; ++i) {
+        auto tower_ptr = weights_->tower[i].get();
         std::swap(conv_out, conv_in);
 
-        // 1st conv3
-        if (use_winograd) {
-            WinogradConvolution3::Forward(
-                board_size, inner_channels, inner_channels,
-                conv_in,
-                tower_ptr->conv1.GetWeights(),
-                workspace0, workspace1, conv_out);
-        } else {
-            Convolution3::Forward(
-                board_size, inner_channels, inner_channels,
-                conv_in,
-                tower_ptr->conv1.GetWeights(),
-                workspace0, conv_out);
+        if (tower_ptr->IsResidualBlock()) {
+            ResidualBlockForward(
+                board_size, tower_ptr, use_winograd,
+                res, conv_in, conv_out, workspace0, workspace1);
+        } else if (tower_ptr->IsBottleneckBlock()) {
+            BottleneckBlockForward(
+                board_size, tower_ptr, use_winograd,
+                res, conv_in, conv_out, workspace0, workspace1);
         }
-
-        AddSpatialBiases::Forward(
-            board_size, inner_channels,
-            conv_out,
-            tower_ptr->conv1.GetBiases(), true);
-
-        if (!(tower_ptr->apply_btl)) {
-            std::swap(conv_in, res);
-        }
-
-        std::swap(conv_out, conv_in);
-
-        // 2nd conv3
-        if (use_winograd) {
-            WinogradConvolution3::Forward(
-                board_size, inner_channels, inner_channels,
-                conv_in,
-                tower_ptr->conv2.GetWeights(),
-                workspace0, workspace1, conv_out);
-        } else {
-            Convolution3::Forward(
-                board_size, inner_channels, inner_channels,
-                conv_in,
-                tower_ptr->conv2.GetWeights(),
-                workspace0, conv_out);
-        }
-
-        if (tower_ptr->apply_btl) {
-            AddSpatialBiases::Forward(
-                board_size, inner_channels,
-                conv_out,
-                tower_ptr->conv2.GetBiases(), true);
-
-            std::swap(conv_out, conv_in);
-
-            // The post-bottleneck conv1.
-            Convolution1::Forward(
-                board_size, inner_channels, outer_channels,
-                conv_in,
-                tower_ptr->post_btl_conv.GetWeights(),
-                workspace0, conv_out);
-        }
-
-        auto &last_biases = tower_ptr->apply_btl ?
-                                tower_ptr->post_btl_conv.GetBiases() :
-                                tower_ptr->conv2.GetBiases();
-        auto &last_skip = tower_ptr->apply_se ? zero_vec : res;
-        bool last_relu = !(tower_ptr->apply_se);
-
-        AddSpatialBiases::Forward(
-            board_size, outer_channels,
-            conv_out,
-            last_biases,
-            last_skip, last_relu);
 
         // The SE process.
         if (tower_ptr->apply_se) {
             auto &se_skip = res;
-
-            const size_t se_size = tower_ptr->se_size;
+            const auto channels = weights_->residual_channels;
+            const auto se_size = tower_ptr->se_size;
             SEUnit::Forward(
-                board_size, outer_channels, se_size,
+                board_size, channels, se_size,
                 conv_out, se_skip,
                 tower_ptr->squeeze.GetWeights(),
                 tower_ptr->squeeze.GetBiases(),
