@@ -221,6 +221,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         graph_->tower.emplace_back(NNGraph::Block{});
     }
 
+    int peak_channels = 0;
     for (int i = 0; i < blocks; ++i) {
         const auto tower_ptr = weights_->tower[i].get();
         if (tower_ptr->IsResidualBlock()) {
@@ -243,6 +244,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
                 channels,     // output channels
                 use_relu
             );
+            peak_channels = std::max(peak_channels, channels);
         } else if (tower_ptr->IsBottleneckBlock()) {
             const auto outer_channels = weights_->residual_channels;
             const auto inner_channels = tower_ptr->bottleneck_channels;
@@ -280,6 +282,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
                 outer_channels, // output channels
                 use_relu        // relu
             );
+            peak_channels = std::max({peak_channels, inner_channels, outer_channels});
         } else if (tower_ptr->IsMixerBlock()) {
             const auto channels = weights_->residual_channels;
             const auto feedforwards = tower_ptr->feedforward_channels;
@@ -309,6 +312,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
                 channels,     // output channels
                 use_relu      // relu
             );
+            peak_channels = std::max({peak_channels, channels, feedforwards});
         }
         if (tower_ptr->apply_se) {
             const auto channels = weights_->residual_channels;
@@ -513,7 +517,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     const size_t val_size = factor * kOuputValueMisc;
     const size_t ownership_size = spatia_size * kOuputOwnershipChannels;
 
-    const size_t conv_op_size = factor * weights_->residual_channels * num_intersections;
+    const size_t conv_op_size = factor * peak_channels * num_intersections;
 
     const size_t pol_op1_size = factor * policy_extract_channels * num_intersections;
     const size_t pol_op2_size = factor * policy_extract_channels * 3;
