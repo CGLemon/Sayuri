@@ -736,10 +736,10 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
             // dw conv layer
             graph_->tower[i].dw_conv.Forward(
                 batch_size,
-                cuda_conv_op_[1], cuda_conv_op_[0],
+                cuda_conv_op_[3], cuda_conv_op_[0],
                 cuda_conv_op_[0], mask_buf[0]);
 
-            std::swap(cuda_conv_op_[1], cuda_conv_op_[0]);
+            std::swap(cuda_conv_op_[3], cuda_conv_op_[0]);
 
             // 1st ffd conv layer
             graph_->tower[i].conv1.Forward(

@@ -1017,6 +1017,19 @@ def gogui_ladder_heatmap(laddermap, board):
     out = out[:-1]
     return out
 
+def print_winrate(wdl, scores):
+    def np_softmax(x):
+        return np.exp(x) / np.sum(np.exp(x), axis=0)
+
+    wdl = wdl[0].cpu().detach().numpy()
+    wdl = np_softmax(wdl)
+    scores = scores[0].cpu().detach().numpy()
+    score = scores[0]
+
+    winrate = (wdl[0] - wdl[2] + 1) / 2
+    stderr_write("winrate= {:.2f}%\n".format(100 * winrate))
+    stderr_write("score= {:.2f}\n".format(score))
+
 def get_vertex_from_pred(prob, board):
     prob = prob[0].cpu().detach().numpy()
     prob = get_valid_spat(prob, board)
@@ -1129,9 +1142,10 @@ def gtp_loop(args):
 
             planes = torch.from_numpy(board.get_features()).float().to(device)
             pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            prob, _, _, _, _, _, _, _, _, _ = pred
+            prob, _, _, _, _, _, wdl, _, scores, _ = pred
             move, vtx = get_vertex_from_pred(prob, board)
             board.play(vtx)
+            print_winrate(wdl, scores)
             gtp_print(move)
         elif main == "planes":
             out = str()
