@@ -145,6 +145,25 @@ void Winograd3TransformOut(bool fp16, void *output, const void *input,
     }
 }
 
+void DepthwiseConv(bool fp16, void *output, const void *input, const void *weights,
+                   const void *biases, const void *residual, const void *mask,
+                   int filter_size, int batch, int channels, int height, int width,
+                   bool relu, cudaStream_t stream) {
+    if (fp16) {
+#ifdef ENABLE_FP16
+        depthwise_conv(
+            (half *)output, (const half *)input, (const half *)weights,
+            (const half *)biases, (const half *)residual, (const half *)mask,
+            filter_size, batch, channels, height, width, relu, stream);
+#endif
+    } else {
+        depthwise_conv(
+            (float *)output, (const float *)input, (const float *)weights,
+            (const float *)biases, (const float *)residual, (const float *)mask,
+            filter_size, batch, channels, height, width, relu, stream);
+    }
+}
+
 void Gemm(bool fp16, bool TA, bool TB,
           int M, int N, int K,
           float ALPHA,
@@ -494,6 +513,68 @@ void Convolution::LoadWeights(const std::vector<float> &weights,
     LoadWeights(weights, scratch_size, winpgrad);
 }
 
+DepthwiseConvolution::DepthwiseConvolution(CudaHandles *handles,
+                                           const int max_batch,
+                                           const int board_size,
+                                           const int filter_size,
+                                           const int channels,
+                                           bool ReLU) {
+    width_ = board_size;
+    height_ = board_size;
+    spatial_size_ = width_ * height_;
+
+    channels_ = channels;
+    filters_ = filter_size;
+    maxbatch_ = max_batch;
+
+    handles_ = handles;
+
+    fp16_ = handles->fp16;
+    loaded_ = false;
+    relu_ = ReLU;
+}
+
+DepthwiseConvolution::~DepthwiseConvolution() {
+    if (loaded_) {
+        ReportCUDAErrors(cudaFree(cuda_weights_));
+        if (cuda_biases_) {
+            ReportCUDAErrors(cudaFree(cuda_biases_));
+        }
+    }
+}
+
+void DepthwiseConvolution::Forward(const int batch,
+                                   void *output, void *input,
+                                   const void *residual,
+                                   const void *mask) {
+    if (!loaded_) {
+        return;
+    }
+    assert(batch <= maxbatch_);
+    DepthwiseConv(
+        fp16_, output, input, cuda_weights_,
+        cuda_biases_, residual, mask,
+        filters_, batch, channels_, height_, width_,
+        relu_, handles_->stream);
+}
+
+void DepthwiseConvolution::LoadWeights(const std::vector<float> &weights,
+                                       const std::vector<float> &biases) {
+    if (loaded_) {
+        return;
+    }
+    MallocAndCopy(fp16_, &cuda_biases_, biases);
+    LoadWeights(weights);
+}
+
+
+void DepthwiseConvolution::LoadWeights(const std::vector<float> &weights) {
+    if (loaded_) {
+        return;
+    }
+    MallocAndCopy(fp16_, &cuda_weights_, weights);
+    loaded_ = true;
+}
 
 FullyConnect::FullyConnect(CudaHandles *handles,
                            const int max_batch,

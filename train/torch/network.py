@@ -11,6 +11,12 @@ from status_loader import StatusLoader
 
 CRAZY_NEGATIVE_VALUE = -5000.0
 
+def dwconv_to_text(in_channels, out_channels, kernel_size):
+    return "DepthwiseConvolution {iC} {oC} {KS}\n".format(
+               iC=in_channels,
+               oC=out_channels,
+               KS=kernel_size)
+
 def conv_to_text(in_channels, out_channels, kernel_size):
     return "Convolution {iC} {oC} {KS}\n".format(
                iC=in_channels,
@@ -201,6 +207,31 @@ class BatchNorm2d(nn.Module):
         # Fixup can avoid the weird forwarding result. Fixup also speeds up the performance. The
         # improvement may be around x1.6 ~ x1.8 faster.
         self.fixup = fixup
+
+    def get_merged_param(self):
+        bn_mean = torch.zeros(self.num_features)
+        bn_std = torch.zeros(self.num_features)
+
+        # Merge four tensors (mean, variance, gamma, beta) into two tensors (
+        # mean, variance).
+        bn_mean[:] = self.running_mean[:]
+        bn_std[:] = torch.sqrt(self.eps + self.running_var)[:]
+
+        # Original format: gamma * ((x-mean) / std) + beta
+        # Target format: (x-mean) / std
+        #
+        # Solve the following equation:
+        #     gamma * ((x-mean) / std) + beta = (x-tgt_mean) / tgt_std
+        #
+        # We will get:
+        #     tgt_std = std / gamma
+        #     tgt_mean = mean - beta * (std / gamma)
+
+        if self.gamma is not None:
+            bn_std = bn_std / self.gamma
+        if self.beta is not None:
+            bn_mean = bn_mean - self.beta * bn_std
+        return bn_mean, bn_std
 
     def _clamp(self, x, lower=0., upper=1.):
         x = max(lower, x)
@@ -415,8 +446,6 @@ class ConvBlock(nn.Module):
         return out
 
     def tensors_to_text(self, use_bin):
-        bn_mean = torch.zeros(self.out_channels)
-        bn_std = torch.zeros(self.out_channels)
         if use_bin:
             out = bytes()
         else:
@@ -424,26 +453,7 @@ class ConvBlock(nn.Module):
         out += tensor_to_text(self.conv.weight, use_bin)
         out += tensor_to_text(torch.zeros(self.out_channels), use_bin) # fill zero
 
-        # Merge four tensors (mean, variance, gamma, beta) into two tensors (
-        # mean, variance).
-        bn_mean[:] = self.bn.running_mean[:]
-        bn_std[:] = torch.sqrt(self.bn.eps + self.bn.running_var)[:]
-
-        # Original format: gamma * ((x-mean) / std) + beta
-        # Target format: (x-mean) / std
-        #
-        # Solve the following equation:
-        #     gamma * ((x-mean) / std) + beta = (x-tgt_mean) / tgt_std
-        #
-        # We will get:
-        #     tgt_std = std / gamma
-        #     tgt_mean = mean - beta * (std / gamma)
-
-        if self.bn.gamma is not None:
-            bn_std = bn_std / self.bn.gamma
-        if self.bn.beta is not None:
-            bn_mean = bn_mean - self.bn.beta * bn_std
-
+        bn_mean, bn_std = self.bn.get_merged_param()
         out += tensor_to_text(bn_mean, use_bin)
         out += tensor_to_text(bn_std, use_bin)
         return out
@@ -460,11 +470,13 @@ class DepthwiseConvBlock(nn.Module):
                        use_gamma,
                        relu=True,
                        collector=None):
+        assert in_channels == out_channels, ""
         super(DepthwiseConvBlock, self).__init__()
 
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
+        self.groups = self.in_channels
         self.relu = relu
         self.conv = nn.Conv2d(
             in_channels,
@@ -480,6 +492,7 @@ class DepthwiseConvBlock(nn.Module):
             use_gamma=use_gamma
         )
         self._init_weights()
+        self._try_collect(collector)
 
     def _init_weights(self):
         nn.init.xavier_normal_(self.conv.weight, gain=1.0)
@@ -487,6 +500,30 @@ class DepthwiseConvBlock(nn.Module):
         # nn.init.kaiming_normal_(self.conv.weight,
         #                         mode="fan_out",
         #                         nonlinearity="relu")
+
+    def tensors_to_text(self, use_bin):
+        if use_bin:
+            out = bytes()
+        else:
+            out = str()
+
+        out += tensor_to_text(self.conv.weight, use_bin)
+        out += tensor_to_text(torch.zeros(self.out_channels), use_bin) # fill zero
+
+        bn_mean, bn_std = self.bn.get_merged_param()
+        out += tensor_to_text(bn_mean, use_bin)
+        out += tensor_to_text(bn_std, use_bin)
+        return out
+
+    def _try_collect(self, collector):
+        if collector is not None:
+            collector.append(self)
+
+    def shape_to_text(self):
+        out = str()
+        out += dwconv_to_text(self.in_channels // self.groups, self.out_channels, self.kernel_size)
+        out += bn_to_text(self.out_channels)
+        return out
 
     def forward(self, x, mask):
         x = self.conv(x) * mask

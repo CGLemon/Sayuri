@@ -35,6 +35,7 @@ private:
 
     class NNGraph {
         struct Block {
+            cuda::DepthwiseConvolution dw_conv;
             cuda::Convolution pre_btl_conv;
             cuda::Convolution conv1;
             cuda::Convolution conv2;

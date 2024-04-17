@@ -86,12 +86,14 @@ public:
     enum Type {
         kUnknown,
         kResidualBlock,
-        kBottleneckBlock
+        kBottleneckBlock,
+        kMixerBlock
     };
     BlockBasic() = default;
 
     bool IsResidualBlock() { return type == Type::kResidualBlock; }
     bool IsBottleneckBlock() { return type == Type::kBottleneckBlock; }
+    bool IsMixerBlock() { return type == Type::kMixerBlock; }
 
     Type type{kUnknown};
 
@@ -105,6 +107,10 @@ public:
     ConvLayer post_btl_conv;
     BatchNormLayer post_btl_bn;
     int bottleneck_channels{0};
+
+    ConvLayer dw_conv;
+    BatchNormLayer dw_bn;
+    int feedforward_channels{0};
 
     LinearLayer squeeze;
     LinearLayer excite;
@@ -120,6 +126,11 @@ public:
 class BottleneckBlock : public BlockBasic {
 public:
     BottleneckBlock() { type = Type::kBottleneckBlock; }
+};
+
+class MixerBlock : public BlockBasic {
+public:
+    MixerBlock() { type = Type::kMixerBlock; }
 };
 
 class DNNWeights {

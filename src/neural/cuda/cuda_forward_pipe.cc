@@ -280,6 +280,35 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
                 outer_channels, // output channels
                 use_relu        // relu
             );
+        } else if (tower_ptr->IsMixerBlock()) {
+            const auto channels = weights_->residual_channels;
+            const auto feedforwards = tower_ptr->feedforward_channels;
+            const auto filters = tower_ptr->dw_conv.GetFilter();
+            const bool use_relu = !(tower_ptr->apply_se);
+            graph_->tower[i].dw_conv = cuda::DepthwiseConvolution(
+                &handles_,
+                max_batch_,  // max batch size
+                board_size_, // board size
+                filters,     // kernel size
+                channels     // input channels
+            );
+            graph_->tower[i].conv1 = cuda::Convolution(
+                &handles_,
+                max_batch_,  // max batch size
+                board_size_, // board size
+                1,           // kernel size
+                channels,    // input channels
+                feedforwards // output channels
+            );
+            graph_->tower[i].conv2 = cuda::Convolution(
+                &handles_,
+                max_batch_,   // max batch size
+                board_size_,  // board size
+                1,            // kernel size
+                feedforwards, // input channels
+                channels,     // output channels
+                use_relu      // relu
+            );
         }
         if (tower_ptr->apply_se) {
             const auto channels = weights_->residual_channels;
@@ -416,6 +445,18 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
             graph_->tower[i].post_btl_conv.LoadWeights(
                 tower_ptr->post_btl_conv.GetWeights(),
                 tower_ptr->post_btl_conv.GetBiases(),
+                scratch_size_, winograd);
+        } else if (tower_ptr->IsMixerBlock()) {
+            graph_->tower[i].dw_conv.LoadWeights(
+                tower_ptr->dw_conv.GetWeights(),
+                tower_ptr->dw_conv.GetBiases());
+            graph_->tower[i].conv1.LoadWeights(
+                tower_ptr->conv1.GetWeights(),
+                tower_ptr->conv1.GetBiases(),
+                scratch_size_, winograd);
+            graph_->tower[i].conv2.LoadWeights(
+                tower_ptr->conv2.GetWeights(),
+                tower_ptr->conv2.GetBiases(),
                 scratch_size_, winograd);
         }
         if (tower_ptr->apply_se) {
@@ -691,6 +732,30 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
                 cuda_conv_op_[3], cuda_conv_op_[1],
                 btl_skip, mask_buf[0],
                 cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+        } else if (tower_ptr->IsMixerBlock()) {
+            // dw conv layer
+            graph_->tower[i].dw_conv.Forward(
+                batch_size,
+                cuda_conv_op_[1], cuda_conv_op_[0],
+                cuda_conv_op_[0], mask_buf[0]);
+
+            std::swap(cuda_conv_op_[1], cuda_conv_op_[0]);
+
+            // 1st ffd conv layer
+            graph_->tower[i].conv1.Forward(
+                batch_size,
+                cuda_conv_op_[1], cuda_conv_op_[0],
+                nullptr, mask_buf[0],
+                cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+
+            // 2nd ffd conv layer
+            void *ffd_skip = tower_ptr->apply_se ?
+                                     nullptr : cuda_conv_op_[0];
+            graph_->tower[i].conv2.Forward(
+                batch_size,
+                cuda_conv_op_[3], cuda_conv_op_[1],
+                ffd_skip, mask_buf[0],
+                cuda_scratch_op_[0],  cuda_scratch_op_[1], scratch_size_);
         }
 
         bool module_skip = false;

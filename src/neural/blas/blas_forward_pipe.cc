@@ -283,6 +283,8 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
             BottleneckBlockForward(
                 board_size, tower_ptr, use_winograd,
                 res, conv_in, conv_out, workspace0, workspace1);
+        } else if (tower_ptr->IsMixerBlock()) {
+            throw "BLAS backend does not support the MixerBlock().";
         }
 
         // The SE process.

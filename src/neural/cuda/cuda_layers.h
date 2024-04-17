@@ -71,6 +71,31 @@ private:
     void *cuda_biases_{nullptr};
 };
 
+class DepthwiseConvolution : public LayerBasic {
+public:
+    DepthwiseConvolution() = default;
+    DepthwiseConvolution(CudaHandles *handles, const int batch,
+                         const int board_size, const int filter,
+                         const int channels, bool ReLU = true);
+    ~DepthwiseConvolution();
+
+    void Forward(const int batch,
+                 void *output, void *input,
+                 const void *residual, const void *mask);
+
+    void LoadWeights(const std::vector<float> &weights);
+
+    void LoadWeights(const std::vector<float> &weights,
+                     const std::vector<float> &biases);
+
+private:
+    int filters_;
+    int channels_;
+
+    void *cuda_weights_;
+    void *cuda_biases_{nullptr};
+};
+
 class FullyConnect : public LayerBasic {
 public:
     FullyConnect() = default;
