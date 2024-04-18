@@ -677,8 +677,8 @@ class Board(object):
         # plane  26-29 : pass-alive and pass-dead area
         # planes 30-33 : strings with 1, 2, 3 and 4 liberties 
         # planes 34-37 : ladder features
-        # plane     38 : wave
-        # plane     39 : rule
+        # plane     38 : rule
+        # plane     39 : wave
         # plane     40 : komi/20
         # plane     41 : -komi/20
         # plane     42 : intersections/361
@@ -751,8 +751,8 @@ class Board(object):
         scoring = self.get_scoring_rule()
         for v in range(self.num_vertices):
             if self.state[v] != INVLD:
-                features[37, self.vertex_to_feature_index(v)] = wave
-                features[38, self.vertex_to_feature_index(v)] = scoring
+                features[37, self.vertex_to_feature_index(v)] = scoring
+                features[38, self.vertex_to_feature_index(v)] = wave
                 features[39, self.vertex_to_feature_index(v)] = side_komi/20.
                 features[40, self.vertex_to_feature_index(v)] = -side_komi/20.
                 features[41, self.vertex_to_feature_index(v)] = self.num_intersections/361.
@@ -1016,6 +1016,84 @@ def gogui_ladder_heatmap(laddermap, board):
     out = out[:-1]
     return out
 
+def print_winrate(wdl, scores):
+    def np_softmax(x):
+        return np.exp(x) / np.sum(np.exp(x), axis=0)
+
+    wdl = wdl[0].cpu().detach().numpy()
+    wdl = np_softmax(wdl)
+    scores = scores[0].cpu().detach().numpy()
+    score = scores[0]
+
+    winrate = (wdl[0] - wdl[2] + 1) / 2
+    stderr_write("winrate= {:.2f}%\n".format(100 * winrate))
+    stderr_write("score= {:.2f}\n".format(score))
+
+def print_raw_nn(pred, board):
+    def np_softmax(x):
+        return np.exp(x) / np.sum(np.exp(x), axis=0)
+
+    prob, _, _, _, _, ownership, wdl, _, scores, _ = pred
+
+    # prob
+    prob = prob[0].cpu().detach().numpy()
+    prob = get_valid_spat(prob, board)
+    prob = np_softmax(prob)
+
+    # winrate
+    wdl = wdl[0].cpu().detach().numpy()
+    wdl = np_softmax(wdl)
+    winrate = (wdl[0] - wdl[2] + 1) / 2
+
+    # score
+    scores = scores[0].cpu().detach().numpy()
+    score = scores[0]
+
+    # ownership
+    ownership = ownership[0].cpu().detach().numpy()
+    ownership = get_valid_spat(ownership, board)
+
+    stderr_write("winrate= {:.6f}%\n".format(100 * winrate))
+    stderr_write("score= {:.6f}\n".format(score))
+
+    prob_out = str()
+    for y in range(board.board_size):
+        for x in range(board.board_size): 
+            idx = (board.board_size - y - 1) * board.board_size + x
+            prob_out += "  {:.6f}".format(prob[idx])
+        prob_out += "\n"
+    stderr_write("policy=\n{}".format(prob_out))
+    stderr_write("pass policy= {:.6f}\n".format(prob[-1]))
+
+    ownership_out = str()
+    for y in range(board.board_size):
+        for x in range(board.board_size): 
+            idx = (board.board_size - y - 1) * board.board_size + x
+            val = ownership[idx]
+            if val < 0:
+                ownership_out += " {:.6f}".format(val)
+            else:
+                ownership_out += "  {:.6f}".format(val)
+        ownership_out += "\n"
+    stderr_write("ownership=\n{}".format(ownership_out))
+
+def print_planes(board):
+    planes = board.get_features()
+
+    planes_out = str()
+    for p in range(INPUT_CHANNELS):
+        planes_out += "planes: {}\n".format(p+1)
+        for y in range(BOARD_SIZE):
+            for x in range(BOARD_SIZE):
+                val = planes[p, BOARD_SIZE - y - 1, x]
+                if val < 0:
+                    planes_out += " {:.2f}".format(val)
+                else:
+                    planes_out += "  {:.2f}".format(val)
+            planes_out += "\n"
+        planes_out += "\n"
+    stderr_write("planes=\n{}".format(planes_out))
+
 def get_vertex_from_pred(prob, board):
     prob = prob[0].cpu().detach().numpy()
     prob = get_valid_spat(prob, board)
@@ -1076,6 +1154,9 @@ def gtp_loop(args):
                 "komi",
                 "play",
                 "genmove",
+                "raw-nn",
+                "planes",
+                "save_bin_weights",
                 "gogui-analyze_commands"
             ]
             out = str()
@@ -1125,21 +1206,21 @@ def gtp_loop(args):
             elif color.lower()[:1] == "w":
                 c = WHITE
             board.to_move = c
-
             planes = torch.from_numpy(board.get_features()).float().to(device)
             pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            prob, _, _, _, _, _, _, _, _, _ = pred
+            prob, _, _, _, _, _, wdl, _, scores, _ = pred
             move, vtx = get_vertex_from_pred(prob, board)
             board.play(vtx)
+            print_winrate(wdl, scores)
             gtp_print(move)
+        elif main == "raw-nn":
+            planes = torch.from_numpy(board.get_features()).float().to(device)
+            pred, _ = net.forward(torch.unsqueeze(planes, 0))
+            print_raw_nn(pred, board)
+            gtp_print("")
         elif main == "planes":
-            out = str()
-            planes = board.get_features()
-            for i in range(INPUT_CHANNELS - 6):
-                plane = planes[i]
-                out += "planes: {}\n".format(i+1)
-                out += "{}\n".format(plane.astype(int))
-            gtp_print(out)
+            print_planes(board)
+            gtp_print("")
         elif main == "gogui-analyze_commands":
             supported_list = [
                 "gfx/Policy Rating/gogui-policy_rating",
