@@ -42,7 +42,7 @@ Please see this [section](./docs/COMPILE.md). If you are Windows platform, you m
 
 ## Reinforcement Learning
 
-Sayuri is a fairly fast self-play learning system for the game of Go. The current performance is apparently better than KataGo g104 which is one of fastest system in 2019s. The pictute shows the performance v0.6 versus KataGo. [Here](./bash/README.md) will describe how to build the self-play loop.
+Sayuri is a fairly fast self-play learning system for the game of Go. The current performance is apparently better than KataGo g104 which is one of fastest system in 2019s. The pictute shows the performance of v0.6 engine versus KataGo. The picture source is [here](https://arxiv.org/abs/1902.10565). [Here](./bash/README.md) will describe how to build the self-play loop.
 
 ![vs-kata](./img/katavslz-sayuri.png)
 
