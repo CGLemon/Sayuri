@@ -51,7 +51,6 @@ The ```selfplay-setting.json``` controls the training process. Here are the para
                                      # part in the reinforcement learning.
          ],
 
-        "FixUpBatchNorm": false,
         "TrainDirectory": "selfplay/data",
         "StorePath" : "workspace"
     }
