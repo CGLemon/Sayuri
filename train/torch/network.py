@@ -471,6 +471,8 @@ class DepthwiseConvBlock(nn.Module):
                        relu=True,
                        collector=None):
         assert in_channels == out_channels, ""
+        assert kernel_size >= 7, ""
+        assert kernel_size % 2 == 1, ""
         super(DepthwiseConvBlock, self).__init__()
 
         self.in_channels = in_channels
@@ -482,6 +484,14 @@ class DepthwiseConvBlock(nn.Module):
             in_channels,
             out_channels,
             kernel_size,
+            groups=in_channels,
+            padding="same",
+            bias=False,
+        )
+        self.rep3x3 = nn.Conv2d(
+            in_channels,
+            out_channels,
+            3,
             groups=in_channels,
             padding="same",
             bias=False,
@@ -507,7 +517,11 @@ class DepthwiseConvBlock(nn.Module):
         else:
             out = str()
 
-        out += tensor_to_text(self.conv.weight, use_bin)
+        ps = int((self.kernel_size - 3) / 2)
+        weights = torch.zeros_like(self.conv.weight)
+        weights += self.conv.weight.data
+        weights += F.pad(self.rep3x3.weight, (ps, ps, ps, ps), "constant", 0)
+        out += tensor_to_text(weights, use_bin)
         out += tensor_to_text(torch.zeros(self.out_channels), use_bin) # fill zero
 
         bn_mean, bn_std = self.bn.get_merged_param()
@@ -526,7 +540,7 @@ class DepthwiseConvBlock(nn.Module):
         return out
 
     def forward(self, x, mask):
-        x = self.conv(x) * mask
+        x = (self.conv(x) + self.rep3x3(x)) * mask
         x = self.bn(x, mask)
         return F.relu(x, inplace=True) if self.relu else x
 
