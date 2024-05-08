@@ -745,20 +745,20 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
             std::swap(cuda_conv_op_[3], cuda_conv_op_[0]);
 
-            // 1st ffd conv layer
+            // 1st ffn conv layer
             graph_->tower[i].conv1.Forward(
                 batch_size,
                 cuda_conv_op_[1], cuda_conv_op_[0],
                 nullptr, mask_buf[0],
                 cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
 
-            // 2nd ffd conv layer
-            void *ffd_skip = tower_ptr->apply_se ?
+            // 2nd ffn conv layer
+            void *ffn_skip = tower_ptr->apply_se ?
                                      nullptr : cuda_conv_op_[0];
             graph_->tower[i].conv2.Forward(
                 batch_size,
                 cuda_conv_op_[3], cuda_conv_op_[1],
-                ffd_skip, mask_buf[0],
+                ffn_skip, mask_buf[0],
                 cuda_scratch_op_[0],  cuda_scratch_op_[1], scratch_size_);
         }
 

@@ -682,16 +682,18 @@ class MixerBlock(nn.Module):
             relu=False,
             collector=collector
         )
+
+        ffn_channels = int(1.5 * self.channels)
         self.ffn1 = ConvBlock(
             in_channels=self.channels,
-            out_channels=2 * self.channels,
+            out_channels=ffn_channels,
             kernel_size=1,
             use_gamma=False,
             relu=True,
             collector=collector
         )
         self.ffn2 = ConvBlock(
-            in_channels=2 * self.channels,
+            in_channels=ffn_channels,
             out_channels=self.channels,
             kernel_size=1,
             use_gamma=True,

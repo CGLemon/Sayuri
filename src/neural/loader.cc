@@ -466,33 +466,33 @@ int DNNLoader::FillBlock(int offset,
             dw_bn_shape[0]);
 
         // 1st feedforward layers.
-        const auto ffd_conv1_shape = netstruct[offset++];
-        const auto ffd_bn1_shape = netstruct[offset++];
+        const auto ffn_conv1_shape = netstruct[offset++];
+        const auto ffn_bn1_shape = netstruct[offset++];
         FillConvolutionLayer(tower_ptr->conv1, buffer,
-            ffd_conv1_shape[0], ffd_conv1_shape[1], ffd_conv1_shape[2]);
+            ffn_conv1_shape[0], ffn_conv1_shape[1], ffn_conv1_shape[2]);
         FillBatchnormLayer(tower_ptr->bn1, buffer,
-            ffd_bn1_shape[0]);
+            ffn_bn1_shape[0]);
 
         // 2nd feedforward layers.
-        const auto ffd_conv2_shape = netstruct[offset++];
-        const auto ffd_bn2_shape = netstruct[offset++];
+        const auto ffn_conv2_shape = netstruct[offset++];
+        const auto ffn_bn2_shape = netstruct[offset++];
         FillConvolutionLayer(tower_ptr->conv2, buffer,
-            ffd_conv2_shape[0], ffd_conv2_shape[1], ffd_conv2_shape[2]);
+            ffn_conv2_shape[0], ffn_conv2_shape[1], ffn_conv2_shape[2]);
         FillBatchnormLayer(tower_ptr->bn2, buffer,
-            ffd_bn2_shape[0]);
+            ffn_bn2_shape[0]);
 
-        tower_ptr->feedforward_channels = ffd_conv1_shape[1];
+        tower_ptr->feedforward_channels = ffn_conv1_shape[1];
         const auto channels = weights_->residual_channels;
         const auto kernel = 1;
         if (channels != dw_conv_shape[1] ||
                 channels != dw_bn_shape[0] ||
-                channels != ffd_conv1_shape[0] ||
-                channels != ffd_conv2_shape[1] ||
-                channels != ffd_bn2_shape[0]) {
+                channels != ffn_conv1_shape[0] ||
+                channels != ffn_conv2_shape[1] ||
+                channels != ffn_bn2_shape[0]) {
             throw "The channels of mixer block is wrong";
         }
-        if (kernel != ffd_conv1_shape[2] ||
-                kernel != ffd_conv2_shape[2]) {
+        if (kernel != ffn_conv1_shape[2] ||
+                kernel != ffn_conv2_shape[2]) {
             throw "The kernel of mixer block is wrong";
         }
     }
