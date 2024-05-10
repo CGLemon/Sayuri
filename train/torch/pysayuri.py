@@ -915,6 +915,7 @@ class Node:
         # Swap the side to move winrate. 
         return 1 - v;
 
+    @torch.no_grad()
     def _get_network_result(self, board, network, device):
         def np_softmax(x):
             return np.exp(x) / np.sum(np.exp(x), axis=0)
@@ -990,8 +991,7 @@ class Node:
 
         # Select the best node by PUCT algorithm. 
         for vtx, child in self.children.items():
-            q_value = self.nn_eval # The First Play Urgency for unvisited
-                                   # nodes.
+            q_value = 0
 
             if child.visits != 0:
                 q_value = self.inverse(child.values / child.visits)
