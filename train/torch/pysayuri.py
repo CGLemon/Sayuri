@@ -9,6 +9,8 @@ import copy
 import sys
 import math
 import argparse
+import time
+import select
 
 BOARD_SIZE = 19
 KOMI = 7.5
@@ -36,6 +38,14 @@ NUM_INTESECTIONS = BOARD_SIZE ** 2 # max intersections number
 PASS = -1  # pass
 RESIGN = -2 # resign
 NULL_VERTEX = NUM_VERTICES+1 # invalid position
+
+def stderr_write(val):
+    sys.stderr.write(val)
+    sys.stderr.flush()
+
+def stdout_write(val):
+    sys.stdout.write(val)
+    sys.stdout.flush()
 
 class StoneLiberty(object):
     def __init__(self):
@@ -763,11 +773,11 @@ class Board(object):
     def superko(self):
         # Return true if the current position is superko.
 
-        curr_hash = hash(self.state.tostring())
+        curr_hash = hash(self.state.tobytes())
         s = len(self.history)
         for p in range(s-1):
             h = self.history[p]
-            if hash(h.tostring()) == curr_hash:
+            if hash(h.tobytes()) == curr_hash:
                 return True
         return False
 
@@ -800,9 +810,437 @@ class Board(object):
         out += "komi: {:.2f}".format(self.komi)
         return out + "\n"
 
-def stderr_write(val):
-    sys.stderr.write(val)
-    sys.stderr.flush()
+class TimeControl:
+    def __init__(self):
+        self.main_time = 0
+        self.byo_time = 7 * 24 * 60 * 60 # one week per move
+        self.byo_stones = 1
+
+        self.maintime_left = [0, 0]
+        self.byotime_left = [0, 0]
+        self.stones_left = [0, 0]
+        self.in_byo = [False, False]
+        
+        self.clock_time = time.time()
+        self.reset()
+
+    def check_in_byo(self):
+        self.in_byo[0] = True if self.maintime_left[0] <= 0 else False
+        self.in_byo[1] = True if self.maintime_left[1] <= 0 else False
+
+    def reset(self):
+        self.maintime_left = [self.main_time] * 2
+        self.byotime_left = [self.byo_time] * 2
+        self.stones_left = [self.byo_stones] * 2
+        self.check_in_byo()
+
+    def time_settings(self, main_time, byo_time, byo_stones):
+        self.main_time = main_time
+        self.byo_time = byo_time
+        self.byo_stones = byo_stones
+        self.reset()
+
+    def time_left(self, color, time, stones):
+        if stones == 0:
+            self.maintime_left[color] = time
+        else:
+            self.maintime_left[color] = 0
+            self.byotime_left[color] = time
+            self.stones_left[color] = stones
+        self.check_in_byo()
+
+    def clock(self):
+        self.clock_time = time.time()
+
+    def took_time(self, color):
+        remaining_took_time = time.time() - self.clock_time
+        if not self.in_byo[color]:
+            if self.maintime_left[color] > remaining_took_time:
+                self.maintime_left[color] -= remaining_took_time
+                remaining_took_time = -1
+            else:
+                remaining_took_time -= self.maintime_left[color]
+                self.maintime_left[color] = 0
+                self.in_byo[color] = True
+
+        if self.in_byo[color] and remaining_took_time > 0:
+            self.byotime_left[color] -= remaining_took_time
+            self.stones_left[color] -= 1
+            if self.stones_left[color] == 0:
+                self.stones_left[color] = self.byo_stones
+                self.byotime_left[color] = self.byo_time
+
+    def get_thinking_time(self, color, board_size, move_num):
+        estimate_moves_left = max(4, int(board_size * board_size * 0.4) - move_num)
+        lag_buffer = 1 # Remaining some time for network hiccups or GUI lag 
+        remaining_time = self.maintime_left[color] + self.byotime_left[color] - lag_buffer
+        if self.byo_stones == 0:
+            return remaining_time / estimate_moves_left
+        return remaining_time / self.stones_left[color]
+
+    def should_stop(self, max_time):
+        elapsed = time.time() - self.clock_time
+        return elapsed > max_time
+
+    def get_timeleft_string(self, color):
+        out = str()
+        if not self.in_byo[color]:
+            out += "{s} sec".format(
+                                 s=int(self.maintime_left[color]))
+        else:
+            out += "{s} sec, {c} stones".format(
+                                             s=int(self.byotime_left[color]),
+                                             c=self.stones_left[color])
+        return out
+
+    def __str__(self):
+        return "".join(["Black: ",
+                          self.get_timeleft_string(0),
+                           " | White: ",
+                           self.get_timeleft_string(1)])
+
+class Node:
+    # TODO: Tnue C_PUCT parameter.
+    C_PUCT = 0.5 # The PUCT hyperparameter.
+    def __init__(self, p):
+        self.policy = p  # The network raw policy from its parents node.
+        self.nn_eval = 0 # The network raw eval from this node.
+
+        self.values = 0 # The accumulate winrate.
+        self.visits = 0 # The accumulate node visits.
+                        # The Q value must be equal to (self.values / self.visits)
+        self.children = dict() # Next node.
+
+    def inverse(self, v):
+        # Swap the side to move winrate. 
+        return 1 - v;
+
+    def _get_network_result(self, board, network, device):
+        def np_softmax(x):
+            return np.exp(x) / np.sum(np.exp(x), axis=0)
+
+        planes = torch.from_numpy(board.get_features()).float().to(device)
+        pred, _ = network.forward(torch.unsqueeze(planes, 0))
+
+        # Use optimistic policy.
+        _, _, _, _, prob, _, wdl, _, scores, _ = pred
+
+        # winrate
+        wdl = wdl[0].cpu().detach().numpy()
+        wdl = np_softmax(wdl)
+        winrate = (wdl[0] - wdl[2] + 1) / 2
+
+        # score
+        scores = scores[0].cpu().detach().numpy()
+        score = scores[0]
+
+        # prob
+        prob = prob[0].cpu().detach().numpy()
+        prob = get_valid_spat(prob, board)
+        prob = np_softmax(prob)
+        return prob, wdl, score
+
+    def expand_children(self, board, network, device):
+        if board.last_move == PASS:
+            score = board.final_score()
+            if (board.to_move == BLACK and score > 0) or \
+                    (board.to_move == WHITE and score < 0):
+                # Play pass move if we win the game.
+                self.children[PASS] = Node(1.0)
+                return 1;
+
+        # Compute the net results.
+        policy, value, _ = self._get_network_result(board, network, device)
+
+        for idx in range(board.num_intersections):
+            vtx = board.index_to_vertex(idx)
+
+            # Remove the all illegal move.
+            if board.legal(vtx):
+                p = policy[idx]
+                self.children[vtx] = Node(p)
+
+        # The pass move is alwaly the legal move. We don't need to
+        # check it.
+        self.children[PASS] = Node(policy[-1])
+
+        # The nn eval is side-to-move winrate. 
+        self.nn_eval = value[0]
+
+        return self.nn_eval
+
+    def remove_superko(self, board):
+        # Remove all superko moves.
+
+        remove_list = list()
+        for vtx, _ in self.children.items():
+            if vtx != PASS:
+                next_board = board.copy()
+                next_board.play(vtx)
+                if next_board.superko():
+                    remove_list.append(vtx)
+        for vtx in remove_list:
+            self.children.pop(vtx)
+
+    def puct_select(self):
+        parent_visits = max(self.visits, 1) # The parent visits must great than 1 because we want to get the
+                                            # best policy value if it is the first selection.
+        numerator = math.sqrt(parent_visits)
+        puct_list = list()
+
+        # Select the best node by PUCT algorithm. 
+        for vtx, child in self.children.items():
+            q_value = self.nn_eval # The First Play Urgency for unvisited
+                                   # nodes.
+
+            if child.visits != 0:
+                q_value = self.inverse(child.values / child.visits)
+
+            puct = q_value + self.C_PUCT * child.policy * (numerator / (1+child.visits))
+            puct_list.append((puct, vtx))
+        return max(puct_list)[1]
+
+    def update(self, v):
+        self.values += v
+        self.visits += 1
+
+    def get_best_prob_move(self):
+        gather_list = list()
+        for vtx, child in self.children.items():
+            gather_list.append((child.policy, vtx))
+        return max(gather_list)[1]
+
+    def get_best_move(self, resign_threshold):
+        # Return best probability move if there are no playouts.
+        if self.visits == 1 and \
+               resign_threshold is not None:
+            if self.values < resign_threshold:
+                return 0;
+            else:
+                return self.get_best_prob_move()
+
+        # Get best move by number of node visits.
+        gather_list = list()
+        for vtx, child in self.children.items():
+            gather_list.append((child.visits, vtx))
+
+        vtx = max(gather_list)[1]
+        child = self.children[vtx]
+
+        # Play resin move if we think we have already lost.
+        if resign_threshold is not None and \
+               self.inverse(child.values / child.visits) < resign_threshold:
+            return RESIGN
+        return vtx
+
+    def to_string(self, board):
+        # Collect some node information in order to debug.
+
+        out = str()
+        out += "Root -> W: {:5.2f}%, V: {}\n".format(
+                    100.0 * self.values/self.visits,
+                    self.visits)
+
+        gather_list = list()
+        for vtx, child in self.children.items():
+            gather_list.append((child.visits, vtx))
+        gather_list.sort(reverse=True)
+
+        for _, vtx in gather_list:
+            child = self.children[vtx]
+            if child.visits != 0:
+                out += "  {:4} -> W: {:5.2f}%, P: {:5.2f}%, V: {}\n".format(
+                           board.vertex_to_text(vtx),
+                           100.0 * self.inverse(child.values/child.visits),
+                           100.0 * child.policy,
+                           child.visits)
+        return out
+
+    def get_pv(self, board, pv_str):
+        # Get the best Principal Variation list since this
+        # node.
+        if len(self.children) == 0: 
+            return pv_str
+
+        next_vtx = self.get_best_move(None)
+        next = self.children[next_vtx]
+        pv_str += "{} ".format(board.vertex_to_text(next_vtx))
+        return next.get_pv(board, pv_str)
+
+    def to_lz_analysis(self, board):
+        # Output the leela zero analysis string. Watch the detail
+        # here: https://github.com/SabakiHQ/Sabaki/blob/master/docs/guides/engine-analysis-integration.md
+        out = str()
+
+        gather_list = list()
+        for vtx, child in self.children.items():
+            gather_list.append((child.visits, vtx))
+        gather_list.sort(reverse=True)
+
+        i = 0
+        for _, vtx in gather_list:
+            child = self.children[vtx]
+            if child.visits != 0:
+                winrate = self.inverse(child.values/child.visits)
+                prior = child.policy
+                lcb = winrate
+                order = i
+                pv = "{} ".format(board.vertex_to_text(vtx))
+                out += "info move {} visits {} winrate {} prior {} lcb {} order {} pv {}".format(
+                           board.vertex_to_text(vtx),
+                           child.visits,
+                           int(10000 * winrate),
+                           int(10000 * prior),
+                           int(10000 * lcb),
+                           order,
+                           child.get_pv(board, pv))
+                i+=1
+        out += '\n'
+        return out
+
+class Search:
+    def __init__(self, board, network, time_control, device):
+        self.root_board = board # Root board positions, all simulation boards will fork from it.
+        self.root_node = None # Root node, start the PUCT search from it.
+        self.network = network
+        self.time_control = time_control
+        self.device = device
+        self.analysis_tag = {
+            "interval" : -1
+        }
+
+    def _prepare_root_node(self):
+        # Expand the root node first.
+        self.root_node = Node(1)
+        val = self.root_node.expand_children(self.root_board, self.network, self.device)
+
+        # In order to avoid overhead, we only remove the superko positions in
+        # the root.
+        self.root_node.remove_superko(self.root_board)
+        self.root_node.update(val)
+
+    def _descend(self, color, curr_board, node):
+        value = None
+        if curr_board.num_passes >= 2:
+            # The game is over. Compute the final score.
+            score = curr_board.final_score()
+            if score > 1e-4:
+                # The black player is winner.
+                value = 1 if color is BLACK else 0
+            elif score < -1e-4:
+                # The white player is winner.
+                value = 1 if color is WHITE else 0
+            else:
+                # The game is draw
+                value = 0.5
+        elif len(node.children) != 0:
+            # Select the next node by PUCT algorithm. 
+            vtx = node.puct_select()
+            curr_board.to_move = color
+            curr_board.play(vtx)
+            color = (color + 1) % 2
+            next_node = node.children[vtx]
+
+            # go to the next node.
+            value = self._descend(color, curr_board, next_node)
+        else:
+            # This is the termainated node. Now try to expand it. 
+            value = node.expand_children(curr_board, self.network, self.device)
+
+        assert value != None, ""
+        node.update(value)
+
+        return node.inverse(value)
+
+    def ponder(self, playouts, verbose):
+        if self.root_board.num_passes >= 2:
+            return str()
+
+        analysis_clock = time.time()
+        interval = self.analysis_tag["interval"]
+
+        # Try to expand the root node first.
+        self._prepare_root_node()
+
+        for p in range(playouts):
+            if p != 0 and \
+                   interval > 0 and \
+                   time.time() - analysis_clock  > interval:
+                analysis_clock = time.time()
+                stdout_write(self.root_node.to_lz_analysis(self.root_board))
+
+            rlist, _, _ = select.select([sys.stdin], [], [], 0)
+            if rlist:
+                break
+
+            # Copy the root board because we need to simulate the current board.
+            curr_board = self.root_board.copy()
+            color = curr_board.to_move
+
+            # Start the Monte Carlo tree search.
+            self._descend(color, curr_board, self.root_node)
+
+        out_verbose = self.root_node.to_string(self.root_board)
+        if verbose:
+            # Dump verbose to stderr because we want to debug it on GTP
+            # interface(sabaki).
+            stderr_write(out_verbose + "\n")
+
+        return out_verbose
+
+    def think(self, playouts, resign_threshold, verbose):
+        # Get the best move with Monte carlo tree. The time controller and max playouts limit
+        # the search. More thinking time or playouts is stronger.
+
+        if self.root_board.num_passes >= 2:
+            return PASS, str()
+
+        analysis_clock = time.time()
+        interval = self.analysis_tag["interval"]
+        self.time_control.clock()
+        if verbose:
+            stderr_write(str(self.time_control) + "\n")
+
+        # Prepare some basic information.
+        to_move = self.root_board.to_move
+        bsize = self.root_board.board_size
+        move_num = self.root_board.move_num
+
+        # Compute thinking time limit.
+        max_time = self.time_control.get_thinking_time(to_move, bsize, move_num)
+
+        # Try to expand the root node first.
+        self._prepare_root_node()
+
+        for p in range(playouts):
+            if p != 0 and \
+                   interval > 0 and \
+                   time.time() - analysis_clock  > interval:
+                analysis_clock = time.time()
+                stdout_write(self.root_node.to_lz_analysis(self.root_board))
+
+            if self.time_control.should_stop(max_time):
+                break
+
+            # Copy the root board because we need to simulate the current board.
+            curr_board = self.root_board.copy()
+            color = curr_board.to_move
+
+            # Start the Monte Carlo tree search.
+            self._descend(color, curr_board, self.root_node)
+
+        # Eat the remaining time. 
+        self.time_control.took_time(to_move)
+
+        out_verbose = self.root_node.to_string(self.root_board)
+        if verbose:
+            # Dump verbose to stderr because we want to debug it on GTP
+            # interface(sabaki).
+            stderr_write(out_verbose)
+            stderr_write(str(self.time_control))
+            stderr_write("\n")
+
+        return self.root_node.get_best_move(resign_threshold), out_verbose
 
 def load_checkpoint(json_path, checkpoint, use_swa):
     cfg = None
@@ -1094,30 +1532,12 @@ def print_planes(board):
         planes_out += "\n"
     stderr_write("planes=\n{}".format(planes_out))
 
-def get_vertex_from_pred(prob, board):
-    prob = prob[0].cpu().detach().numpy()
-    prob = get_valid_spat(prob, board)
-
-    for idx in range(board.num_intersections):
-        if not board.legal(board.index_to_vertex(idx)):
-            prob[idx] = CRAZY_NEGATIVE_VALUE
-
-    idx = np.argmax(prob).item()
-    board_size = board.board_size
-
-    if idx == board_size * board_size:
-        return "pass", PASS
-    x = idx % board_size
-    y = idx // board_size
-    return get_move_text(x, y), board.index_to_vertex(idx)
-
 def gtp_loop(args):
     def gtp_print(res, success=True):
         if success:
-            sys.stdout.write("= {}\n\n".format(res))
+            stdout_write("= {}\n\n".format(res))
         else:
-            sys.stdout.write("? {}\n\n".format(res))
-        sys.stdout.flush()
+            stdout_write("? {}\n\n".format(res))
 
     board = Board(BOARD_SIZE, KOMI, SCORING_AREA)
     net = load_checkpoint(args.json, args.checkpoint, args.use_swa)
@@ -1126,11 +1546,16 @@ def gtp_loop(args):
     device = torch.device("cuda") if use_gpu else torch.device("cpu")
     net = net.to(device)
 
+    time_control = TimeControl()
+
     if use_gpu:
         stderr_write("Enable the GPU device...\n")
 
     while True:
         inputs = sys.stdin.readline().strip().split()
+        if len(inputs) == 0:
+            continue
+
         main = inputs[0]
 
         if main == "quit":
@@ -1154,10 +1579,14 @@ def gtp_loop(args):
                 "komi",
                 "play",
                 "genmove",
+                "time_settings",
+                "time_left",
                 "raw-nn",
                 "planes",
                 "save_bin_weights",
-                "gogui-analyze_commands"
+                "gogui-analyze_commands",
+                "lz-genmove_analyze",
+                "lz-analyze"
             ]
             out = str()
             for i in supported_list:
@@ -1198,7 +1627,6 @@ def gtp_loop(args):
                 board.play(vtx)
             gtp_print("")
         elif main == "genmove":
-            # TODO: Support MCTS?
             color = inputs[1]
             c = INVLD
             if color.lower()[:1] == "b":
@@ -1206,13 +1634,56 @@ def gtp_loop(args):
             elif color.lower()[:1] == "w":
                 c = WHITE
             board.to_move = c
-            planes = torch.from_numpy(board.get_features()).float().to(device)
-            pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            prob, _, _, _, _, _, wdl, _, scores, _ = pred
-            move, vtx = get_vertex_from_pred(prob, board)
+
+            search = Search(board, net, time_control, device)
+            vtx, _ = search.think(args.playouts, args.resign_threshold, args.verbose)
             board.play(vtx)
-            print_winrate(wdl, scores)
+            move = board.vertex_to_text(vtx)
             gtp_print(move)
+        elif main == "time_settings":
+            main_time = int(inputs[1])
+            byo_time = int(inputs[2])
+            byo_stones = int(inputs[3])
+            time_control.time_settings(main_time, byo_time, byo_stones)
+            gtp_print("")
+        elif main == "time_left":
+            gtp_print("")
+        elif main == "lz-genmove_analyze":
+            c = board.to_move
+            interval = 0
+            for tag in inputs[1:]:
+                if tag.isdigit():
+                   interval = int(tag)
+                else:
+                    color = tag
+                    if color.lower()[:1] == "b":
+                        c = BLACK
+                    elif color.lower()[:1] == "w":
+                        c = WHITE
+            stdout_write("=\n")
+            search = Search(board, net, time_control, device)
+            search.analysis_tag["interval"] = interval/100
+            vtx, _ = search.think(args.playouts, args.resign_threshold, args.verbose)
+            board.play(vtx)
+            move = board.vertex_to_text(vtx)
+            stdout_write("play {}\n\n".format(move))
+        elif main == "lz-analyze":
+            c = board.to_move
+            interval = 0
+            for tag in inputs[1:]:
+                if tag.isdigit():
+                   interval = int(tag)
+                else:
+                    color = tag
+                    if color.lower()[:1] == "b":
+                        c = BLACK
+                    elif color.lower()[:1] == "w":
+                        c = WHITE
+            stdout_write("=\n")
+            search = Search(board, net, time_control, device)
+            search.analysis_tag["interval"] = interval/100
+            search.ponder(args.playouts, args.verbose)
+            stdout_write("\n")
         elif main == "raw-nn":
             planes = torch.from_numpy(board.get_features()).float().to(device)
             pred, _ = net.forward(torch.unsqueeze(planes, 0))
@@ -1345,5 +1816,11 @@ if __name__ == "__main__":
                         action="store_true", default=False)
     parser.add_argument("--use-gpu", help="Use the GPU.",
                         action="store_true", default=False)
+    parser.add_argument("-p", "--playouts", metavar="<integer>",
+                        help="The number of playouts.", type=int, default=400)
+    parser.add_argument("-r", "--resign-threshold", metavar="<float>",
+                        help="Resign when winrate is less than x.", type=float, default=0.1)
+    parser.add_argument("-v", "--verbose", default=False,
+                        help="Dump some search verbose.", action="store_true")
     args = parser.parse_args()
     gtp_loop(args)
