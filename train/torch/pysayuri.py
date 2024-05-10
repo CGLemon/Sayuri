@@ -467,7 +467,7 @@ class Board(object):
         self._compute_reach_color(WHITE, white_buf)
 
         for v in range(self.num_vertices):
-            i = self.vertex_to_feature_index(v)
+            i = self.vertex_to_index(v)
             if black_buf[v] and white_buf[v]:
                 ownermap[i] = EMPTY
             elif black_buf[v]:
