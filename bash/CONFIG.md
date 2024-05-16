@@ -37,7 +37,7 @@ The ```selfplay-setting.json``` controls the training process. Here are the para
         "Workers": 4,                # Number of data loader workers.
         "BatchSize": 256,
         "BufferSize" : 524288,       # Bigger is better but it will use more memory. If your 
-                                     # compute is 32GB, you can set it as half value.
+                                     # compute is only 32GB, you can set it as around 256000.
 
         "DownSampleRate": 16,        # Bigger is better but may be slow down.
         "MacroFactor": 1,

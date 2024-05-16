@@ -18,7 +18,7 @@ First, you need a executable weights. Download the old v0.6 weights [here](https
 
 Then start the program with GTP mode via the terminal/PowerShell, please enter
 
-    $ ./sayuri -w <weights file> -t 1 -b 1 -p 400
+    $ ./sayuri -w <weights file> -t 1 -b 1 -p 400 --use-optimistic-policy
 
 You will see the diagnostic verbose. If the verbose includes ```Network Verison``` information, it means you success to execute the program with GPT mode. For more arguments, please give the ```--help``` option.
 
@@ -42,7 +42,7 @@ Please see this [section](./docs/COMPILE.md). If you are Windows platform, you m
 
 ## Reinforcement Learning
 
-Sayuri is a fairly fast self-play learning system for the game of Go. The current performance is apparently better than KataGo g104 which is one of fastest system in 2019s. The pictute shows the performance of v0.6 engine versus KataGo. The picture source is [here](https://arxiv.org/abs/1902.10565). [Here](./bash/README.md) will describe how to build the self-play loop.
+Sayuri is a fairly fast self-play learning system for the game of Go. The current performance is apparently better than KataGo g104 which is one of fastest system in 2019s. The pictute shows the performance of v0.6 engine (orange point) versus KataGo and LeelaZero. The picture source is [here](https://arxiv.org/abs/1902.10565). [Here](./bash/README.md) will describe how to build the self-play loop.
 
 ![vs-kata](./img/katavslz-sayuri.png)
 
