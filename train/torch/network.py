@@ -464,40 +464,41 @@ class ConvBlock(nn.Module):
         return F.relu(x, inplace=True) if self.relu else x
 
 class DepthwiseConvBlock(nn.Module):
-    def __init__(self, in_channels,
-                       out_channels,
+    def __init__(self, channels,
                        kernel_size,
                        use_gamma,
                        relu=True,
                        collector=None):
-        assert in_channels == out_channels, ""
-        assert kernel_size >= 7, ""
+        # Implement it based on "Scaling Up Your Kernels to 31x31: Revisiting Large Kernel Design
+        # in CNNs".
+
+        assert kernel_size >= 5, ""
         assert kernel_size % 2 == 1, ""
         super(DepthwiseConvBlock, self).__init__()
 
-        self.in_channels = in_channels
-        self.out_channels = out_channels
+        self.in_channels = channels
+        self.out_channels = channels
         self.kernel_size = kernel_size
         self.groups = self.in_channels
         self.relu = relu
         self.conv = nn.Conv2d(
-            in_channels,
-            out_channels,
+            self.in_channels,
+            self.out_channels,
             kernel_size,
-            groups=in_channels,
+            groups=self.in_channels,
             padding="same",
-            bias=False,
+            bias=True,
         )
         self.rep3x3 = nn.Conv2d(
-            in_channels,
-            out_channels,
+            self.in_channels,
+            self.out_channels,
             3,
-            groups=in_channels,
+            groups=self.in_channels,
             padding="same",
-            bias=False,
+            bias=True,
         )
         self.bn = BatchNorm2d(
-            num_features=out_channels,
+            num_features=self.out_channels,
             eps=1e-5,
             use_gamma=use_gamma
         )
@@ -506,10 +507,7 @@ class DepthwiseConvBlock(nn.Module):
 
     def _init_weights(self):
         nn.init.xavier_normal_(self.conv.weight, gain=1.0)
-
-        # nn.init.kaiming_normal_(self.conv.weight,
-        #                         mode="fan_out",
-        #                         nonlinearity="relu")
+        nn.init.xavier_normal_(self.rep3x3.weight, gain=1.0)
 
     def tensors_to_text(self, use_bin):
         if use_bin:
@@ -521,8 +519,9 @@ class DepthwiseConvBlock(nn.Module):
         weights = torch.zeros_like(self.conv.weight)
         weights += self.conv.weight.data
         weights += F.pad(self.rep3x3.weight, (ps, ps, ps, ps), "constant", 0)
+        biases = self.conv.bias.data + self.rep3x3.bias.data
         out += tensor_to_text(weights, use_bin)
-        out += tensor_to_text(torch.zeros(self.out_channels), use_bin) # fill zero
+        out += tensor_to_text(biases, use_bin)
 
         bn_mean, bn_std = self.bn.get_merged_param()
         out += tensor_to_text(bn_mean, use_bin)
@@ -675,11 +674,10 @@ class MixerBlock(nn.Module):
         self.use_se = se_size is not None
 
         self.depthwise_conv = DepthwiseConvBlock(
-            in_channels=self.channels,
-            out_channels=self.channels,
+            channels=self.channels,
             kernel_size=7,
             use_gamma=True,
-            relu=False,
+            relu=True,
             collector=collector
         )
 
@@ -711,7 +709,8 @@ class MixerBlock(nn.Module):
         x, mask_buffers = inputs
         mask, _, _ = mask_buffers
 
-        x = F.relu(self.depthwise_conv(x, mask) + x, inplace=True)
+        x = self.depthwise_conv(x, mask) + x
+
         out = x
         out = self.ffn1(out, mask)
         out = self.ffn2(out, mask)
@@ -1051,12 +1050,11 @@ class Network(nn.Module):
 
     def update_parameters(self, curr_steps):
         for layer in self.layers_collector:
-            if isinstance(layer, FullyConnect):
-                pass
-            elif isinstance(layer, Convolve):
-                pass
-            elif isinstance(layer, ConvBlock):
+            if isinstance(layer, ConvBlock) or \
+                   isinstance(layer, MixerBlock):
                 layer.bn.update_renorm_clips(curr_steps)
+            else:
+                pass
 
     def accumulate_swa(self, other_network, swa_count):
         def accum_weights(v, w, n):

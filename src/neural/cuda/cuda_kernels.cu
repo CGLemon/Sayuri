@@ -742,14 +742,14 @@ __global__ void depthwise_conv_kernel(T *output, const T *input, const T *weight
         if (biases) {
             val += (float)(biases[c_index]);
         }
+        if (relu && val < 0) {
+            val = 0.f;
+        }
         if (residual) {
             val += (float)(residual[index]);
         }
         if (mask) {
             val *= (float)(mask[n_index * spatial + hw_index]);
-        }
-        if (relu && val < 0) {
-            val = 0.f;
         }
         output[index] = (T)val;
     }
