@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# default parameters
-
 usage()
 {
     echo "usage: -h, --help      | dump this verbose"
@@ -100,5 +98,6 @@ while :; do
     shift
 done
 
+gather_gpu
 main_loop
 
