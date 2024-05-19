@@ -737,7 +737,7 @@ class Network(nn.Module):
         self.value_misc = 15
         self.policy_outs = 5
         self.stack = cfg.stack
-        self.version = 3
+        self.version = 4
 
         self.construct_layers()
 
@@ -1119,6 +1119,7 @@ class Network(nn.Module):
             f.write(str_to_bin("PolicyExtract {}\n".format(self.policy_extract)))
             f.write(str_to_bin("ValueExtract {}\n".format(self.value_extract)))
             f.write(str_to_bin("ValueMisc {}\n".format(self.value_misc)))
+            f.write(str_to_bin("ActivationFunction {}\n".format("relu")))
             f.write(str_to_bin("end info\n"))
 
             write_stack(f, self.stack)
@@ -1159,6 +1160,7 @@ class Network(nn.Module):
             f.write("PolicyExtract {}\n".format(self.policy_extract))
             f.write("ValueExtract {}\n".format(self.value_extract))
             f.write("ValueMisc {}\n".format(self.value_misc))
+            f.write("ActivationFunction {}\n".format("relu"))
             f.write("end info\n")
 
             write_stack(f, self.stack)

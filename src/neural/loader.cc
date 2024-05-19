@@ -226,15 +226,21 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
         //     compression process.
         //
         // v3: Add more output heads.
+        //
+        // v4: Add support for MixerBlock and more activation
+        //     function.
     }
 
-    if (version_ >= 4 || version_ <= 2) {
+    if (version_ >= 5 || version_ <= 2) {
         throw "Do not support this version";
     }
 
-
     if (!NotFound(netinfo, "NNType")) {
         // Not used.
+    }
+
+    if (!NotFound(netinfo, "ActivationFunction")) {
+        // TODO
     }
 
     // Build the stack if it is not in weights file. It only
