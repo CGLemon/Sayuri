@@ -34,14 +34,21 @@ public:
 private:
 
     class NNGraph {
+        struct Block {
+            cuda::DepthwiseConvolution dw_conv;
+            cuda::Convolution pre_btl_conv;
+            cuda::Convolution conv1;
+            cuda::Convolution conv2;
+            cuda::Convolution post_btl_conv;
+            cuda::SEUnit se_module;
+        };
+
         struct Graph {
             // intput
             cuda::Convolution input_conv;
 
-            // residual towers
-            std::vector<cuda::Convolution> btl_conv;
-            std::vector<cuda::Convolution> tower_conv;
-            std::vector<cuda::SEUnit> tower_se;
+            // block tower
+            std::vector<NNGraph::Block> tower;
 
             // policy head
             cuda::Convolution p_ex_conv;

@@ -709,6 +709,70 @@ void winograd3_transform_out(T *out, const T *M, const T *biases,
     ReportCUDAErrors(cudaGetLastError());
 }
 
+template <typename T>
+__global__ void depthwise_conv_kernel(T *output, const T *input, const T *weights,
+                                      const T *biases, const T *residual, const T *mask,
+                                      int filter_size, int N, int C, int H, int W, bool relu) {
+    int total_elements = N * C * H * W;
+    int index = threadIdx.x + blockDim.x * blockIdx.x;
+    if (index < total_elements) {
+        int filter_dim = filter_size * filter_size;
+        int spatial = H * W;
+        int nc_index = index / spatial;
+        int n_index = nc_index / C;
+        int c_index = nc_index % C;
+        int hw_index = index % spatial;
+        int pad = filter_size / 2;
+        int h_in = hw_index / W - pad;
+        int w_in = hw_index % W - pad;
+
+        float val = 0.f;
+        #pragma unroll
+        for (int i = 0; i < filter_size; ++i) {
+            #pragma unroll
+            for (int j = 0; j < filter_size; ++j) {
+                int h = h_in + i;
+                int w = w_in + j;
+                if (h >= 0 && w >= 0 && h < H && w < W) {
+                    val += (float)(weights[i * filter_size + j + c_index * filter_dim]) *
+                               (float)(input[nc_index * spatial + h * W + w]);
+                }
+            }
+        }
+        if (biases) {
+            val += (float)(biases[c_index]);
+        }
+        if (relu && val < 0) {
+            val = 0.f;
+        }
+        if (residual) {
+            val += (float)(residual[index]);
+        }
+        if (mask) {
+            val *= (float)(mask[n_index * spatial + hw_index]);
+        }
+        output[index] = (T)val;
+    }
+}
+
+template <typename T>
+void depthwise_conv(T *output, const T *input, const T *weights,
+                    const T *biases, const T *residual, const T *mask,
+                    int filter_size, int batch, int channels, int height, int width,
+                    bool relu, cudaStream_t stream) {
+    const int total_elements = batch * channels * height * width;
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(total_elements, block_size);
+
+    depthwise_conv_kernel<<<blocks, block_size, 0, stream>>>(
+        output, input, weights,
+        biases, residual, mask,
+        filter_size, batch, channels, height, width,
+        relu);
+
+    ReportCUDAErrors(cudaGetLastError());
+}
+
 template<>
 void gemm<float>(bool TA, bool TB, int M, int N, int K, float ALPHA,
                  const float *A_gpu, int lda, const float *B_gpu, int ldb,
@@ -809,6 +873,11 @@ template void winograd3_transform_out<float>(float *out, const float *M, const f
                                              int batch, int channels, int board_size,
                                              bool relu, cudaStream_t stream);
 
+template void depthwise_conv<float>(float *output, const float *input, const float *weights,
+                                    const float *biases, const float *residual, const float *mask,
+                                    int filter_size, int batch, int channels, int height, int width,
+                                    bool relu, cudaStream_t stream);
+
 #ifdef ENABLE_FP16
 template void add_vectors<half>(half *c, const  half *a, const half *b, int size,
                                 int asize, int bsize,  bool relu, cudaStream_t stream);
@@ -841,6 +910,11 @@ template void winograd3_transform_out<half>(half *out, const half *M, const half
                                             const half *residual, const half *mask,
                                             int batch, int channels, int board_size,
                                             bool relu, cudaStream_t stream);
+
+template void depthwise_conv<half>(half *output, const half *input, const half *weights,
+                                   const half *biases, const half *residual, const half *mask,
+                                   int filter_size, int batch, int channels, int height, int width,
+                                   bool relu, cudaStream_t stream);
 #endif
 
 } // namespace cuda

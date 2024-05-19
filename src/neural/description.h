@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <vector>
+#include <memory>
 
 class LinearLayer {
 public:
@@ -23,7 +24,6 @@ private:
     int inputs_{0};
     int outputs_{0};
 };
-
 
 class BatchNormLayer {
 public:
@@ -81,23 +81,56 @@ private:
     int filter_{0};
 };
 
-class ResidualBlock {
+class BlockBasic {
 public:
+    enum Type {
+        kUnknown,
+        kResidualBlock,
+        kBottleneckBlock,
+        kMixerBlock
+    };
+    BlockBasic() = default;
+
+    bool IsResidualBlock() { return type == Type::kResidualBlock; }
+    bool IsBottleneckBlock() { return type == Type::kBottleneckBlock; }
+    bool IsMixerBlock() { return type == Type::kMixerBlock; }
+
+    Type type{kUnknown};
+
     ConvLayer conv1;
     BatchNormLayer bn1;
     ConvLayer conv2;
     BatchNormLayer bn2;
 
-    LinearLayer squeeze;
-    LinearLayer excite;
-    int se_size{0};
-    bool apply_se{false};
-
     ConvLayer pre_btl_conv;
     BatchNormLayer pre_btl_bn;
     ConvLayer post_btl_conv;
     BatchNormLayer post_btl_bn;
-    bool apply_btl{false};
+    int bottleneck_channels{0};
+
+    ConvLayer dw_conv;
+    BatchNormLayer dw_bn;
+    int feedforward_channels{0};
+
+    LinearLayer squeeze;
+    LinearLayer excite;
+    int se_size{0};
+    bool apply_se{false};
+};
+
+class ResidualBlock : public BlockBasic {
+public:
+    ResidualBlock() { type = Type::kResidualBlock; }
+};
+
+class BottleneckBlock : public BlockBasic {
+public:
+    BottleneckBlock() { type = Type::kBottleneckBlock; }
+};
+
+class MixerBlock : public BlockBasic {
+public:
+    MixerBlock() { type = Type::kMixerBlock; }
 };
 
 class DNNWeights {
@@ -118,8 +151,8 @@ public:
     ConvLayer input_conv;
     BatchNormLayer input_bn;
 
-    // residual tower
-    std::vector<ResidualBlock> tower;
+    // block tower
+    std::vector<std::unique_ptr<BlockBasic>> tower;
 
     // policy head
     ConvLayer p_ex_conv;

@@ -50,6 +50,12 @@ void winograd3_transform_out(T *out, const T *M, const T *biases,
                              bool relu, cudaStream_t stream);
 
 template <typename T>
+void depthwise_conv(T *output, const T *input, const T *weights,
+                    const T *biases, const T *residual, const T *mask,
+                    int filter_size, int batch, int channels, int height, int width,
+                    bool relu, cudaStream_t stream);
+
+template <typename T>
 void gemm(bool TA, bool TB, int M, int N, int K, T ALPHA,
           const T *A_gpu, int lda, const T *B_gpu, int ldb,
           T BETA, T *C_gpu, int ldc, cublasHandle_t handle);

@@ -24,6 +24,24 @@ public:
 private:
     void InitWinograd();
 
+    void ResidualBlockForward(int board_size,
+                              BlockBasic * tower_ptr,
+                              bool use_winograd,
+                              std::vector<float> &res,
+                              std::vector<float> &conv_in,
+                              std::vector<float> &conv_out,
+                              std::vector<float> &workspace0,
+                              std::vector<float> &workspace1);
+
+    void BottleneckBlockForward(int board_size,
+                                BlockBasic * tower_ptr,
+                                bool use_winograd,
+                                std::vector<float> &res,
+                                std::vector<float> &conv_in,
+                                std::vector<float> &conv_out,
+                                std::vector<float> &workspace0,
+                                std::vector<float> &workspace1);
+
     bool use_optimistic_policy_;
 
     std::shared_ptr<DNNWeights> weights_{nullptr};

@@ -11,6 +11,12 @@ from status_loader import StatusLoader
 
 CRAZY_NEGATIVE_VALUE = -5000.0
 
+def dwconv_to_text(in_channels, out_channels, kernel_size):
+    return "DepthwiseConvolution {iC} {oC} {KS}\n".format(
+               iC=in_channels,
+               oC=out_channels,
+               KS=kernel_size)
+
 def conv_to_text(in_channels, out_channels, kernel_size):
     return "Convolution {iC} {oC} {KS}\n".format(
                iC=in_channels,
@@ -201,6 +207,31 @@ class BatchNorm2d(nn.Module):
         # Fixup can avoid the weird forwarding result. Fixup also speeds up the performance. The
         # improvement may be around x1.6 ~ x1.8 faster.
         self.fixup = fixup
+
+    def get_merged_param(self):
+        bn_mean = torch.zeros(self.num_features)
+        bn_std = torch.zeros(self.num_features)
+
+        # Merge four tensors (mean, variance, gamma, beta) into two tensors (
+        # mean, variance).
+        bn_mean[:] = self.running_mean[:]
+        bn_std[:] = torch.sqrt(self.eps + self.running_var)[:]
+
+        # Original format: gamma * ((x-mean) / std) + beta
+        # Target format: (x-mean) / std
+        #
+        # Solve the following equation:
+        #     gamma * ((x-mean) / std) + beta = (x-tgt_mean) / tgt_std
+        #
+        # We will get:
+        #     tgt_std = std / gamma
+        #     tgt_mean = mean - beta * (std / gamma)
+
+        if self.gamma is not None:
+            bn_std = bn_std / self.gamma
+        if self.beta is not None:
+            bn_mean = bn_mean - self.beta * bn_std
+        return bn_mean, bn_std
 
     def _clamp(self, x, lower=0., upper=1.):
         x = max(lower, x)
@@ -415,8 +446,6 @@ class ConvBlock(nn.Module):
         return out
 
     def tensors_to_text(self, use_bin):
-        bn_mean = torch.zeros(self.out_channels)
-        bn_std = torch.zeros(self.out_channels)
         if use_bin:
             out = bytes()
         else:
@@ -424,32 +453,93 @@ class ConvBlock(nn.Module):
         out += tensor_to_text(self.conv.weight, use_bin)
         out += tensor_to_text(torch.zeros(self.out_channels), use_bin) # fill zero
 
-        # Merge four tensors (mean, variance, gamma, beta) into two tensors (
-        # mean, variance).
-        bn_mean[:] = self.bn.running_mean[:]
-        bn_std[:] = torch.sqrt(self.bn.eps + self.bn.running_var)[:]
-
-        # Original format: gamma * ((x-mean) / std) + beta
-        # Target format: (x-mean) / std
-        #
-        # Solve the following equation:
-        #     gamma * ((x-mean) / std) + beta = (x-tgt_mean) / tgt_std
-        #
-        # We will get:
-        #     tgt_std = std / gamma
-        #     tgt_mean = mean - beta * (std / gamma)
-
-        if self.bn.gamma is not None:
-            bn_std = bn_std / self.bn.gamma
-        if self.bn.beta is not None:
-            bn_mean = bn_mean - self.bn.beta * bn_std
-
+        bn_mean, bn_std = self.bn.get_merged_param()
         out += tensor_to_text(bn_mean, use_bin)
         out += tensor_to_text(bn_std, use_bin)
         return out
 
     def forward(self, x, mask):
         x = self.conv(x) * mask
+        x = self.bn(x, mask)
+        return F.relu(x, inplace=True) if self.relu else x
+
+class DepthwiseConvBlock(nn.Module):
+    def __init__(self, channels,
+                       kernel_size,
+                       use_gamma,
+                       relu=True,
+                       collector=None):
+        # Implement it based on "Scaling Up Your Kernels to 31x31: Revisiting Large Kernel Design
+        # in CNNs".
+
+        assert kernel_size >= 5, ""
+        assert kernel_size % 2 == 1, ""
+        super(DepthwiseConvBlock, self).__init__()
+
+        self.in_channels = channels
+        self.out_channels = channels
+        self.kernel_size = kernel_size
+        self.groups = self.in_channels
+        self.relu = relu
+        self.conv = nn.Conv2d(
+            self.in_channels,
+            self.out_channels,
+            kernel_size,
+            groups=self.in_channels,
+            padding="same",
+            bias=True,
+        )
+        self.rep3x3 = nn.Conv2d(
+            self.in_channels,
+            self.out_channels,
+            3,
+            groups=self.in_channels,
+            padding="same",
+            bias=True,
+        )
+        self.bn = BatchNorm2d(
+            num_features=self.out_channels,
+            eps=1e-5,
+            use_gamma=use_gamma
+        )
+        self._init_weights()
+        self._try_collect(collector)
+
+    def _init_weights(self):
+        nn.init.xavier_normal_(self.conv.weight, gain=1.0)
+        nn.init.xavier_normal_(self.rep3x3.weight, gain=1.0)
+
+    def tensors_to_text(self, use_bin):
+        if use_bin:
+            out = bytes()
+        else:
+            out = str()
+
+        ps = int((self.kernel_size - 3) / 2)
+        weights = torch.zeros_like(self.conv.weight)
+        weights += self.conv.weight.data
+        weights += F.pad(self.rep3x3.weight, (ps, ps, ps, ps), "constant", 0)
+        biases = self.conv.bias.data + self.rep3x3.bias.data
+        out += tensor_to_text(weights, use_bin)
+        out += tensor_to_text(biases, use_bin)
+
+        bn_mean, bn_std = self.bn.get_merged_param()
+        out += tensor_to_text(bn_mean, use_bin)
+        out += tensor_to_text(bn_std, use_bin)
+        return out
+
+    def _try_collect(self, collector):
+        if collector is not None:
+            collector.append(self)
+
+    def shape_to_text(self):
+        out = str()
+        out += dwconv_to_text(self.in_channels // self.groups, self.out_channels, self.kernel_size)
+        out += bn_to_text(self.out_channels)
+        return out
+
+    def forward(self, x, mask):
+        x = (self.conv(x) + self.rep3x3(x)) * mask
         x = self.bn(x, mask)
         return F.relu(x, inplace=True) if self.relu else x
 
@@ -473,10 +563,18 @@ class BottleneckBlock(nn.Module):
         # resnet. The 192 is outer_channel.
         self.outer_channels = channels
 
-        self.conv1 = ConvBlock(
+        self.pre_btl_conv = ConvBlock(
             in_channels=self.outer_channels,
             out_channels=self.inner_channels,
             kernel_size=1,
+            use_gamma=False,
+            relu=True,
+            collector=collector
+        )
+        self.conv1 = ConvBlock(
+            in_channels=self.inner_channels,
+            out_channels=self.inner_channels,
+            kernel_size=3,
             use_gamma=False,
             relu=True,
             collector=collector
@@ -489,15 +587,7 @@ class BottleneckBlock(nn.Module):
             relu=True,
             collector=collector
         )
-        self.conv3 = ConvBlock(
-            in_channels=self.inner_channels,
-            out_channels=self.inner_channels,
-            kernel_size=3,
-            use_gamma=False,
-            relu=True,
-            collector=collector
-        )
-        self.conv4 = ConvBlock(
+        self.post_btl_conv = ConvBlock(
             in_channels=self.inner_channels,
             out_channels=self.outer_channels,
             kernel_size=1,
@@ -517,10 +607,10 @@ class BottleneckBlock(nn.Module):
         mask, _, _ = mask_buffers
 
         out = x
+        out = self.pre_btl_conv(out, mask)
         out = self.conv1(out, mask)
         out = self.conv2(out, mask)
-        out = self.conv3(out, mask)
-        out = self.conv4(out, mask)
+        out = self.post_btl_conv(out, mask)
         if self.use_se:
             out = self.se_module(out, mask_buffers)
         out = out + x
@@ -572,6 +662,63 @@ class ResidualBlock(nn.Module):
         out = out + x
         return F.relu(out, inplace=True), mask_buffers
 
+class MixerBlock(nn.Module):
+    def __init__(self, channels,
+                       *args,
+                       **kwargs):
+        super(MixerBlock, self).__init__()
+        se_size = kwargs.get("se_size", None)
+        collector = kwargs.get("collector", None)
+
+        self.channels = channels
+        self.use_se = se_size is not None
+
+        self.depthwise_conv = DepthwiseConvBlock(
+            channels=self.channels,
+            kernel_size=7,
+            use_gamma=True,
+            relu=True,
+            collector=collector
+        )
+
+        ffn_channels = int(1.5 * self.channels)
+        self.ffn1 = ConvBlock(
+            in_channels=self.channels,
+            out_channels=ffn_channels,
+            kernel_size=1,
+            use_gamma=False,
+            relu=True,
+            collector=collector
+        )
+        self.ffn2 = ConvBlock(
+            in_channels=ffn_channels,
+            out_channels=self.channels,
+            kernel_size=1,
+            use_gamma=True,
+            relu=False,
+            collector=collector
+        )
+        if self.use_se:
+            self.se_module = SqueezeAndExcitation(
+                channels=self.channels,
+                se_size=se_size,
+                collector=collector
+            )
+
+    def forward(self, inputs):
+        x, mask_buffers = inputs
+        mask, _, _ = mask_buffers
+
+        x = self.depthwise_conv(x, mask) + x
+
+        out = x
+        out = self.ffn1(out, mask)
+        out = self.ffn2(out, mask)
+        if self.use_se:
+            out = self.se_module(out, mask_buffers)
+        out = out + x
+        return F.relu(out, inplace=True), mask_buffers
+
 class Network(nn.Module):
     def __init__(self, cfg):
         super(Network, self).__init__()
@@ -590,7 +737,7 @@ class Network(nn.Module):
         self.value_misc = 15
         self.policy_outs = 5
         self.stack = cfg.stack
-        self.version = 3
+        self.version = 4
 
         self.construct_layers()
 
@@ -622,6 +769,8 @@ class Network(nn.Module):
                     bottleneck_channels = main_channels // 2
                     assert main_channels % 2 == 0, ""
                     block = BottleneckBlock
+                elif component == "MixerBlock":
+                    block = MixerBlock
                 elif component == "SE":
                     se_size = main_channels // self.se_ratio
                     assert main_channels % self.se_ratio == 0, ""
@@ -901,12 +1050,11 @@ class Network(nn.Module):
 
     def update_parameters(self, curr_steps):
         for layer in self.layers_collector:
-            if isinstance(layer, FullyConnect):
-                pass
-            elif isinstance(layer, Convolve):
-                pass
-            elif isinstance(layer, ConvBlock):
+            if isinstance(layer, ConvBlock) or \
+                   isinstance(layer, MixerBlock):
                 layer.bn.update_renorm_clips(curr_steps)
+            else:
+                pass
 
     def accumulate_swa(self, other_network, swa_count):
         def accum_weights(v, w, n):
@@ -971,6 +1119,7 @@ class Network(nn.Module):
             f.write(str_to_bin("PolicyExtract {}\n".format(self.policy_extract)))
             f.write(str_to_bin("ValueExtract {}\n".format(self.value_extract)))
             f.write(str_to_bin("ValueMisc {}\n".format(self.value_misc)))
+            f.write(str_to_bin("ActivationFunction {}\n".format("relu")))
             f.write(str_to_bin("end info\n"))
 
             write_stack(f, self.stack)
@@ -1011,6 +1160,7 @@ class Network(nn.Module):
             f.write("PolicyExtract {}\n".format(self.policy_extract))
             f.write("ValueExtract {}\n".format(self.value_extract))
             f.write("ValueMisc {}\n".format(self.value_misc))
+            f.write("ActivationFunction {}\n".format("relu"))
             f.write("end info\n")
 
             write_stack(f, self.stack)

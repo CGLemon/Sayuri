@@ -11,6 +11,7 @@ import math
 import argparse
 import time
 import select
+import os
 
 BOARD_SIZE = 19
 KOMI = 7.5
@@ -1266,7 +1267,7 @@ def load_checkpoint(json_path, checkpoint, use_swa):
         if use_swa:
             loader.load_swa_model(net)
     net.eval()
-    return net
+    return net, loader
 
 def get_valid_spat(net_pred, board):
     valid_size = board.num_intersections
@@ -1540,7 +1541,7 @@ def gtp_loop(args):
             stdout_write("? {}\n\n".format(res))
 
     board = Board(BOARD_SIZE, KOMI, SCORING_AREA)
-    net = load_checkpoint(args.json, args.checkpoint, args.use_swa)
+    net, loader = load_checkpoint(args.json, args.checkpoint, args.use_swa)
 
     use_gpu = args.use_gpu and torch.cuda.is_available()
     device = torch.device("cuda") if use_gpu else torch.device("cpu")
@@ -1803,6 +1804,18 @@ def gtp_loop(args):
             laddermap = board._get_ladder_map()
             out = gogui_ladder_heatmap(laddermap, board)
             gtp_print(out)
+        elif main == "save_bin_weights":
+            path = inputs[1]
+            steps = loader.get_steps()
+            weights_name = os.path.join(path, "s{}.bin.txt".format(steps))
+            swa_weights_name = os.path.join(path, "swa-s{}.bin.txt".format(steps))
+            cfg = Config(loader.get_json_str(), False)
+            cpu_net = Network(cfg).to("cpu")
+            loader.load_model(cpu_net)
+            cpu_net.transfer_to_bin(weights_name)
+            loader.load_swa_model(cpu_net)
+            cpu_net.transfer_to_bin(swa_weights_name)
+            gtp_print("")
         else:
             gtp_print("unknown command", False)
 
