@@ -17,7 +17,6 @@ public:
                         std::vector<float> &output);
 };
 
-
 template<unsigned int FILTERS>
 class Convolution {
 public:
@@ -135,3 +134,14 @@ size_t Convolution<FILTERS>::GetWorkspaceSize(const size_t board_size, const siz
     const auto filter_dim = filter_len * input_channels;
     return filter_dim * width * height;
 }
+
+class DepthwiseConvolution {
+public:
+    DepthwiseConvolution() = delete;
+    static void Forward(const size_t board_size,
+                        const size_t filter_size,
+                        const size_t channels,
+                        const std::vector<float> &input,
+                        const std::vector<float> &weights,
+                        std::vector<float> &output);
+};

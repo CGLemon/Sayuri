@@ -198,15 +198,73 @@ void BlasForwardPipe::BottleneckBlockForward(int board_size,
         last_skip, last_relu);
 }
 
+void BlasForwardPipe::MixerBlockForward(int board_size,
+                                        BlockBasic * tower_ptr,
+                                        std::vector<float> &res,
+                                        std::vector<float> &conv_in,
+                                        std::vector<float> &conv_out) {
+    auto zero_vec = std::vector<float>{};
+    const auto channels = weights_->residual_channels;
+    const auto ffn_channels = tower_ptr->feedforward_channels;
+    const auto filter_size =  tower_ptr->dw_conv.GetFilter();
+
+    // dw conv layer
+    DepthwiseConvolution::Forward(
+        board_size, filter_size, channels,
+        conv_in, tower_ptr->dw_conv.GetWeights(), conv_out);
+    AddSpatialBiasesPost::Forward(
+        board_size, channels,
+        conv_out, tower_ptr->dw_conv.GetBiases(), true, conv_in);
+
+    std::swap(conv_out, conv_in);
+
+    // 1st ffn conv layer
+    Convolution1::Forward(
+        board_size, channels, ffn_channels,
+        conv_in,
+        tower_ptr->conv1.GetWeights(),
+        zero_vec, conv_out);
+    AddSpatialBiases::Forward(
+        board_size, ffn_channels,
+        conv_out,
+        tower_ptr->conv1.GetBiases(), true);
+
+    std::swap(conv_in, res);
+    std::swap(conv_out, conv_in);
+
+    // 2nd ffn conv layer
+    Convolution1::Forward(
+        board_size, ffn_channels, channels,
+        conv_in,
+        tower_ptr->conv2.GetWeights(),
+        zero_vec, conv_out);
+
+    auto &last_skip = tower_ptr->apply_se ? zero_vec : res;
+    bool last_relu = !(tower_ptr->apply_se);
+    AddSpatialBiases::Forward(
+        board_size, channels,
+        conv_out,
+        tower_ptr->conv2.GetBiases(),
+        last_skip, last_relu);
+}
+
 OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     using Convolution3 = Convolution<3>;
 
     // Some useful information for network.
+    int tower_peak_channels = weights_->residual_channels;
+    for (int i = 0; i < weights_->residual_blocks; ++i) {
+        auto tower_ptr = weights_->tower[i].get();
+        tower_peak_channels = std::max({
+            tower_peak_channels,
+            tower_ptr->feedforward_channels,
+            tower_ptr->bottleneck_channels});
+    }
     const auto board_size = inpnts.board_size;
     const auto num_intersections = board_size * board_size;
     const auto output_channels = weights_->residual_channels;
     const auto max_channels = std::max({kInputChannels,
-                                        output_channels,
+                                        tower_peak_channels,
                                         weights_->policy_extract_channels,
                                         weights_->value_extract_channels});
     const auto plane_size = kInputChannels * num_intersections;
@@ -231,9 +289,9 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     auto workspace0 = std::vector<float>(workspace0_size);
     auto workspace1 = std::vector<float>(workspace1_size);
 
-    auto conv_out = std::vector<float>(output_channels * num_intersections);
-    auto conv_in = std::vector<float>(output_channels * num_intersections);
-    auto res = std::vector<float>(output_channels * num_intersections);
+    auto conv_out = std::vector<float>(tower_peak_channels * num_intersections);
+    auto conv_in = std::vector<float>(tower_peak_channels * num_intersections);
+    auto res = std::vector<float>(tower_peak_channels * num_intersections);
     auto intermediate = std::vector<float>(3 * max_intermediates);
     auto pooling = std::vector<float>(3 * max_intermediates);
 
@@ -270,8 +328,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
         weights_->input_conv.GetBiases(), true);
 
     // The block tower.
-    const auto blocks = weights_->residual_blocks;
-    for (int i = 0; i < blocks; ++i) {
+    for (int i = 0; i < weights_->residual_blocks; ++i) {
         auto tower_ptr = weights_->tower[i].get();
         std::swap(conv_out, conv_in);
 
@@ -284,7 +341,9 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                 board_size, tower_ptr, use_winograd,
                 res, conv_in, conv_out, workspace0, workspace1);
         } else if (tower_ptr->IsMixerBlock()) {
-            throw "BLAS backend does not support the MixerBlock().";
+            MixerBlockForward(
+                board_size, tower_ptr,
+                res, conv_in, conv_out);
         }
 
         // The SE process.

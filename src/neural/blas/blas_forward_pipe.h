@@ -42,6 +42,12 @@ private:
                                 std::vector<float> &workspace0,
                                 std::vector<float> &workspace1);
 
+    void MixerBlockForward(int board_size,
+                           BlockBasic * tower_ptr,
+                           std::vector<float> &res,
+                           std::vector<float> &conv_in,
+                           std::vector<float> &conv_out);
+
     bool use_optimistic_policy_;
 
     std::shared_ptr<DNNWeights> weights_{nullptr};
