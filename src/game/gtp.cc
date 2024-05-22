@@ -266,6 +266,19 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         auto color = agent_->GetState().GetToMove();
         auto final_score = result.root_score_lead;
 
+        if (agent_->GetState().GetPasses() >= 2) {
+            auto dead_list = std::vector<int>{};
+            auto fork_state = agent_->GetState();
+
+            for (const auto &string : result.dead_strings) {
+                for (const auto vtx: string) {
+                    dead_list.emplace_back(vtx);
+                }
+            }
+            fork_state.RemoveDeadStrings(dead_list);
+            final_score = fork_state.GetFinalScore(color);
+        }
+
         final_score = AdjustKomi<float>(final_score);
         if (std::abs(final_score) < 1e-4f) {
             color = kEmpty;

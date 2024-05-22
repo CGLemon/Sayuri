@@ -587,7 +587,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         result.target_playouts_dist, root_raw_probabilities_);
 
     // Fill the dead strings and live strings.
-    constexpr float kOwnshipThreshold = 0.75f;
+    constexpr float kOwnershipThreshold = 0.75f; // ~87.5%
 
     auto safe_ownership = root_state_.GetOwnership();
     auto safe_area = root_state_.GetStrictSafeArea();
@@ -604,15 +604,14 @@ void Search::GatherComputationResult(ComputationResult &result) const {
                                result.root_ownership[idx];
         const auto state = root_state_.GetState(vtx);
 
-
-        if (owner > kOwnshipThreshold) {
+        if (owner > kOwnershipThreshold) {
             // It is my territory.
             if (color == state) {
                 alive.emplace_back(root_state_.GetStringList(vtx));
             } else if ((!color) == state) {
                 dead.emplace_back(root_state_.GetStringList(vtx));
             }
-        } else if (owner < -kOwnshipThreshold) {
+        } else if (owner < -kOwnershipThreshold) {
             // It is opp's territory.
             if ((!color) == state) {
                 alive.emplace_back(root_state_.GetStringList(vtx));
@@ -647,7 +646,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         const auto owner = safe_area[idx] == true ?
                                2 * (float)(safe_ownership[idx] == color) - 1 :
                                result.root_ownership[idx];
-        if (owner > kOwnshipThreshold &&
+        if (owner > kOwnershipThreshold &&
                 root_state_.IsLegalMove(vtx, color)) {
             if (raw_owner == kEmpty && root_state_.IsNeighborColor(vtx, color)) {
                 // adjacent my string
@@ -847,7 +846,7 @@ bool ShouldForbidPass(GameState &state,
         }
     }
 
-    constexpr float kRawOwnshipThreshold = 0.8f; // ~90%
+    constexpr float kRawOwnershipThreshold = 0.8f; // ~90%
 
     for (int idx = 0; idx < num_intersections; ++idx) {
         float owner = root_evals.black_ownership[idx];
@@ -857,7 +856,7 @@ bool ShouldForbidPass(GameState &state,
 
         // Some opp's stone are not really alive. Keep to
         // eat these stones.
-        if (owner >= kRawOwnshipThreshold &&
+        if (owner >= kRawOwnershipThreshold &&
                 safe_ownership[idx] != to_move) {
             return true;
         }
