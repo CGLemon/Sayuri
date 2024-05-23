@@ -671,7 +671,16 @@ void Search::GatherComputationResult(ComputationResult &result) const {
                           int v1_cap = root_state_.board_.IsCaptureMove(v1, color);
                           return v0_cap > v1_cap;
                       });
-        result.capture_all_dead_move = *std::begin(fill_moves);
+
+        for (int move : fill_moves) {
+           auto fork_state = root_state_;
+           fork_state.PlayMove(move, color);
+           if (!fork_state.IsSuperko()) {
+               // Find the first non-superko move.
+               result.capture_all_dead_move = move;
+               break;
+           }
+        }
     }
 }
 
@@ -1255,7 +1264,7 @@ void Search::GatherData(const GameState &state,
     data.planes = Encoder::Get().GetPlanes(state);
     data.probabilities = result.target_playouts_dist;
     data.wave = state.GetWave();
-    data.rule = state.GetScoringRule() == kArea ? 0.f : 1.f; 
+    data.rule = state.GetScoringRule() == kArea ? 0.f : 1.f;
     data.kld = result.policy_kld;
 
     training_data_buffer_.emplace_back(data);
