@@ -983,7 +983,12 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             const auto x = idx % board_size;
             const auto y = idx / board_size;
             const auto vtx = agent_->GetState().GetVertex(x,y);
-            const auto gnval = gammas[idx];
+            auto gnval = gammas[idx];
+
+            if (gnval > 0.0001f) {
+                // highlight
+                gnval = std::sqrt(gnval);
+            }
             gammas_map << GoguiColor(gnval, agent_->GetState().VertexToText(vtx));
         }
         out << GtpSuccess(gammas_map.str());
