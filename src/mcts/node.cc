@@ -8,6 +8,7 @@
 #include "utils/kldivergence.h"
 #include "utils/ai_style.h"
 #include "game/symmetry.h"
+#include "pattern/gammas_dict.h"
 
 #include <cassert>
 #include <algorithm>
@@ -16,6 +17,8 @@
 #include <iomanip>
 #include <stack>
 #include <numeric>
+
+#include <iostream>
 
 #define VIRTUAL_LOSS_COUNT (3)
 
@@ -129,31 +132,32 @@ void Node::RandomPruneRootChildren(GameState &state) {
         return;
     }
 
-    auto GetCoord = [](GameState &state, int vtx) {
-        auto coord = std::array<int, 2>({-1, -1});
-        if (vtx != kPass
-                && vtx != kResign
-                && vtx != kNullVertex) {
-            coord[0] = state.GetX(vtx);
-            coord[1] = state.GetY(vtx);
-        }
-        return coord;
-    };
+    const auto num_intersections = state.GetNumIntersections();
+    auto gammas = std::vector<float>(num_intersections+1, 1.f/(num_intersections+1));
+    StyleType style = StyleType::kDefault;
+
+    if (GammasDict::Get().IsValid()) {
+        gammas = state.GetGammasPolicy(state.GetToMove());
+        gammas.emplace_back(1.f/num_intersections); // pass move
+        style = StyleType::kPriority;
+    }
 
     auto selection = SelectionVector<Node *>{};
     for (const auto &child : children_) {
         const auto node = child.Get();
         if (node->IsActive()) {
-            auto coord = GetCoord(state, node->GetVertex());
-            selection.emplace_back(
-                child.GetPolicy(), coord, node);
+            int vtx = node->GetVertex();
+            int idx = num_intersections;
+            if (vtx != kPass) {
+                idx = state.VertexToIndex(vtx);
+            }
+            selection.emplace_back(gammas[idx], node);
         }
     }
 
     selection = GetRelativeRankVector(
         selection, param_->relative_rank,
-        state.GetBoardSize(),
-        GetCoord(state, state.GetLastMove()));
+        num_intersections, style);
 
     // prune all active node first
     for (const auto &child : children_) {
@@ -166,7 +170,7 @@ void Node::RandomPruneRootChildren(GameState &state) {
 
     // activate the selection children
     for (auto &it : selection) {
-        const auto node = std::get<2>(it);
+        const auto node = std::get<1>(it);
 
         if (node->IsPruned()) {
             node->SetActive(true);

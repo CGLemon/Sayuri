@@ -1024,7 +1024,15 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
 
         out << GtpSuccess(ladder_map.str());
     } else if (const auto res = spt.Find("gogui-rank_selection", 0)) {
-        const auto result = agent_->GetNetwork().GetOutput(agent_->GetState(), Network::kNone);
+        const auto num_intersections = agent_->GetState().GetNumIntersections();
+        auto gammas = std::vector<float>(num_intersections+1, 1.f/(num_intersections+1));
+        StyleType style = StyleType::kDefault;
+        if (GammasDict::Get().IsValid()) {
+            gammas = agent_->GetState().GetGammasPolicy(agent_->GetState().GetToMove());
+            gammas.emplace_back(1.f/num_intersections); // pass move
+            style = StyleType::kPriority;
+        }
+
         const auto board_size = agent_->GetState().GetBoardSize();
         const auto relative_rank = GetOption<int>("relative_rank");
         auto selection = SelectionVector<int>{};
@@ -1034,21 +1042,19 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
                 for (int x = 0; x < board_size; ++x) {
                     const auto idx = agent_->GetState().GetIndex(x, y);
                     const auto vtx = agent_->GetState().GetVertex(x, y);
-                    const auto coord = std::array<int, 2>({x, y});
                     if (agent_->GetState().IsLegalMove(vtx)) {
-                        selection.emplace_back(
-                            result.probabilities[idx], coord, vtx);
+                        selection.emplace_back(gammas[idx], vtx);
                     }
                 }
             }
             selection = GetRelativeRankVector(
                 selection, relative_rank,
-                board_size, {-1, -1});
+                num_intersections, style);
         }
 
         auto selection_map = std::ostringstream{};
         for (auto &it: selection) {
-            const auto vtx = std::get<2>(it);
+            const auto vtx = std::get<1>(it);
             selection_map << GoguiColor(1.0, agent_->GetState().VertexToText(vtx));
             selection_map << '\n';
         }

@@ -11,42 +11,19 @@
 #include <cmath>
 #include <tuple>
 
-enum class SytleType {
-    kNormal,
-    kRandom,
-    kLocal,
-    kTenuki,
-    kTerritory,
-    kInfluence
+enum class StyleType {
+    kDefault,
+    kPriority
 };
 
 template<typename T>
-using SelectionItem = std::tuple<double, std::array<int, 2>, T>;
+using SelectionItem = std::tuple<double, T>; // priority, item
 
 template<typename T>
 using SelectionVector = std::vector<SelectionItem<T>>;
 
-template<typename T>
-SelectionVector<T> WeightedSelection(SelectionVector<T> selection_vector,
-                                     int n_moves) {
-    // Random select n moves with policy weighted.
-    auto distribution =
-        std::uniform_real_distribution<double>{1e-8, 1.0};
-
-    for (auto &it : selection_vector) {
-        double val = std::log(distribution(Random<>::Get()));
-        double denom = 1.0 + std::get<0>(it);
-        std::get<0>(it) = val / denom; // magic
-    }
-    std::sort(std::rbegin(selection_vector),
-                  std::rend(selection_vector));
-    selection_vector.resize(n_moves);
-
-    return selection_vector;
-}
-
 template<int TOPRANK>
-int GetMaxMoves(int relative_rank, int num_intersections, int num_legal_moves) {
+int GetMaxNumMoves(int relative_rank, int num_intersections, int num_legal_moves) {
     // The formula is imported from katrain. Random select
     // k candidate moves. We can choose the low k number to
     // limit veiw of network. It may be effective to reduce
@@ -79,103 +56,73 @@ int GetMaxMoves(int relative_rank, int num_intersections, int num_legal_moves) {
     return n_moves;
 }
 
-template<typename T>
-void RewritePriority(SelectionVector<T> &selection,
-                     SytleType sytle,
-                     std::array<int, 2> last_move,
-                     int board_size) {
-    // The formula is imported from katrain.
-
-    if (sytle == SytleType::kNormal) {
-        // origin policy only
-        return;
-    }
-
-    if (sytle == SytleType::kRandom) {
-        for (auto &it : selection) {
-            std::get<0>(it) = 0.f;
-        }
-        return;
-    }
-
-    if ((sytle == SytleType::kLocal ||
-             sytle == SytleType::kTenuki) &&
-             last_move[0] >= 0) {
-        for (auto &it : selection) {
-            double dx = std::abs(std::get<1>(it)[0] - last_move[0]);
-            double dy = std::abs(std::get<1>(it)[1] - last_move[1]);
-            double var = std::pow(7.5, 2.0);
-            double gaussian = std::exp(-0.5 * (dx * dx + dy * dy) / var);
-            std::get<0>(it) = gaussian;
-
-            if (sytle == SytleType::kTenuki) {
-                std::get<0>(it) = 1.0 - std::get<0>(it);
-            }
-        }
-        return;
-    }
-
-    if (sytle == SytleType::kTerritory ||
-            sytle == SytleType::kInfluence) {
-        for (auto &it : selection) {
-            double thr_line = 3.5;
-            double x = std::get<1>(it)[0];
-            double y = std::get<1>(it)[1];
-            double weight = 0.0;
-
-            if (sytle == SytleType::kTerritory) {
-                x = std::min(x, board_size - 1 - x);
-                y = std::min(y, board_size - 1 - y);
-                double p = std::max(0.0, std::min(x, y) - thr_line);
-                weight = std::pow(1.0 / 2.0, p);
-            } else if (sytle == SytleType::kInfluence) {
-                x = std::max(0.0, thr_line - std::min(x, board_size - 1 - x));
-                y = std::max(0.0, thr_line - std::min(y, board_size - 1 - y));
-                double p = x + y;
-                weight = std::pow(1.0 / 10.0, p);
-            }
-            std::get<0>(it) *= weight;
-        }
-        return;
-    }
+template<int TOPRANK>
+double GetMaxAccumulationPriority(int relative_rank) {
+    relative_rank = std::min(TOPRANK, std::max(0, relative_rank));
+    double prior = std::min(
+        0.75 + 0.25 * std::pow(relative_rank/static_cast<double>(TOPRANK), 1.5),
+        1.0
+    );
+    return prior;
 }
 
 template<typename T>
-SelectionVector<T> SaveHighPriorityItem(SelectionVector<T> &selection,
-                                        int num_intersections,
-                                        int num_legal_moves) {
-    const auto override_top =
-        0.8 * (1.0 - 0.5 * (num_intersections - num_legal_moves) / num_intersections);
-    auto saved = SelectionVector<T>{};
+SelectionVector<T> RandomSelection(SelectionVector<T> selection_vector,
+                                   int relative_rank,
+                                   int num_intersections) {
+    int num_legal_moves = selection_vector.size();
+    int n_moves = GetMaxNumMoves<25>(
+        relative_rank, num_intersections, num_legal_moves);
 
-    for (auto &it : selection) {
-        double priority = std::get<0>(it);
-        if (priority > override_top) {
-            saved.emplace_back(it);
+    std::shuffle (std::begin(selection_vector), std::end(selection_vector), Random<>::Get());
+    selection_vector.resize(n_moves);
+
+    return selection_vector;
+}
+
+template<typename T>
+SelectionVector<T> PrioritySelection(SelectionVector<T> selection_vector,
+                                     int relative_rank,
+                                     int num_intersections) {
+    double max_accm_prior = GetMaxAccumulationPriority<25>(relative_rank);
+    double accm_prior = 0.0;
+    int num_legal_moves = selection_vector.size();
+    int n_moves = 0;
+
+    std::sort(std::rbegin(selection_vector),
+                  std::rend(selection_vector));
+    for (auto &it : selection_vector) {
+        ++n_moves;
+        accm_prior += std::get<0>(it);
+        if (accm_prior > max_accm_prior) {
+            break;
         }
     }
 
-    return saved;
+    int max_n_moves = std::sqrt(
+            1.5 * 
+            static_cast<double>(num_intersections)/num_legal_moves *
+            GetMaxNumMoves<25>(relative_rank, num_intersections, num_legal_moves));
+    max_n_moves = std::max(2, max_n_moves);
+    n_moves = std::min(n_moves, max_n_moves);
+
+    selection_vector.resize(n_moves);
+    return selection_vector;
 }
+
 
 template<typename T>
 SelectionVector<T> GetRelativeRankVector(SelectionVector<T> selection,
                                          int relative_rank,
-                                         int board_size,
-                                         std::array<int, 2> last_move,
-                                         SytleType sytle = SytleType::kNormal) {
-    int num_legal_moves = selection.size();
-    int num_intersections = board_size * board_size;
-    auto saved = SaveHighPriorityItem(
-        selection, num_intersections, num_legal_moves);
-
-    RewritePriority(selection, sytle, last_move, board_size);
-
-    int n_moves = GetMaxMoves<25>(
-        relative_rank, num_intersections, num_legal_moves);
-
-    selection = WeightedSelection<T>(selection, n_moves);
-    selection.insert(std::begin(selection), std::begin(saved), std::end(saved));
+                                         int num_intersections,
+                                         StyleType style) {
+    if (style == StyleType::kPriority) {
+        selection = PrioritySelection<T>(
+            selection, relative_rank, num_intersections);
+    } else {
+        selection = RandomSelection<T>(
+            selection, relative_rank, num_intersections);
+    }
 
     std::sort(std::rbegin(selection), std::rend(selection));
     selection.erase(std::unique(std::begin(selection), std::end(selection)),

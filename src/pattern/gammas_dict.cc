@@ -69,6 +69,7 @@ void GammasDict::Initialize(std::string filename) {
             }
         }
     }
+    valid_ = true;
 }
 
 bool GammasDict::ProbePattern(std::uint64_t hash, float &val) const {
@@ -87,6 +88,10 @@ bool GammasDict::ProbeFeature(std::uint64_t hash, float &val) const {
     }
     val = it->second;
     return true;
+}
+
+bool GammasDict::IsValid() const {
+    return valid_;
 }
 
 bool GammasDict::InsertPattern(std::uint64_t hash, float val) {
