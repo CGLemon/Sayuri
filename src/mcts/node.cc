@@ -1465,8 +1465,9 @@ float Node::TransformCompletedQ(const float completed_q,
     // Q value and reduces the effect of the prior policy.
     const auto c_visit = param_->gumbel_c_visit;
     const auto c_scale = param_->gumbel_c_scale;
+    const auto threshold = param_->gumbel_playouts_threshold;
 
-    return (c_visit + max_visits) *
+    return (c_visit + std::min(threshold, max_visits)) *
                c_scale * completed_q;
 }
 
@@ -1610,8 +1611,8 @@ void Node::MixLogitsCompletedQ(GameState &state,
 
     // Prune the bad policy and rescale the policy.
     double psize = prob.size();
-    double noise_threshold = 1.f/(psize * psize);
-    double o = 0.f;
+    double noise_threshold = 1./(100. + psize);
+    double o = 0.;
     for (auto &v : prob) {
         if (v < noise_threshold) {
             v = 0;
