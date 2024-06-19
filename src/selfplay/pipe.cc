@@ -3,6 +3,7 @@
 #include "utils/filesystem.h"
 #include "utils/log.h"
 #include "utils/gzip_helper.h"
+#include "utils/time.h"
 #include "config.h"
 
 SelfPlayPipe::SelfPlayPipe() {
@@ -14,7 +15,7 @@ void SelfPlayPipe::Initialize() {
     // Close search verbose.
     SetOption("analysis_verbose", false);
 
-    // For each each game has only one thread.
+    // For each game has only one thread.
     SetOption("threads", 1);
 
     engine_.Initialize();
@@ -30,7 +31,7 @@ void SelfPlayPipe::Initialize() {
     while (true) {
         auto ss = std::ostringstream();
         ss << std::hex << std::uppercase
-               << Random<>::Get().Generate() << std::dec;
+               << GetTimeHash() << std::dec;
 
         filename_hash_ = ss.str();
         sgf_directory_ = ConcatPath(target_directory_, "sgf");
@@ -52,6 +53,7 @@ void SelfPlayPipe::Initialize() {
         if (not_existence) {
             break;
         }
+        std::this_thread::sleep_for(std::chrono::seconds(1)); // next time hash
     }
 }
 
