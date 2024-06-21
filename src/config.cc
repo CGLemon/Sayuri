@@ -7,6 +7,7 @@
 #include "game/board.h"
 #include "pattern/pattern.h"
 #include "mcts/lcb.h"
+#include "mcts/time_control.h"
 #include "config.h"
 
 #include <limits>
@@ -28,7 +29,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["fp16"] << Option::SetOption(true);
     kOptionsMap["capture_all_dead"] << Option::SetOption(false);
 
-    kOptionsMap["timemanage"] << Option::SetOption(std::string{"off"});
+    kOptionsMap["timemanage"] << Option::SetOption((int)TimeControl::TimeManagement::kOff);
 
     kOptionsMap["fixed_nn_boardsize"] << Option::SetOption(0);
     kOptionsMap["defualt_boardsize"] << Option::SetOption(kDefaultBoardSize);
@@ -337,8 +338,16 @@ void ArgsParser::Parse(Splitter &spt) {
 
     if (const auto res = spt.FindNext("--timemanage")) {
         if (IsParameter(res->Get<>()) &&
-                AcceptSet(res->Get<>(), {"off", "on"})) {
-            SetOption("timemanage", res->Get<>());
+                AcceptSet(res->Get<>(), {"off", "on", "fast", "keep"})) {
+            if (res->Get<>() == "off") {
+                SetOption("timemanage", (int)TimeControl::TimeManagement::kOff);
+            } else if (res->Get<>() == "on") {
+                SetOption("timemanage", (int)TimeControl::TimeManagement::kOn);
+            } else if (res->Get<>() == "fast") {
+                SetOption("timemanage", (int)TimeControl::TimeManagement::kFast);
+            } else if (res->Get<>() == "keep") {
+                SetOption("timemanage", (int)TimeControl::TimeManagement::kKeep);
+            }
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -774,13 +783,6 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--relative-rank")) {
         if (IsParameter(res->Get<>())) {
             SetOption("relative_rank", res->Get<int>());
-            spt.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--kldgain")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("kldgain", res->Get<>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

@@ -1,4 +1,5 @@
 #include "selfplay/pipe.h"
+#include "mcts/time_control.h"
 #include "utils/random.h"
 #include "utils/filesystem.h"
 #include "utils/log.h"
@@ -17,6 +18,9 @@ void SelfPlayPipe::Initialize() {
 
     // For each game has only one thread.
     SetOption("threads", 1);
+
+    // Disable time management.
+    SetOption("timemanage", (int)TimeControl::TimeManagement::kOff);
 
     engine_.Initialize();
 

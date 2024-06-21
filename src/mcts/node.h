@@ -121,8 +121,11 @@ public:
     // Update the node.
     void Update(const NodeEvals *evals);
 
-    // Get children's LCB values.
+    // Get children's LCB with utility values.
     std::vector<std::pair<float, int>> GetLcbUtilityList(const int color);
+
+    // Get LCB value.
+    float GetLcb(const int color) const;
 
     // Get best move(vertex) with LCB value.
     int GetBestMove(bool allow_pass);
@@ -225,7 +228,6 @@ private:
     float GetScoreUtility(const int color, float div, float parent_score) const;
     float GetScoreVariance(const float default_var, const int visits) const;
     float GetWLVariance(const float default_var, const int visits) const;
-    float GetLcb(const int color) const;
 
     void Inflate(Edge& child);
     void Release(Edge& child);

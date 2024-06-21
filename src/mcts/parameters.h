@@ -12,8 +12,7 @@ public:
     Parameters() = default;
 
     void Reset() {
-        timemanage = GetOption<std::string>("timemanage");
-
+        timemanage = GetOption<int>("timemanage");
         threads = GetOption<int>("threads");
         batch_size = GetOption<int>("batch_size");
         playouts = GetOption<int>("playouts");
@@ -60,7 +59,6 @@ public:
         resign_discard_prob = GetOption<float>("resign_discard_prob");
 
         relative_rank = GetOption<int>("relative_rank");
-        kldgain = std::stod(GetOption<std::string>("kldgain")); // not used
 
         lag_buffer = GetOption<float>("lag_buffer");
         ponder = GetOption<bool>("ponder");
@@ -78,8 +76,7 @@ public:
         no_exploring_phase = false;
     }
 
-    std::string timemanage;
-
+    int timemanage;
     int threads;
     int batch_size;
     int playouts;
@@ -129,7 +126,6 @@ public:
     float resign_discard_prob;
 
     int relative_rank;
-    double kldgain;
 
     bool ponder;
     bool reuse_tree;

@@ -133,11 +133,6 @@ void Search::PrepareRootNode(Search::OptionTag tag) {
         root_node_->Update(&root_evals_);
     }
 
-    // Compute the current root visits distribution. We can compute
-    // the KLD gaining from this distribution.
-    int visits;
-    last_root_dist_ = GetRootDistribution(visits);
-
     // We should get this root policy from the NN cache. The softmax
     // temperature of 'root_evals_' may be not 1.0 so we need to
     // compute it again.
@@ -325,7 +320,6 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     }
 
     // Main thread is running.
-    auto last_updating_visits = root_node_->GetVisits();
     auto keep_running = running_.load(std::memory_order_relaxed);
 
     while (!InputPending(tag) && keep_running) {
@@ -362,13 +356,8 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         }
         if (tag & kThinking) {
             keep_running &= (elapsed < thinking_time);
-
-            const int check_freq = 100;
-            if (root_visits - last_updating_visits >= check_freq) {
-                last_updating_visits = root_visits;
-                keep_running &= HaveAlternateMoves(elapsed, thinking_time);
-            }
         }
+        keep_running &= HaveAlternateMoves(elapsed, thinking_time, playouts, tag);
         keep_running &= !AchieveCap(playouts, tag);
         keep_running &= running_.load(std::memory_order_relaxed);
     };
@@ -1349,68 +1338,117 @@ bool Search::AdvanceToNewRootState(Search::OptionTag tag) {
     return true;
 }
 
-bool Search::HaveAlternateMoves(float elapsed, float limit) {
+bool Search::HaveAlternateMoves(const float elapsed, const float limit,
+                                const int cap, Search::OptionTag tag) {
     const auto &children = root_node_->GetChildren();
-    if (children.size() == 1) {
-        // Only one (pass) move.
+    const auto color = root_state_.GetToMove();
+
+    size_t valid_cnt = 0;
+    int topvisits = 0;
+    float toplcb = 0.0f;
+    for (const auto &child : children) {
+        const auto node = child.Get();
+
+        if (!node->IsActive()) {
+            continue;
+        }
+        ++valid_cnt;
+        topvisits = std::max(topvisits, node->GetVisits());
+        toplcb = std::max(toplcb, node->GetLcb(color));
+    }
+
+    if (valid_cnt == 1) {
+        if (param_->analysis_verbose) {
+            LOGGING << "Only one valid move, stopping early.\n";
+        }
         return false;
     }
-
-    int visits;
-    last_root_dist_ = GetRootDistribution(visits);
-
-    if (last_root_dist_.size() <= 1) {
-        // Be sure that there are at least two nodes.
-        return true;
-    }
-    if (elapsed <= 1.0f || param_->timemanage == "off") {
-        // A second for estimating playouts may be more precision.
+    if (param_->timemanage == TimeControl::TimeManagement::kOff ||
+            !(tag & kThinking)) {
         return true;
     }
 
-    auto sorted_dist = last_root_dist_;
-    std::sort(std::rbegin(sorted_dist), std::rend(sorted_dist));
+    int playouts = playouts_.load(std::memory_order_relaxed);
+    int estimated_playouts = GetPlayoutsLeft(cap, tag);
+    if (elapsed >= 1.0f && playouts >= 100) {
+        // Wait some time. Besure that we can estimate playout rate
+        // correctly.
+        const double remaining = std::max(static_cast<double>(limit) - elapsed, 0.);
+        const double playouts_per_sec = static_cast<double>(playouts)/elapsed;
+        estimated_playouts = std::min(
+            estimated_playouts,
+            static_cast<int>(std::round(remaining * playouts_per_sec)));
+    }
 
-    const double remaining = limit - elapsed;
-    const double playouts = playouts_.load(std::memory_order_relaxed);
-    const double playouts_per_sec = playouts/elapsed;
-    const double estimated_playouts = remaining * playouts_per_sec;
+    size_t bad_cnt = 0;
+    for (const auto &child : children) {
+        const auto node = child.Get();
+        const auto visits = node->GetVisits();
 
-    double top_visits = visits * sorted_dist[0];
-    double sec_visits = visits * sorted_dist[1];
-    double thres = 0.5;
-
-    if (sorted_dist[0] > 0.9) {
-        // Current distribution is too sharp. We simply stop the
-        // search for saving thinking time.
-        double cap_visits = sec_visits + estimated_playouts;
-        if (thres * top_visits > cap_visits) {
-            return false;
+        if (!node->IsActive()) {
+            continue;
+        }
+        bool has_enough_visits =
+            visits + estimated_playouts >= topvisits;
+        bool has_high_winrate =
+            visits > 0 ? node->GetWL(color, false) >= toplcb : false;
+        if (!(has_enough_visits || has_high_winrate)) {
+            ++bad_cnt;
         }
     }
-    return true;
+    if (bad_cnt != valid_cnt - 1) {
+        // We have two or above reasonable moves.
+        return true;
+    }
+
+    if (param_->timemanage == TimeControl::TimeManagement::kOn) {
+        // Case "on": Will save up the current thinking time for next
+        //            move if next move phase doesn't reset the thinking
+        //            time.
+        if (param_->const_time > 0 || !time_control_.CanAccumulateTime(color)) {
+            return true;
+        }
+    } else if (param_->timemanage == TimeControl::TimeManagement::kFast) {
+        // Case "fast": Always save up the current thinking time. Play
+        //              the move as fast as possible and be sure that
+        //              we can pick up one reasonable move.
+    } else if (param_->timemanage == TimeControl::TimeManagement::kKeep) {
+        // Case "Keep": Only save up the current thinking time in byo
+        //              phase.
+        if (param_->const_time > 0 || !time_control_.InByo(color)) {
+            return true;
+        }
+    }
+
+    if (param_->analysis_verbose) {
+        LOGGING << Format("Remaining %.1f(sec) left, stopping early.\n",
+                              limit - elapsed);
+    }
+    return false;
 }
 
 bool Search::AchieveCap(const int cap, Search::OptionTag tag) {
-    const auto playouts = playouts_.load(std::memory_order_relaxed);
-    const auto visits = root_node_->GetVisits();
-    bool should_stop = false;
+    // No playouts left, stopping search.
+    return GetPlayoutsLeft(cap, tag) == 0;
+}
 
+int Search::GetPlayoutsLeft(const int cap, Search::OptionTag tag) {
+
+    // Defalut we use playouts cap.
+    int accumulation = playouts_.load(std::memory_order_relaxed);
+
+    // In this condition, We disable the reuse-tree. But we use visit
+    // cap instead of discarding the sub-tree. They should be equal.
     if (tag & kUnreused) {
-        // Disable the reuse-tree mode. But we use visit cap instead of
-        // discarding the sub-tree. They should be equal.
-        if (visits - 1 >= cap) {
-            // The visits number is greater or equal to 1 because the
-            // it always includes the root visit. We should reduce it.
-            should_stop |= true;
-        }
+        // The visits number is greater or equal to 1 because it
+        // always includes the root visit. We should reduce it.
+        accumulation = root_node_->GetVisits() - 1;
     }
-    if (playouts >= cap) {
-        // It is playout cap. In the most case, we should be more easy
-        // to achieve visit cap.
-        should_stop |= true;
-    }
-    return should_stop;
+
+    // Compute how many playouts we need.
+    const auto remaining = std::max(cap - accumulation, 0);
+
+    return remaining;
 }
 
 int Search::GetPonderPlayouts() const {
@@ -1429,28 +1467,4 @@ int Search::GetPonderPlayouts() const {
 std::string Search::GetDebugMoves(std::vector<int> moves) {
     return root_node_->GetPathVerboseString(
                root_state_, root_state_.GetToMove(), moves);
-}
-
-std::vector<double> Search::GetRootDistribution(int &parentvisits) {
-    auto result = std::vector<double>{};
-    const auto &children = root_node_->GetChildren();
-
-    parentvisits = 0;
-    for (const auto &child : children) {
-        auto node = child.Get();
-        int visits = 0;
-        if (node && node->IsActive()) {
-            visits = child.GetVisits();
-        }
-        parentvisits += visits;
-        result.emplace_back(visits);
-    }
-    if (parentvisits == 0) {
-        return std::vector<double>{};
-    }
-
-    for (auto &v : result) {
-        v /= parentvisits;
-    }
-    return result;
 }

@@ -104,7 +104,7 @@ void TimeControl::TookTime(int color) {
         byotime_left_[color] -= remaining_took_time;
 
         if (byo_periods_) {
-            // Byo-Yomi type
+            // Japanese byo yomi style type
             if (byotime_left_[color] < 0) {
                 periods_left_[color]--;
             }
@@ -113,7 +113,7 @@ void TimeControl::TookTime(int color) {
                 byotime_left_[color] = byo_time_;
             }
         } else if (byo_stones_) {
-            // Canadian type
+            // Canadian style type
             stones_left_[color]--;
             if (stones_left_[color] == 0) {
                 if (byotime_left_[color] > 0) {
@@ -191,10 +191,10 @@ void TimeControl::TimeStream(std::ostream &out, int color) const {
        out << std::setw(2) << std::setfill('0') << seconds << ", ";
 
         if (byo_periods_) {
-            // Byo-Yomi type
+            // Japanese byo yomi style type
             out << "Periods left: " << periods_left_[color];
         } else if (byo_stones_) {
-            // Canadian type
+            // Canadian style type
             out << "Stones left: " << stones_left_[color];
         }
     }
@@ -259,6 +259,36 @@ float TimeControl::GetThinkingTime(int color, int boardsize,
     int inc_time = std::max(extra_time_per_move - lag_buffer_cs, 0);
 
     return static_cast<double>(base_time + inc_time) / 100.f; // centisecond to second
+}
+
+bool TimeControl::CanAccumulateTime(int color) const {
+    // Returns true if we are in a time control where we
+    // can save up time. If not, we should not move quickly
+    // even if certain of our move, but plough ahead.
+
+    if (in_byo_[color]) {
+        // Cannot accumulate in Japanese byo yomi
+        if (byo_periods_) {
+            return false;
+        }
+
+        // Cannot accumulate in Canadese style with
+        // one move remaining in the period
+        if (byo_stones_ && stones_left_[color] == 1) {
+            return false;
+        }
+    } else {
+        // If there is a base time, we should expect
+        // to be able to accumulate. This may be somewhat
+        // of an illusion if the base time is tiny and byo
+        // yomi time is big.
+    }
+
+    return true;
+}
+
+bool TimeControl::InByo(int color) const {
+    return in_byo_[color];
 }
 
 bool TimeControl::IsTimeOver(int color) const {

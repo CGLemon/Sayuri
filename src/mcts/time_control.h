@@ -7,6 +7,10 @@
 
 class TimeControl {
 public:
+    enum TimeManagement : int {
+        kOff = 0, kOn = 1, kFast = 2, kKeep = 3
+    };
+
     TimeControl();
 
     void TimeSettings(const int main_time,
@@ -26,6 +30,8 @@ public:
     void Clock();
     void TookTime(int color);
 
+    bool CanAccumulateTime(int color) const;
+    bool InByo(int color) const;
     bool IsTimeOver(int color) const;
 
     void TimeStream(std::ostream &out) const;

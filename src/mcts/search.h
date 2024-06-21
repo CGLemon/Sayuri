@@ -209,14 +209,16 @@ private:
     // Try to reuse the sub-tree.
     bool AdvanceToNewRootState(Search::OptionTag tag);
 
-    // Reture false if there is only one reasonable move.
-    bool HaveAlternateMoves(float elapsed, float limit);
+    // Reture false if there is only one reasonable move and
+    // enable the time management.
+    bool HaveAlternateMoves(const float elapsed, const float limit,
+                            const int cap, Search::OptionTag tag);
 
     // Reture true if the root achieve visit cap or playout
     // cap.
     bool AchieveCap(const int cap, Search::OptionTag tag);
 
-    std::vector<double> GetRootDistribution(int &parentvisits);
+    int GetPlayoutsLeft(const int cap, Search::OptionTag tag);
 
     bool InputPending(Search::OptionTag tag) const;
 
@@ -270,8 +272,6 @@ private:
 
     // The tree search threads.
     std::unique_ptr<ThreadGroup<void>> group_;
-
-    std::vector<double> last_root_dist_;
 
     std::vector<float> root_raw_probabilities_;
 };
