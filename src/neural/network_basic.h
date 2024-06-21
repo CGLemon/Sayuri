@@ -48,6 +48,32 @@ struct OutputResult {
     std::array<float, kNumIntersections> ownership;
 };
 
+struct ForwardQuery {
+    ForwardQuery() = default;
+
+    static ForwardQuery SetTemperature(float temp) {
+        ForwardQuery q;
+        q.temperature = temp;
+        return q;
+    }
+    static ForwardQuery SetSymmetry(int symm) {
+        ForwardQuery q;
+        q.symmetry = symm;
+        return q;
+    }
+    static ForwardQuery SetCache(bool use_cache) {
+        ForwardQuery q;
+        q.read_cache = use_cache;
+        q.write_cache = use_cache;
+        return q;
+    }
+
+    float temperature{1.0f};
+    int symmetry{-1};
+    bool read_cache{true};
+    bool write_cache{true};
+};
+
 class NetworkForwardPipe {
 public:
     virtual void Initialize(std::shared_ptr<DNNWeights> weights) = 0;

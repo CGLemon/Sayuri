@@ -139,9 +139,9 @@ void Search::PrepareRootNode(Search::OptionTag tag) {
     last_root_dist_ = GetRootDistribution(visits);
 
     // We should get this root policy from the NN cache. The softmax
-    // temperature of 'root_evals_' may be not 1 so we need to
+    // temperature of 'root_evals_' may be not 1.0 so we need to
     // compute it again.
-    auto netlist = network_.GetOutput(root_state_, Network::kRandom, 1);
+    auto netlist = network_.GetOutput(root_state_, Network::kRandom);
     auto num_intersections = root_state_.GetNumIntersections();
     root_raw_probabilities_.resize(num_intersections+1);
 

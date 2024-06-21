@@ -73,7 +73,7 @@ private:
         fork_state.SetRule(kArea);
         constexpr float kOwnshipThreshold = 0.75f;
 
-        auto netlist = network.GetOutput(fork_state, Network::kRandom, 1);
+        auto netlist = network.GetOutput(fork_state, Network::kRandom);
         auto color = fork_state.GetToMove();
         auto num_intersections = fork_state.GetNumIntersections();
         auto safe_area = fork_state.GetStrictSafeArea();

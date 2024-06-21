@@ -584,7 +584,8 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         }
 
         if (symmetry <= 8 && symmetry >= 0) {
-            out << GtpSuccess(agent_->GetNetwork().GetOutputString(agent_->GetState(), Network::kDirect, symmetry));
+            out << GtpSuccess(agent_->GetNetwork().GetOutputString(
+                       agent_->GetState(), Network::kDirect, Network::Query::SetSymmetry(symmetry)));
         } else {
             out << GtpFail("symmetry must be from 0 to 7");
         }
@@ -603,7 +604,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             while (count.load(std::memory_order_relaxed) < eval_cnt) {
                 count.fetch_add(1, std::memory_order_relaxed);
                 agent_->GetNetwork().GetOutput(
-                    agent_->GetState(), Network::kRandom, 1.f, 0, false, false);
+                    agent_->GetState(), Network::kRandom, Network::Query::SetCache(false));
             }
         };
 

@@ -145,12 +145,12 @@ Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
     return result;
 }
 
-Network::Result
-Network::GetOutputInternal(const GameState &state, const int symmetry) {
+Network::Result Network::GetOutputInternal(const GameState &state,
+                                           const int symmetry) {
     Network::Result out_result;
     Network::Result result_buf;
 
-    // apply symmetry
+    // gather input features with symmetry
     auto inputs = Encoder::Get().GetInputs(state, symmetry);
 
     if (pipe_->Valid()) {
@@ -253,49 +253,49 @@ bool Network::ProbeCache(const GameState &state,
     return false;
 }
 
-Network::Result
-Network::GetOutput(const GameState &state,
-                   const Ensemble ensemble,
-                   const float temperature,
-                   int symmetry,
-                   const bool read_cache,
-                   const bool write_cache) {
+Network::Result Network::GetOutput(const GameState &state,
+                                   const Ensemble ensemble,
+                                   Network::Query query) {
     Result result;
     if (ensemble == kNone) {
-        symmetry = Symmetry::kIdentitySymmetry;
+        query.symmetry = Symmetry::kIdentitySymmetry;
     } else if (ensemble == kDirect) {
-        assert(symmetry >= 0 && symmetry < Symmetry::kNumSymmetris);
+        assert(query.symmetry >= 0 && query.symmetry < Symmetry::kNumSymmetris);
     } else if (ensemble == kRandom) {
-        symmetry = Random<>::Get().RandFix<Symmetry::kNumSymmetris>();
+        query.symmetry = Random<>::Get().RandFix<Symmetry::kNumSymmetris>();
     }
 
+    if (no_cache_) {
+        query.read_cache = false;
+        query.write_cache = false;
+    }
     bool probed = false;
 
     // Try to get forwarding result from cache.
-    if (read_cache && !no_cache_) {
-        if (ProbeCache(state, result)) {
-            probed = true;
-        }
+    if (query.read_cache) {
+        probed = ProbeCache(state, result);
     }
 
     if (!probed) {
-        result = GetOutputInternal(state, symmetry);
+        result = GetOutputInternal(state, query.symmetry);
 
         // Write forwarding result to cache.
-        if (write_cache && !no_cache_) {
+        if (query.write_cache) {
             nn_cache_.Insert(state.GetHash(), result);
         }
     }
 
-    ActivatePolicy(result, temperature);
+    ActivatePolicy(result, query.temperature);
 
     return result;
 }
 
 std::string Network::GetOutputString(const GameState &state,
                                      const Ensemble ensemble,
-                                     int symmetry) {
-    const auto result = GetOutput(state, ensemble, 1.f, symmetry, false, false);
+                                     Network::Query query) {
+    query.read_cache = false;
+    query.write_cache = false;
+    const auto result = GetOutput(state, ensemble, query);
     const auto bsize = result.board_size;
 
     auto out = std::ostringstream{};
@@ -351,7 +351,7 @@ void Network::ActivatePolicy(Result &result, const float temperature) const {
 int Network::GetVertexWithPolicy(const GameState &state,
                                  const float temperature,
                                  const bool allow_pass) {
-    const auto result = GetOutput(state, kRandom, temperature);
+    const auto result = GetOutput(state, kRandom, Query::SetTemperature(temperature));
     const auto boardsize = result.board_size;
     const auto num_intersections = boardsize * boardsize;
 
@@ -363,7 +363,7 @@ int Network::GetVertexWithPolicy(const GameState &state,
         const auto vtx = state.IndexToVertex(idx);
         if (state.IsLegalMove(vtx)) {
             accum += result.probabilities[idx];
-            accum_vector.emplace_back(std::pair<float, int>(accum, vtx));
+            accum_vector.emplace_back(accum, vtx);
         }
     }
 

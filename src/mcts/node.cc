@@ -86,7 +86,8 @@ void Node::Recompute(Network &network,
 
     const float temp = is_root ?
                 param_->root_policy_temp : param_->policy_temp;
-    auto raw_netlist = network.GetOutput(state, Network::kRandom, temp);
+    auto raw_netlist = network.GetOutput(
+        state, Network::kRandom, Network::Query::SetTemperature(temp));
 
     const auto num_intersections = state.GetNumIntersections();
     auto legal_accumulate = 0.f;
@@ -191,12 +192,12 @@ bool Node::ExpandChildren(Network &network,
 
     // Get network computation result.
 
-    // Policy softmax temperature. If 't' is greater than 1,
-    // policy is broader. If 't' is less than 1, policy is
-    // sharper.
+    // Policy softmax temperature. If 't' is greater than 1, policy
+    // will be broader. If 't' is less than 1, policy will be sharper.
     const float temp = is_root ?
                     param_->root_policy_temp : param_->policy_temp;
-    auto raw_netlist = network.GetOutput(state, Network::kRandom, temp);
+    auto raw_netlist = network.GetOutput(
+        state, Network::kRandom, Network::Query::SetTemperature(temp));
 
     // Store the network reuslt.
     ApplyNetOutput(state, raw_netlist, node_evals, color_);

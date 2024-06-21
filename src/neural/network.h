@@ -20,6 +20,7 @@ public:
 
     using Inputs = InputData;
     using Result = OutputResult;
+    using Query = ForwardQuery;
     using Cache = HashKeyCache<Result>;
     using PolicyVertexPair = std::pair<float, int>;
 
@@ -31,16 +32,13 @@ public:
                             const float temperature,
                             const bool allow_pass);
 
-    Result GetOutput(const GameState &state,
-                     const Ensemble ensemble,
-                     const float temperature = 1.f,
-                     int symmetry = -1,
-                     const bool read_cache = true,
-                     const bool write_cache = true);
+    Network::Result GetOutput(const GameState &state,
+                              const Ensemble ensemble,
+                              Network::Query = {});
 
     std::string GetOutputString(const GameState &state,
                                 const Ensemble ensemble,
-                                int symmetry = -1);
+                                Network::Query = {});
 
     void Reload(int board_size);
 
@@ -51,11 +49,11 @@ public:
     size_t GetNumQueries() const;
 
 private:
-    void ActivatePolicy(Result &result, const float temperature) const;
+    void ActivatePolicy(Network::Result &result, const float temperature) const;
 
-    bool ProbeCache(const GameState &state, Result &result);
+    bool ProbeCache(const GameState &state, Network::Result &result);
 
-    Result GetOutputInternal(const GameState &state, const int symmetry);
+    Network::Result GetOutputInternal(const GameState &state, const int symmetry);
 
     Network::Result DummyForward(const Network::Inputs& inputs) const;
 
