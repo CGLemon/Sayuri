@@ -1,7 +1,10 @@
 #pragma once
 
+#include <ctime>
+#include <cstdint>
 #include <vector>
 #include <string>
+#include <initializer_list>
 
 // Concatenate paths or filenames.
 std::string ConcatPath(const std::string path_1, const std::string path_2);

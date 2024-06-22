@@ -1,6 +1,5 @@
 #include "utils/parse_float.h"
 
-#include <cstdint>
 #include <cstring>
 
 float ParseBinFloat32(std::istream &in, bool big_endian) {
