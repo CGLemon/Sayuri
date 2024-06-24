@@ -941,12 +941,19 @@ int Search::GetSelfPlayMove(OptionTag tag) {
                    result.best_no_pass_move;
     }
 
+    // Do we lose the the game?
+    float root_eval = result.root_eval;
+    float root_score = result.root_score_lead;
+    bool already_lost = root_eval < param_->resign_threshold ||
+                            root_eval > (1.f - param_->resign_threshold);
+
     // Do the random move in the opening stage in order to improve the
-    // game state diversity. The Gumbel noise may be good enough. Don't
-    // play the random move if 'is_gumbel' is true. Or do random move
-    // when fast search phase.
+    // game state diversity. we thought Gumbel noise may be good enough.
+    // So Don't play the random move if 'is_gumbel' is true. We also play
+    // random move when fast search phase. It may litte improve exploring.
     if ((is_opening_random && !is_gumbel) ||
-            ((tag & kNoExploring) &&
+            (!already_lost &&
+                 (tag & kNoExploring) &&
                  Random<>::Get().Roulette<10000>(param_->random_fastsearch_prob))) {
         if (!(forbid_pass && result.random_move == kPass)) {
             move = result.random_move;
@@ -957,15 +964,12 @@ int Search::GetSelfPlayMove(OptionTag tag) {
     // data. It is because that the quality of current data is bad. To
     // discard it can improve the network performance.
     bool discard_it = false;
-    float root_eval = result.root_eval;
-    float root_score = result.root_score_lead;
     if (tag & kNoExploring) {
         // It is fast search of "Playout Cap Randomization". Do
         // not record the low quality datas.
         discard_it = true;
     }
-    if (root_eval < param_->resign_threshold ||
-            root_eval > (1.f-param_->resign_threshold)) {
+    if (already_lost) {
         // Someone already won the game. Do not record this kind
         // of positions too much to avoid introducing pathological
         // biases in the training data
