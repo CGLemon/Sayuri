@@ -1,6 +1,7 @@
 #include "utils/option.h"
 #include "utils/log.h"
 #include "utils/mutex.h"
+#include "utils/probe_gpu.h"
 #include "game/zobrist.h"
 #include "game/symmetry.h"
 #include "game/types.h"
@@ -129,54 +130,6 @@ void ArgsParser::InitBasicParameters() const {
     LcbEntries::Get().Initialize(GetOption<float>("ci_alpha"));
     LogOptions::Get().SetQuiet(GetOption<bool>("quiet"));
 
-    // If the threads is zero, program select a reasonable number
-    // and the batch size is same.
-    bool already_set_thread = !IsOptionDefault("threads");
-    bool use_gpu = GetOption<bool>("use_gpu");
-
-    const int cores = std::max((int)std::thread::hardware_concurrency(), 1);
-    int select_threads = GetOption<int>("threads");
-    int select_batchsize = GetOption<int>("batch_size");
-
-    // Try to select a reasonable number for threads and batch size.
-    //
-    // GPU case:
-    // case 1. if no args are given, use thread count of 12
-    // case 2. if number of threads are 0, use thread count of (number of cpu cores) * 2
-    // case 3. number of threads and batches are given
-    // other cases. number of threads are equal to (batch size) * 2
-    //
-    // CPU case (ingore batch size):
-    // case 1. if no args are given, use thread count of 6
-    // case 2. if number of threads are 0, use thread count of (number of cpu cores) * 1
-    // case 3. number of threads are given
-
-    // TODO: The most modern CPUs, eg i5-13500, have so many cores. Should
-    //       we use the greater 'threads_base'?
-    const int threads_base = 6;
-    if (!use_gpu) {
-        // reduce the batch size effect
-        select_batchsize = 0;
-    }
-    if (!already_set_thread && select_batchsize == 0) {
-        select_threads = (1 + (int)use_gpu) * std::min(cores, threads_base);
-    }
-    if (select_threads == 0 && select_batchsize == 0) {
-        select_threads = (1 + (int)use_gpu) * cores;
-        select_batchsize = select_threads/2;
-    } else if (select_threads == 0 && select_batchsize != 0) {
-        select_threads = (1 + (int)use_gpu) * select_batchsize;
-    } else if (select_threads != 0 && select_batchsize == 0) {
-        select_batchsize = select_threads/2;
-    }
-    if (!use_gpu) {
-        // the CPU only uses one batch
-        select_batchsize = 1;
-    }
-
-    SetOption("threads", std::max(select_threads, 1));
-    SetOption("batch_size", std::max(select_batchsize, 1));
-
     // Try to select a reasonable number for const time and playouts.
     bool already_set_time = !IsOptionDefault("const_time");
     bool already_set_playouts = !IsOptionDefault("playouts");
@@ -187,6 +140,100 @@ void ArgsParser::InitBasicParameters() const {
     if (!already_set_playouts) {
         SetOption("playouts", std::numeric_limits<int>::max() / 2);
     }
+
+    // If the threads/batchsize are zero, program will select a reasonable
+    // number based on your device and others setting.
+    const bool use_gpu = IsOptionDefault("use_gpu") ?
+                             IsGpuAvailable() :
+                             IsGpuAvailable() ?
+                                 GetOption<bool>("use_gpu") : false;
+    const int num_gpus = !use_gpu ?
+                             0 :
+                             IsOptionDefault("gpus") ?
+                                 GetGpuCount() : GetOptionCount("gpus");
+
+    const int cores = std::max((int)std::thread::hardware_concurrency(), 1);
+    int select_threads = GetOption<int>("threads");
+    int select_batchsize = GetOption<int>("batch_size");
+
+    // GPU case:
+    // case 1. if number of threads are 0, use thread count of reasonable number
+    // case 2. number of threads and batches are given
+    // other cases. thread count are equal to (batch size) * 2
+    //
+    // CPU case (ingore batch size):
+    // case 1. if number of threads are 0, use thread count of reasonable number
+    // case 2. number of threads are given
+
+    bool already_set_threads = !IsOptionDefault("threads");
+    int reasonable_threads = 0;
+    int leela_base_threads = 10; // leela uses 10 threads and 5 batches by default
+    if (already_set_playouts) {
+        // Assume the bound is playouts count. Avoid reducing the strength
+        // too much. We select thread count based on playouts count.
+        int playouts = GetOption<int>("playouts");
+
+        // TODO: Design a approximate function for 'reasonable_threads'.
+        if (playouts <= 400 && use_gpu) {
+            reasonable_threads = 1;
+        } else if (playouts <= 1600) {
+            reasonable_threads = 4;
+        } else if (playouts <= 6400) {
+            reasonable_threads = 6;
+        } else if (playouts <= 12800) {
+            reasonable_threads = 10;
+        } else if (playouts <= 25600) {
+            reasonable_threads = 16;
+        } else if (playouts <= 51200) {
+            reasonable_threads = 32;
+        } else {
+            // Will take long time, allocate the threads as many as
+            // possible.
+            reasonable_threads = 0;
+        }
+    }
+
+    // The performance increase is slow down on normal device (eg. RTX 4060Ti) after
+    // the batch size reaches 32. Maybe we will change this value in the future.
+    const int reasonable_batchsize_bound_per_gpu = 32;
+    const int reasonable_batchsize_bound = reasonable_batchsize_bound_per_gpu * num_gpus;
+    if (reasonable_threads == 0) {
+        // Assume the bound is thinking time. Actually we can't know the thinking time
+        // so only selecting the maximum thread count.
+        reasonable_threads = use_gpu ?
+            2 * reasonable_batchsize_bound :
+            64;
+    }
+    if (!already_set_threads) {
+        // Assume new comer forgets to set thread count. Avoid eating too
+        // much computation resource so we set a lower thread count bound.
+        // We are so nice :-).
+        reasonable_threads = std::min(reasonable_threads, leela_base_threads);
+    }
+
+    if (use_gpu) {
+        if (select_threads == 0 && select_batchsize == 0) {
+            select_threads = reasonable_threads;
+            select_batchsize = select_threads/2;
+        } else if (select_threads == 0 && select_batchsize != 0) {
+            select_threads = 2 * select_batchsize;
+        } else if (select_threads != 0 && select_batchsize == 0) {
+            select_batchsize = select_threads/2;
+        }
+        // No idea why somebody wants to use threads less than the number of GPUs
+        // but should at least prevent hiccup.
+        select_threads = std::max(select_threads, num_gpus);
+    } else {
+        if (select_threads == 0) {
+            select_threads = std::min(reasonable_threads, cores);
+        }
+        // The CPU only's batch size is always 1.
+        select_batchsize = 1;
+    }
+
+    SetOption("use_gpu", use_gpu);
+    SetOption("threads", std::max(select_threads, 1));
+    SetOption("batch_size", std::max(select_batchsize, 1));
 
     // Set the root fpu value.
     bool already_set_fpu_root = !IsOptionDefault("fpu_root_reduction");
@@ -586,6 +633,7 @@ void ArgsParser::Parse(Splitter &spt) {
     while (const auto res = spt.FindNext({"--gpu", "-g"})) {
         if (IsParameter(res->Get<>())) {
             SetOption("gpus", res->Get<int>());
+            UniqueOption("gpus");
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
@@ -900,10 +948,6 @@ void ArgsParser::Parse(Splitter &spt) {
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
-
-#ifdef USE_CUDA
-    SetOption("use_gpu", true);
-#endif
 
     if (ErrorCommands(spt) || GetOption<bool>("help")) {
         DumpHelper();

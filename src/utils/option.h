@@ -190,6 +190,8 @@ public:
         return val_list_.size();
     }
 
+    void Unique();
+
     // Get Option object.
     template<
         typename T,
@@ -260,7 +262,6 @@ inline T GetOption(std::string key, int idx=-1) {
     return val;
 }
 
-
 template<
     typename T,
     typename = std::enable_if_t<
@@ -301,4 +302,9 @@ inline int GetOptionCount(std::string key) {
 inline bool IsOptionDefault(std::string key) {
     auto it = kOptionsMap.find(key);
     return it->second.IsDefault();
+}
+
+inline void UniqueOption(std::string key) {
+    auto it = kOptionsMap.find(key);
+    it->second.Unique();
 }

@@ -1,5 +1,6 @@
 #include "utils/option.h"
 
+#include <set>
 #include <sstream>
 
 void Option::Adjust() {
@@ -51,5 +52,17 @@ void Option::HandleInvalid() const {
         throw std::runtime_error(out.str());
     }
 };
+
+void Option::Unique() {
+    auto dest_list = std::vector<std::string>{};
+    auto check_set = std::set<std::string>{};
+    for (auto &val : val_list_) {
+        if (check_set.count(val) == 0) {
+            dest_list.emplace_back(val);
+        }
+        check_set.emplace(val);
+    }
+    std::swap(val_list_, dest_list);
+}
 
 std::unordered_map<std::string, Option> kOptionsMap;

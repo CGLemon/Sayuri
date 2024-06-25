@@ -1417,7 +1417,7 @@ bool Search::HaveAlternateMoves(const float elapsed, const float limit,
         //              the move as fast as possible and be sure that
         //              we can pick up one reasonable move.
     } else if (param_->timemanage == TimeControl::TimeManagement::kKeep) {
-        // Case "Keep": Only save up the current thinking time in byo
+        // Case "keep": Only save up the current thinking time in byo
         //              phase.
         if (param_->const_time > 0 || !time_control_.InByo(color)) {
             return true;
