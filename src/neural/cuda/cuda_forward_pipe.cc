@@ -29,9 +29,11 @@ OutputResult CudaForwardPipe::Forward(const InputData &input) {
     const bool should_reorder = planes_bsize != board_size_;
 
     if (should_reorder) {
+        // Data board size is not equal to NN board size. We reorder the
+        // original inputs data to match the NN input size.
         for (int c = 0; c < kInputChannels; ++c) {
-            int offset_r = c * board_size_ * board_size_;
-            int offset_p = c * planes_bsize * planes_bsize;
+            int offset_r = c * board_size_ * board_size_; // data order index
+            int offset_p = c * planes_bsize * planes_bsize; // NN order index
 
             for (int idx = 0; idx < board_size_ * board_size_; ++idx) {
                 const int x = idx % board_size_;
@@ -48,12 +50,12 @@ OutputResult CudaForwardPipe::Forward(const InputData &input) {
     auto entry = std::make_shared<ForwawrdEntry>(reordered_input, output);
     std::unique_lock<std::mutex> lock(entry->mutex);
     {
-        // Push the entry.
+        // Push the entry into queue.
         std::lock_guard<std::mutex> queue_lock(queue_mutex_);
         entry_queue_.emplace_back(entry);
     }
 
-    if (entry_queue_.size() >= (size_t)max_batch_) {
+    if (entry_queue_.size() >= (size_t)max_batch_per_nn_) {
         cv_.notify_one(); // Wake up one worker if there are enough batch size.
     }
     entry->cv.wait(lock); // Wait for batch forwarding worker.
@@ -63,8 +65,9 @@ OutputResult CudaForwardPipe::Forward(const InputData &input) {
     OutputResult reordered_ouput = output;
 
     if (should_reorder) {
-        int offset_r = 0;
-        int offset_p = 0;
+        // Reorder the NN outputs data to the correct data format.
+        int offset_r = 0; // data order index
+        int offset_p = 0; // NN order index
         for (int idx = 0; idx < board_size_ * board_size_; ++idx) {
             const int x = idx % board_size_;
             const int y = idx / board_size_;
@@ -102,7 +105,7 @@ void CudaForwardPipe::Reload(int board_size) {
         return;
     }
 
-    // Select the matched size.
+    // Select the matched board size.
     const int fixed_nn_boardsize =
                   std::max(board_size, GetOption<int>("fixed_nn_boardsize"));
     if (fixed_nn_boardsize > 0) {
@@ -110,37 +113,29 @@ void CudaForwardPipe::Reload(int board_size) {
     } else {
         board_size_ = board_size;
     }
-    max_batch_ = GetOption<int>("batch_size");
-    const auto d_cnt = cuda::GetDeviceCount();
 
-    auto already_set_gpu = !IsOptionDefault("gpus");
+    // Assign the GPUs.
+    const auto cuda_device_cnt = cuda::GetDeviceCount();
+    const auto specific_gpus_cnt = GetOptionCount("gpus");
     auto gpus_list = std::vector<int>{};
 
-    if (!already_set_gpu) {
-         for (int i = 0; i < d_cnt; ++i) {
-             gpus_list.emplace_back(i);
-         }
-    } else {
-        auto gpus_cnt = GetOptionCount("gpus");
-        for (int idx = 0; idx < gpus_cnt; ++idx) {
-            auto gpu_id = GetOption<int>("gpus", idx);
-            if (gpu_id < d_cnt) {
-                gpus_list.emplace_back(gpu_id);
-            } else {
-                LOGGING << Format("Not found GPU device %d.\n", gpu_id);
-            }
+    for (int idx = 0; idx < specific_gpus_cnt; ++idx) {
+        auto gpu_id = GetOption<int>("gpus", idx);
+        if (gpu_id < cuda_device_cnt) {
+            gpus_list.emplace_back(gpu_id);
+        } else {
+            LOGGING << Format("Not found GPU device (%d).\n", gpu_id);
         }
     }
 
     if (gpus_list.empty()) {
-        LOGGING << "Not found any GPU device! Now assign the GPU(s) automatically.\n";
-        for (int i = 0; i < d_cnt; ++i) {
+        LOGGING << "Not found any specific GPU device! Now assign the GPU(s) automatically.\n";
+        for (int i = 0; i < cuda_device_cnt; ++i) {
             gpus_list.emplace_back(i);
         }
-
-        if (gpus_list.empty()) {
-            throw std::runtime_error("No executable GPU device!");
-        }
+    }
+    if (gpus_list.empty()) {
+        throw std::runtime_error("No executable GPU device!");
     }
 
     for (size_t i = 0; i < gpus_list.size(); ++i) {
@@ -148,17 +143,17 @@ void CudaForwardPipe::Reload(int board_size) {
     }
 
     // TODO: Assign different batch size by device computing capability.
-
+    max_batch_per_nn_ = GetOption<int>("batch_size");
     if (gpus_list.size() >= 2) {
-        // Assign the the batch for each netork.
+        // Assign the the batch size for each netork.
         const int num_gpus = gpus_list.size();
-        max_batch_ = (max_batch_ / num_gpus) + bool(max_batch_ % num_gpus);
-        max_batch_ = std::max(max_batch_, 1);
+        max_batch_per_nn_ = (max_batch_per_nn_ / num_gpus) + bool(max_batch_per_nn_ % num_gpus);
+        max_batch_per_nn_ = std::max(max_batch_per_nn_, 1);
     }
 
     for (auto i = size_t{0}; i < gpus_list.size(); ++i) {
         nngraphs_[i]->BuildGraph(
-            dump_gpu_info_, gpus_list[i], max_batch_, board_size_, weights_);
+            dump_gpu_info_, gpus_list[i], max_batch_per_nn_, board_size_, weights_);
     }
 
     dump_gpu_info_ = false; // don't show the GPU info next time.
@@ -627,7 +622,7 @@ bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData> &inputs) {
             sqrt_mask[b] = planes_bsize;
         }
 
-        // Copy the mask to device.
+        // Copy the mask from host memory to device.
         {
             std::lock_guard<std::mutex> lock(io_mutex_);
             cuda::SetDevice(handles_.gpu_id);
@@ -666,7 +661,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         mask_buf[0] = mask_buf[1] = nullptr;
     }
 
-    // copy the inputs to device
+    // copy the inputs data from host memory to device
     {
         std::lock_guard<std::mutex> lock(io_mutex_);
         cuda::SetDevice(handles_.gpu_id);
@@ -685,7 +680,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     // block tower
     const auto blocks = weights_->residual_blocks;
     for (int i = 0; i < blocks; ++i) {
-        // cuda_conv_op_[0] is input.
+        // cuda_conv_op_[0] is input/residual.
         // cuda_conv_op_[1 ~ 2] are buffers.
         // cuda_conv_op_[3] is output before SE module.
 
@@ -964,7 +959,8 @@ void CudaForwardPipe::Worker(int gpu) {
         const auto max_waittime = std::max(10 * gpu_waittime_base, 100);
         auto entries = std::vector<std::shared_ptr<ForwawrdEntry>>{};
 
-        // Running the loop until there is enough entry size.
+        // Running the loop until there are enough entries or time out, then break
+        // the loop.
         while(true) {
             if (!worker_running_.load(std::memory_order_relaxed)) {
                 return entries;
@@ -973,18 +969,18 @@ void CudaForwardPipe::Worker(int gpu) {
             bool should_be_fast = fast_pipe_.exchange(false, std::memory_order_relaxed);
             int waittime = waittime_.load(std::memory_order_relaxed);
 
-            if ((int)entry_queue_.size() >= max_batch_) {
-                // Threre are enough batches. Finish the loop.
+            if ((int)entry_queue_.size() >= max_batch_per_nn_) {
+                // We gather enough entries, break the loop now.
                 waittime_.store(
                     std::min(waittime, gpu_waittime_base),
                     std::memory_order_relaxed);
                 break;
             }
 
-            // Wait for some time in order to avoid busy waiting.
+            // Wait for some time to avoid busy waiting.
             std::unique_lock<std::mutex> lock(worker_mutex_);
             bool timeout = !cv_.wait_for(lock, std::chrono::milliseconds(waittime),
-                                             [this](){ return !((int)entry_queue_.size() < max_batch_); }
+                                             [this](){ return !((int)entry_queue_.size() < max_batch_per_nn_); }
                                          );
 
             // Reset the waiting time.
@@ -992,9 +988,9 @@ void CudaForwardPipe::Worker(int gpu) {
                 waittime = std::min(waittime, gpu_waittime_base);
 
                 if (timeout && should_be_fast) {
-                    // We wait two times and there are always not enough batches.
-                    // Simply assume threre still are not next time so set the
-                    // waiting time as zero.
+                    // We already waited two times and fail to gather the full
+                    // batch data. Simply assume we will be still fail next time
+                    // so set the waiting time as zero.
                     waittime = 0;
                 } else if (waittime > 0) {
                     // Decrease the waiting time if it is time out.
@@ -1007,9 +1003,13 @@ void CudaForwardPipe::Worker(int gpu) {
                 // Finish the loop.
                 break;
             } else {
+                // We can't receive any entry. Assume we are resting. Increase the waiting
+                // time to avoid busy waiting.
                 if (waittime < gpu_waittime_base) {
                     waittime_.store(waittime+1, std::memory_order_relaxed);
                 } else if (waittime < max_waittime) {
+                    // Quicky increase waiting time because we receive no entry several
+                    // times.
                     waittime_.store(waittime+10, std::memory_order_relaxed);
                 }
             }
@@ -1018,8 +1018,8 @@ void CudaForwardPipe::Worker(int gpu) {
         // Gather the entries.
         std::lock_guard<std::mutex> queue_lock(queue_mutex_);
         auto count = entry_queue_.size();
-        if ((int)count > max_batch_) {
-            count = max_batch_;
+        if ((int)count > max_batch_per_nn_) {
+            count = max_batch_per_nn_;
         }
 
         auto end = std::begin(entry_queue_);
@@ -1040,21 +1040,28 @@ void CudaForwardPipe::Worker(int gpu) {
             continue;
         }
 
+        // Gather batch data.
         auto inputs = std::vector<InputData>(batch_size);
         for (auto b = size_t{0}; b < batch_size; ++b) {
             inputs[b] = entries[b]->input;
         }
 
+        // Forward...
         auto outputs = nngraphs_[gpu]->BatchForward(inputs);
 
         for (auto b = size_t{0}; b < batch_size; ++b) {
             entries[b]->output = outputs[b];
+
+            // Keep to wake up the worker. Be sure the sleeping worker
+            // receives the signal.
             while (!entries[b]->done.load(std::memory_order_relaxed)) {
                 entries[b]->cv.notify_all();
             }
         }
 
-        if ((int)batch_size <= max_batch_) {
+        // There is no enough items in queue. Assume the current state is CPU
+        // bound. Try reduce the waiting for time next forwarding query.
+        if ((int)batch_size <= max_batch_per_nn_) {
             fast_pipe_.store(true, std::memory_order_relaxed);
         }
     }

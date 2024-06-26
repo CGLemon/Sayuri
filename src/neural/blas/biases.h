@@ -3,6 +3,9 @@
 #include <vector>
 #include <cstddef>
 
+// step1. add biases
+// step3. add residual (optional)
+// step2. activation function
 class AddSpatialBiases {
 public:
     AddSpatialBiases() = delete;
@@ -20,6 +23,9 @@ public:
                         bool ReLU);
 };
 
+// step1. add biases
+// step2. activation function
+// step3. add residual
 class AddSpatialBiasesPost {
 public:
     AddSpatialBiasesPost() = delete;
@@ -31,6 +37,8 @@ public:
                         const std::vector<float> &residual);
 };
 
+// step1. add biases
+// step2. activation function
 class AddVectorBiases {
 public:
     AddVectorBiases() = delete;

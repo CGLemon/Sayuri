@@ -27,7 +27,7 @@ private:
     void ResidualBlockForward(int board_size,
                               BlockBasic * tower_ptr,
                               bool use_winograd,
-                              std::vector<float> &res,
+                              std::vector<float> &residual,
                               std::vector<float> &conv_in,
                               std::vector<float> &conv_out,
                               std::vector<float> &workspace0,
@@ -36,7 +36,7 @@ private:
     void BottleneckBlockForward(int board_size,
                                 BlockBasic * tower_ptr,
                                 bool use_winograd,
-                                std::vector<float> &res,
+                                std::vector<float> &residual,
                                 std::vector<float> &conv_in,
                                 std::vector<float> &conv_out,
                                 std::vector<float> &workspace0,
@@ -44,7 +44,7 @@ private:
 
     void MixerBlockForward(int board_size,
                            BlockBasic * tower_ptr,
-                           std::vector<float> &res,
+                           std::vector<float> &residual,
                            std::vector<float> &conv_in,
                            std::vector<float> &conv_out);
 

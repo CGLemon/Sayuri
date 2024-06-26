@@ -149,7 +149,7 @@ private:
     std::vector<std::thread> workers_;
 
     bool dump_gpu_info_;
-    int max_batch_;
+    int max_batch_per_nn_;
     int board_size_{0};
 
     void PrepareWorkers();

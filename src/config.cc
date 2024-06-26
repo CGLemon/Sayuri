@@ -143,14 +143,15 @@ void ArgsParser::InitBasicParameters() const {
 
     // If the threads/batchsize are zero, program will select a reasonable
     // number based on your device and others setting.
+    bool already_set_specific_gpus = !IsOptionDefault("gpus");
     const bool use_gpu = IsOptionDefault("use_gpu") ?
                              IsGpuAvailable() :
                              IsGpuAvailable() ?
                                  GetOption<bool>("use_gpu") : false;
     const int num_gpus = !use_gpu ?
                              0 :
-                             IsOptionDefault("gpus") ?
-                                 GetGpuCount() : GetOptionCount("gpus");
+                             already_set_specific_gpus ?
+                                 GetOptionCount("gpus") : GetGpuCount();
 
     const int cores = std::max((int)std::thread::hardware_concurrency(), 1);
     int select_threads = GetOption<int>("threads");
@@ -234,6 +235,13 @@ void ArgsParser::InitBasicParameters() const {
     SetOption("use_gpu", use_gpu);
     SetOption("threads", std::max(select_threads, 1));
     SetOption("batch_size", std::max(select_batchsize, 1));
+
+    // Assign the GPUs index.
+    if (use_gpu && !already_set_specific_gpus) {
+        for (int idx = 0; idx < num_gpus; ++idx) {
+            SetOption("gpus", idx);
+        }
+    }
 
     // Set the root fpu value.
     bool already_set_fpu_root = !IsOptionDefault("fpu_root_reduction");
@@ -1015,6 +1023,9 @@ void ArgsParser::DumpHelper() const {
 
                 << "\t--resign-threshold, -r <float>\n"
                 << "\t\tResign when winrate is less than x. Default is 0.1.\n\n"
+
+                << "\t--timemanage [off/on/fast/keep]\n"
+                << "\t\tWill save the thinking time if we enable the option.\n\n"
 
                 << "\t--weights, -w <weight file name>\n"
                 << "\t\tFile with network weights.\n\n"
