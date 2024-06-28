@@ -1,5 +1,6 @@
 #pragma once
 
+#include "neural/activation.h"
 #include <vector>
 #include <cstddef>
 
@@ -31,7 +32,7 @@ public:
                         const std::vector<float> &weights_b1,
                         const std::vector<float> &weights_w2,
                         const std::vector<float> &weights_b2,
-                        bool ReLU);
+                        const Activation act);
 
 private:
     static void SEProcess(const size_t board_size,
@@ -39,6 +40,6 @@ private:
                           std::vector<float> &input,
                           const std::vector<float> &residual,
                           const std::vector<float> &scale,
-                          bool ReLU);
+                          const Activation act);
 
 };

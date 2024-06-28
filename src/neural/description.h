@@ -1,5 +1,7 @@
 #pragma once
 
+#include "neural/activation.h"
+
 #include <cmath>
 #include <vector>
 #include <memory>
@@ -146,6 +148,8 @@ public:
 
     int policy_extract_channels{0};
     int value_extract_channels{0};
+
+    Activation default_act;
 
     // input layer
     ConvLayer input_conv;

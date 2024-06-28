@@ -13,36 +13,37 @@
 namespace cuda {
 
 void AddVectors(bool fp16, void *c, const void *a, const void *b,
-                int size, int asize, int bsize, bool relu, cudaStream_t stream) {
+                int size, int asize, int bsize, Activation act,
+                cudaStream_t stream) {
     if (fp16) {
 #ifdef ENABLE_FP16
         add_vectors(
             (half *)c, (const half *)a, (const half *)b,
-            size, asize, bsize, relu, stream);
+            size, asize, bsize, act, stream);
 #endif
     } else {
         add_vectors(
             (float *)c, (const float *)a, (const float *)b,
-            size, asize, bsize, relu, stream);
+            size, asize, bsize, act, stream);
     }
 }
 
 void AddSpatial(bool fp16, void *data, const void *biases,
                 const void *residual, const void *mask,
                 int bsize, int batch, int channels, int spatial,
-                bool relu, cudaStream_t stream) {
+                Activation act, cudaStream_t stream) {
     if (fp16) {
 #ifdef ENABLE_FP16
         add_spatial(
             (half *)data, (const half *)biases,
             (const half *)residual, (const half *)mask,
-            bsize, batch, channels, spatial, relu, stream);
+            bsize, batch, channels, spatial, act, stream);
 #endif
     } else {
         add_spatial(
             (float *)data, (const float *)biases,
             (const float *)residual, (const float *)mask,
-            bsize, batch, channels, spatial, relu, stream);
+            bsize, batch, channels, spatial, act, stream);
     }
 }
 
@@ -96,19 +97,19 @@ void HeadGlobalPooling(bool fp16, void *output, void *input, const void *sqrt_ma
 void SeScale(bool fp16, void *output, const void *input,
              const void *residual, const void *se_biases,
              const void *mask, int batch, int channels,
-             int spatial, bool relu, cudaStream_t stream) {
+             int spatial, Activation act, cudaStream_t stream) {
     if (fp16) {
 #ifdef ENABLE_FP16
         se_scale(
             (half *)output, (const half *)input,
             (const half*)residual, (const half *)se_biases,
-            (const half *)mask, batch, channels, spatial, relu, stream);
+            (const half *)mask, batch, channels, spatial, act, stream);
 #endif
     } else {
         se_scale(
             (float *)output, (const float *)input,
             (const float*)residual, (const float *)se_biases,
-            (const float *)mask, batch, channels, spatial, relu, stream);
+            (const float *)mask, batch, channels, spatial, act, stream);
     }
 }
 
@@ -129,38 +130,39 @@ void Winograd3TransformIn(bool fp16, void *output, const void *input,
 
 void Winograd3TransformOut(bool fp16, void *output, const void *input,
                            const void *biases, const void *residual, const void *mask,
-                           int batch, int channels, int board_size, bool relu, cudaStream_t stream) {
+                           int batch, int channels, int board_size, Activation act,
+                           cudaStream_t stream) {
     if (fp16) {
 #ifdef ENABLE_FP16
         winograd3_transform_out(
             (half *)output, (const half *)input, (const half *)biases,
             (const half *)residual, (const half *)mask,
-            batch, channels, board_size, relu, stream);
+            batch, channels, board_size, act, stream);
 #endif
     } else {
         winograd3_transform_out(
             (float *)output, (const float *)input, (const float *)biases,
             (const float *)residual, (const float *)mask,
-            batch, channels, board_size, relu, stream);
+            batch, channels, board_size, act, stream);
     }
 }
 
 void DepthwiseConv(bool fp16, void *output, const void *input, const void *weights,
                    const void *biases, const void *residual, const void *mask,
                    int filter_size, int batch, int channels, int height, int width,
-                   bool relu, cudaStream_t stream) {
+                   Activation act, cudaStream_t stream) {
     if (fp16) {
 #ifdef ENABLE_FP16
         depthwise_conv(
             (half *)output, (const half *)input, (const half *)weights,
             (const half *)biases, (const half *)residual, (const half *)mask,
-            filter_size, batch, channels, height, width, relu, stream);
+            filter_size, batch, channels, height, width, act, stream);
 #endif
     } else {
         depthwise_conv(
             (float *)output, (const float *)input, (const float *)weights,
             (const float *)biases, (const float *)residual, (const float *)mask,
-            filter_size, batch, channels, height, width, relu, stream);
+            filter_size, batch, channels, height, width, act, stream);
     }
 }
 
@@ -241,7 +243,7 @@ Convolution::Convolution(CudaHandles *handles,
                          const int filter_size,
                          const int input_channels,
                          const int output_channels,
-                         bool ReLU) {
+                         Activation act) {
     width_ = board_size;
     height_ = board_size;
     spatial_size_ = width_ * height_;
@@ -256,7 +258,7 @@ Convolution::Convolution(CudaHandles *handles,
 
     fp16_ = handles->fp16;
     loaded_ = false;
-    relu_ = ReLU;
+    act_ = act;
 
 #ifdef USE_CUDNN
     cudnnCreateFilterDescriptor(&filter_desc_);
@@ -322,7 +324,7 @@ void Convolution::Forward(const int batch,
         fp16_, output, cuda_biases_,
         residual, mask,
         out_channels_,
-        batch, out_channels_, spatial_size_, relu_,
+        batch, out_channels_, spatial_size_, act_,
         handles_->stream);
 
 #else
@@ -351,7 +353,7 @@ void Convolution::Forward(const int batch,
         Winograd3TransformOut(
             fp16_, output, scratch_op_other,
             cuda_biases_, residual, mask,
-            batch, out_channels_, board_size, relu_, handles_->stream);
+            batch, out_channels_, board_size, act_, handles_->stream);
     } else {
         if (filters_ != 1) {
             Im2ColBatched(
@@ -383,7 +385,7 @@ void Convolution::Forward(const int batch,
             fp16_, output, cuda_biases_,
             residual, mask,
             out_channels_,
-            batch, out_channels_, spatial_size_, relu_,
+            batch, out_channels_, spatial_size_, act_,
             handles_->stream);
     }
 #endif
@@ -518,7 +520,7 @@ DepthwiseConvolution::DepthwiseConvolution(CudaHandles *handles,
                                            const int board_size,
                                            const int filter_size,
                                            const int channels,
-                                           bool ReLU) {
+                                           Activation act) {
     width_ = board_size;
     height_ = board_size;
     spatial_size_ = width_ * height_;
@@ -531,7 +533,7 @@ DepthwiseConvolution::DepthwiseConvolution(CudaHandles *handles,
 
     fp16_ = handles->fp16;
     loaded_ = false;
-    relu_ = ReLU;
+    act_ = act;
 }
 
 DepthwiseConvolution::~DepthwiseConvolution() {
@@ -555,7 +557,7 @@ void DepthwiseConvolution::Forward(const int batch,
         fp16_, output, input, cuda_weights_,
         cuda_biases_, residual, mask,
         filters_, batch, channels_, height_, width_,
-        relu_, handles_->stream);
+        act_, handles_->stream);
 }
 
 void DepthwiseConvolution::LoadWeights(const std::vector<float> &weights,
@@ -580,13 +582,13 @@ FullyConnect::FullyConnect(CudaHandles *handles,
                            const int max_batch,
                            const int inputs,
                            const int outputs,
-                           bool ReLU) {
+                           Activation act) {
     maxbatch_ = max_batch;
     inputs_ = inputs;
     outputs_ = outputs;
     fp16_ = handles->fp16;
     loaded_ = false;
-    relu_ = ReLU;
+    act_ = act;
     handles_ = handles;
 }
 
@@ -622,7 +624,7 @@ void FullyConnect::Forward(const int batch, void *output, void *input) {
          handles_->cublas_handle);
     AddVectors(
         fp16_, output, cuda_biases_, output,
-        outputs_ * batch, outputs_, outputs_ * batch, relu_, handles_->stream);
+        outputs_ * batch, outputs_, outputs_ * batch, act_, handles_->stream);
 }
 
 GlobalPooling::GlobalPooling(CudaHandles *handles,
@@ -660,11 +662,11 @@ SEUnit::SEUnit(CudaHandles *handles,
                const int board_size,
                const int channels,
                const int se_size,
-               bool ReLU) {
+               Activation act) {
     width_ = board_size;
     height_ = board_size;
     spatial_size_ = width_ * height_;
-    relu_ = ReLU;
+    act_ = act;
 
     fp16_ = handles->fp16;
     se_size_ = se_size;
@@ -707,7 +709,7 @@ void SEUnit::Forward(const int batch, void *ouput, void *input,
 
     const size_t fc1_input_size = 3 * channels_;
     const size_t fc1_output_size = se_size_;
-    const bool fc1_relu = true;
+    const Activation fc1_act = act_;
     Gemm(fp16_, false, true,
          batch, fc1_output_size, fc1_input_size,
          1.0f,
@@ -718,11 +720,11 @@ void SEUnit::Forward(const int batch, void *ouput, void *input,
          handles_->cublas_handle);
     AddVectors(
         fp16_, cuda_op_[1], cuda_weights_b1_, cuda_op_[1],
-        fc1_output_size * batch, fc1_output_size, fc1_output_size * batch, fc1_relu, handles_->stream);
+        fc1_output_size * batch, fc1_output_size, fc1_output_size * batch, fc1_act, handles_->stream);
 
     const size_t fc2_input_size = se_size_;
     const size_t fc2_output_size = 2 * channels_;
-    const bool fc2_relu = false;
+    const Activation fc2_act = Activation::kIdentity;
     Gemm(fp16_, false, true,
          batch, fc2_output_size, fc2_input_size,
          1.0f,
@@ -734,10 +736,10 @@ void SEUnit::Forward(const int batch, void *ouput, void *input,
 
     AddVectors(
         fp16_, cuda_op_[2], cuda_weights_b2_, cuda_op_[2],
-        fc2_output_size * batch, fc2_output_size, fc2_output_size * batch, fc2_relu, handles_->stream);
+        fc2_output_size * batch, fc2_output_size, fc2_output_size * batch, fc2_act, handles_->stream);
     SeScale(
         fp16_, ouput, input, residual, cuda_op_[2], mask,
-        batch, channels_, spatial_size_, relu_, handles_->stream);
+        batch, channels_, spatial_size_, act_, handles_->stream);
 }
 
 SEUnit::~SEUnit() {

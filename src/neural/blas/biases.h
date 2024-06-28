@@ -1,5 +1,7 @@
 #pragma once
 
+#include "neural/activation.h"
+
 #include <vector>
 #include <cstddef>
 
@@ -13,14 +15,13 @@ public:
                         const size_t channels,
                         std::vector<float> &input,
                         const std::vector<float> &biases,
-                        bool ReLU);
-
+                        const Activation act);
     static void Forward(const size_t board_size,
                         const size_t channels,
                         std::vector<float> &input,
                         const std::vector<float> &biases,
                         const std::vector<float> &residual,
-                        bool ReLU);
+                        const Activation act);
 };
 
 // step1. add biases
@@ -33,7 +34,7 @@ public:
                         const size_t channels,
                         std::vector<float> &input,
                         const std::vector<float> &biases,
-                        bool ReLU,
+                        const Activation act,
                         const std::vector<float> &residual);
 };
 
@@ -45,5 +46,5 @@ public:
     static void Forward(const size_t size,
                         std::vector<float> &input,
                         const std::vector<float> &biases,
-                        bool ReLU = false);
+                        const Activation act);
 };

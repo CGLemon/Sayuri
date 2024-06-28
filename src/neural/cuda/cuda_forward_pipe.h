@@ -12,6 +12,7 @@
 
 #include "neural/cuda/cuda_common.h"
 #include "neural/cuda/cuda_layers.h"
+#include "neural/activation.h"
 #include "neural/network_basic.h"
 #include "neural/description.h"
 

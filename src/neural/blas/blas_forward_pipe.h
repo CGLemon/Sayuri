@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include "neural/activation.h"
 #include "neural/network_basic.h"
 #include "neural/description.h"
 

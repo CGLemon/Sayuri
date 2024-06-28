@@ -64,6 +64,7 @@ void BlasForwardPipe::ResidualBlockForward(int board_size,
     using Convolution3 = Convolution<3>;
     const auto zero_vec = std::vector<float>{};
     const auto channels = weights_->residual_channels;
+    const auto default_act = weights_->default_act;
 
     // 1st conv3
     if (use_winograd) {
@@ -82,7 +83,7 @@ void BlasForwardPipe::ResidualBlockForward(int board_size,
     AddSpatialBiases::Forward(
         board_size, channels,
         conv_out,
-        tower_ptr->conv1.GetBiases(), true);
+        tower_ptr->conv1.GetBiases(), default_act);
 
     std::swap(conv_in, residual);
     std::swap(conv_out, conv_in);
@@ -103,13 +104,13 @@ void BlasForwardPipe::ResidualBlockForward(int board_size,
     }
 
     auto &last_skip = tower_ptr->apply_se ? zero_vec : residual;
-    bool last_relu = !(tower_ptr->apply_se);
+    auto last_act = tower_ptr->apply_se ? Activation::kIdentity : default_act;
 
     AddSpatialBiases::Forward(
         board_size, channels,
         conv_out,
         tower_ptr->conv2.GetBiases(),
-        last_skip, last_relu);
+        last_skip, last_act);
 }
 
 void BlasForwardPipe::BottleneckBlockForward(int board_size,
@@ -124,6 +125,7 @@ void BlasForwardPipe::BottleneckBlockForward(int board_size,
     const auto zero_vec = std::vector<float>{};
     const auto outer_channels = weights_->residual_channels;
     const auto inner_channels = tower_ptr->bottleneck_channels;
+    const auto default_act = weights_->default_act;
 
     // The pre-bottleneck conv1.
     Convolution1::Forward(
@@ -134,7 +136,7 @@ void BlasForwardPipe::BottleneckBlockForward(int board_size,
     AddSpatialBiases::Forward(
         board_size, inner_channels,
         conv_out,
-        tower_ptr->pre_btl_conv.GetBiases(), true);
+        tower_ptr->pre_btl_conv.GetBiases(), default_act);
 
     std::swap(conv_in, residual);
     std::swap(conv_out, conv_in);
@@ -156,7 +158,7 @@ void BlasForwardPipe::BottleneckBlockForward(int board_size,
     AddSpatialBiases::Forward(
         board_size, inner_channels,
         conv_out,
-        tower_ptr->conv1.GetBiases(), true);
+        tower_ptr->conv1.GetBiases(), default_act);
 
     std::swap(conv_out, conv_in);
 
@@ -177,7 +179,7 @@ void BlasForwardPipe::BottleneckBlockForward(int board_size,
     AddSpatialBiases::Forward(
         board_size, inner_channels,
         conv_out,
-        tower_ptr->conv2.GetBiases(), true);
+        tower_ptr->conv2.GetBiases(), default_act);
 
     std::swap(conv_out, conv_in);
 
@@ -189,13 +191,13 @@ void BlasForwardPipe::BottleneckBlockForward(int board_size,
         workspace0, conv_out);
 
     auto &last_skip = tower_ptr->apply_se ? zero_vec : residual;
-    bool last_relu = !(tower_ptr->apply_se);
+    auto last_act = tower_ptr->apply_se ? Activation::kIdentity : default_act;
 
     AddSpatialBiases::Forward(
         board_size, outer_channels,
         conv_out,
         tower_ptr->post_btl_conv.GetBiases(),
-        last_skip, last_relu);
+        last_skip, last_act);
 }
 
 void BlasForwardPipe::MixerBlockForward(int board_size,
@@ -207,6 +209,7 @@ void BlasForwardPipe::MixerBlockForward(int board_size,
     const auto channels = weights_->residual_channels;
     const auto ffn_channels = tower_ptr->feedforward_channels;
     const auto filter_size =  tower_ptr->dw_conv.GetFilter();
+    const auto default_act = weights_->default_act;
 
     // dw conv layer
     DepthwiseConvolution::Forward(
@@ -214,7 +217,7 @@ void BlasForwardPipe::MixerBlockForward(int board_size,
         conv_in, tower_ptr->dw_conv.GetWeights(), conv_out);
     AddSpatialBiasesPost::Forward(
         board_size, channels,
-        conv_out, tower_ptr->dw_conv.GetBiases(), true, conv_in);
+        conv_out, tower_ptr->dw_conv.GetBiases(), default_act, conv_in);
 
     std::swap(conv_out, conv_in);
 
@@ -227,7 +230,7 @@ void BlasForwardPipe::MixerBlockForward(int board_size,
     AddSpatialBiases::Forward(
         board_size, ffn_channels,
         conv_out,
-        tower_ptr->conv1.GetBiases(), true);
+        tower_ptr->conv1.GetBiases(), default_act);
 
     std::swap(conv_in, residual);
     std::swap(conv_out, conv_in);
@@ -240,12 +243,13 @@ void BlasForwardPipe::MixerBlockForward(int board_size,
         zero_vec, conv_out);
 
     auto &last_skip = tower_ptr->apply_se ? zero_vec : residual;
-    bool last_relu = !(tower_ptr->apply_se);
+    auto last_act = tower_ptr->apply_se ? Activation::kIdentity : default_act;
+
     AddSpatialBiases::Forward(
         board_size, channels,
         conv_out,
         tower_ptr->conv2.GetBiases(),
-        last_skip, last_relu);
+        last_skip, last_act);
 }
 
 OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
@@ -276,6 +280,8 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     const auto plane_size = kInputChannels * num_intersections;
     const auto max_intermediates = std::max(weights_->policy_extract_channels,
                                                 weights_->value_extract_channels);
+    const auto default_act = weights_->default_act;
+
 
     // Allocate the forward pipe buffers.
     bool use_winograd = weights_->winograd;
@@ -331,7 +337,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     AddSpatialBiases::Forward(
         board_size, residual_channels,
         conv_out,
-        weights_->input_conv.GetBiases(), true);
+        weights_->input_conv.GetBiases(), default_act);
 
     // The block tower.
     for (int i = 0; i < weights_->residual_blocks; ++i) {
@@ -362,7 +368,8 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                 tower_ptr->squeeze.GetWeights(),
                 tower_ptr->squeeze.GetBiases(),
                 tower_ptr->excite.GetWeights(),
-                tower_ptr->excite.GetBiases(), true);
+                tower_ptr->excite.GetBiases(),
+                default_act);
         }
     }
 
@@ -379,7 +386,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     AddSpatialBiases::Forward(
         board_size, policy_extract_channels,
         policy_conv,
-        weights_->p_ex_conv.GetBiases(), true);
+        weights_->p_ex_conv.GetBiases(), default_act);
 
     GlobalPooling<false>::Forward(
         board_size, policy_extract_channels,
@@ -390,12 +397,12 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
         pooling,
         weights_->p_inter_fc.GetWeights(),
         weights_->p_inter_fc.GetBiases(),
-        intermediate, true);
+        intermediate, default_act);
 
     AddSpatialBiases::Forward(
         board_size, policy_extract_channels,
         policy_conv,
-        intermediate, false);
+        intermediate, Activation::kIdentity);
 
     // The policy outs.
     Convolution1::Forward(
@@ -407,14 +414,14 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     AddSpatialBiases::Forward(
         board_size, kOuputProbabilitiesChannels,
         output_prob,
-        weights_->prob_conv.GetBiases(), false);
+        weights_->prob_conv.GetBiases(), Activation::kIdentity);
 
     FullyConnect::Forward(
         policy_extract_channels, kOuputPassProbability,
         intermediate,
         weights_->pass_fc.GetWeights(),
         weights_->pass_fc.GetBiases(),
-        output_pass, false);
+        output_pass, Activation::kIdentity);
 
     // The value head.
     const auto value_extract_channels = weights_->value_extract_channels;
@@ -429,7 +436,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     AddSpatialBiases::Forward(
         board_size, value_extract_channels,
         value_conv,
-        weights_->v_ex_conv.GetBiases(), true);
+        weights_->v_ex_conv.GetBiases(), default_act);
 
     GlobalPooling<true>::Forward(
         board_size, value_extract_channels,
@@ -440,7 +447,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
         pooling,
         weights_->v_inter_fc.GetWeights(),
         weights_->v_inter_fc.GetBiases(),
-        intermediate, true);
+        intermediate, default_act);
 
     // The value outs.
     Convolution1::Forward(
@@ -452,14 +459,14 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     AddSpatialBiases::Forward(
         board_size, kOuputOwnershipChannels,
         output_ownership,
-        weights_->v_ownership.GetBiases(), false);
+        weights_->v_ownership.GetBiases(), Activation::kIdentity);
 
     FullyConnect::Forward(
         3 * value_extract_channels, kOuputValueMisc,
         intermediate,
         weights_->v_misc.GetWeights(),
         weights_->v_misc.GetBiases(),
-        output_misc, false);
+        output_misc, Activation::kIdentity);
 
     // Now copy the result.
     auto result = OutputResult{};

@@ -2,6 +2,7 @@
 
 #ifdef USE_CUDA
 #include "neural/cuda/cuda_common.h"
+#include "neural/activation.h"
 
 #include <vector>
 #include <array>
@@ -11,14 +12,14 @@ namespace cuda {
 void AddSpatial(bool fp16, void *data, const void *biases,
                 const void *residual, const void *mask,
                 int bsize, int batch, int channels, int spatial,
-                bool relu, cudaStream_t stream);
+                Activation act, cudaStream_t stream);
 
 class LayerBasic {
 protected:
     CudaHandles *handles_{nullptr};
     bool loaded_{false};
-    bool relu_{false};
     bool fp16_{false};
+    Activation act_{Activation::kIdentity};
 
     int maxbatch_{0};
     int width_{0};
@@ -32,7 +33,7 @@ public:
     Convolution(CudaHandles *handles, const int batch,
                 const int board_size, const int filter,
                 const int in_channels, const int out_channels,
-                bool ReLU = true);
+                Activation act);
     ~Convolution();
 
     void Forward(const int batch,
@@ -76,7 +77,7 @@ public:
     DepthwiseConvolution() = default;
     DepthwiseConvolution(CudaHandles *handles, const int batch,
                          const int board_size, const int filter,
-                         const int channels, bool ReLU = true);
+                         const int channels, Activation act);
     ~DepthwiseConvolution();
 
     void Forward(const int batch,
@@ -103,7 +104,7 @@ public:
                  const int batch,
                  const int inputs,
                  const int outputs,
-                 bool ReLU);
+                 Activation act);
     ~FullyConnect();
 
     void Forward(const int batch, void *output, void *input);
@@ -144,7 +145,7 @@ public:
            const int board_size,
            const int channels,
            const int se_size,
-           bool ReLU);
+           Activation act);
     ~SEUnit();
 
     void LoadWeights(const std::vector<float> &weights_w1,

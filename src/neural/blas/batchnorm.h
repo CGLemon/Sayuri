@@ -1,5 +1,7 @@
 #pragma once
 
+#include "neural/activation.h"
+
 #include <vector>
 #include <cstddef>
 
@@ -12,5 +14,5 @@ public:
                         const std::vector<float> &means,
                         const std::vector<float> &stddevs,
                         const float *const eltwise = nullptr,
-                        const bool ReLU = true);
+                        const Activation act = Activation::kIdentity);
 };

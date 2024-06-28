@@ -75,15 +75,15 @@ void SEUnit::Forward(const size_t board_size,
                      const std::vector<float> &weights_b1,
                      const std::vector<float> &weights_w2,
                      const std::vector<float> &weights_b2,
-                     bool ReLU) {
+                     const Activation act) {
     using Pooling = GlobalPooling<false>;
     auto pool = std::vector<float>(3 * channels);
     auto fc_out = std::vector<float>(se_size);
 
     Pooling::Forward(board_size, channels, input, pool);
-    FullyConnect::Forward(3*channels, se_size, pool, weights_w1, weights_b1, fc_out, true);
-    FullyConnect::Forward(se_size, 2*channels, fc_out, weights_w2, weights_b2, pool, false);
-    SEProcess(board_size, channels, input, residual, pool, ReLU);
+    FullyConnect::Forward(3*channels, se_size, pool, weights_w1, weights_b1, fc_out, act);
+    FullyConnect::Forward(se_size, 2*channels, fc_out, weights_w2, weights_b2, pool, Activation::kIdentity);
+    SEProcess(board_size, channels, input, residual, pool, act);
 }
 
 void SEUnit::SEProcess(const size_t board_size,
@@ -91,14 +91,10 @@ void SEUnit::SEProcess(const size_t board_size,
                        std::vector<float> &input,
                        const std::vector<float> &residual,
                        const std::vector<float> &scale,
-                       bool ReLU) {
+                       const Activation act) {
     const auto width = board_size;
     const auto height = board_size;
     const auto spatial_size = width * height;
-
-    const auto lambda_ReLU = [ReLU](const auto val) {
-        return (val > 0.0f || (!ReLU)) ? val : 0.0f;
-    };
 
     const auto lambda_sigmoid = [](const auto val) {
         return 1.0f / (1.0f + std::exp(-val));
@@ -123,7 +119,10 @@ void SEUnit::SEProcess(const size_t board_size,
                 val += *residual_ptr;
                 residual_ptr++;
             }
-            *input_ptr = lambda_ReLU(val);
+
+            ACTIVATION_FUNC(val, act);
+
+            *input_ptr = val;
             input_ptr++;
         }
     }
