@@ -773,6 +773,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         gogui_cmds << "gfx/Win-Draw-Loss Rating/gogui-wdl_rating";
         gogui_cmds << "\ngfx/Policy Heatmap/gogui-policy_heatmap";
         gogui_cmds << "\ngfx/Policy Rating/gogui-policy_rating";
+        gogui_cmds << "\ngfx/Target Policy Rating/gogui-target_policy_rating";
         gogui_cmds << "\ngfx/Ownership Heatmap/gogui-ownership_heatmap 0";
         gogui_cmds << "\ngfx/Ownership Influence/gogui-ownership_influence 0";
         gogui_cmds << "\ngfx/MCTS Ownership Heatmap/gogui-ownership_heatmap 400";
@@ -860,6 +861,48 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             if (prob > ave_pol) {
                 if (max_idx < 0 ||
                         result.probabilities[max_idx] < prob) {
+                    max_idx = idx;
+                }
+
+                policy_rating << '\n';
+                policy_rating << GoguiLable(prob, agent_->GetState().VertexToText(vtx));
+            }
+        }
+
+        auto policy_rating_var = std::ostringstream{};
+
+        const auto x = max_idx % board_size;
+        const auto y = max_idx / board_size;
+        const auto max_vtx = agent_->GetState().GetVertex(x,y);
+
+        if (agent_->GetState().GetToMove() == kBlack) {
+            policy_rating_var << Format("VAR b %s", agent_->GetState().VertexToText(max_vtx).c_str());
+        } else {
+            policy_rating_var << Format("VAR w %s", agent_->GetState().VertexToText(max_vtx).c_str());
+        }
+        policy_rating_var << policy_rating.str();
+
+        out << GtpSuccess(policy_rating_var.str());
+    } else if (const auto res = spt.Find("gogui-target_policy_rating", 0)) {
+        agent_->GetSearch().ReleaseTree();
+        agent_->GetNetwork().ClearCache();
+        auto result = agent_->GetSearch().Computation(GetOption<int>("playouts"), Search::kNullTag);
+        const auto board_size = result.board_size;
+        const auto num_intersections = board_size * board_size;
+        const auto ave_pol = 1.f / (float)num_intersections;
+
+        auto policy_rating = std::ostringstream{};
+        int max_idx = -1;
+
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            const auto x = idx % board_size;
+            const auto y = idx / board_size;
+            const auto vtx = agent_->GetState().GetVertex(x,y);
+
+            auto prob = result.target_playouts_dist[idx];
+            if (prob > ave_pol) {
+                if (max_idx < 0 ||
+                        result.target_playouts_dist[max_idx] < prob) {
                     max_idx = idx;
                 }
 
