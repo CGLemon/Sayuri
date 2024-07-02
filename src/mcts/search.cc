@@ -515,7 +515,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         result.root_visits[index] = visits;
     }
 
-    // Fill raw probabilities.
+    // Fill raw search distribution.
     if (parentvisits != 0) {
         for (int idx = 0; idx < num_intersections+1; ++idx) {
             result.root_playouts_dist[idx] =
@@ -528,47 +528,42 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     }
 
     // Fill target distribution.
-    if (parentvisits != 0 &&
-            (root_node_->ShouldApplyGumbel() ||
-             param_->always_completed_q_policy)) {
-        result.target_playouts_dist =
-            root_node_->GetProbLogitsCompletedQ(root_state_);
+    auto prob_with_completed_q =
+        root_node_->GetProbLogitsCompletedQ(root_state_);
+
+    if (parentvisits == 0) {
+        // No useful distribution.
+        result.target_playouts_dist = result.root_playouts_dist;
+    } else if (root_node_->ShouldApplyGumbel() ||
+                   param_->always_completed_q_policy) {
+        // Apply Gumbel Target policy.
+        result.target_playouts_dist = prob_with_completed_q;
     } else {
-        float accm_target_policy = 0.0f;
-        size_t target_cnt = 0;
+        // Merge two policy.
+        auto target_dist_buf = result.root_playouts_dist;
         for (int idx = 0; idx < num_intersections+1; ++idx) {
-            int vertex;
-
-            if (idx == num_intersections) {
-                vertex = kPass;
-            } else {
-                vertex = root_state_.IndexToVertex(idx);
-            }
-
-            auto node = root_node_->GetChild(vertex);
-
-            // TODO: Prune more bad children in order to get better
-            //       target playouts distribution.
-            if (node != nullptr &&
-                    node->GetVisits() > 1 &&
-                    node->IsActive()) {
-                const auto prob = result.root_playouts_dist[idx];
-                result.target_playouts_dist[idx] = prob;
-                accm_target_policy += prob;
-                target_cnt += 1;
-            } else {
-                result.target_playouts_dist[idx] = 0.0f;
-            }
+            float factor = std::min(std::min(parentvisits, 800) / 800.f, 1.0f);
+            target_dist_buf[idx] = factor * target_dist_buf[idx] + (1.0f - factor) * prob_with_completed_q[idx];
         }
 
-        if (target_cnt == 0) {
+        // Prune bad moves.
+        float accm_target_policy = 0.0f;
+        for (int idx = 0; idx < num_intersections+1; ++idx) {
+            if (prob_with_completed_q[idx] < 1e-4f) {
+                target_dist_buf[idx] = 0.0f;
+            }
+            accm_target_policy += target_dist_buf[idx];
+        }
+
+        if (accm_target_policy < 1e-4f) {
             // All moves are pruned. We directly use the raw
             // distribution.
-            result.target_playouts_dist = result.root_playouts_dist;
+            result.target_playouts_dist = prob_with_completed_q;
         } else {
-            for (auto &prob : result.target_playouts_dist) {
-                prob /= accm_target_policy;
+            for (int idx = 0; idx < num_intersections+1; ++idx) {
+                target_dist_buf[idx] /= accm_target_policy;
             }
+            result.target_playouts_dist = target_dist_buf;
         }
     }
 
