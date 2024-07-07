@@ -1,6 +1,6 @@
 
 <div id="sayuri-art" align="center">
-    <br/>
+    </br>
     <img src="./img/sayuri-art.PNG" alt="Sayuri Art" width="768"/>
     <h3>Sayuri</h3>
 </div>
@@ -16,9 +16,9 @@ Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network a
 
 First, you need a executable weights. Download the old v0.6 weights [here](https://drive.google.com/drive/folders/1nawHAKHTBKEpLcizaVrK4GVDSIuVqJ-Q?usp=sharing) or last v0.7 weights [here](https://drive.google.com/drive/folders/1_wnDk50g35ekb41Eg3VcoYlSfXt-ngQl). Some description of weights and RL progression is [here](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJew5OFci). If you want to use the older network, please use the v0.5 engine at the ```save-last-v050``` branch.
 
-Then start the program with GTP mode via the terminal/PowerShell, please enter
+Then start the program with GTP mode via the terminal/PowerShell, using 1 thread and 400 visits per move with optimistic policy, please enter
 
-    $ ./sayuri -w <weights file> -t 1 -b 1 -p 400 --use-optimistic-policy
+    $ ./sayuri -w <weights file> -t 1 -p 400 --use-optimistic-policy
 
 You will see the diagnostic verbose. If the verbose includes ```Network Verison``` information, it means you success to execute the program with GPT mode. For more arguments, please give the ```--help``` option.
 
@@ -42,9 +42,11 @@ Please see this [section](./docs/COMPILE.md). If you are Windows platform, you m
 
 ## Reinforcement Learning
 
-Sayuri is a fairly fast self-play learning system for the game of Go. The current performance is apparently better than KataGo g104 which is one of fastest system in 2019s. The pictute shows the performance of v0.6 engine (orange point) versus KataGo and LeelaZero. The picture source is [here](https://arxiv.org/abs/1902.10565). [Here](./bash/README.md) will describe how to build the self-play loop.
+Sayuri is a fairly fast self-play learning system for the game of Go. The pictute shows the estimated computation of v0.7 engine (purple line) versus KataGo and LeelaZero. Compare sayuri with ELF OpenGo, achieving a around 250x reduction in computation. In detail, spending 3 months on a single RTX4080 device. The result is apparently better than KataGo g104 which claims 50x reduction in computation.
 
-![vs-kata](./img/katavslz-sayuri.png)
+[Here](./bash/README.md) will describe how to run the self-play loop.
+
+![sayuri-vs-kata](./img/sayurivskata-v7.png)
 
 ## Todo
 
