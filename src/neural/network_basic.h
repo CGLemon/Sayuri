@@ -31,6 +31,11 @@ struct OutputResult {
         probabilities.fill(0.f);
         ownership.fill(0.f);
     }
+    void ImportQueryInfo(OutputResult &other) {
+        fp16 = other.fp16;
+        board_size = other.board_size;
+        komi = other.komi;
+    }
 
     bool fp16{false};
     int board_size{-1};

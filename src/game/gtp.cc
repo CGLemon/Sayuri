@@ -578,14 +578,19 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         }
     } else if (const auto res = spt.Find("raw-nn", 0)) {
         int symmetry = Symmetry::kIdentitySymmetry;
+        bool use_avg = false;
 
         if (const auto symm = spt.GetWord(1)) {
-            symmetry = symm->Get<int>();
+            if (symm->Get<>() == "avg" || symm->Get<>() == "average") {
+                use_avg = true;
+            } else {
+                symmetry = symm->Get<int>();
+            }
         }
-
         if (symmetry <= 8 && symmetry >= 0) {
+            auto ensemble = use_avg ? Network::kAverage : Network::kDirect;
             out << GtpSuccess(agent_->GetNetwork().GetOutputString(
-                       agent_->GetState(), Network::kDirect, Network::Query::SetSymmetry(symmetry)));
+                       agent_->GetState(), ensemble, Network::Query::SetSymmetry(symmetry)));
         } else {
             out << GtpFail("symmetry must be from 0 to 7");
         }

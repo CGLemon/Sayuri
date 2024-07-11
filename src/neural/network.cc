@@ -256,7 +256,6 @@ bool Network::ProbeCache(const GameState &state,
 Network::Result Network::GetOutput(const GameState &state,
                                    const Ensemble ensemble,
                                    Network::Query query) {
-    Result result;
     if (ensemble == kNone) {
         query.symmetry = Symmetry::kIdentitySymmetry;
     } else if (ensemble == kDirect) {
@@ -265,28 +264,48 @@ Network::Result Network::GetOutput(const GameState &state,
         query.symmetry = Random<>::Get().RandFix<Symmetry::kNumSymmetris>();
     }
 
-    if (no_cache_) {
+    if (no_cache_ || ensemble == kAverage) {
         query.read_cache = false;
         query.write_cache = false;
     }
-    bool probed = false;
 
-    // Try to get forwarding result from cache.
-    if (query.read_cache) {
-        probed = ProbeCache(state, result);
+    Result result;
+    if (query.read_cache && ProbeCache(state, result)) {
+        ActivatePolicy(result, query.temperature);
+        return result;
     }
 
-    if (!probed) {
-        result = GetOutputInternal(state, query.symmetry);
+    if (ensemble == kAverage) {
+        for (int symm = Symmetry::kIdentitySymmetry; symm < Symmetry::kNumSymmetris; ++symm) {
+            auto inter_result = GetOutputInternal(state, symm);
+            const auto boardsize = inter_result.board_size;
+            const auto num_intersections = boardsize * boardsize;
+            ActivatePolicy(inter_result, query.temperature);
 
-        // Write forwarding result to cache.
+            result.pass_probability += inter_result.pass_probability / Symmetry::kNumSymmetris;
+            result.wdl_winrate += inter_result.wdl_winrate / Symmetry::kNumSymmetris;
+            result.stm_winrate += inter_result.stm_winrate / Symmetry::kNumSymmetris;
+            result.final_score += inter_result.final_score / Symmetry::kNumSymmetris;
+            result.q_error += inter_result.q_error / Symmetry::kNumSymmetris;
+            result.score_error += inter_result.score_error / Symmetry::kNumSymmetris;
+            for (int idx = 0; idx < 3; ++idx) {
+                result.wdl[idx] += inter_result.wdl[idx] / Symmetry::kNumSymmetris;
+            }
+            for (int idx = 0; idx < num_intersections; ++idx) {
+                result.probabilities[idx] += inter_result.probabilities[idx] / Symmetry::kNumSymmetris;
+                result.ownership[idx] += inter_result.ownership[idx] / Symmetry::kNumSymmetris;
+            }
+            if (symm == Symmetry::kIdentitySymmetry) {
+                result.ImportQueryInfo(inter_result);
+            }
+        }
+    } else {
+        result = GetOutputInternal(state, query.symmetry);
         if (query.write_cache) {
             nn_cache_.Insert(state.GetHash(), result);
         }
+        ActivatePolicy(result, query.temperature);
     }
-
-    ActivatePolicy(result, query.temperature);
-
     return result;
 }
 
