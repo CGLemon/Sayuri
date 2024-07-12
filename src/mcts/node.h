@@ -168,7 +168,7 @@ public:
     float GetFinalScore(const int color) const;
 
     // Get the average win-loss value.
-    float GetWL(const int color, const bool use_virtual_loss=true) const;
+    float GetWL(const int color) const;
 
     // Get the average draw value.
     float GetDraw() const;
@@ -189,6 +189,7 @@ public:
 
     void IncrementThreads();
     void DecrementThreads();
+    int GetRunningThreads() const;
 
     bool Expandable() const;
     bool IsExpanding() const;
@@ -234,7 +235,6 @@ private:
 
     void InflateAllChildren();
     void ReleaseAllChildren();
-    int GetVirtualLoss() const;
 
     float GetGumbelQValue(int color, float parent_score) const;
     float TransformCompletedQ(const float completed_q,

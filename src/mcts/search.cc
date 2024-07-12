@@ -350,7 +350,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
             // If someone already won the game, the Q value was not very effective
             // in the MCTS. Low playouts with policy network is good enough. Just
             // simply stop the tree search.
-            float wl = root_node_->GetWL(color, false);
+            float wl = root_node_->GetWL(color);
             keep_running &= !(wl < param_->resign_threshold ||
                                 wl > (1.f-param_->resign_threshold));
         }
@@ -470,13 +470,13 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     result.gumbel_move = root_node_->GetGumbelMove(true);
     result.gumbel_no_pass_move = root_node_->GetGumbelMove(false);
     result.root_score_lead = root_node_->GetFinalScore(color);
-    result.root_eval = root_node_->GetWL(color, false);
+    result.root_eval = root_node_->GetWL(color);
     result.root_score_stddev = root_node_->GetScoreStddev();
     result.root_eval_stddev = root_node_->GetWLStddev();
     {
         auto best_node = root_node_->GetChild(result.best_move);
         if (best_node->GetVisits() >= 1) {
-           result.best_eval = best_node->GetWL(color, false);
+           result.best_eval = best_node->GetWL(color);
         } else {
            result.best_eval = result.root_eval;
         }
@@ -1390,7 +1390,7 @@ bool Search::HaveAlternateMoves(const float elapsed, const float limit,
         bool has_enough_visits =
             visits + estimated_playouts >= topvisits;
         bool has_high_winrate =
-            visits > 0 ? node->GetWL(color, false) >= toplcb : false;
+            visits > 0 ? node->GetWL(color) >= toplcb : false;
         if (!(has_enough_visits || has_high_winrate)) {
             ++bad_cnt;
         }

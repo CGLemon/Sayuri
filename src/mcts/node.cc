@@ -503,11 +503,11 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
 
         if (is_pointer && node->IsValid()) {
             // The node status is pruned or active.
-            const auto visits = node->GetVisits();
-            parentvisits += visits;
+            const auto visits = node->GetVisits() + node->GetRunningThreads();
             if (visits > 0) {
                 total_visited_policy += child.GetPolicy();
             }
+            parentvisits += visits;
         }
     }
 
@@ -583,7 +583,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
                 }
             }
             cpuct *= GetDynamicCpuctFactor(node, visits, parentvisits);
-            denom += visits;
+            denom += (visits + node->GetRunningThreads());
         }
 
         // PUCT algorithm
@@ -830,7 +830,7 @@ float Node::GetLcb(const int color) const {
         return GetPolicy() - 1e6f;
     }
 
-    const auto mean = GetWL(color, false);
+    const auto mean = GetWL(color);
     const auto variance = GetWLVariance(1.0f, visits);
     const auto stddev = std::sqrt(variance);
     const auto z = LcbEntries::Get().CachedTQuantile(visits - 1);
@@ -850,7 +850,7 @@ std::string Node::GetPathVerboseString(GameState &state, int color,
         curr_node = curr_node->GetChild(moves[depth++]);
         if (curr_node) {
             const auto vertex = curr_node->GetVertex();
-            const auto winrate = curr_node->GetWL(color, false);
+            const auto winrate = curr_node->GetWL(color);
             const auto score = curr_node->GetFinalScore(color);
             const auto policy = curr_node->GetPolicy();
             const auto raw_winrate = curr_node->GetNetWL(color);
@@ -915,7 +915,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
         assert(visits != 0);
 
         const auto final_score = child->GetFinalScore(color);
-        const auto eval = child->GetWL(color, false);
+        const auto eval = child->GetWL(color);
         const auto draw = child->GetDraw();
 
         const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
@@ -1004,7 +1004,7 @@ std::string Node::ToAnalysisString(GameState &state,
 
         auto child = GetChild(vertex);
         const auto final_score = child->GetFinalScore(color);
-        const auto winrate = child->GetWL(color, false);
+        const auto winrate = child->GetWL(color);
         const auto visits = child->GetVisits();
         const auto prior = child->GetPolicy();
         const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
@@ -1189,11 +1189,6 @@ const std::vector<Node::Edge> &Node::GetChildren() const {
     return children_;
 }
 
-int Node::GetVirtualLoss() const {
-    return VIRTUAL_LOSS_COUNT *
-               running_threads_.load(std::memory_order_relaxed);
-}
-
 int Node::GetVertex() const {
     return vertex_;
 }
@@ -1233,21 +1228,10 @@ float Node::GetNetScore(const int color) const {
     return 0.0f - black_fs_;
 }
 
-float Node::GetWL(const int color, const bool use_virtual_loss) const {
-    auto virtual_loss = 0;
-
-    if (use_virtual_loss) {
-        // Punish the node if there are some threads under this
-        // sub-tree.
-        virtual_loss = GetVirtualLoss();
-    }
-
-    auto visits = GetVisits() + virtual_loss;
-    auto accumulated_wl = accumulated_black_wl_.load(std::memory_order_relaxed);
-    if (color == kWhite && use_virtual_loss) {
-        accumulated_wl += static_cast<double>(virtual_loss);
-    }
-    auto eval = accumulated_wl / visits;
+float Node::GetWL(const int color) const {
+    const auto visits = GetVisits();
+    const auto accumulated_wl = accumulated_black_wl_.load(std::memory_order_relaxed);
+    const auto eval = accumulated_wl / visits;
 
     if (color == kBlack) {
         return eval;
@@ -1289,6 +1273,10 @@ void Node::IncrementThreads() {
 
 void Node::DecrementThreads() {
     running_threads_.fetch_sub(1, std::memory_order_relaxed);
+}
+
+int Node::GetRunningThreads() const {
+    return running_threads_.load(std::memory_order_relaxed);
 }
 
 void Node::SetActive(const bool active) {
@@ -1456,7 +1444,7 @@ float Node::GetGumbelQValue(int color, float parent_score) const {
     const auto utility = score_utility_factor *
                                  GetScoreUtility(
                                      color, score_utility_div, parent_score);
-    const auto mixed_q = GetWL(color, false) + utility;
+    const auto mixed_q = GetWL(color) + utility;
     return mixed_q;
 }
 
