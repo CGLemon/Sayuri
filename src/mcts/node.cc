@@ -1503,7 +1503,7 @@ void Node::MixLogitsCompletedQ(GameState &state,
 
     // The 'prob' size should be intersections number plus
     // one pass move.
-    if (num_intersections+1 != (int)prob.size()) {
+    if (num_intersections + 1 != static_cast<int>(prob.size())) {
         return;
     }
 
@@ -1536,8 +1536,6 @@ void Node::MixLogitsCompletedQ(GameState &state,
 
     // Compute the all children's completed Q.
     auto completed_q_list = std::vector<float>{};
-    float max_completed_q = std::numeric_limits<float>::min();
-    float min_completed_q = std::numeric_limits<float>::max();
 
     // Mix the raw value and approximate Q value. It may help
     // to improve the performance when the parentvisits is very
@@ -1563,31 +1561,6 @@ void Node::MixLogitsCompletedQ(GameState &state,
             completed_q = node->GetGumbelQValue(color, parent_score);
         }
         completed_q_list.emplace_back(completed_q);
-
-        max_completed_q = std::max(max_completed_q, completed_q);
-        min_completed_q = std::min(min_completed_q, completed_q);
-    }
-
-    // Shift the completed Q. Be sure that the completed Q
-    // is bigger than zero.
-    if (min_completed_q <= 0.f) {
-        const auto shift = (-min_completed_q);
-        for (auto &q : completed_q_list) {
-            q += shift;
-        }
-        max_completed_q += shift;
-        min_completed_q += shift;
-    }
-
-    // Rescale the completed Q. Be sure that the completed Q
-    // is lower than one.
-    if (max_completed_q >= 1.f) {
-        const auto factor = 1.f/max_completed_q;
-        for (auto &q : completed_q_list) {
-            q *= factor;
-        }
-        max_completed_q *= factor;
-        min_completed_q *= factor;
     }
 
     // Apply the completed Q with policy.
@@ -1616,7 +1589,7 @@ void Node::MixLogitsCompletedQ(GameState &state,
     double o = 0.;
     for (auto &v : prob) {
         if (v < noise_threshold) {
-            v = 0;
+            v = 0.;
         } else {
             o += v;
         }
