@@ -173,6 +173,11 @@ public:
     // Get the average draw value.
     float GetDraw() const;
 
+    // Get First Play Urgency (FPU) for unvisited children.
+    float GetFpu(const int color,
+                 const float total_visited_policy,
+                 const bool is_root) const;
+
     // Get the average ownership value.
     std::array<float, kNumIntersections> GetOwnership(int color);
 
