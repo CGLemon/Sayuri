@@ -22,7 +22,7 @@ public:
         resign_threshold = GetOption<float>("resign_threshold");
         lcb_reduction = GetOption<float>("lcb_reduction");
         fpu_reduction = GetOption<float>("fpu_reduction");
-        fpu_root_reduction = GetOption<float>("fpu_root_reduction");
+        root_fpu_reduction = GetOption<float>("root_fpu_reduction");
         cpuct_init = GetOption<float>("cpuct_init");
         cpuct_base_factor = GetOption<float>("cpuct_base_factor");
         cpuct_base = GetOption<float>("cpuct_base");
@@ -91,7 +91,7 @@ public:
 
     float lcb_reduction;
     float fpu_reduction;
-    float fpu_root_reduction;
+    float root_fpu_reduction;
     float cpuct_init;
     float cpuct_base_factor;
     float cpuct_base;

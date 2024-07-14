@@ -1256,7 +1256,7 @@ float Node::GetFpu(const int color,
     // unvisited nodes are same as parent's. The NN-based MCTS favors
     // the visited node. So give the unvisited node a little bad favour
     // (FPU reduction) in order to reduce the priority. 
-    const auto fpu_reduction_max = is_root ? param_->fpu_root_reduction : param_->fpu_reduction;
+    const auto fpu_reduction_max = is_root ? param_->root_fpu_reduction : param_->fpu_reduction;
     const auto fpu_reduction = fpu_reduction_max * std::sqrt(total_visited_policy);
 
     const auto avg_factor = std::pow(total_visited_policy, 2.0f);

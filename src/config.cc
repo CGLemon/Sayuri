@@ -30,7 +30,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["fp16"] << Option::SetOption(true);
     kOptionsMap["capture_all_dead"] << Option::SetOption(false);
 
-    kOptionsMap["timemanage"] << Option::SetOption((int)TimeControl::TimeManagement::kOff);
+    kOptionsMap["timemanage"] << Option::SetOption(static_cast<int>(TimeControl::TimeManagement::kOff));
 
     kOptionsMap["fixed_nn_boardsize"] << Option::SetOption(0);
     kOptionsMap["defualt_boardsize"] << Option::SetOption(kDefaultBoardSize);
@@ -58,7 +58,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["ci_alpha"] << Option::SetOption(1e-5f, 1.f, 0.f);
     kOptionsMap["lcb_reduction"] << Option::SetOption(0.02f, 1.f, 0.f);
     kOptionsMap["fpu_reduction"] << Option::SetOption(0.25f);
-    kOptionsMap["fpu_root_reduction"] << Option::SetOption(0.25f);
+    kOptionsMap["root_fpu_reduction"] << Option::SetOption(0.25f);
     kOptionsMap["cpuct_init"] << Option::SetOption(0.5f);
     kOptionsMap["cpuct_base_factor"] << Option::SetOption(1.0f);
     kOptionsMap["cpuct_base"] << Option::SetOption(19652.f);
@@ -71,7 +71,6 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["forced_playouts_k"] << Option::SetOption(0.f);
 
     kOptionsMap["relative_rank"] << Option::SetOption(-1);
-    kOptionsMap["kldgain"] << Option::SetOption(std::string{"0"});
 
     kOptionsMap["root_policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
@@ -244,10 +243,10 @@ void ArgsParser::InitBasicParameters() const {
     }
 
     // Set the root fpu value.
-    bool already_set_fpu_root = !IsOptionDefault("fpu_root_reduction");
+    bool already_set_fpu_root = !IsOptionDefault("root_fpu_reduction");
     if (!already_set_fpu_root) {
         bool as_default = true;
-        SetOption("fpu_root_reduction",
+        SetOption("root_fpu_reduction",
                       GetOption<float>("fpu_reduction"),
                       as_default);
     }
@@ -395,13 +394,13 @@ void ArgsParser::Parse(Splitter &spt) {
         if (IsParameter(res->Get<>()) &&
                 AcceptSet(res->Get<>(), {"off", "on", "fast", "keep"})) {
             if (res->Get<>() == "off") {
-                SetOption("timemanage", (int)TimeControl::TimeManagement::kOff);
+                SetOption("timemanage", static_cast<int>(TimeControl::TimeManagement::kOff));
             } else if (res->Get<>() == "on") {
-                SetOption("timemanage", (int)TimeControl::TimeManagement::kOn);
+                SetOption("timemanage", static_cast<int>(TimeControl::TimeManagement::kOn));
             } else if (res->Get<>() == "fast") {
-                SetOption("timemanage", (int)TimeControl::TimeManagement::kFast);
+                SetOption("timemanage", static_cast<int>(TimeControl::TimeManagement::kFast));
             } else if (res->Get<>() == "keep") {
-                SetOption("timemanage", (int)TimeControl::TimeManagement::kKeep);
+                SetOption("timemanage", static_cast<int>(TimeControl::TimeManagement::kKeep));
             }
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
@@ -787,9 +786,9 @@ void ArgsParser::Parse(Splitter &spt) {
         }
     }
 
-    if (const auto res = spt.FindNext("--fpu-root-reduction")) {
+    if (const auto res = spt.FindNext("--root-fpu-reduction")) {
         if (IsParameter(res->Get<>())) {
-            SetOption("fpu_root_reduction", res->Get<float>());
+            SetOption("root_fpu_reduction", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
