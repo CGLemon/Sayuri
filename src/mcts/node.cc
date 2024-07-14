@@ -1260,7 +1260,7 @@ float Node::GetFpu(const int color,
     const auto fpu_reduction = fpu_reduction_max * std::sqrt(total_visited_policy);
 
     const auto avg_factor = std::pow(total_visited_policy, 2.0f);
-    const auto fpu_value = (1.0f - avg_factor) * GetNetWL(color) + avg_factor * GetWL(color);
+    const auto fpu_value = (1.0f - avg_factor) * GetNetWL(color) + avg_factor * GetWL(color, false);
     return fpu_value - fpu_reduction;
 }
 
