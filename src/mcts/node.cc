@@ -1255,10 +1255,14 @@ float Node::GetFpu(const int color,
     // Apply First Play Urgency (FPU). We should think the value of the
     // unvisited nodes are same as parent's. The NN-based MCTS favors
     // the visited node. So give the unvisited node a little bad favour
-    // (FPU reduction) in order to reduce the priority. 
+    // (FPU reduction) in order to reduce the priority.
+    const auto visits = GetVisits();
     const auto fpu_reduction_max = is_root ? param_->root_fpu_reduction : param_->fpu_reduction;
     const auto fpu_reduction = fpu_reduction_max * std::sqrt(total_visited_policy);
 
+    if (visits <= 0) {
+        return GetNetWL(color) - fpu_reduction;
+    }
     const auto avg_factor = std::pow(total_visited_policy, 2.0f);
     const auto fpu_value = (1.0f - avg_factor) * GetNetWL(color) + avg_factor * GetWL(color, false);
     return fpu_value - fpu_reduction;
