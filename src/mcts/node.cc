@@ -84,6 +84,8 @@ void Node::Recompute(Network &network,
         return;
     }
 
+    // Policy softmax temperature. If 't' is greater than 1, policy
+    // will be broader. If 't' is less than 1, policy will be sharper.
     const float temp = is_root ?
                 param_->root_policy_temp : param_->policy_temp;
     auto raw_netlist = network.GetOutput(
@@ -106,7 +108,7 @@ void Node::Recompute(Network &network,
         legal_accumulate += raw_netlist.pass_probability;
     }
 
-    // Assign the new policy.
+    // Assign the new policy for children.
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto vtx = state.IndexToVertex(idx);
         auto node = GetChild(vtx);
@@ -468,9 +470,6 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     const auto cpuct_init           = param_->cpuct_init;
     const auto cpuct_base_factor    = param_->cpuct_base_factor;
     const auto cpuct_base           = param_->cpuct_base;
-    const auto draw_factor          = param_->draw_factor;
-    const auto score_utility_factor = param_->score_utility_factor;
-    const auto score_utility_div    = param_->score_utility_div;
     const auto noise                = is_root ? param_->dirichlet_noise : false;
     const auto forced_playouts_k    = is_root ? param_->forced_playouts_k : 0.f;
 
@@ -496,7 +495,6 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
         const float psa = GetSearchPolicy(child, noise);
 
         float denom = 1.0f;
-        float utility = 0.0f; // the utility value
         float cpuct = raw_cpuct;
 
         if (is_pointer) {
@@ -507,15 +505,9 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
                 // threads in this node.
                 q_value = std::min(fpu_value, -1.0f);
             } else if (visits > 0) {
-                // Transfer win-draw-loss to side-to-move value (Q value).
-                const float eval = node->GetWL(color);
-                const float draw_value = node->GetDraw() * draw_factor;
-                q_value = eval + draw_value;
-
-                // Heuristic value for score lead.
-                utility += score_utility_factor *
-                               node->GetScoreUtility(
-                                   color, score_utility_div, parent_score);
+                // Optimize the best path by score eval.
+                q_value = node->GetWL(color, true) +
+                              node->GetScoreEval(color, parent_score);
 
                 // Forced Playouts method. It can help to explore the low priority
                 // child with high noise value. We think 20% is big enough and high
@@ -526,7 +518,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
                     std::max(1e-4f, forced_playouts_k * psa_factor * (float)parentvisits);
                 const int forced_n = std::sqrt(forced_n_factor);
                 if (forced_n - visits > 0) {
-                    utility += (forced_n - visits) * 1e6;
+                    q_value += (forced_n - visits) * 1e6;
                 }
             }
             cpuct *= GetDynamicCpuctFactor(node, visits, parentvisits);
@@ -535,7 +527,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
 
         // PUCT algorithm
         const float puct = cpuct * psa * (numerator / denom);
-        const float value = q_value + puct + utility;
+        const float value = q_value + puct;
         assert(value > std::numeric_limits<float>::lowest());
 
         if (value > best_value) {
@@ -734,12 +726,11 @@ std::array<float, kNumIntersections> Node::GetOwnership(int color) {
     return out;
 }
 
-float Node::GetScoreUtility(const int color,
-                            float div,
-                            float parent_score) const {
-    const auto score =
-        GetFinalScore(color) + score_bouns_;
-    return std::tanh((score - parent_score)/div);
+float Node::GetScoreEval(const int color, float parent_score) const {
+    const auto factor = param_->score_utility_factor;
+    const auto div = param_->score_utility_div;
+    const auto score = GetFinalScore(color) + score_bouns_;
+    return factor * std::tanh((score - parent_score)/div);
 }
 
 float Node::GetScoreVariance(const float default_var, const int visits) const {
@@ -832,8 +823,8 @@ std::string Node::GetPathVerboseString(GameState &state, int color,
 
 std::string Node::ToVerboseString(GameState &state, const int color) {
     auto out = std::ostringstream{};
-    const auto lcblist = GetLcbUtilityList(color);
-    const auto parentvisits = GetVisits() - 1; // One is root visit.
+    const auto parentvisits = GetValidVisits();
+    const auto lcblist = GetSortedLcbUtilityList(color, parentvisits);
 
     if (lcblist.empty()) {
         out << " * Search List: N/A" << std::endl;
@@ -927,7 +918,7 @@ std::string Node::ToAnalysisString(GameState &state,
     // https://github.com/SabakiHQ/Sabaki/blob/master/docs/guides/engine-analysis-integration.md
 
     auto out = std::ostringstream{};
-    const auto lcblist = GetLcbUtilityList(color);
+    const auto lcblist = GetSortedLcbUtilityList(color);
 
     if (lcblist.empty()) {
         return std::string{};
@@ -1049,27 +1040,32 @@ Node *Node::PopChild(const int vertex) {
     return node;
 }
 
-std::vector<std::pair<float, int>> Node::GetLcbUtilityList(const int color) {
-    WaitExpanded();
-    assert(HasChildren());
-
-    const auto lcb_reduction = std::min(
-        std::max(0.f, param_->lcb_reduction), 1.f);
-    int parentvisits = 0;
-    const auto parent_score = GetFinalScore(color);
-    const auto score_utility_factor = param_->score_utility_factor;
-    const auto score_utility_div = param_->score_utility_div;
-
-    auto list = std::vector<std::pair<float, int>>{};
-
+int Node::GetValidVisits() const {
+    int validvisits = 0;
     for (const auto & child : children_) {
         const auto node = child.Get();
         const bool is_pointer = node != nullptr;
 
         if (is_pointer && node->IsActive()) {
-            parentvisits += node->GetVisits();
+            validvisits += node->GetVisits();
         }
     }
+    return validvisits;
+}
+
+std::vector<std::pair<float, int>> Node::GetSortedLcbUtilityList(const int color) {
+    return GetSortedLcbUtilityList(color, GetValidVisits());
+}
+
+std::vector<std::pair<float, int>> Node::GetSortedLcbUtilityList(const int color,
+                                                                 const int parentvisits) {
+    WaitExpanded();
+    assert(HasChildren());
+
+    const auto lcb_reduction = std::min(
+        std::max(0.f, param_->lcb_reduction), 1.f);
+    const auto parent_score = GetFinalScore(color);
+    auto lcblist = std::vector<std::pair<float, int>>{};
 
     for (const auto & child : children_) {
         const auto node = child.Get();
@@ -1082,31 +1078,37 @@ std::vector<std::pair<float, int>> Node::GetLcbUtilityList(const int color) {
 
         const auto visits = node->GetVisits();
         if (visits > 0) {
-            auto lcb = node->GetLcb(color);
-            auto utility = score_utility_factor *
-                               node->GetScoreUtility(
-                                   color, score_utility_div, parent_score);
-            const auto ulcb = (lcb + utility) * (1.f - lcb_reduction) +
+            // Mix LCB value and score eval be sure that bias of LCB with scoring
+            // could be as same as Q eval in PUCT phase.
+            const auto mixed_lcb = node->GetLcb(color) +
+                                       node->GetScoreEval(color, parent_score);
+
+            // Reduce some LCB value to avoid select low visits move. For example,
+            // The node 'A' has 100 visits and its LCB is 90%. The node 'B' has
+            // 1000000 visits and its LCB is 89%. Based on the normal LCB formula,
+            // We will select the node 'A'. Obviously the node 'A' is unstable because
+            // it has only few visits. Actually, we should select the node 'B'.
+            const auto rlcb = mixed_lcb * (1.0f - lcb_reduction) +
                                   lcb_reduction * ((float)visits/parentvisits);
-            list.emplace_back(ulcb, node->GetVertex());
+            lcblist.emplace_back(rlcb, node->GetVertex());
         }
     }
 
-    std::stable_sort(std::rbegin(list), std::rend(list));
-    return list;
+    std::stable_sort(std::rbegin(lcblist), std::rend(lcblist));
+    return lcblist;
 }
 
 int Node::GetBestMove(bool allow_pass) {
     WaitExpanded();
     assert(HasChildren());
 
-    auto lcblist = GetLcbUtilityList(color_);
+    auto lcblist = GetSortedLcbUtilityList(color_);
     float best_value = std::numeric_limits<float>::lowest();
     int best_move = kNullVertex;
 
-    for (auto &entry : lcblist) {
-        const auto lcb = entry.first;
-        const auto vtx = entry.second;
+    for (auto &lcb_pair : lcblist) {
+        const auto lcb = lcb_pair.first;
+        const auto vtx = lcb_pair.second;
         if (lcb > best_value) {
             if (!allow_pass && vtx == kPass) {
                 continue;
@@ -1406,17 +1408,13 @@ void Node::ComputeNodeCount(size_t &nodes, size_t &edges) {
     }
 }
 
-float Node::GetGumbelQValue(int color, float parent_score) const {
+float Node::GetGumbelEval(int color, float parent_score) const {
     // Get non-transform complete Q value. In the original
     // paper, it is Q value. We mix Q value and score lead
     // in order to optimize the move probabilities. Make it
     // playing the best move.
-    const auto score_utility_div = param_->score_utility_div;
-    const auto score_utility_factor = param_->score_utility_factor;
-    const auto utility = score_utility_factor *
-                                 GetScoreUtility(
-                                     color, score_utility_div, parent_score);
-    const auto mixed_q = GetWL(color, false) + utility;
+    const auto mixed_q = GetWL(color, false) +
+                             GetScoreEval(color, parent_score);
     return mixed_q;
 }
 
@@ -1489,7 +1487,7 @@ void Node::MixLogitsCompletedQ(GameState &state,
 
         if (visits > 0) {
             weighted_q += child.GetPolicy() *
-                              node->GetGumbelQValue(color, parent_score);
+                              node->GetGumbelEval(color, parent_score);
             weighted_pi += child.GetPolicy();
         }
     }
@@ -1518,7 +1516,7 @@ void Node::MixLogitsCompletedQ(GameState &state,
             // virtual approximate Q value.
             completed_q = approximate_q;
         } else {
-            completed_q = node->GetGumbelQValue(color, parent_score);
+            completed_q = node->GetGumbelEval(color, parent_score);
         }
         completed_q_list.emplace_back(completed_q);
     }
@@ -1715,7 +1713,7 @@ end_loop:;
             auto completed_q = 0.f;
             if (is_pointer && target_visits > 0) {
                 completed_q = TransformCompletedQ(
-                    node->GetGumbelQValue(color, parent_score), max_visists);
+                    node->GetGumbelEval(color, parent_score), max_visists);
             }
             gumbel_logits[i] = logit + completed_q;
             count += 1;

@@ -65,7 +65,6 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["cpuct_dynamic"] << Option::SetOption(true);
     kOptionsMap["cpuct_dynamic_k_factor"] << Option::SetOption(4.f);
     kOptionsMap["cpuct_dynamic_k_base"] << Option::SetOption(10000.f);
-    kOptionsMap["draw_factor"] << Option::SetOption(0.f);
     kOptionsMap["score_utility_factor"] << Option::SetOption(0.1f);
     kOptionsMap["score_utility_div"] << Option::SetOption(20.f);
     kOptionsMap["forced_playouts_k"] << Option::SetOption(0.f);
@@ -824,13 +823,6 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--cpuct-dynamic-k-base")) {
         if (IsParameter(res->Get<>())) {
             SetOption("cpuct_dynamic_k_base", res->Get<float>());
-            spt.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--draw-factor")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("draw_factor", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

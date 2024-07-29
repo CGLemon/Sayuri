@@ -122,7 +122,9 @@ public:
     void Update(const NodeEvals *evals);
 
     // Get children's LCB with utility values.
-    std::vector<std::pair<float, int>> GetLcbUtilityList(const int color);
+    std::vector<std::pair<float, int>> GetSortedLcbUtilityList(const int color);
+    std::vector<std::pair<float, int>> GetSortedLcbUtilityList(const int color,
+                                                               const int parentvisits);
 
     // Get LCB value.
     float GetLcb(const int color) const;
@@ -168,7 +170,7 @@ public:
     float GetFinalScore(const int color) const;
 
     // Get the average win-loss value.
-    float GetWL(const int color, const bool use_virtual_loss=true) const;
+    float GetWL(const int color, const bool use_virtual_loss=false) const;
 
     // Get the average draw value.
     float GetDraw() const;
@@ -226,8 +228,9 @@ private:
 
     void LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist);
 
+    int GetValidVisits() const;
     float GetSearchPolicy(Edge& child, bool noise);
-    float GetScoreUtility(const int color, float div, float parent_score) const;
+    float GetScoreEval(const int color, float parent_score) const;
     float GetScoreVariance(const float default_var, const int visits) const;
     float GetWLVariance(const float default_var, const int visits) const;
 
@@ -238,7 +241,7 @@ private:
     void ReleaseAllChildren();
     int GetVirtualLoss() const;
 
-    float GetGumbelQValue(int color, float parent_score) const;
+    float GetGumbelEval(int color, float parent_score) const;
     float TransformCompletedQ(const float completed_q,
                               const int max_visits) const;
     void ComputeNodeCount(size_t &nodes, size_t &edges);

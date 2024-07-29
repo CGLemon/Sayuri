@@ -29,7 +29,6 @@ public:
         cpuct_dynamic = GetOption<bool>("cpuct_dynamic");
         cpuct_dynamic_k_factor = GetOption<float>("cpuct_dynamic_k_factor");
         cpuct_dynamic_k_base = GetOption<float>("cpuct_dynamic_k_base");
-        draw_factor = GetOption<float>("draw_factor");
         forced_playouts_k = GetOption<float>("forced_playouts_k");
 
         random_min_visits = GetOption<int>("random_min_visits");
@@ -97,7 +96,6 @@ public:
     float cpuct_base;
     float cpuct_dynamic_k_factor;
     float cpuct_dynamic_k_base;
-    float draw_factor;
     float forced_playouts_k;
 
     float gumbel_c_visit;
