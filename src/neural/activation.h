@@ -65,7 +65,7 @@ static inline Activation StringToAct(std::string val) {
 
 #define ACTIVATION_HARDSWISH(x) \
     x = x >= 3.f ? x :          \
-            x <= 3.f ? 0.f : (x*(x+3.0f)/6.0f);
+            x <= -3.f ? 0.f : (x * (x + 3.0f) / 6.0f);
 
 #define ACTIVATION_FUNC(x, type)                                    \
     switch (type) {                                                 \
@@ -77,5 +77,5 @@ static inline Activation StringToAct(std::string val) {
         case Activation::kMISH: ACTIVATION_MISH(x) break;           \
         case Activation::kSwish: ACTIVATION_SWISH(x) break;         \
         case Activation::kHardSwish: ACTIVATION_HARDSWISH(x) break; \
-        default: ;                                                  \
+        default: break;                                             \
     }
