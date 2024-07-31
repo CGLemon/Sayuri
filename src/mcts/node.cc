@@ -924,11 +924,6 @@ std::string Node::ToAnalysisString(GameState &state,
         return std::string{};
     }
 
-    bool is_sayuri = config.is_sayuri;
-    bool is_kata = config.is_kata;
-    bool use_ownership = config.ownership;
-    bool use_moves_ownership = config.moves_ownership;
-
     int order = 0;
     for (auto &lcb_pair : lcblist) {
         if (order+1 > config.max_moves) {
@@ -945,25 +940,27 @@ std::string Node::ToAnalysisString(GameState &state,
         const auto prior = child->GetPolicy();
         const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
 
-        if (is_sayuri) {
-            out << Format("info move %s visits %d winrate %.6f scorelead %.6f prior %.6f lcb %.6f order %d pv %s",
+        if (config.output_format == AnalysisConfig::kSayuri) {
+            const auto drawrate = child->GetDraw();
+            out << Format("info move %s visits %d winrate %.6f draw %.6f scorelead %.6f prior %.6f lcb %.6f order %d pv %s",
                              state.VertexToText(vertex).c_str(),
                              visits,
                              winrate,
+                             drawrate,
                              final_score,
                              prior,
-                             lcb,
+                             std::min(1.0f, lcb),
                              order,
                              pv_string.c_str()
                          );
-        } else if (is_kata) {
+        } else if (config.output_format == AnalysisConfig::kKata) {
             out << Format("info move %s visits %d winrate %.6f scoreLead %.6f prior %.6f lcb %.6f order %d pv %s",
                              state.VertexToText(vertex).c_str(),
                              visits,
                              winrate,
                              final_score,
                              prior,
-                             lcb,
+                             std::min(1.0f, lcb),
                              order,
                              pv_string.c_str()
                          );
@@ -979,8 +976,8 @@ std::string Node::ToAnalysisString(GameState &state,
                              pv_string.c_str()
                          );
         }
-        if (use_moves_ownership) {
-            if (is_sayuri) {
+        if (config.moves_ownership) {
+            if (config.output_format == AnalysisConfig::kSayuri) {
                 out << OwnershipToString(state, color, "movesownership", child);
             } else {
                 out << OwnershipToString(state, color, "movesOwnership", child);
@@ -989,10 +986,9 @@ std::string Node::ToAnalysisString(GameState &state,
         order += 1;
     }
 
-    if (use_ownership) {
+    if (config.ownership) {
         out << OwnershipToString(state, color, "ownership", this->Get());
     }
-
     out << std::endl;
 
     return out.str();

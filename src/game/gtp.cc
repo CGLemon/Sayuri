@@ -1204,11 +1204,11 @@ AnalysisConfig GtpLoop::ParseAnalysisConfig(Splitter &spt, int &color) {
     auto main = spt.GetWord(0)->Get<>();
 
     if (main.find("sayuri") == 0) {
-        config.is_sayuri = true;
+        config.output_format = AnalysisConfig::kSayuri;
     } else if (main.find("kata") == 0) {
-        config.is_kata = true;
+        config.output_format = AnalysisConfig::kKata;
     } else {
-        config.is_leelaz = true;
+        config.output_format = AnalysisConfig::kLeela;
     }
 
     int curr_idx = 1;

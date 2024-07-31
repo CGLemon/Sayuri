@@ -20,6 +20,12 @@ struct NodeEvals {
 };
 
 struct AnalysisConfig {
+    enum OutputFormat {
+        kSayuri,
+        kKata,
+        kLeela
+    };
+
     struct MoveToAvoid{
         int vertex{kNullVertex}, color{kInvalid}, until_move{-1};
         bool Valid() const {
@@ -29,9 +35,7 @@ struct AnalysisConfig {
         }
     };
 
-    bool is_sayuri{false};
-    bool is_kata{false};
-    bool is_leelaz{false};
+    OutputFormat output_format{kLeela};
     bool ownership{false};
     bool moves_ownership{false};
 
@@ -48,10 +52,8 @@ struct AnalysisConfig {
     }
 
     void Clear() {
-        is_sayuri =
-            is_kata =
-            is_leelaz =
-            ownership =
+        output_format = kLeela;
+        ownership =
             moves_ownership = false;
         min_moves = 0;
         max_moves = kPotentialMoves;
