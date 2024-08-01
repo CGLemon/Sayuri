@@ -20,13 +20,13 @@ Then start the program with GTP mode via the terminal/PowerShell, using 1 thread
 
     $ ./sayuri -w <weights file> -t 1 -p 400 --use-optimistic-policy
 
-You will see the diagnostic verbose. If the verbose includes ```Network Verison``` information, it means you success to execute the program with GPT mode. For more arguments, please give the ```--help``` option.
+You will see the diagnostic verbose. If the verbose includes ```Network Version``` information, it means you success to execute the program with GPT mode. For more arguments, please give the ```--help``` option.
 
     $ ./sayuri --help
 
 ## Execute Engine via Graphical Interface
 
-Sayuri is not complete engine. You need a graphical interface for playing with her. She supports any GTP (version 2) interface application. [Sabaki](https://sabaki.yichuanshen.de/) and [GoGui](https://github.com/Remi-Coulom/gogui) are recommended because Sayuri supports some specific analysis commands. 
+Sayuri is not complete engine. You need a graphical interface for playing with her. She supports any GTP (version 2) interface application. [Sabaki](https://sabaki.yichuanshen.de/) and [GoGui](https://github.com/Remi-Coulom/gogui) are recommended because Sayuri supports some specific analysis commands.
 
 * Sabaki analysis mode
 

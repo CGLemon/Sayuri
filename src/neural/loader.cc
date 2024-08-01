@@ -297,7 +297,7 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
 void DNNLoader::DumpInfo() const {
     auto out = std::ostringstream{};
 
-    out << "Network Verison: " << version_ << '\n';
+    out << "Network Version: " << version_ << '\n';
     out << "Input Channels: " << weights_->input_channels << '\n';
     out << "Residual Blocks: " << weights_->residual_blocks << '\n';
     out << "Residual Channels: " << weights_->residual_channels << '\n';
