@@ -1,7 +1,8 @@
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <utility>
-#include <algorithm>
+#include <stdexcept>
 
 #include "utils/log.h"
 #include "utils/random.h"
@@ -84,9 +85,9 @@ void Book::BookDataProcess(std::string sgfstring,
     GameState state;
     try {
         state = Sgf::Get().FromString(sgfstring, kMaxBookMoves);
-    } catch (const char *err) {
+    } catch (const std::exception& e) {
         LOGGING << "Fail to load the SGF file! Discard it." << std::endl
-                    << Format("\tCause: %s.", err) << std::endl;
+                    << Format("\tCause: %s.", e.what()) << std::endl;
         return;
     }
 

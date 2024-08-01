@@ -16,11 +16,21 @@ void DumpLicense() {
 }
 
 void StartGtpLoop() {
-    auto loop = std::make_unique<GtpLoop>();
+    try {
+        auto loop = std::make_unique<GtpLoop>();
+    } catch (const std::exception& e) {
+        LOGGING << Format(
+            "Get the exception during the GTP loop. Exception: %s.\n", e.what());
+    }
 }
 
 void StartSelfplayLoop() {
-    auto loop = std::make_unique<SelfPlayPipe>();
+    try {
+        auto loop = std::make_unique<SelfPlayPipe>();
+    } catch (const std::exception& e) {
+        LOGGING << Format(
+            "Get the exception during the self-play loop. Exception: %s.\n", e.what());
+    }
 }
 
 int main(int argc, char **argv) {

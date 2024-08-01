@@ -6,6 +6,7 @@
 #include "utils/random.h"
 
 #include <random>
+#include <stdexcept>
 
 AccuracyReport ComputeNetAccuracy(Network &network,
                                   std::string sgf_name) {
@@ -20,9 +21,9 @@ AccuracyReport ComputeNetAccuracy(Network &network,
         GameState state;
         try {
             state = Sgf::Get().FromString(sgfstring, 9999);
-        } catch (const char *err) {
+        } catch (const std::exception& e) {
             LOGGING << "Fail to load the SGF file! Discard it." << std::endl
-                        << Format("\tCause: %s.", err) << std::endl;
+                        << Format("\tCause: %s.", e.what()) << std::endl;
             continue;
         }
         auto game_ite = GameStateIterator(state);

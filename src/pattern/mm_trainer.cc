@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <stdexcept>
 
 constexpr int MmTrainer::kMmMaxPatternDist;
 constexpr int MmTrainer::kMmMinPatternDist;
@@ -190,9 +191,9 @@ void MmTrainer::FillPatterns(std::string sgfstring) {
 
     try {
         state = Sgf::Get().FromString(sgfstring, 9999);
-    } catch (const char *err) {
+    } catch (const std::exception& e) {
         LOGGING << "Fail to load the SGF file! Discard it." << std::endl
-                    << Format("\tCause: %s.", err) << std::endl;
+                    << Format("\tCause: %s.", e.what()) << std::endl;
         return;
     }
 
@@ -282,9 +283,9 @@ void MmTrainer::FillMmParticipant(std::string sgfstring) {
 
     try {
         state = Sgf::Get().FromString(sgfstring, 9999);
-    } catch (const char *err) {
+    } catch (const std::exception& e) {
         LOGGING << "Fail to load the SGF file! Discard it." << std::endl
-                    << Format("\tCause: %s.", err) << std::endl;
+                    << Format("\tCause: %s.", e.what()) << std::endl;
         return;
     }
 

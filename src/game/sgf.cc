@@ -6,6 +6,7 @@
 
 #include <ctype.h>
 #include <limits>
+#include <stdexcept>
 
 void SgfNode::AddProperty(std::string property, std::string value) {
     properties_.emplace(property, value);
@@ -49,11 +50,11 @@ int SgfNode::GetVertexFromString(const std::string& movestring) {
     int bsize = GetState().GetBoardSize();
 
     if (bsize <= 0) {
-        throw "Node has 0 sized board";
+        throw std::runtime_error{"node has 0 sized board"};
     }
 
     if (movestring.size() != 2) {
-        throw "Illegal SGF move format";
+        throw std::runtime_error{"illegal SGF move format"};
     }
 
     if (bsize <= 19) {
@@ -82,7 +83,7 @@ int SgfNode::GetVertexFromString(const std::string& movestring) {
     // catch illegal SGF
     if (cc1 < 0 || cc1 >= bsize
         || cc2 < 0 || cc2 >= bsize) {
-        throw "Illegal SGF move format";
+        throw std::runtime_error{"illegal SGF move format"};
     }
 
     int vtx = GetState().GetVertex(cc1, cc2);
@@ -96,14 +97,14 @@ void SgfNode::PopulateState(GameState currstate) {
     // first check for go game setup in properties
     if (const auto res = GetPropertyValue("GM")) {
         if (std::stoi(*res) != 1) {
-            throw "SGF Game is not a Go game";
+            throw std::runtime_error{"SGF Game is not a Go game"};
         }
     }
 
     // board size
     if (const auto res = GetPropertyValue("SZ")) {
         for (const char c : *res) {
-            if (!std::isspace(c) && !std::isdigit(c)) throw "It is not a square board";
+            if (!std::isspace(c) && !std::isdigit(c)) throw std::runtime_error{"not a square board"};
         }
 
         const auto bsize = std::stoi(*res);
@@ -243,7 +244,7 @@ GameState SgfNode::GetMainLineState(unsigned int movenum) {
 
             if (vtx != kNullVertex && color != kInvalid) {
                 if (!main_state.PlayMove(vtx, color)) {
-                    throw "Illegal SGF move";
+                    throw std::runtime_error{"illegal SGF move"};
                 }
                 main_state.RewriteComment(
                     comment, main_state.GetMoveNumber());
@@ -439,7 +440,7 @@ std::vector<std::string> SgfParser::ChopAll(std::string filename,
     std::ifstream ins(filename.c_str(), std::ifstream::binary | std::ifstream::in);
 
     if (ins.fail()) {
-        throw "Error opening file";
+        throw std::runtime_error{"error opening file"};
     }
 
     auto result = ChopStream(ins, stopat);
@@ -605,7 +606,7 @@ void Sgf::CleanSgf(std::string in, std::string out) {
         try {
             auto game_state = FromString(sgf, 9999);
             fout << ToString(game_state) << std::endl;
-        } catch (const char *err) {
+        } catch (const std::exception& e) {
             // Include illegal element for this program. We directly
             // copy it.
             fout << sgf << std::endl;

@@ -1,3 +1,4 @@
+#include <stdexcept>
 #include "neural/loader.h"
 #include "neural/network_basic.h"
 #include "utils/log.h"
@@ -50,10 +51,10 @@ void DNNLoader::FromFile(std::shared_ptr<DNNWeights> weights, std::string filena
         LOGGING << Format("Done! Load the weights file in %.2f sec.",
                               timer.GetDurationMilliseconds()/1000.f)
                     << std::endl;
-    } catch (const char *err) {
+    } catch (const std::exception& e) {
         // Should be not happned.
         LOGGING << "Fail to load the network file!" << std::endl
-                    << Format("    Cause: %s.", err) << std::endl;
+                    << Format("    Cause: %s", e.what()) << std::endl;
     }
 }
 
@@ -81,10 +82,10 @@ void DNNLoader::Parse(std::istream &buffer) {
         const auto spt = Splitter(line, 2);
         if (spt.GetWord(0)->Get<>() != "get" ||
                 spt.GetWord(1)->Get<>() != "main") {
-            throw "Weights file format is not acceptable";
+            throw std::runtime_error{"weights file format is not acceptable"};
         }
     } else {
-        throw "Weights file is empty";
+        throw std::runtime_error{"weights file is empty"};
     }
 
     auto netinfo = NetInfo{};
@@ -132,19 +133,19 @@ void DNNLoader::ParseInfo(NetInfo &netinfo, std::istream &buffer) const {
     };
 
     if (NotFound(netinfo, "InputChannels")) {
-        throw "InputChannels must be provided";
+        throw std::runtime_error{"InputChannels must be provided"};
     }
     if (NotFound(netinfo, "ResidualBlocks")) {
-        throw "ResidualBlocks must be provided";
+        throw std::runtime_error{"ResidualBlocks must be provided"};
     }
     if (NotFound(netinfo, "ResidualChannels")) {
-        throw "ResidualChannels must be provided";
+        throw std::runtime_error{"ResidualChannels must be provided"};
     }
     if (NotFound(netinfo, "PolicyExtract")) {
-        throw "PolicyExtract must be provided";
+        throw std::runtime_error{"PolicyExtract must be provided"};
     }
     if (NotFound(netinfo, "ValueExtract")) {
-        throw "ValueExtract must be provided";
+        throw std::runtime_error{"ValueExtract must be provided"};
     }
 }
 
@@ -181,22 +182,22 @@ void DNNLoader::ParseStruct(NetStruct &netstruct, std::istream &buffer) const {
         const auto layer_name = spt.GetWord(0)->Get<>();
         if (layer_name == "FullyConnect") {
             if (netstruct[cnt].size() != 2) {
-                throw "The FullyConnect Layer shape is error";
+                throw std::runtime_error{"FullyConnect Layer shape is error"};
             }
         } else if (layer_name == "Convolution") {
             if (netstruct[cnt].size() != 3) {
-                throw "The Convolution Layer shape is error";
+                throw std::runtime_error{"Convolution Layer shape is error"};
             }
         } else if (layer_name == "DepthwiseConvolution") {
             if (netstruct[cnt].size() != 3) {
-                throw "The DepthwiseConvolution Layer shape is error";
+                throw std::runtime_error{"DepthwiseConvolution Layer shape is error"};
             }
         } else if (layer_name == "BatchNorm") {
             if (netstruct[cnt].size() != 1) {
-                throw "The BatchNorm layer shape is error";
+                throw std::runtime_error{"BatchNorm layer shape is error"};
             }
         } else {
-            throw "The layer shape is error";
+            throw std::runtime_error{"layer shape is error"};
         }
         cnt++;
     }
@@ -266,7 +267,7 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
         }
 
         if ((int)netstruct.size() != heads_cnt + inner_cnt + inputs_cnt) {
-            throw "Do not support this weights format";
+            throw std::runtime_error{"do not support this weights format"};
         }
     }
 
@@ -287,8 +288,8 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
                     component == "FixUp") {
                 // do nothing...
             } else {
-                throw Format("Do not support this block type [%s].",
-                                 block_type.c_str());
+                throw std::runtime_error{
+                          Format("do not support this block type [%s]", block_type.c_str())};
             }
         }
     }
@@ -346,7 +347,7 @@ int DNNLoader::FillBlock(int offset,
     } else if (SplitterFound(block_spt, "MixerBlock")) {
         weights_->tower.emplace_back(std::make_unique<MixerBlock>());
     } else {
-        throw "Need the ResidualBlock, BottleneckBlock or MixerBlock";
+        throw std::runtime_error{"need the ResidualBlock, BottleneckBlock or MixerBlock"};
     }
     auto tower_ptr = std::rbegin(weights_->tower)->get();
     tower_ptr->apply_se = SplitterFound(block_spt, "SE");
@@ -382,11 +383,11 @@ int DNNLoader::FillBlock(int offset,
                 channels != res_conv2_shape[0] ||
                 channels != res_conv2_shape[1] ||
                 channels != res_bn2_shape[0]) {
-            throw "The channels of residual block is wrong";
+            throw std::runtime_error{"the channels of residual block is wrong"};
         }
         if (kernel != res_conv1_shape[2] ||
                 kernel != res_conv2_shape[2]) {
-            throw "The kernel of residual block is wrong";
+            throw std::runtime_error{"the kernel of residual block is wrong"};
         }
     } else if (tower_ptr->IsBottleneckBlock()) {
         // bottleneck block
@@ -438,7 +439,7 @@ int DNNLoader::FillBlock(int offset,
         if (outer_channels != pre_btl_conv_shape[0] ||
                 outer_channels != post_btl_conv_shape[1] ||
                 outer_channels != post_btl_bn_shape[0]) {
-            throw "The outer channels of bottleneck block is wrong";
+            throw std::runtime_error{"rhe outer channels of bottleneck block is wrong"};
         }
         if (inner_channels != res_conv1_shape[0] ||
                 inner_channels != res_conv1_shape[1] ||
@@ -446,13 +447,13 @@ int DNNLoader::FillBlock(int offset,
                 inner_channels != res_conv2_shape[0] ||
                 inner_channels != res_conv2_shape[1] ||
                 inner_channels != res_bn2_shape[0]) {
-            throw "The inner channels of bottleneck block is wrong";
+            throw std::runtime_error{"rhe inner channels of bottleneck block is wrong"};
         }
         if (kernel != res_conv1_shape[2] ||
                 kernel != res_conv2_shape[2] ||
                 1 != pre_btl_conv_shape[2] ||
                 1 != post_btl_bn_shape[2]) {
-            throw "The kernel of bottleneck block is wrong";
+            throw std::runtime_error{"rhe kernel of bottleneck block is wrong"};
         }
     } else if (tower_ptr->IsMixerBlock()) {
         // mixer block
@@ -495,11 +496,11 @@ int DNNLoader::FillBlock(int offset,
                 channels != ffn_conv1_shape[0] ||
                 channels != ffn_conv2_shape[1] ||
                 channels != ffn_bn2_shape[0]) {
-            throw "The channels of mixer block is wrong";
+            throw std::runtime_error{"the channels of mixer block is wrong"};
         }
         if (kernel != ffn_conv1_shape[2] ||
                 kernel != ffn_conv2_shape[2]) {
-            throw "The kernel of mixer block is wrong";
+            throw std::runtime_error{"the kernel of mixer block is wrong"};
         }
     }
 
@@ -519,7 +520,7 @@ int DNNLoader::FillBlock(int offset,
         const auto channels = weights_->residual_channels;
         if (3 * channels != se_squeeze_shape[0] ||
                 2 * channels != se_excite_shape[1]) {
-            throw "The SE module size is wrong";
+            throw std::runtime_error{"the SE module size is wrong"};
         }
     }
     return offset;
@@ -537,7 +538,7 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
     weights_->value_extract_channels = std::stoi(netinfo["ValueExtract"]);
 
     if (weights_->input_channels != kInputChannels) {
-        throw "The number of input channels is wrong.";
+        throw std::runtime_error{"he number of input channels is wrong"};
     }
 
     // There are three types layer. Each layer has
@@ -570,7 +571,7 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
             weights_->residual_channels != input_conv_shape[1] ||
             weights_->residual_channels != input_bn_shape[0] ||
             input_conv_shape[2] != 3) {
-        throw "The input layers are wrong";
+        throw std::runtime_error{"the input layers are wrong"};
     }
     auto t_offset = 2; // include 'input_conv' and 'input_bn'
 
@@ -616,18 +617,18 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
                           pass_fc_shape[1]);
 
     if (p_ex_conv_shape[2] != 1 || prob_conv_shape[2] != 1) {
-        throw "The policy convolution kernel size is wrong";
+        throw std::runtime_error{"the policy convolution kernel size is wrong"};
     }
     if (prob_conv_shape[1] != kOuputProbabilitiesChannels) {
-        throw "The number of policy ouput size is wrong";
+        throw std::runtime_error{"the number of policy ouput size is wrong"};
     }
     if (p_inter_fc_shape[1] != pass_fc_shape[0] ||
             p_inter_fc_shape[0] != 3 * weights_->policy_extract_channels ||
             p_inter_fc_shape[1] != 1 * weights_->policy_extract_channels) {
-        throw "The number of policy fully connect size is wrong";
+        throw std::runtime_error{"the number of policy fully connect size is wrong"};
     }
     if (pass_fc_shape[1] != kOuputPassProbability) {
-        throw "The number of pass ouput size is wrong";
+        throw std::runtime_error{"the number of pass ouput size is wrong"};
     }
 
     // value head
@@ -662,25 +663,25 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
                           misc_fc_shape[0],
                           misc_fc_shape[1]);
     if (v_ex_conv_shape[2] != 1 || v_os_conv_shape[2] != 1) {
-        throw "The value convolution kernel size is wrong";
+        throw std::runtime_error{"the value convolution kernel size is wrong"};
     }
     if (v_os_conv_shape[1] != kOuputOwnershipChannels) {
-        throw "The number of ownership ouput size is wrong";
+        throw std::runtime_error{"the number of ownership ouput size is wrong"};
     }
     if (v_inter_fc_shape[1] != misc_fc_shape[0] ||
             v_inter_fc_shape[0] != 3 * weights_->value_extract_channels ||
             v_inter_fc_shape[1] != 3 * weights_->value_extract_channels) {
-        throw "The number of value fully connect size is wrong";
+        throw std::runtime_error{"the number of value fully connect size is wrong"};
     }
     if (misc_fc_shape[1] != kOuputValueMisc) {
-        throw "The misc value layer size is wrong";
+        throw std::runtime_error{"the misc value layer size is wrong."};
     }
 
     auto line = std::string{};
     std::getline(buffer, line);
     const auto spt = Splitter(line);
     if (spt.GetWord(0)->Get<std::string>() != "end") {
-        throw "Not end? Weights file format is not acceptable";
+        throw std::runtime_error{"weights file format is not acceptable"};
     }
     weights_->winograd = GetOption<bool>("winograd");
     weights_->loaded = true;
@@ -778,7 +779,7 @@ void DNNLoader::GetWeightsFromBuffer(std::vector<float> &weights, std::istream &
                 }
                 const auto is_ok = fast_float::from_chars<double>(start_ptr, end_ptr, weight);
                 if (is_ok.ec != std::errc()) {
-                    throw "There is non-numeric in parameters";
+                    throw std::runtime_error{"non-numeric in parameters"};
                 }
 
                 weights.emplace_back(weight);

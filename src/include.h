@@ -7,3 +7,5 @@
 #include "utils/format.h"
 #include "config.h"
 #include "version.h"
+
+#include <stdexcept>

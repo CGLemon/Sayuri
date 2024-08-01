@@ -11,12 +11,13 @@
 #include "neural/encoder.h"
 #include "summary/accuracy.h"
 
+#include <array>
+#include <atomic>
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <stdexcept>
 #include <vector>
-#include <array>
-#include <atomic>
 
 void GtpLoop::Loop() {
     while (true) {
@@ -196,8 +197,8 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         try {
             agent_->GetState() = Sgf::Get().FromFile(filename, movenum);
             out << GtpSuccess("");
-        } catch (const char *err) {
-            out << GtpFail(Format("invalid SGF file, cause %s.", err));
+        } catch (const std::exception& e) {
+            out << GtpFail(Format("invalid SGF file, cause %s.", e.what()));
         }
     } else if (const auto res = spt.Find("is_legal", 0)) {
         auto color = agent_->GetState().GetToMove();;
