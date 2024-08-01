@@ -354,6 +354,49 @@ class BatchNorm2d(nn.Module):
 
         return x * mask
 
+class BroadcastDepthwiseConv2d(nn.Module):
+    def __init__(self, channels,
+                       kernel_size,
+                       padding="same",
+                       bias=True):
+        super(BroadcastDepthwiseConv2d, self).__init__()
+        self.channels = channels
+        self.kernel_size = kernel_size
+        self.padding = padding
+        self.use_bias = bias
+
+        self.weight = nn.Parameter(
+            torch.randn((self.channels, 1, self.kernel_size, self.kernel_size), dtype=torch.float)
+        )
+        if self.use_bias:
+            self.bias = nn.Parameter(
+                torch.zeros(self.channels, dtype=torch.float)
+            )
+
+    def _compute_equivalent_weight(self):
+        return self.weight + torch.sum(self.weight, dim=0, keepdim=True) / self.channels
+
+    def get_merged_param(self):
+        weight = torch.zeros_like(self.weight)
+        bias = torch.zeros(self.channels)
+
+        weight[:] = self._compute_equivalent_weight().detach()[:]
+        if self.use_bias:
+            bias[:] = self.bias[:]
+        return weight, bias
+
+    def forward(self, x):
+        weight = self._compute_equivalent_weight()
+        x = F.conv2d(
+            x,
+            weight,
+            padding=self.padding,
+            groups=self.channels
+        )
+        if self.use_bias:
+            x = x + self.bias.view(1, self.out_channels, 1, 1)
+        return x
+
 class FullyConnect(nn.Module):
     def __init__(self, in_size,
                        out_size,
@@ -522,28 +565,23 @@ class DepthwiseConvBlock(nn.Module):
         assert kernel_size % 2 == 1, ""
         super(DepthwiseConvBlock, self).__init__()
 
-        self.in_channels = channels
-        self.out_channels = channels
+        self.channels = channels
         self.kernel_size = kernel_size
-        self.groups = self.in_channels
-        self.conv = nn.Conv2d(
-            self.in_channels,
-            self.out_channels,
-            kernel_size,
-            groups=self.in_channels,
+        self.groups = self.channels
+        self.conv = BroadcastDepthwiseConv2d(
+            self.channels,
+            self.kernel_size,
             padding="same",
-            bias=True,
+            bias=True
         )
-        self.rep3x3 = nn.Conv2d(
-            self.in_channels,
-            self.out_channels,
+        self.rep3x3 = BroadcastDepthwiseConv2d(
+            self.channels,
             3,
-            groups=self.in_channels,
             padding="same",
-            bias=True,
+            bias=True
         )
         self.bn = BatchNorm2d(
-            num_features=self.out_channels,
+            num_features=self.channels,
             eps=1e-5,
             use_gamma=use_gamma
         )
@@ -564,11 +602,13 @@ class DepthwiseConvBlock(nn.Module):
         else:
             out = str()
 
+        weights, biases = self.conv.get_merged_param()
+
         ps = int((self.kernel_size - 3) / 2)
-        weights = torch.zeros_like(self.conv.weight)
-        weights += self.conv.weight.data
-        weights += F.pad(self.rep3x3.weight, (ps, ps, ps, ps), "constant", 0)
-        biases = self.conv.bias.data + self.rep3x3.bias.data
+        rep3x3_weights, rep3x3_biases = self.rep3x3.get_merged_param()
+        weights += F.pad(rep3x3_weights, (ps, ps, ps, ps), "constant", 0)
+        biases += rep3x3_biases
+
         out += tensor_to_text(weights, use_bin)
         out += tensor_to_text(biases, use_bin)
 
@@ -583,8 +623,8 @@ class DepthwiseConvBlock(nn.Module):
 
     def shape_to_text(self):
         out = str()
-        out += dwconv_to_text(self.in_channels // self.groups, self.out_channels, self.kernel_size)
-        out += bn_to_text(self.out_channels)
+        out += dwconv_to_text(self.channels // self.groups, self.channels, self.kernel_size)
+        out += bn_to_text(self.channels)
         return out
 
     def forward(self, x, mask):
