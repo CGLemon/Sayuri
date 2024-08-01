@@ -394,7 +394,7 @@ class BroadcastDepthwiseConv2d(nn.Module):
             groups=self.channels
         )
         if self.use_bias:
-            x = x + self.bias.view(1, self.out_channels, 1, 1)
+            x = x + self.bias.view(1, self.channels, 1, 1)
         return x
 
 class FullyConnect(nn.Module):
