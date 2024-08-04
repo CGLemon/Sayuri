@@ -4,6 +4,8 @@ from config import Config
 
 import colorsys
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 import copy
 import sys
@@ -501,7 +503,7 @@ class Board(object):
     def _ladder_search(self, v, n):
         n += 1
         if n >= MAX_LADDER_NODES:
-            return False, n 
+            return False, n
 
         prey_c = self.state[v]
         hunter_c = int(prey_c == 0)
@@ -651,7 +653,7 @@ class Board(object):
     def get_vertex(self, x, y):
         # x, y to vertex
         return (y+1) * (self.board_size+2) + (x+1)
-        
+
     def get_index(self, x, y):
         # x, y to index
         return y * self.board_size + x
@@ -659,7 +661,7 @@ class Board(object):
     def vertex_to_index(self, v):
         # vertex to index
         return self.get_index(self.get_x(v), self.get_y(v))
-        
+
     def index_to_vertex(self, idx):
         # index to vertex
         return self.get_vertex(idx % self.board_size, idx // self.board_size)
@@ -671,7 +673,7 @@ class Board(object):
             return "pass"
         elif vtx == RESIGN:
             return "resign"
-        
+
         x = self.get_x(vtx)
         y = self.get_y(vtx)
         offset = 1 if x >= 8 else 0 # skip 'I'
@@ -686,7 +688,7 @@ class Board(object):
         # planes 1 -24 : last 8 history moves
         # plane     25 : ko move
         # plane  26-29 : pass-alive and pass-dead area
-        # planes 30-33 : strings with 1, 2, 3 and 4 liberties 
+        # planes 30-33 : strings with 1, 2, 3 and 4 liberties
         # planes 34-37 : ladder features
         # plane     38 : rule
         # plane     39 : wave
@@ -697,7 +699,7 @@ class Board(object):
         my_color = self.to_move
         opp_color = (self.to_move + 1) % 2
         past_moves = min(8, len(self.history))
-        
+
         features = np.zeros((INPUT_CHANNELS, NUM_INTESECTIONS), dtype=np.float32)
 
         # planes 1-24
@@ -808,8 +810,82 @@ class Board(object):
             line_str += str(y+1) if y >= 9 else " " + str(y+1)
             out += (line_str + "\n")
         out += get_xlabel(self.board_size)
-        out += "komi: {:.2f}".format(self.komi)
+        out += "Komi: {:.2f}".format(self.komi)
         return out + "\n"
+
+class NetworkWrap(Network):
+    def __init__(self, cfg):
+        super(NetworkWrap, self).__init__(cfg)
+        self._device = torch.device("cpu")
+
+    def _get_valid_spat(self, raw_spat, board_size=None):
+        if board_size is None:
+            return raw_spat
+
+        n, raw_size = raw_spat.shape
+        valid_size = board_size * board_size
+
+        if raw_size == NUM_INTESECTIONS + 1:
+            valid_size += 1
+
+        valid_spat = torch.zeros((n, valid_size))
+        valid_spat = valid_spat.to(self._device)
+
+        for y in range(board_size):
+            for x in range(board_size):
+                valid_idx = y * board_size + x
+                net_idx = y * BOARD_SIZE + x
+                valid_spat[:, valid_idx] = raw_spat[:, net_idx]
+
+        if raw_size == NUM_INTESECTIONS + 1:
+            valid_spat[:, -1] = raw_spat[:, -1]
+
+        return valid_spat
+
+    def to_device(self, d, *args, **kwargs):
+        self = self.to(d)
+        self._device = d
+        return self
+
+    @torch.no_grad()
+    def get_output_without_batch(self, features, *args, **kwargs):
+        as_numpy = kwargs.get("as_numpy", False)
+        board_size = kwargs.get("board_size", None)
+
+        if isinstance(features, np.ndarray):
+            planes = torch.from_numpy(features).float().to(self._device)
+        elif torch.is_tensor(features):
+            planes = features.float().to(self._device)
+        else:
+            raise Exception("get_output_without_batch(...): Tensor should be torch or numpy array")
+
+        planes = torch.from_numpy(features).float().to(self._device)
+        pred, _ = self.forward(torch.unsqueeze(planes, 0))
+
+        labels = (
+            "prob",            # logits
+            "aux_prob",        # logits
+            "soft_prob",       # logits
+            "soft_aux_prob",   # logits
+            "optimistic_prob", # logits
+            "ownership",       # -1 ~ 1
+            "wdl",             # logits
+            "all_q_vals",      # {final, current, short, middle, long}
+            "all_scores",      # {final, current, short, middle, long}
+            "all_errors"       # {q error, score error}
+        )
+        reuslt = dict()
+        for tensor, label in zip(pred, labels):
+            if "prob" in label:
+                tensor = self._get_valid_spat(tensor, board_size)
+                tensor = F.softmax(tensor, dim=1)
+            elif "ownership" in label:
+                tensor = self._get_valid_spat(tensor, board_size)
+            elif "wdl" in label:
+                tensor = F.softmax(tensor, dim=1)
+            reuslt[label] = tensor[0] if not as_numpy else \
+                                tensor[0].cpu().detach().numpy()
+        return reuslt
 
 class TimeControl:
     def __init__(self):
@@ -821,7 +897,7 @@ class TimeControl:
         self.byotime_left = [0, 0]
         self.stones_left = [0, 0]
         self.in_byo = [False, False]
-        
+
         self.clock_time = time.time()
         self.reset()
 
@@ -873,7 +949,7 @@ class TimeControl:
 
     def get_thinking_time(self, color, board_size, move_num):
         estimate_moves_left = max(4, int(board_size * board_size * 0.4) - move_num)
-        lag_buffer = 1 # Remaining some time for network hiccups or GUI lag 
+        lag_buffer = 1 # Remaining some time for network hiccups or GUI lag
         remaining_time = self.maintime_left[color] + self.byotime_left[color] - lag_buffer
         if self.byo_stones == 0:
             return remaining_time / estimate_moves_left
@@ -901,7 +977,6 @@ class TimeControl:
                            self.get_timeleft_string(1)])
 
 class Node:
-    # TODO: Tnue C_PUCT parameter.
     C_PUCT = 0.5 # The PUCT hyperparameter.
     def __init__(self, p):
         self.policy = p  # The network raw policy from its parents node.
@@ -913,36 +988,23 @@ class Node:
         self.children = dict() # Next node.
 
     def inverse(self, v):
-        # Swap the side to move winrate. 
+        # Swap the side to move winrate.
         return 1 - v;
 
     @torch.no_grad()
-    def _get_network_result(self, board, network, device):
-        def np_softmax(x):
-            return np.exp(x) / np.sum(np.exp(x), axis=0)
+    def _get_net_result(self, board, net):
+        result = net.get_output_without_batch(
+            features = board.get_features(),
+            board_size = board.board_size,
+            as_numpy = True
+        )
+        wdl = result["wdl"]
+        score = result["all_scores"][0]
+        prob = result["optimistic_prob"]
 
-        planes = torch.from_numpy(board.get_features()).float().to(device)
-        pred, _ = network.forward(torch.unsqueeze(planes, 0))
-
-        # Use optimistic policy.
-        _, _, _, _, prob, _, wdl, _, scores, _ = pred
-
-        # winrate
-        wdl = wdl[0].cpu().detach().numpy()
-        wdl = np_softmax(wdl)
-        winrate = (wdl[0] - wdl[2] + 1) / 2
-
-        # score
-        scores = scores[0].cpu().detach().numpy()
-        score = scores[0]
-
-        # prob
-        prob = prob[0].cpu().detach().numpy()
-        prob = get_valid_spat(prob, board)
-        prob = np_softmax(prob)
         return prob, wdl, score
 
-    def expand_children(self, board, network, device):
+    def expand_children(self, board, net):
         if board.last_move == PASS:
             score = board.final_score()
             if (board.to_move == BLACK and score > 0) or \
@@ -952,7 +1014,7 @@ class Node:
                 return 1;
 
         # Compute the net results.
-        policy, value, _ = self._get_network_result(board, network, device)
+        policy, value, _ = self._get_net_result(board, net)
 
         for idx in range(board.num_intersections):
             vtx = board.index_to_vertex(idx)
@@ -966,7 +1028,7 @@ class Node:
         # check it.
         self.children[PASS] = Node(policy[-1])
 
-        # The nn eval is side-to-move winrate. 
+        # The nn eval is side-to-move winrate.
         self.nn_eval = value[0]
 
         return self.nn_eval
@@ -990,12 +1052,14 @@ class Node:
         numerator = math.sqrt(parent_visits)
         puct_list = list()
 
-        # Select the best node by PUCT algorithm. 
-        for vtx, child in self.children.items():
-            q_value = 0
+        # FPU is for unvisited node.
+        fpu = self.values / self.visits - 0.25 * \
+                  math.sqrt(sum([ child.policy for _, child in self.children.items() if child.visits != 0 ]))
 
-            if child.visits != 0:
-                q_value = self.inverse(child.values / child.visits)
+        # Select the best node by PUCT algorithm.
+        for vtx, child in self.children.items():
+            q_value = 0 if child.visits == 0 else \
+                          self.inverse(child.values / child.visits)
 
             puct = q_value + self.C_PUCT * child.policy * (numerator / (1+child.visits))
             puct_list.append((puct, vtx))
@@ -1060,7 +1124,7 @@ class Node:
     def get_pv(self, board, pv_str):
         # Get the best Principal Variation list since this
         # node.
-        if len(self.children) == 0: 
+        if len(self.children) == 0:
             return pv_str
 
         next_vtx = self.get_best_move(None)
@@ -1100,12 +1164,11 @@ class Node:
         return out
 
 class Search:
-    def __init__(self, board, network, time_control, device):
+    def __init__(self, board, net, time_control):
         self.root_board = board # Root board positions, all simulation boards will fork from it.
         self.root_node = None # Root node, start the PUCT search from it.
-        self.network = network
+        self.net = net
         self.time_control = time_control
-        self.device = device
         self.analysis_tag = {
             "interval" : -1
         }
@@ -1113,7 +1176,7 @@ class Search:
     def _prepare_root_node(self):
         # Expand the root node first.
         self.root_node = Node(1)
-        val = self.root_node.expand_children(self.root_board, self.network, self.device)
+        val = self.root_node.expand_children(self.root_board, self.net)
 
         # In order to avoid overhead, we only remove the superko positions in
         # the root.
@@ -1135,7 +1198,7 @@ class Search:
                 # The game is draw
                 value = 0.5
         elif len(node.children) != 0:
-            # Select the next node by PUCT algorithm. 
+            # Select the next node by PUCT algorithm.
             vtx = node.puct_select()
             curr_board.to_move = color
             curr_board.play(vtx)
@@ -1145,8 +1208,8 @@ class Search:
             # go to the next node.
             value = self._descend(color, curr_board, next_node)
         else:
-            # This is the termainated node. Now try to expand it. 
-            value = node.expand_children(curr_board, self.network, self.device)
+            # This is the termainated node. Now try to expand it.
+            value = node.expand_children(curr_board, self.net)
 
         assert value != None, ""
         node.update(value)
@@ -1230,7 +1293,7 @@ class Search:
             # Start the Monte Carlo tree search.
             self._descend(color, curr_board, self.root_node)
 
-        # Eat the remaining time. 
+        # Eat the remaining time.
         self.time_control.took_time(to_move)
 
         out_verbose = self.root_node.to_string(self.root_board)
@@ -1243,314 +1306,432 @@ class Search:
 
         return self.root_node.get_best_move(resign_threshold), out_verbose
 
-def load_checkpoint(json_path, checkpoint, use_swa):
-    cfg = None
-    if json_path is None and not checkpoint is None:
-        loader = StatusLoader()
-        loader.load(checkpoint)
-        cfg = Config(loader.get_json_str(), False)
-    else:
-        cfg = Config(json_path)
+class Agent():
+    def __init__(self, *args, **kwargs):
+        self.name = "pysayuri"
+        self.version = "0.1.0"
+        self._board = Board(
+            kwargs.get("board_size", BOARD_SIZE),
+            kwargs.get("komi", KOMI),
+            SCORING_AREA
+        )
 
-    if cfg is None:
-        raise Exception("The config file does not exist.")
+        self._json_path = kwargs.get("json", None)
+        self._checkpoint = kwargs.get("checkpoint", None)
+        self._use_swa = kwargs.get("use_swa", False)
 
-    cfg.boardsize = BOARD_SIZE
-    net = Network(cfg)
-    stderr_write("Load the weights from: {}\n".format(checkpoint))
-    stderr_write(net.simple_info())
+        self._net, self._loader = self._load_checkpoint()
+        self._use_gpu = kwargs.get("use_gpu", False) and torch.cuda.is_available()
+        self._device = torch.device("cuda") if self._use_gpu else torch.device("cpu")
+        self._net = self._net.to_device(self._device)
+        self._time_control = TimeControl()
 
-    if not checkpoint is None:
-        loader = StatusLoader()
-        loader.load(checkpoint)
-        loader.load_model(net)
-        if use_swa:
-            loader.load_swa_model(net)
-    net.eval()
-    return net, loader
+        if self._use_gpu:
+            stderr_write("Enable the GPU device...\n")
 
-def get_valid_spat(net_pred, board):
-    valid_size = board.num_intersections
-    if net_pred.size == NUM_INTESECTIONS + 1:
-        valid_size += 1
+    def _load_checkpoint(self):
+        net_cfg = None
+        if self._json_path is None and not self._checkpoint is None:
+            loader = StatusLoader()
+            loader.load(self._checkpoint)
+            net_cfg = Config(loader.get_json_str(), False)
+        else:
+            net_cfg = Config(self._json_path)
 
-    valid_spat = np.zeros(valid_size)
+        if net_cfg is None:
+            raise Exception("config file does not exist")
 
-    for y in range(board.board_size):
-        for x in range(board.board_size):
-            valid_idx = board.get_index(x, y)
-            net_idx = y * BOARD_SIZE + x
-            valid_spat[valid_idx] = net_pred[net_idx]
+        net_cfg.boardsize = BOARD_SIZE
+        net = NetworkWrap(net_cfg)
+        stderr_write("Load the weights from: {}\n".format(self._checkpoint))
+        stderr_write(net.simple_info())
 
-    if net_pred.size == NUM_INTESECTIONS + 1:
-        valid_spat[-1] = net_pred[-1]
+        if not self._checkpoint is None:
+            loader = StatusLoader()
+            loader.load(self._checkpoint)
+            loader.load_model(net)
+            if self._use_swa:
+                loader.load_swa_model(net)
+        net.eval()
+        return net, loader
 
-    return valid_spat
+    def time_settings(self, main_time, byo_time, byo_stones):
+        if main_time <= 0 and byo_time <= 0:
+            raise Exception("time_settings(...): main_time or byo_time should be greater than zero")
+        self._time_control.time_settings(
+            main_time, byo_time, byo_stones)
 
-def get_move_text(x, y):
-    return "{}{}".format("ABCDEFGHJKLMNOPQRST"[x], y+1)
-
-def gogui_policy_order(prob, board):
-    def np_softmax(x):
-        return np.exp(x) / np.sum(np.exp(x), axis=0)
-
-    prob = prob[0].cpu().detach().numpy()
-    prob = get_valid_spat(prob, board)
-    prob = np_softmax(prob)
-
-    ordered_list = list()
-    for idx in range(board.num_intersections):
-        ordered_list.append((prob[idx], idx))
-
-    out = str()
-    ordered_list.sort(reverse=True, key=lambda x: x[0])
-    for order in range(12):
-        _, idx = ordered_list[order]
-        vtx = board.index_to_vertex(idx)
-        x = board.get_x(vtx)
-        y = board.get_y(vtx)
-        out += "LABEL {} {}\n".format(get_move_text(x, y), order+1)
-    out = out[:-1]
-    return out
-
-def gogui_policy_rating(prob, board):
-    def np_softmax(x):
-        return np.exp(x) / np.sum(np.exp(x), axis=0)
-
-    prob = prob[0].cpu().detach().numpy()
-    prob = get_valid_spat(prob, board)
-    prob = np_softmax(prob)
-
-    out = str()
-    for y in range(board.board_size):
-        for x in range(board.board_size):
-            val = prob[board.get_index(x, y)]
-            if val > 1./board.num_intersections:
-                out += "LABEL {} {}\n".format(get_move_text(x, y), round(100. * val))
-    out = out[:-1]
-    return out
-
-def gogui_policy_heatmap(prob, board):
-    def np_softmax(x):
-        return np.exp(x) / np.sum(np.exp(x), axis=0)
-
-    def value_to_code(val):
-        def hsv2rgb(h,s,v):
-            return tuple(round(i * 255) for i in colorsys.hsv_to_rgb(h,s,v))
-
-        h1, h2 = 145, 215
-        w = h2 - h1
-        w2 = 20
-
-        h = (1.0 - val) * (242 - w + w2)
-        s = 1.0
-        v = 1.0
-
-        if (h1 <= h and h <= h1 + w2):
-            h = h1 + (h - h1) * w / w2
-            m = w / 2
-            v -= (m - abs(h - (h1 + m))) * 0.2 / m
-        elif h >= h1 + w2:
-            h += w - w2
-
-        h0 = 100
-        m0 = (h2 - h0) / 2
-        if h0 <= h and h <= h2:
-            v -= (m0 - abs(h - (h0 + m0))) * 0.2 / m0
-        r, g, b = hsv2rgb(h/360, s, v)
-        return "#{0:02x}{1:02x}{2:02x}".format(r, g, b)
-
-    prob = prob[0].cpu().detach().numpy()
-    prob = get_valid_spat(prob, board)
-    prob = np_softmax(prob)
-
-    out = str()
-    for y in range(board.board_size):
-        for x in range(board.board_size):
-            val = prob[board.get_index(x, y)]
-            if val > 0.0001:
-                val = math.sqrt(val) # highlight
-            out += "COLOR {} {}\n".format(value_to_code(val), get_move_text(x, y))
-    out = out[:-1]
-    return out
-
-def gogui_ownership_heatmap(ownership, board):
-    def value_to_code(val, inves):
-        def hsv2rgb(h,s,v):
-            return tuple(round(i * 255) for i in colorsys.hsv_to_rgb(h,s,v))
-        h = 0.
-        s = 0.
-        v = val if not inves else 1. - val
-        r, g, b = hsv2rgb(h/360, s, v)
-        return "#{0:02x}{1:02x}{2:02x}".format(r, g, b)
-
-    ownership = ownership[0].cpu().detach().numpy()
-    ownership = get_valid_spat(ownership, board)
-    inves = board.to_move == BLACK
-
-    out = str()
-    for y in range(board.board_size):
-        for x in range(board.board_size):
-            val = (ownership[board.get_index(x, y)] + 1.) / 2.0
-            out += "COLOR {} {}\n".format(value_to_code(val, inves), get_move_text(x, y))
-    out = out[:-1]
-    return out
-
-def gogui_ownership_influence(ownership, board):
-    ownership = ownership[0].cpu().detach().numpy()
-    ownership = get_valid_spat(ownership, board)
-    inves = board.to_move == WHITE
-
-    out = "INFLUENCE"
-    for y in range(board.board_size):
-        for x in range(board.board_size):
-            val = ownership[board.get_index(x, y)]
-            if inves:
-                val = -val
-            out += " {} {:.2f}".format(get_move_text(x, y), val)
-    return out
-
-def gogui_ladder_heatmap(laddermap, board):
-    def value_to_code(val):
-        def hsv2rgb(h,s,v):
-            return tuple(round(i * 255) for i in colorsys.hsv_to_rgb(h,s,v))
-
-        h1, h2 = 145, 215
-        w = h2 - h1
-        w2 = 20
-
-        h = (1.0 - val) * (242 - w + w2)
-        s = 1.0
-        v = 1.0
-
-        if (h1 <= h and h <= h1 + w2):
-            h = h1 + (h - h1) * w / w2
-            m = w / 2
-            v -= (m - abs(h - (h1 + m))) * 0.2 / m
-        elif h >= h1 + w2:
-            h += w - w2
-
-        h0 = 100
-        m0 = (h2 - h0) / 2
-        if h0 <= h and h <= h2:
-            v -= (m0 - abs(h - (h0 + m0))) * 0.2 / m0
-        r, g, b = hsv2rgb(h/360, s, v)
-        return "#{0:02x}{1:02x}{2:02x}".format(r, g, b)
-
-    out = str()
-    for y in range(board.board_size):
-        for x in range(board.board_size): 
-            ladder = laddermap[board.get_vertex(x, y)]
-            if ladder == LADDER_ATAR:
-                val = 0.2
-            elif ladder == LADDER_TAKE:
-                val = 0.4
-            elif ladder == LADDER_ESCP:
-                val = 0.8
-            elif ladder == LADDER_DEAD:
-                val = 1.0
+    def time_left(self, color, time, stones):
+        if isinstance(color, str):
+            if color.lower()[:1] == "b":
+                c = BLACK
+            elif color.lower()[:1] == "w":
+                c = WHITE
             else:
-                val = 0.0
-            out += "COLOR {} {}\n".format(value_to_code(val), get_move_text(x, y))
-    out = out[:-1]
-    return out
+                raise Exception("time_left(...): invalid color string")
+        else:
+            c = color
+        self._time_control.time_left(c, time, stones)
 
-def print_winrate(wdl, scores):
-    def np_softmax(x):
-        return np.exp(x) / np.sum(np.exp(x), axis=0)
-
-    wdl = wdl[0].cpu().detach().numpy()
-    wdl = np_softmax(wdl)
-    scores = scores[0].cpu().detach().numpy()
-    score = scores[0]
-
-    winrate = (wdl[0] - wdl[2] + 1) / 2
-    stderr_write("winrate= {:.2f}%\n".format(100 * winrate))
-    stderr_write("score= {:.2f}\n".format(score))
-
-def print_raw_nn(pred, board):
-    def np_softmax(x):
-        return np.exp(x) / np.sum(np.exp(x), axis=0)
-
-    prob, _, _, _, _, ownership, wdl, _, scores, _ = pred
-
-    # prob
-    prob = prob[0].cpu().detach().numpy()
-    prob = get_valid_spat(prob, board)
-    prob = np_softmax(prob)
-
-    # winrate
-    wdl = wdl[0].cpu().detach().numpy()
-    wdl = np_softmax(wdl)
-    winrate = (wdl[0] - wdl[2] + 1) / 2
-
-    # score
-    scores = scores[0].cpu().detach().numpy()
-    score = scores[0]
-
-    # ownership
-    ownership = ownership[0].cpu().detach().numpy()
-    ownership = get_valid_spat(ownership, board)
-
-    stderr_write("winrate= {:.6f}%\n".format(100 * winrate))
-    stderr_write("score= {:.6f}\n".format(score))
-
-    prob_out = str()
-    for y in range(board.board_size):
-        for x in range(board.board_size): 
-            idx = (board.board_size - y - 1) * board.board_size + x
-            prob_out += "  {:.6f}".format(prob[idx])
-        prob_out += "\n"
-    stderr_write("policy=\n{}".format(prob_out))
-    stderr_write("pass policy= {:.6f}\n".format(prob[-1]))
-
-    ownership_out = str()
-    for y in range(board.board_size):
-        for x in range(board.board_size): 
-            idx = (board.board_size - y - 1) * board.board_size + x
-            val = ownership[idx]
-            if val < 0:
-                ownership_out += " {:.6f}".format(val)
-            else:
-                ownership_out += "  {:.6f}".format(val)
-        ownership_out += "\n"
-    stderr_write("ownership=\n{}".format(ownership_out))
-
-def print_planes(board):
-    planes = board.get_features()
-
-    planes_out = str()
-    for p in range(INPUT_CHANNELS):
-        planes_out += "planes: {}\n".format(p+1)
-        for y in range(BOARD_SIZE):
-            for x in range(BOARD_SIZE):
-                val = planes[p, BOARD_SIZE - y - 1, x]
-                if val < 0:
-                    planes_out += " {:.2f}".format(val)
+    def play(self, move, color=None):
+        if color:
+            if isinstance(color, str):
+                if color.lower()[:1] == "b":
+                    self._board.to_move = BLACK
+                elif color.lower()[:1] == "w":
+                    self._board.to_move = WHITE
                 else:
-                    planes_out += "  {:.2f}".format(val)
+                    raise Exception("play(...): invalid color string")
+            elif isinstance(color, int):
+                if color in [BLACK, WHITE]:
+                    self._board.to_move = color
+                else:
+                    raise Exception("play(...): invalid color int")
+
+        if isinstance(move, str):
+            if move == "pass":
+                vtx = PASS
+            elif move == "resign":
+                vtx = RESIGN
+            else:
+                x = ord(move[0]) - (ord('A') if ord(move[0]) < ord('a') else ord('a'))
+                y = int(move[1:]) - 1
+                if x >= 8:
+                    x -= 1
+                vtx = self._board.get_vertex(x,y)
+        elif isinstance(move, int):
+            vtx = move
+        self._board.play(vtx)
+
+    def get_net_output_without_batch(self, as_numpy=False):
+        result = self._net.get_output_without_batch(
+            features = self._board.get_features(),
+            board_size = self._board.board_size,
+            as_numpy = as_numpy
+        )
+        return result
+
+    def genmove(self, color=None, *args, **kwargs):
+        playouts = kwargs.get("playouts", 400)
+        resign_threshold = kwargs.get("resign_threshold", 0.1)
+        verbose = kwargs.get("verbose", False)
+        analysis_config = kwargs.get("analysis_config", {})
+
+        if color:
+            if isinstance(color, str):
+                if color.lower()[:1] == "b":
+                    self._board.to_move = BLACK
+                elif color.lower()[:1] == "w":
+                    self._board.to_move = WHITE
+                else:
+                    raise Exception("genmove(...): invalid color string")
+            elif isinstance(color, int):
+                if color in [BLACK, WHITE]:
+                    self._board.to_move = color
+                else:
+                    raise Exception("genmove(...): invalid color int")
+        search = Search(
+            self._board,
+            self._net,
+            self._time_control
+        )
+        search.analysis_tag["interval"] = analysis_config.get("interval", 0)
+
+        vtx, _ = search.think(
+            playouts = playouts,
+            resign_threshold = resign_threshold,
+            verbose = verbose
+        )
+        self._board.play(vtx)
+        move = self._board.vertex_to_text(vtx)
+        return move
+
+    def ponder(self, color=None, *args, **kwargs):
+        playouts = kwargs.get("playouts", 400)
+        verbose = kwargs.get("verbose", False)
+        analysis_config = kwargs.get("analysis_config", {})
+
+        if color:
+            if isinstance(color, str):
+                if color.lower()[:1] == "b":
+                    self._board.to_move = BLACK
+                elif color.lower()[:1] == "w":
+                    self._board.to_move = WHITE
+                else:
+                    raise Exception("genmove(...): invalid color string")
+            elif isinstance(color, int):
+                if color in [BLACK, WHITE]:
+                    self._board.to_move = color
+                else:
+                    raise Exception("genmove(...): invalid color int")
+        search = Search(
+            self._board,
+            self._net,
+            self._time_control
+        )
+        search.analysis_tag["interval"] = analysis_config.get("interval", 0)
+
+        verbose = search.ponder(
+            playouts = playouts,
+            verbose = verbose
+        )
+        return verbose
+
+    def reset_board(self, board_size=None, komi=None):
+        if board_size and board_size > BOARD_SIZE:
+            raise Exception("reset_board(...): board size should be less than {}".format(BOARD_SIZE))
+
+        if board_size and komi:
+            self._board.reset(board_size, komi)
+        elif board_size:
+            self._board.reset(board_size, self._board.komi)
+        elif komi:
+            self._board.komi = komi
+        else:
+            self._board.reset(self._board.board_size, self._board.komi)
+
+    def get_board(self):
+        return self._board
+
+    def get_net_loader(self):
+        return self._loader
+
+    def __str__(self):
+        out = str()
+        out += str(self._board)
+        out += str(self._time_control) 
+        return out
+
+class PrintUtils:
+    def __init__(self, board):
+        self._board = board
+
+    def _get_move_text(self, x, y):
+        return "{}{}".format("ABCDEFGHJKLMNOPQRST"[x], y+1)
+
+    def raw_nn(self, pred_result):
+        # prob
+        prob = pred_result["prob"]
+
+        # winrate
+        wdl = pred_result["wdl"]
+        winrate = (wdl[0] - wdl[2] + 1) / 2
+
+        # score
+        scores = pred_result["all_scores"]
+        score = scores[0]
+
+        # ownership
+        ownership = pred_result["ownership"]
+
+        stderr_write("winrate= {:.6f}%\n".format(100 * winrate))
+        stderr_write("score= {:.6f}\n".format(score))
+
+        board_size = self._board.board_size
+        prob_out = str()
+        for y in range(board_size):
+            for x in range(board_size):
+                idx = (board_size - y - 1) * board_size + x
+                prob_out += "  {:.6f}".format(prob[idx])
+            prob_out += "\n"
+        stderr_write("policy=\n{}".format(prob_out))
+        stderr_write("pass policy= {:.6f}\n".format(prob[-1]))
+
+        ownership_out = str()
+        for y in range(board_size):
+            for x in range(board_size):
+                idx = (board_size - y - 1) * board_size + x
+                val = ownership[idx]
+                if val < 0:
+                    ownership_out += " {:.6f}".format(val)
+                else:
+                    ownership_out += "  {:.6f}".format(val)
+            ownership_out += "\n"
+        stderr_write("ownership=\n{}".format(ownership_out))
+
+    def planes(self):
+        planes = self._board.get_features()
+
+        planes_out = str()
+        for p in range(INPUT_CHANNELS):
+            planes_out += "planes: {}\n".format(p+1)
+            for y in range(BOARD_SIZE):
+                for x in range(BOARD_SIZE):
+                    val = planes[p, BOARD_SIZE - y - 1, x]
+                    if val < 0:
+                        planes_out += " {:.2f}".format(val)
+                    else:
+                        planes_out += "  {:.2f}".format(val)
+                planes_out += "\n"
             planes_out += "\n"
-        planes_out += "\n"
-    stderr_write("planes=\n{}".format(planes_out))
+        stderr_write("planes=\n{}".format(planes_out))
+
+    def gogui_policy_rating(self, prob):
+        board_size = self._board.board_size
+        num_intersections = self._board.num_intersections
+
+        out = str()
+        for y in range(board_size):
+            for x in range(board_size):
+                val = prob[self._board.get_index(x, y)]
+                if val > 1./num_intersections:
+                    out += "LABEL {} {}\n".format(self._get_move_text(x, y), round(100. * val))
+        out = out[:-1]
+        return out
+
+    def gogui_policy_heatmap(self, prob):
+        def value_to_code(val):
+            def hsv2rgb(h,s,v):
+                return tuple(round(i * 255) for i in colorsys.hsv_to_rgb(h,s,v))
+
+            h1, h2 = 145, 215
+            w = h2 - h1
+            w2 = 20
+
+            h = (1.0 - val) * (242 - w + w2)
+            s = 1.0
+            v = 1.0
+
+            if (h1 <= h and h <= h1 + w2):
+                h = h1 + (h - h1) * w / w2
+                m = w / 2
+                v -= (m - abs(h - (h1 + m))) * 0.2 / m
+            elif h >= h1 + w2:
+                h += w - w2
+
+            h0 = 100
+            m0 = (h2 - h0) / 2
+            if h0 <= h and h <= h2:
+                v -= (m0 - abs(h - (h0 + m0))) * 0.2 / m0
+            r, g, b = hsv2rgb(h/360, s, v)
+            return "#{0:02x}{1:02x}{2:02x}".format(r, g, b)
+
+        board_size = self._board.board_size
+        out = str()
+        for y in range(board_size):
+            for x in range(board_size):
+                val = prob[self._board.get_index(x, y)]
+                if val > 0.0001:
+                    val = math.sqrt(val) # highlight
+                out += "COLOR {} {}\n".format(value_to_code(val), self._get_move_text(x, y))
+        out = out[:-1]
+        return out
+
+    def gogui_policy_order(self, prob):
+        num_intersections = self._board.num_intersections
+        ordered_list = list()
+        for idx in range(num_intersections):
+            ordered_list.append((prob[idx], idx))
+
+        out = str()
+        ordered_list.sort(reverse=True, key=lambda x: x[0])
+        for order in range(12):
+            _, idx = ordered_list[order]
+            vtx = self._board.index_to_vertex(idx)
+            x = self._board.get_x(vtx)
+            y = self._board.get_y(vtx)
+            out += "LABEL {} {}\n".format(self._get_move_text(x, y), order+1)
+        out = out[:-1]
+        return out
+
+    def gogui_ownership_heatmap(self, ownership):
+        def value_to_code(val, inves):
+            def hsv2rgb(h,s,v):
+                return tuple(round(i * 255) for i in colorsys.hsv_to_rgb(h,s,v))
+            h = 0.
+            s = 0.
+            v = val if not inves else 1. - val
+            r, g, b = hsv2rgb(h/360, s, v)
+            return "#{0:02x}{1:02x}{2:02x}".format(r, g, b)
+
+        board_size = self._board.board_size
+        inves = self._board.to_move == BLACK
+
+        out = str()
+        for y in range(board_size):
+            for x in range(board_size):
+                val = (ownership[self._board.get_index(x, y)] + 1.) / 2.0
+                out += "COLOR {} {}\n".format(value_to_code(val, inves), self._get_move_text(x, y))
+        out = out[:-1]
+        return out
+
+    def gogui_ownership_influence(self, ownership):
+        board_size = self._board.board_size
+        inves = self._board.to_move == WHITE
+
+        out = "INFLUENCE"
+        for y in range(board_size):
+            for x in range(board_size):
+                val = ownership[self._board.get_index(x, y)]
+                if inves:
+                    val = -val
+                out += " {} {:.2f}".format(self._get_move_text(x, y), val)
+        return out
+
+    def gogui_ladder_heatmap(self, laddermap):
+        def value_to_code(val):
+            def hsv2rgb(h,s,v):
+                return tuple(round(i * 255) for i in colorsys.hsv_to_rgb(h,s,v))
+
+            h1, h2 = 145, 215
+            w = h2 - h1
+            w2 = 20
+
+            h = (1.0 - val) * (242 - w + w2)
+            s = 1.0
+            v = 1.0
+
+            if (h1 <= h and h <= h1 + w2):
+                h = h1 + (h - h1) * w / w2
+                m = w / 2
+                v -= (m - abs(h - (h1 + m))) * 0.2 / m
+            elif h >= h1 + w2:
+                h += w - w2
+
+            h0 = 100
+            m0 = (h2 - h0) / 2
+            if h0 <= h and h <= h2:
+                v -= (m0 - abs(h - (h0 + m0))) * 0.2 / m0
+            r, g, b = hsv2rgb(h/360, s, v)
+            return "#{0:02x}{1:02x}{2:02x}".format(r, g, b)
+
+        board_size = self._board.board_size
+        out = str()
+        for y in range(board_size):
+            for x in range(board_size):
+                ladder = laddermap[self._board.get_vertex(x, y)]
+                if ladder == LADDER_ATAR:
+                    val = 0.2
+                elif ladder == LADDER_TAKE:
+                    val = 0.4
+                elif ladder == LADDER_ESCP:
+                    val = 0.8
+                elif ladder == LADDER_DEAD:
+                    val = 1.0
+                else:
+                    val = 0.0
+                out += "COLOR {} {}\n".format(value_to_code(val), self._get_move_text(x, y))
+        out = out[:-1]
+        return out
 
 def gtp_loop(args):
     def gtp_print(res, success=True):
+        while len(res) > 0 and res[-1] == "\n":
+            res = res[:-1]
         if success:
             stdout_write("= {}\n\n".format(res))
         else:
             stdout_write("? {}\n\n".format(res))
 
-    board = Board(BOARD_SIZE, KOMI, SCORING_AREA)
-    net, loader = load_checkpoint(args.json, args.checkpoint, args.use_swa)
-
-    use_gpu = args.use_gpu and torch.cuda.is_available()
-    device = torch.device("cuda") if use_gpu else torch.device("cpu")
-    net = net.to(device)
-
-    time_control = TimeControl()
-
-    if use_gpu:
-        stderr_write("Enable the GPU device...\n")
+    agent = Agent(
+        json = args.json,
+        checkpoint = args.checkpoint,
+        use_swa = args.use_swa,
+        use_gpu = args.use_gpu,
+        board_size = args.board_size,
+        komi = args.komi
+    )
+    stderr_write("GTP loop is ready...\n")
 
     while True:
         inputs = sys.stdin.readline().strip().split()
@@ -1558,14 +1739,15 @@ def gtp_loop(args):
             continue
 
         main = inputs[0]
+        print_utils = PrintUtils(agent.get_board())
 
         if main == "quit":
             gtp_print("")
-            break
+            exit()
         elif main == "name":
-            gtp_print("pysayuri")
+            gtp_print(agent.name)
         elif main == "version":
-            gtp_print("0.1.0")
+            gtp_print(agent.version)
         elif main == "protocol_version":
             gtp_print("2")
         elif main == "list_commands":
@@ -1590,108 +1772,95 @@ def gtp_loop(args):
                 "lz-analyze"
             ]
             out = str()
-            for i in supported_list:
+            for i in sorted(supported_list):
                 out += (i + "\n")
             out = out[:-1]
             gtp_print(out)
         elif main == "showboard":
-            gtp_print("\n" + str(board))
+            gtp_print("\n" + str(agent))
         elif main == "clear_board":
-            board.reset(board.board_size, board.komi)
+            agent.reset_board()
             gtp_print("")
         elif main == "boardsize":
-            board.reset(int(inputs[1]), board.komi)
+            if len(inputs) <= 1 or not inputs[1].isdigit():
+                raise Exception("GTP command \"boardsize\": should provide int parameter")
+            agent.reset_board(board_size=int(inputs[1]))
             gtp_print("")
         elif main == "komi":
-            board.komi = float(inputs[1])
+            if len(inputs) <= 1:
+                raise Exception("GTP command \"komi\": should provide float parameter")
+            agent.reset_board(komi=float(inputs[1]))
             gtp_print("")
         elif main == "play":
+            if len(inputs) <= 2:
+                raise Exception("GTP command \"play\": should provide color and vertex")
             color, move = inputs[1].lower(), inputs[2].lower()
-            c, vtx = INVLD, None
-            if color[:1] == "b":
-                c = BLACK
-            elif color[:1] == "w":
-                c = WHITE
-
-            if move == "pass":
-                vtx = PASS
-            elif move == "resign":
-                vtx = RESIGN
-            else:
-                x = ord(move[0]) - (ord('A') if ord(move[0]) < ord('a') else ord('a'))
-                y = int(move[1:]) - 1
-                if x >= 8:
-                    x -= 1
-                vtx = board.get_vertex(x,y)
-            if c != INVLD and vtx is not None:
-                board.to_move = c
-                board.play(vtx)
+            agent.play(move=move, color=color)
             gtp_print("")
         elif main == "genmove":
-            color = inputs[1]
-            c = INVLD
-            if color.lower()[:1] == "b":
-                c = BLACK
-            elif color.lower()[:1] == "w":
-                c = WHITE
-            board.to_move = c
-
-            search = Search(board, net, time_control, device)
-            vtx, _ = search.think(args.playouts, args.resign_threshold, args.verbose)
-            board.play(vtx)
-            move = board.vertex_to_text(vtx)
+            if len(inputs) <= 1:
+                raise Exception("GTP command \"genmove\": should provide color")
+            color = inputs[1].lower()
+            move = agent.genmove(
+                color,
+                playouts = args.playouts,
+                resign_threshold = args.resign_threshold,
+                verbose = args.verbose
+            )
             gtp_print(move)
         elif main == "time_settings":
+            if len(inputs) <= 3:
+                raise Exception("GTP command \"time_settings\": inputs parameters error")
             main_time = int(inputs[1])
             byo_time = int(inputs[2])
             byo_stones = int(inputs[3])
-            time_control.time_settings(main_time, byo_time, byo_stones)
+            agent.time_settings(main_time, byo_time, byo_stones)
             gtp_print("")
         elif main == "time_left":
+            if len(inputs) <= 3:
+                raise Exception("GTP command \"time_left\": inputs parameters error")
+            color = inputs[1]
+            time = int(inputs[2])
+            stones = int(inputs[3])
+            agent.time_left(color, time, stones)
             gtp_print("")
         elif main == "lz-genmove_analyze":
-            c = board.to_move
             interval = 0
             for tag in inputs[1:]:
                 if tag.isdigit():
                    interval = int(tag)
                 else:
                     color = tag
-                    if color.lower()[:1] == "b":
-                        c = BLACK
-                    elif color.lower()[:1] == "w":
-                        c = WHITE
             stdout_write("=\n")
-            search = Search(board, net, time_control, device)
-            search.analysis_tag["interval"] = interval/100
-            vtx, _ = search.think(args.playouts, args.resign_threshold, args.verbose)
-            board.play(vtx)
-            move = board.vertex_to_text(vtx)
+            move = agent.genmove(
+                color,
+                playouts = args.playouts,
+                resign_threshold = args.resign_threshold,
+                verbose = args.verbose,
+                analysis_config = {"interval": interval/100}
+            )
             stdout_write("play {}\n\n".format(move))
         elif main == "lz-analyze":
-            c = board.to_move
             interval = 0
             for tag in inputs[1:]:
                 if tag.isdigit():
                    interval = int(tag)
                 else:
                     color = tag
-                    if color.lower()[:1] == "b":
-                        c = BLACK
-                    elif color.lower()[:1] == "w":
-                        c = WHITE
             stdout_write("=\n")
-            search = Search(board, net, time_control, device)
-            search.analysis_tag["interval"] = interval/100
-            search.ponder(args.playouts, args.verbose)
+            agent.ponder(
+                color,
+                playouts = args.playouts,
+                verbose = args.verbose,
+                analysis_config = {"interval": interval/100}
+            )
             stdout_write("\n")
         elif main == "raw-nn":
-            planes = torch.from_numpy(board.get_features()).float().to(device)
-            pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            print_raw_nn(pred, board)
+            pred_result = agent.get_net_output_without_batch(as_numpy=True)
+            print_utils.raw_nn(pred_result)
             gtp_print("")
         elif main == "planes":
-            print_planes(board)
+            print_utils.planes()
             gtp_print("")
         elif main == "gogui-analyze_commands":
             supported_list = [
@@ -1717,95 +1886,70 @@ def gtp_loop(args):
             out = out[:-1]
             gtp_print(out)
         elif main == "gogui-policy_rating":
-            planes = torch.from_numpy(board.get_features()).float().to(device)
-            pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            prob, _, _, _, _, _, _, _, _, _ = pred
-            out = gogui_policy_rating(prob, board)
+            pred_result = agent.get_net_output_without_batch(as_numpy=True)
+            out = print_utils.gogui_policy_rating(pred_result["prob"])
             gtp_print(out)
         elif main == "gogui-policy_heatmap":
-            planes = torch.from_numpy(board.get_features()).float().to(device)
-            pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            prob, _, _, _, _, _, _, _, _, _ = pred
-            out = gogui_policy_heatmap(prob, board)
+            pred_result = agent.get_net_output_without_batch(as_numpy=True)
+            out = print_utils.gogui_policy_heatmap(pred_result["prob"])
             gtp_print(out)
         elif main == "gogui-policy_order":
-            planes = torch.from_numpy(board.get_features()).float().to(device)
-            pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            prob, _, _, _, _, _, _, _, _, _ = pred
-            out = gogui_policy_order(prob, board)
+            pred_result = agent.get_net_output_without_batch(as_numpy=True)
+            out = print_utils.gogui_policy_order(pred_result["prob"])
             gtp_print(out)
         elif main == "gogui-opp_policy_rating":
-            planes = torch.from_numpy(board.get_features()).float().to(device)
-            pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            _, prob, _, _, _, _, _, _, _, _ = pred
-            out = gogui_policy_rating(prob, board)
+            pred_result = agent.get_net_output_without_batch(as_numpy=True)
+            out = print_utils.gogui_policy_rating(pred_result["aux_prob"])
             gtp_print(out)
         elif main == "gogui-opp_policy_heatmap":
-            planes = torch.from_numpy(board.get_features()).float().to(device)
-            pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            _, prob, _, _, _, _, _, _, _, _ = pred
-            out = gogui_policy_heatmap(prob, board)
+            pred_result = agent.get_net_output_without_batch(as_numpy=True)
+            out = print_utils.gogui_policy_heatmap(pred_result["aux_prob"])
             gtp_print(out)
         elif main == "gogui-opp_policy_order":
-            planes = torch.from_numpy(board.get_features()).float().to(device)
-            pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            _, prob, _, _, _, _, _, _, _, _ = pred
-            out = gogui_policy_order(prob, board)
+            pred_result = agent.get_net_output_without_batch(as_numpy=True)
+            out = print_utils.gogui_policy_order(pred_result["aux_prob"])
             gtp_print(out)
         elif main == "gogui-soft_policy_rating":
-            planes = torch.from_numpy(board.get_features()).float().to(device)
-            pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            _, _, prob, _, _, _, _, _, _, _ = pred
-            out = gogui_policy_rating(prob, board)
+            pred_result = agent.get_net_output_without_batch(as_numpy=True)
+            out = print_utils.gogui_policy_rating(pred_result["soft_prob"])
             gtp_print(out)
         elif main == "gogui-soft_policy_heatmap":
-            planes = torch.from_numpy(board.get_features()).float().to(device)
-            pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            _, _, prob, _, _, _, _, _, _, _ = pred
-            out = gogui_policy_heatmap(prob, board)
+            pred_result = agent.get_net_output_without_batch(as_numpy=True)
+            out = print_utils.gogui_policy_heatmap(pred_result["soft_prob"])
             gtp_print(out)
         elif main == "gogui-soft_policy_order":
-            planes = torch.from_numpy(board.get_features()).float().to(device)
-            pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            _, _, prob, _, _, _, _, _, _, _ = pred
-            out = gogui_policy_order(prob, board)
+            pred_result = agent.get_net_output_without_batch(as_numpy=True)
+            out = print_utils.gogui_policy_order(pred_result["soft_prob"])
             gtp_print(out)
         elif main == "gogui-optimistic_policy_rating":
-            planes = torch.from_numpy(board.get_features()).float().to(device)
-            pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            _, _, _, _, prob, _, _, _, _, _ = pred
-            out = gogui_policy_rating(prob, board)
+            pred_result = agent.get_net_output_without_batch(as_numpy=True)
+            out = print_utils.gogui_policy_rating(pred_result["optimistic_prob"])
             gtp_print(out)
         elif main == "gogui-optimistic_policy_heatmap":
-            planes = torch.from_numpy(board.get_features()).float().to(device)
-            pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            _, _, _, _, prob, _, _, _, _, _ = pred
-            out = gogui_policy_heatmap(prob, board)
+            pred_result = agent.get_net_output_without_batch(as_numpy=True)
+            out = print_utils.gogui_policy_heatmap(pred_result["optimistic_prob"])
             gtp_print(out)
         elif main == "gogui-optimistic_policy_order":
-            planes = torch.from_numpy(board.get_features()).float().to(device)
-            pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            _, _, _, _, prob, _, _, _, _, _ = pred
-            out = gogui_policy_order(prob, board)
+            pred_result = agent.get_net_output_without_batch(as_numpy=True)
+            out = print_utils.gogui_policy_order(pred_result["optimistic_prob"])
             gtp_print(out)
         elif main == "gogui-ownership_heatmap":
-            planes = torch.from_numpy(board.get_features()).float().to(device)
-            pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            _, _, _, _, _, ownership, _, _, _, _ = pred
-            out = gogui_ownership_heatmap(ownership, board)
+            pred_result = agent.get_net_output_without_batch(as_numpy=True)
+            out = print_utils.gogui_ownership_heatmap(pred_result["ownership"])
             gtp_print(out)
         elif main == "gogui-ownership_influence":
-            planes = torch.from_numpy(board.get_features()).float().to(device)
-            pred, _ = net.forward(torch.unsqueeze(planes, 0))
-            _, _, _, _, _, ownership, _, _, _, _ = pred
-            out = gogui_ownership_influence(ownership, board)
+            pred_result = agent.get_net_output_without_batch(as_numpy=True)
+            out = print_utils.gogui_ownership_influence(pred_result["ownership"])
             gtp_print(out)
         elif main == "gogui-ladder_heatmap":
-            laddermap = board._get_ladder_map()
-            out = gogui_ladder_heatmap(laddermap, board)
+            laddermap = agent.get_board()._get_ladder_map()
+            out = print_utils.gogui_ladder_heatmap(laddermap)
             gtp_print(out)
         elif main == "save_bin_weights":
+            if len(inputs) <= 1:
+                raise Exception("GTP command \"save_bin_weights\": should provide weight's path")
             path = inputs[1]
+            loader = agent.get_net_loader()
             steps = loader.get_steps()
             weights_name = os.path.join(path, "s{}.bin.txt".format(steps))
             swa_weights_name = os.path.join(path, "swa-s{}.bin.txt".format(steps))
@@ -1829,11 +1973,21 @@ if __name__ == "__main__":
                         action="store_true", default=False)
     parser.add_argument("--use-gpu", help="Use the GPU.",
                         action="store_true", default=False)
+    parser.add_argument("-l", "--loop", help="Will automatically start the GTP loop after ending the loop",
+                        action="store_true", default=False)
     parser.add_argument("-p", "--playouts", metavar="<integer>",
                         help="The number of playouts.", type=int, default=400)
     parser.add_argument("-r", "--resign-threshold", metavar="<float>",
                         help="Resign when winrate is less than x.", type=float, default=0.1)
     parser.add_argument("-v", "--verbose", default=False,
                         help="Dump some search verbose.", action="store_true")
+    parser.add_argument("-s", "--board-size", metavar="<integer>",
+                        help="The default board size.", type=int, default=BOARD_SIZE)
+    parser.add_argument("-k", "--komi", metavar="<float>",
+                        help="The default komi.", type=float, default=KOMI)
     args = parser.parse_args()
-    gtp_loop(args)
+    while args.loop:
+        try:
+            gtp_loop(args)
+        except Exception as e:
+            stderr_write("halt the gtp loop, exception: {}\n".format(e))
