@@ -916,10 +916,6 @@ class Network(nn.Module):
         mask_sum_hw_sqrt = torch.sqrt(mask_sum_hw)
         mask_buffers = (mask, mask_sum_hw, mask_sum_hw_sqrt)
 
-        policy_mask = torch.flatten(mask, start_dim=1, end_dim=3)
-        b, _ = policy_mask.shape
-        policy_mask = torch.cat((policy_mask, mask.new_ones((b, 1))), dim=1)
-
         # input layer
         x = self.input_conv(planes, mask)
 
@@ -987,14 +983,22 @@ class Network(nn.Module):
             all_scores, # {final, current, short, middle, long}
             all_errors # {q error, score error}
         )
+        if use_symm:
+            mask = torch_symmetry(symm, mask, invert=True)
+            mask_buffers = (mask, mask_sum_hw, mask_sum_hw_sqrt)
 
         all_loss_dict = dict()
         if target is not None:
-            all_loss_dict = self.compute_loss(predict, target, mask_sum_hw, loss_weight_dict)
+            all_loss_dict = self.compute_loss(predict, target, mask_buffers, loss_weight_dict)
 
         return predict, all_loss_dict
 
-    def compute_loss(self, pred, target, mask_sum_hw, loss_weight_dict):
+    def compute_loss(self, pred, target, mask_buffers, loss_weight_dict):
+        mask, mask_sum_hw, _ = mask_buffers
+        policy_mask = torch.flatten(mask, start_dim=1, end_dim=3)
+        b, _ = policy_mask.shape
+        policy_mask = torch.cat((policy_mask, mask.new_ones((b, 1))), dim=1)
+
         if loss_weight_dict is None:
             soft_weight = 0.1
         else:
@@ -1003,8 +1007,9 @@ class Network(nn.Module):
         p_prob, p_aux_prob, p_soft_prob, p_soft_aux_prob, p_optimistic_prob, p_ownership, p_wdl, p_q_vals, p_scores, p_errors = pred
         t_prob, t_aux_prob, t_ownership, t_wdl, t_q_vals, t_scores, _ = target
 
-        def make_soft_porb(prob, t=4):
-            soft_prob = torch.pow(prob, 1/t)
+        def make_soft_porb(prob, policy_mask, eps=1e-7, t=4):
+            soft_prob = (prob + eps) * policy_mask
+            soft_prob = torch.pow(soft_prob, 1/t)
             soft_prob /= torch.sum(soft_prob, dim=1, keepdim=True)
             return soft_prob
 
@@ -1040,10 +1045,10 @@ class Network(nn.Module):
         aux_prob_loss = 0.15 * cross_entropy(p_aux_prob, t_aux_prob)
 
         # current player's soft probabilities loss
-        soft_prob_loss = 1 * soft_weight * cross_entropy(p_soft_prob, make_soft_porb(t_prob))
+        soft_prob_loss = 1 * soft_weight * cross_entropy(p_soft_prob, make_soft_porb(t_prob, policy_mask))
 
         # opponent's soft probabilities loss
-        soft_aux_prob_loss = 0.15 * soft_weight * cross_entropy(p_soft_aux_prob, make_soft_porb(t_aux_prob))
+        soft_aux_prob_loss = 0.15 * soft_weight * cross_entropy(p_soft_aux_prob, make_soft_porb(t_aux_prob, policy_mask))
 
         # short-term optimistic probabilities loss
         z_short_term_q = (short_term_q_target - short_term_q_pred.detach()) / torch.sqrt(short_term_q_error.detach() + 0.0001)
