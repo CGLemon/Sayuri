@@ -374,7 +374,7 @@ class BroadcastDepthwiseConv2d(nn.Module):
             )
 
     def _compute_equivalent_weight(self):
-        return self.weight + torch.sum(self.weight, dim=0, keepdim=True) / self.channels
+        return self.weight + torch.sum(self.weight, dim=0, keepdim=True) / math.sqrt(self.channels)
 
     def get_merged_param(self):
         weight = torch.zeros_like(self.weight)
