@@ -29,6 +29,7 @@
         "SoftLossWeight" : 0.1,
         "SwaMaxCount" : 16,
         "SwaSteps" : 100,
+        "Activation" : "relu",
 
         "LearningRateSchedule": [
             [0,       1e-2],

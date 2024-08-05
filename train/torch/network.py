@@ -833,7 +833,7 @@ class Network(nn.Module):
 
         self.nntype = cfg.nntype
 
-        self.activation = cfg.activation
+        self.activation = cfg.activation.lower()
         self.input_channels = cfg.input_channels
         self.residual_channels = cfg.residual_channels
         self.xsize = cfg.boardsize
