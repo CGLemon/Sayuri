@@ -92,6 +92,7 @@ class Config:
 
         self.boardsize = network.get("MaxBoardSize", 19)
         self.nntype = network.get("NNType", None)
+        self.activation = network.get("Activation", "relu")
         self.input_channels = network.get("InputChannels", 43)
         self.residual_channels = network.get("ResidualChannels", None)
         self.policy_extract = network.get("PolicyExtract", None)

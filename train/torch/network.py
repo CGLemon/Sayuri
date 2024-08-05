@@ -12,7 +12,7 @@ from symmetry import torch_symmetry
 from status_loader import StatusLoader
 
 CRAZY_NEGATIVE_VALUE = -5000.0
-DEFAULT_ACTIVATION = "relu"
+DEFAULT_ACTIVATION = "mish"
 
 def activation_func(activation, inplace=False):
     if activation == "identity":
@@ -177,15 +177,18 @@ class GlobalPool(nn.Module):
 class SqueezeAndExcitation(nn.Module):
     def __init__(self, channels,
                        se_size,
+                       activation,
                        collector=None):
         super(SqueezeAndExcitation, self).__init__()
+
+        self.activation = activation
         self.global_pool = GlobalPool(is_value_head=False)
         self.channels = channels
 
         self.squeeze = FullyConnect(
             in_size=self.channels * 3,
             out_size=se_size,
-            activation=DEFAULT_ACTIVATION,
+            activation=self.activation,
             collector=collector
         )
         self.excite = FullyConnect(
@@ -639,15 +642,16 @@ class BottleneckBlock(nn.Module):
                        **kwargs):
         super(BottleneckBlock, self).__init__()
 
-        bottleneck_channels = kwargs.get("bottleneck_channels", None)
-        se_size = kwargs.get("se_size", None)
+        self.activation = kwargs.get("activation", DEFAULT_ACTIVATION)
+        self.bottleneck_channels = kwargs.get("bottleneck_channels", None)
+        self.se_size = kwargs.get("se_size", None)
         collector = kwargs.get("collector", None)
 
-        assert bottleneck_channels is not None, ""
-        self.use_se = se_size is not None
+        assert self.bottleneck_channels is not None, ""
+        self.use_se = self.se_size is not None
 
         # The inner layers channels.
-        self.inner_channels = bottleneck_channels
+        self.inner_channels = self.bottleneck_channels
 
         # The main ResidualBlock channels. We say a 15x192
         # resnet. The 192 is outer_channel.
@@ -658,7 +662,7 @@ class BottleneckBlock(nn.Module):
             out_channels=self.inner_channels,
             kernel_size=1,
             use_gamma=False,
-            activation=DEFAULT_ACTIVATION,
+            activation=self.activation,
             collector=collector
         )
         self.conv1 = ConvBlock(
@@ -666,7 +670,7 @@ class BottleneckBlock(nn.Module):
             out_channels=self.inner_channels,
             kernel_size=3,
             use_gamma=False,
-            activation=DEFAULT_ACTIVATION,
+            activation=self.activation,
             collector=collector
         )
         self.conv2 = ConvBlock(
@@ -674,7 +678,7 @@ class BottleneckBlock(nn.Module):
             out_channels=self.inner_channels,
             kernel_size=3,
             use_gamma=False,
-            activation=DEFAULT_ACTIVATION,
+            activation=self.activation,
             collector=collector
         )
         self.post_btl_conv = ConvBlock(
@@ -688,10 +692,11 @@ class BottleneckBlock(nn.Module):
         if self.use_se:
             self.se_module = SqueezeAndExcitation(
                 channels=self.outer_channels,
-                se_size=se_size,
+                se_size=self.se_size,
+                activation=self.activation,
                 collector=collector
             )
-        self.act = activation_func(DEFAULT_ACTIVATION, inplace=True)
+        self.act = activation_func(self.activation, inplace=True)
 
     def forward(self, inputs):
         x, mask_buffers = inputs
@@ -714,17 +719,18 @@ class ResidualBlock(nn.Module):
                        **kwargs):
         super(ResidualBlock, self).__init__()
 
-        se_size = kwargs.get("se_size", None)
+        self.activation = kwargs.get("activation", DEFAULT_ACTIVATION)
+        self.se_size = kwargs.get("se_size", None)
         collector = kwargs.get("collector", None)
 
         self.channels = channels
-        self.use_se = se_size is not None
+        self.use_se = self.se_size is not None
         self.conv1 = ConvBlock(
             in_channels=self.channels,
             out_channels=self.channels,
             kernel_size=3,
             use_gamma=False,
-            activation=DEFAULT_ACTIVATION,
+            activation=self.activation,
             collector=collector
         )
         self.conv2 = ConvBlock(
@@ -738,10 +744,11 @@ class ResidualBlock(nn.Module):
         if self.use_se:
             self.se_module = SqueezeAndExcitation(
                 channels=self.channels,
-                se_size=se_size,
+                se_size=self.se_size,
+                activation=self.activation,
                 collector=collector
             )
-        self.act = activation_func(DEFAULT_ACTIVATION, inplace=True)
+        self.act = activation_func(self.activation, inplace=True)
 
     def forward(self, inputs):
         x, mask_buffers = inputs
@@ -761,17 +768,19 @@ class MixerBlock(nn.Module):
                        *args,
                        **kwargs):
         super(MixerBlock, self).__init__()
-        se_size = kwargs.get("se_size", None)
+
+        self.activation = kwargs.get("activation", DEFAULT_ACTIVATION)
+        self.se_size = kwargs.get("se_size", None)
         collector = kwargs.get("collector", None)
 
         self.channels = channels
-        self.use_se = se_size is not None
+        self.use_se = self.se_size is not None
 
         self.depthwise_conv = DepthwiseConvBlock(
             channels=self.channels,
             kernel_size=7,
             use_gamma=True,
-            activation=DEFAULT_ACTIVATION,
+            activation=self.activation,
             collector=collector
         )
 
@@ -781,7 +790,7 @@ class MixerBlock(nn.Module):
             out_channels=ffn_channels,
             kernel_size=1,
             use_gamma=False,
-            activation=DEFAULT_ACTIVATION,
+            activation=self.activation,
             collector=collector
         )
         self.ffn2 = ConvBlock(
@@ -795,10 +804,11 @@ class MixerBlock(nn.Module):
         if self.use_se:
             self.se_module = SqueezeAndExcitation(
                 channels=self.channels,
-                se_size=se_size,
+                se_size=self.se_size,
+                activation=self.activation,
                 collector=collector
             )
-        self.act = activation_func(DEFAULT_ACTIVATION, inplace=True)
+        self.act = activation_func(self.activation, inplace=True)
 
     def forward(self, inputs):
         x, mask_buffers = inputs
@@ -823,6 +833,7 @@ class Network(nn.Module):
 
         self.nntype = cfg.nntype
 
+        self.activation = cfg.activation
         self.input_channels = cfg.input_channels
         self.residual_channels = cfg.residual_channels
         self.xsize = cfg.boardsize
@@ -846,7 +857,7 @@ class Network(nn.Module):
             out_channels=self.residual_channels,
             kernel_size=3,
             use_gamma=True,
-            activation=DEFAULT_ACTIVATION,
+            activation=self.activation,
             collector=self.layers_collector
         )
 
@@ -880,6 +891,7 @@ class Network(nn.Module):
                 block(channels=main_channels,
                       bottleneck_channels=bottleneck_channels,
                       se_size=se_size,
+                      activation=self.activation,
                       collector=self.layers_collector))
 
         if main_channels != self.residual_channels:
@@ -893,13 +905,13 @@ class Network(nn.Module):
             out_channels=self.policy_extract,
             kernel_size=1,
             use_gamma=False,
-            activation=DEFAULT_ACTIVATION,
+            activation=self.activation,
             collector=self.layers_collector
         )
         self.policy_intermediate_fc = FullyConnect(
             in_size=self.policy_extract * 3,
             out_size=self.policy_extract,
-            activation=DEFAULT_ACTIVATION,
+            activation=self.activation,
             collector=self.layers_collector
         )
         self.pol_misc = Convolve(
@@ -922,13 +934,13 @@ class Network(nn.Module):
             out_channels=self.value_extract,
             kernel_size=1,
             use_gamma=False,
-            activation=DEFAULT_ACTIVATION,
+            activation=self.activation,
             collector=self.layers_collector
         )
         self.value_intermediate_fc = FullyConnect(
             in_size=self.value_extract * 3,
             out_size=self.value_extract * 3,
-            activation=DEFAULT_ACTIVATION,
+            activation=self.activation,
             collector=self.layers_collector
         )
         self.ownership_conv = Convolve(
@@ -1185,7 +1197,7 @@ class Network(nn.Module):
         info += "Policy extract channels: {policyextract}\n".format(policyextract=self.policy_extract)
         info += "Value extract channels: {valueextract}\n".format(valueextract=self.value_extract)
         info += "Value misc size: {valuemisc}\n".format(valuemisc=self.value_misc)
-        info += "Default activation: {act}\n".format(act=DEFAULT_ACTIVATION)
+        info += "Default activation: {act}\n".format(act=self.activation)
 
         return info
 
@@ -1221,7 +1233,7 @@ class Network(nn.Module):
             f.write(str_to_bin("PolicyExtract {}\n".format(self.policy_extract)))
             f.write(str_to_bin("ValueExtract {}\n".format(self.value_extract)))
             f.write(str_to_bin("ValueMisc {}\n".format(self.value_misc)))
-            f.write(str_to_bin("ActivationFunction {}\n".format(DEFAULT_ACTIVATION)))
+            f.write(str_to_bin("ActivationFunction {}\n".format(self.activation)))
             f.write(str_to_bin("end info\n"))
 
             write_stack(f, self.stack)
@@ -1262,7 +1274,7 @@ class Network(nn.Module):
             f.write("PolicyExtract {}\n".format(self.policy_extract))
             f.write("ValueExtract {}\n".format(self.value_extract))
             f.write("ValueMisc {}\n".format(self.value_misc))
-            f.write("ActivationFunction {}\n".format(DEFAULT_ACTIVATION))
+            f.write("ActivationFunction {}\n".format(self.activation))
             f.write("end info\n")
 
             write_stack(f, self.stack)
