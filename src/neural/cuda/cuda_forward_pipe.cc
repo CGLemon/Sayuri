@@ -199,6 +199,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
 
     // Build the graph first.
     const auto output_channels = weights_->residual_channels;
+    const auto default_act = weights_->default_act;
 
     // input layer
     graph_->input_conv = cuda::Convolution(
@@ -207,7 +208,8 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         board_size_,         // board size
         3,                   // kernel size
         kInputChannels,      // input channels
-        output_channels      // output channels
+        output_channels,     // output channels
+        default_act          // activation
     );
 
     // block tower
@@ -221,14 +223,16 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         const auto tower_ptr = weights_->tower[i].get();
         if (tower_ptr->IsResidualBlock()) {
             const auto channels = weights_->residual_channels;
-            const bool use_relu = !(tower_ptr->apply_se);
+            const auto last_act = tower_ptr->apply_se ? Activation::kIdentity : default_act;
+
             graph_->tower[i].conv1 = cuda::Convolution(
                 &handles_,
                 max_batch_,   // max batch size
                 board_size_,  // board size
                 3,            // kernel size
                 channels,     // input channels
-                channels      // output channels
+                channels,     // output channels
+                default_act   // activation
             );
             graph_->tower[i].conv2 = cuda::Convolution(
                 &handles_,
@@ -237,20 +241,22 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
                 3,            // kernel size
                 channels,     // input channels
                 channels,     // output channels
-                use_relu
+                last_act      // activation
             );
             peak_channels = std::max(peak_channels, channels);
         } else if (tower_ptr->IsBottleneckBlock()) {
             const auto outer_channels = weights_->residual_channels;
             const auto inner_channels = tower_ptr->bottleneck_channels;
-            const bool use_relu = !(tower_ptr->apply_se);
+            const auto last_act = tower_ptr->apply_se ? Activation::kIdentity : default_act;
+
             graph_->tower[i].pre_btl_conv = cuda::Convolution(
                 &handles_,
                 max_batch_,     // max batch size
                 board_size_,    // board size
                 1,              // kernel size
                 outer_channels, // input channels
-                inner_channels  // output channels
+                inner_channels, // output channels
+                default_act     // activation
             );
             graph_->tower[i].conv1 = cuda::Convolution(
                 &handles_,
@@ -258,7 +264,8 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
                 board_size_,    // board size
                 3,              // kernel size
                 inner_channels, // input channels
-                inner_channels  // output channels
+                inner_channels, // output channels
+                default_act     // activation
             );
             graph_->tower[i].conv2 = cuda::Convolution(
                 &handles_,
@@ -266,7 +273,8 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
                 board_size_,    // board size
                 3,              // kernel size
                 inner_channels, // input channels
-                inner_channels  // output channels
+                inner_channels, // output channels
+                default_act     // activation
             );
             graph_->tower[i].post_btl_conv = cuda::Convolution(
                 &handles_,
@@ -275,28 +283,31 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
                 1,              // kernel size
                 inner_channels, // input channels
                 outer_channels, // output channels
-                use_relu        // relu
+                last_act        // activation
             );
             peak_channels = std::max({peak_channels, inner_channels, outer_channels});
         } else if (tower_ptr->IsMixerBlock()) {
             const auto channels = weights_->residual_channels;
             const auto feedforwards = tower_ptr->feedforward_channels;
             const auto filters = tower_ptr->dw_conv.GetFilter();
-            const bool use_relu = !(tower_ptr->apply_se);
+            const auto last_act = tower_ptr->apply_se ? Activation::kIdentity : default_act;
+
             graph_->tower[i].dw_conv = cuda::DepthwiseConvolution(
                 &handles_,
-                max_batch_,  // max batch size
-                board_size_, // board size
-                filters,     // kernel size
-                channels     // input channels
+                max_batch_,   // max batch size
+                board_size_,  // board size
+                filters,      // kernel size
+                channels,     // input channels
+                default_act   // activation
             );
             graph_->tower[i].conv1 = cuda::Convolution(
                 &handles_,
-                max_batch_,  // max batch size
-                board_size_, // board size
-                1,           // kernel size
-                channels,    // input channels
-                feedforwards // output channels
+                max_batch_,   // max batch size
+                board_size_,  // board size
+                1,            // kernel size
+                channels,     // input channels
+                feedforwards, // output channels
+                default_act   // activation
             );
             graph_->tower[i].conv2 = cuda::Convolution(
                 &handles_,
@@ -305,21 +316,21 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
                 1,            // kernel size
                 feedforwards, // input channels
                 channels,     // output channels
-                use_relu      // relu
+                last_act      // activation
             );
             peak_channels = std::max({peak_channels, channels, feedforwards});
         }
         if (tower_ptr->apply_se) {
             const auto channels = weights_->residual_channels;
             const size_t se_size = tower_ptr->se_size;
-            const bool use_relu = true;
+
             graph_->tower[i].se_module = cuda::SEUnit(
                 &handles_,
                 max_batch_,  // max batch size
                 board_size_, // board size
                 channels,    // channels
                 se_size,     // SE size
-                use_relu     // relu
+                default_act  // activation
             );
         }
     }
@@ -332,7 +343,8 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         board_size_,             // board size
         1,                       // kernel size
         output_channels,         // input channels
-        policy_extract_channels  // output channels
+        policy_extract_channels, // output channels
+        default_act              // activation
     );
     graph_->p_pool = cuda::GlobalPooling(
         &handles_,
@@ -346,7 +358,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         max_batch_,               // max batch size
         3*policy_extract_channels,// input sizes
         policy_extract_channels,  // outpur size
-        true
+        default_act               // activation
     );
     graph_->p_prob = cuda::Convolution(
         &handles_,
@@ -355,14 +367,14 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         1,                           // kernel size
         policy_extract_channels,     // input channels
         kOuputProbabilitiesChannels, // output channels
-        false                        // relu
+        Activation::kIdentity        // activation
     );
     graph_->p_prob_pass = cuda::FullyConnect(
         &handles_,
         max_batch_,               // max batch size
         policy_extract_channels,  // input sizes
         kOuputPassProbability,    // outpur size
-        false                     // relu
+        Activation::kIdentity     // activation
     );
 
     // value head
@@ -373,7 +385,8 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         board_size_,              // board size
         1,                        // kernel size
         output_channels,          // input channels
-        value_extract_channels    // output channels
+        value_extract_channels,   // output channels
+        default_act               // activation
     );
     graph_->v_pool = cuda::GlobalPooling(
         &handles_,
@@ -387,7 +400,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         max_batch_,               // max batch size
         3*value_extract_channels, // input sizes
         3*value_extract_channels, // outpur size
-        true
+        default_act               // activation
     );
     graph_->v_ownership = cuda::Convolution(
         &handles_,
@@ -396,14 +409,14 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         1,                        // kernel size
         value_extract_channels,   // input channels
         kOuputOwnershipChannels,  // output channels
-        false                     // relu
+        Activation::kIdentity     // activation
     );
     graph_->v_misc = cuda::FullyConnect(
         &handles_,
         max_batch_,               // max batch size
         3*value_extract_channels, // input size
         kOuputValueMisc,          // output size
-        false                     // relu
+        Activation::kIdentity     // relu
     );
 
     // Now push the weights.
@@ -798,7 +811,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         null_op, mask_buf[0],
         batch_size * policy_extract_channels,
         batch_size, policy_extract_channels, num_intersections,
-        false, handles_.stream);
+        Activation::kIdentity, handles_.stream);
 
     graph_->p_prob.Forward(
         batch_size,

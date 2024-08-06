@@ -1,4 +1,4 @@
-#include <stdexcept>
+#include "neural/activation.h"
 #include "neural/loader.h"
 #include "neural/network_basic.h"
 #include "utils/log.h"
@@ -10,6 +10,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 
 #ifdef USE_FAST_PARSER
 #include "fast_float.h"
@@ -241,7 +242,7 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
     }
 
     if (!NotFound(netinfo, "ActivationFunction")) {
-        // TODO
+        weights_->default_act = StringToAct(netinfo["ActivationFunction"]);
     }
 
     // Build the stack if it is not in weights file. It only

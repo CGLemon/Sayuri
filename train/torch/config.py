@@ -4,39 +4,6 @@ import torch
 
 class Config:
     def __init__(self, inputs, is_file=True):
-        self.raw_data = str()
-        self.num_workers = None
-        self.use_gpu = None
-        self.batchsize = None
-        self.buffersize = None
-        self.macrobatchsize = None
-        self.macrofactor = None
-        self.lr_schelude = None
-        self.weight_decay = None
-        self.train_dir = None
-        self.validation_dir = None
-        self.verbose_steps = None
-        self.steps_per_epoch = None
-        self.validation_steps = None
-        self.max_steps = None
-        self.fixup_batch_norm = None
-        self.store_path = None
-        self.down_sample_rate = None
-        self.stack = []
-        self.residual_channels = None
-        self.policy_extract = None
-        self.value_extract = None
-        self.se_ratio = None
-        self.optimizer = None
-        self.nntype = None
-        self.input_channels = None
-        self.input_features = None
-        self.boardsize = None
-        self.num_chunks = None
-        self.soft_loss_weight = None
-        self.swa_max_count = None
-        self.swa_steps = None
-
         if is_file:
             self.read(inputs)
         else:
@@ -92,17 +59,15 @@ class Config:
 
         self.boardsize = network.get("MaxBoardSize", 19)
         self.nntype = network.get("NNType", None)
+        self.activation = network.get("Activation", "relu")
         self.input_channels = network.get("InputChannels", 43)
         self.residual_channels = network.get("ResidualChannels", None)
         self.policy_extract = network.get("PolicyExtract", None)
         self.value_extract = network.get("ValueExtract", None)
         self.se_ratio = network.get("SeRatio", 1)
+        self.stack = network.get("Stack", [])
 
         assert self.input_channels != None, ""
         assert self.residual_channels != None, ""
         assert self.policy_extract != None, ""
         assert self.value_extract != None, ""
-
-        stack = network.get("Stack", None)
-        for s in stack:
-            self.stack.append(s)

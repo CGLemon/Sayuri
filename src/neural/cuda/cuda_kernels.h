@@ -4,6 +4,7 @@
 #include <cassert>
 #include <type_traits>
 
+#include "neural/activation.h"
 #include "neural/cuda/cuda_common.h"
 
 namespace cuda {
@@ -11,13 +12,13 @@ namespace cuda {
 template <typename T>
 void add_vectors(T *c, const T *a, const T *b,
                  int size, int asize, int bsize,
-                 bool relu, cudaStream_t stream);
+                 Activation act, cudaStream_t stream);
 
 template <typename T>
 void add_spatial(T *data, const T *biases,
                  const T *residual, const T *mask,
                  int bsize, int batch, int channels, int spatial,
-                 bool relu, cudaStream_t stream);
+                 Activation act, cudaStream_t stream);
 
 template <typename T>
 void im2col_batched(T *data_col, T *data_im,
@@ -37,7 +38,7 @@ void head_global_pooling(T *input, T *output, const T *sqrt_mask,
 template <typename T>
 void se_scale(T *output, const T *input, const T *residual,
               const T *se_biases, const T *mask, int batch,
-              int channels, int spatial, bool relu, cudaStream_t stream);
+              int channels, int spatial, Activation act, cudaStream_t stream);
 
 template <typename T>
 void winograd3_transform_in(T *V, const T *in, int batch,
@@ -47,13 +48,13 @@ template <typename T>
 void winograd3_transform_out(T *out, const T *M, const T *biases,
                              const T *residual, const T *mask,
                              int batch, int channels, int board_size,
-                             bool relu, cudaStream_t stream);
+                             Activation act, cudaStream_t stream);
 
 template <typename T>
 void depthwise_conv(T *output, const T *input, const T *weights,
                     const T *biases, const T *residual, const T *mask,
                     int filter_size, int batch, int channels, int height, int width,
-                    bool relu, cudaStream_t stream);
+                    Activation act, cudaStream_t stream);
 
 template <typename T>
 void gemm(bool TA, bool TB, int M, int N, int K, T ALPHA,

@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import packaging
+import packaging.version
 import numpy as np
 import math
 import struct
@@ -10,6 +12,50 @@ from symmetry import torch_symmetry
 from status_loader import StatusLoader
 
 CRAZY_NEGATIVE_VALUE = -5000.0
+DEFAULT_ACTIVATION = "mish"
+
+def activation_func(activation, inplace=False):
+    if activation == "identity":
+        return nn.Identity()
+    if activation == "relu":
+        return nn.ReLU(inplace=inplace)
+    if activation == "elu":
+        return nn.ELU(inplace=inplace)
+    if activation == "selu":
+        return nn.SELU(inplace=inplace)
+    if activation == "gelu":
+        return nn.GELU(inplace=inplace)
+    if activation == "mish":
+        return nn.Mish(inplace=inplace)
+    if activation == "swish":
+        return nn.SiLU(inplace=inplace)
+    if activation == "hardswish":
+        if packaging.version.parse(torch.__version__) > packaging.version.parse("1.6.0"):
+            return nn.Hardswish(inplace=inplace)
+        else:
+            return nn.Hardswish()
+    raise Exception("The {} is invalid activation function.".format(activation))
+
+def compute_gain(activation):
+    if activation == "identity":
+        gain = 1.0
+    elif activation == "relu":
+        gain = math.sqrt(2.0)
+    elif activation == "elu":
+        gain = math.sqrt(1.55052)
+    elif activation == "selu":
+        gain = 3/4
+    elif activation == "gelu":
+        gain = math.sqrt(2.351718)
+    elif activation == "mish":
+        gain = math.sqrt(2.210277)
+    elif activation == "swish":
+        gain = math.sqrt(2.0) # TODO:
+    elif activation == "hardswish":
+        gain = math.sqrt(2.0)
+    else:
+        raise Exception("The {} is invalid activation function for computing gain.".format(activation))
+    return gain
 
 def dwconv_to_text(in_channels, out_channels, kernel_size):
     return "DepthwiseConvolution {iC} {oC} {KS}\n".format(
@@ -42,7 +88,7 @@ def bin_to_float(bnum, big_endian):
     return struct.unpack(fmt, bnum)[0]
 
 def str_to_bin(st):
-    return bytearray(st, 'utf-8')
+    return bytearray(st, "utf-8")
 
 def ffffffff_nan():
     return b'\xff\xff\xff\xff'
@@ -131,21 +177,24 @@ class GlobalPool(nn.Module):
 class SqueezeAndExcitation(nn.Module):
     def __init__(self, channels,
                        se_size,
+                       activation,
                        collector=None):
         super(SqueezeAndExcitation, self).__init__()
+
+        self.activation = activation
         self.global_pool = GlobalPool(is_value_head=False)
         self.channels = channels
 
         self.squeeze = FullyConnect(
-            in_size=3*self.channels,
+            in_size=self.channels * 3,
             out_size=se_size,
-            relu=True,
+            activation=self.activation,
             collector=collector
         )
         self.excite = FullyConnect(
             in_size=se_size,
-            out_size=2*self.channels,
-            relu=False,
+            out_size=self.channels * 2,
+            activation="identity",
             collector=collector
         )
 
@@ -308,13 +357,55 @@ class BatchNorm2d(nn.Module):
 
         return x * mask
 
+class BroadcastDepthwiseConv2d(nn.Module):
+    def __init__(self, channels,
+                       kernel_size,
+                       padding="same",
+                       bias=True):
+        super(BroadcastDepthwiseConv2d, self).__init__()
+        self.channels = channels
+        self.kernel_size = kernel_size
+        self.padding = padding
+        self.use_bias = bias
+
+        self.weight = nn.Parameter(
+            torch.randn((self.channels, 1, self.kernel_size, self.kernel_size), dtype=torch.float)
+        )
+        if self.use_bias:
+            self.bias = nn.Parameter(
+                torch.zeros(self.channels, dtype=torch.float)
+            )
+
+    def _compute_equivalent_weight(self):
+        return self.weight + torch.sum(self.weight, dim=0, keepdim=True) / math.sqrt(self.channels)
+
+    def get_merged_param(self):
+        weight = torch.zeros_like(self.weight)
+        bias = torch.zeros(self.channels)
+
+        weight[:] = self._compute_equivalent_weight().detach()[:]
+        if self.use_bias:
+            bias[:] = self.bias[:]
+        return weight, bias
+
+    def forward(self, x):
+        weight = self._compute_equivalent_weight()
+        x = F.conv2d(
+            x,
+            weight,
+            padding=self.padding,
+            groups=self.channels
+        )
+        if self.use_bias:
+            x = x + self.bias.view(1, self.channels, 1, 1)
+        return x
+
 class FullyConnect(nn.Module):
     def __init__(self, in_size,
                        out_size,
-                       relu=True,
+                       activation,
                        collector=None):
         super(FullyConnect, self).__init__()
-        self.relu = relu
         self.in_size = in_size
         self.out_size = out_size
         self.linear = nn.Linear(
@@ -322,11 +413,14 @@ class FullyConnect(nn.Module):
             out_size,
             bias=True
         )
+        self.activation = activation
+        self.act = activation_func(self.activation, inplace=True)
         self._init_weights()
         self._try_collect(collector)
 
     def _init_weights(self):
-        nn.init.xavier_normal_(self.linear.weight, gain=1.0)
+        nn.init.xavier_normal_(
+            self.linear.weight, gain=compute_gain(self.activation))
         nn.init.zeros_(self.linear.bias)
 
     def _try_collect(self, collector):
@@ -347,20 +441,20 @@ class FullyConnect(nn.Module):
 
     def forward(self, x):
         x = self.linear(x)
-        return F.relu(x, inplace=True) if self.relu else x
+        x = self.act(x)
+        return x
 
 class Convolve(nn.Module):
     def __init__(self, in_channels,
                        out_channels,
                        kernel_size,
-                       relu=True,
+                       activation,
                        collector=None):
         super(Convolve, self).__init__()
 
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
-        self.relu = relu
         self.conv = nn.Conv2d(
             in_channels,
             out_channels,
@@ -368,16 +462,15 @@ class Convolve(nn.Module):
             padding="same",
             bias=True,
         )
+        self.activation = activation
+        self.act = activation_func(self.activation, inplace=True)
         self._init_weights()
         self._try_collect(collector)
 
     def _init_weights(self):
-        nn.init.xavier_normal_(self.conv.weight, gain=1.0)
+        nn.init.xavier_normal_(
+            self.conv.weight, gain=compute_gain(self.activation))
         nn.init.zeros_(self.conv.bias)
-
-        # nn.init.kaiming_normal_(self.conv.weight,
-        #                         mode="fan_out",
-        #                         nonlinearity="relu")
 
     def _try_collect(self, collector):
         if collector is not None:
@@ -397,21 +490,21 @@ class Convolve(nn.Module):
 
     def forward(self, x, mask):
         x = self.conv(x) * mask
-        return F.relu(x, inplace=True) if self.relu else x
+        x = self.act(x)
+        return x
 
 class ConvBlock(nn.Module):
     def __init__(self, in_channels,
                        out_channels,
                        kernel_size,
                        use_gamma,
-                       relu=True,
+                       activation,
                        collector=None):
         super(ConvBlock, self).__init__()
  
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
-        self.relu = relu
         self.conv = nn.Conv2d(
             in_channels,
             out_channels,
@@ -419,21 +512,19 @@ class ConvBlock(nn.Module):
             padding="same",
             bias=False,
         )
-
         self.bn = BatchNorm2d(
             num_features=out_channels,
             eps=1e-5,
             use_gamma=use_gamma
         )
+        self.activation = activation
+        self.act = activation_func(self.activation, inplace=True)
         self._init_weights()
         self._try_collect(collector)
 
     def _init_weights(self):
-        nn.init.xavier_normal_(self.conv.weight, gain=1.0)
-
-        # nn.init.kaiming_normal_(self.conv.weight,
-        #                         mode="fan_out",
-        #                         nonlinearity="relu")
+        nn.init.xavier_normal_(
+            self.conv.weight, gain=compute_gain(self.activation))
 
     def _try_collect(self, collector):
         if collector is not None:
@@ -461,13 +552,14 @@ class ConvBlock(nn.Module):
     def forward(self, x, mask):
         x = self.conv(x) * mask
         x = self.bn(x, mask)
-        return F.relu(x, inplace=True) if self.relu else x
+        x = self.act(x)
+        return x
 
 class DepthwiseConvBlock(nn.Module):
     def __init__(self, channels,
                        kernel_size,
                        use_gamma,
-                       relu=True,
+                       activation,
                        collector=None):
         # Implement it based on "Scaling Up Your Kernels to 31x31: Revisiting Large Kernel Design
         # in CNNs".
@@ -476,38 +568,36 @@ class DepthwiseConvBlock(nn.Module):
         assert kernel_size % 2 == 1, ""
         super(DepthwiseConvBlock, self).__init__()
 
-        self.in_channels = channels
-        self.out_channels = channels
+        self.channels = channels
         self.kernel_size = kernel_size
-        self.groups = self.in_channels
-        self.relu = relu
-        self.conv = nn.Conv2d(
-            self.in_channels,
-            self.out_channels,
-            kernel_size,
-            groups=self.in_channels,
+        self.groups = self.channels
+        self.conv = BroadcastDepthwiseConv2d(
+            self.channels,
+            self.kernel_size,
             padding="same",
-            bias=True,
+            bias=True
         )
-        self.rep3x3 = nn.Conv2d(
-            self.in_channels,
-            self.out_channels,
+        self.rep3x3 = BroadcastDepthwiseConv2d(
+            self.channels,
             3,
-            groups=self.in_channels,
             padding="same",
-            bias=True,
+            bias=True
         )
         self.bn = BatchNorm2d(
-            num_features=self.out_channels,
+            num_features=self.channels,
             eps=1e-5,
             use_gamma=use_gamma
         )
+        self.activation = activation
+        self.act = activation_func(self.activation, inplace=True)
         self._init_weights()
         self._try_collect(collector)
 
     def _init_weights(self):
-        nn.init.xavier_normal_(self.conv.weight, gain=1.0)
-        nn.init.xavier_normal_(self.rep3x3.weight, gain=1.0)
+        nn.init.xavier_normal_(
+            self.conv.weight, gain=compute_gain(self.activation))
+        nn.init.xavier_normal_(
+            self.rep3x3.weight, gain=compute_gain(self.activation))
 
     def tensors_to_text(self, use_bin):
         if use_bin:
@@ -515,11 +605,13 @@ class DepthwiseConvBlock(nn.Module):
         else:
             out = str()
 
+        weights, biases = self.conv.get_merged_param()
+
         ps = int((self.kernel_size - 3) / 2)
-        weights = torch.zeros_like(self.conv.weight)
-        weights += self.conv.weight.data
-        weights += F.pad(self.rep3x3.weight, (ps, ps, ps, ps), "constant", 0)
-        biases = self.conv.bias.data + self.rep3x3.bias.data
+        rep3x3_weights, rep3x3_biases = self.rep3x3.get_merged_param()
+        weights += F.pad(rep3x3_weights, (ps, ps, ps, ps), "constant", 0)
+        biases += rep3x3_biases
+
         out += tensor_to_text(weights, use_bin)
         out += tensor_to_text(biases, use_bin)
 
@@ -534,14 +626,15 @@ class DepthwiseConvBlock(nn.Module):
 
     def shape_to_text(self):
         out = str()
-        out += dwconv_to_text(self.in_channels // self.groups, self.out_channels, self.kernel_size)
-        out += bn_to_text(self.out_channels)
+        out += dwconv_to_text(self.channels // self.groups, self.channels, self.kernel_size)
+        out += bn_to_text(self.channels)
         return out
 
     def forward(self, x, mask):
         x = (self.conv(x) + self.rep3x3(x)) * mask
         x = self.bn(x, mask)
-        return F.relu(x, inplace=True) if self.relu else x
+        x = self.act(x)
+        return x
 
 class BottleneckBlock(nn.Module):
     def __init__(self, channels,
@@ -549,15 +642,16 @@ class BottleneckBlock(nn.Module):
                        **kwargs):
         super(BottleneckBlock, self).__init__()
 
-        bottleneck_channels = kwargs.get("bottleneck_channels", None)
-        se_size = kwargs.get("se_size", None)
+        self.activation = kwargs.get("activation", DEFAULT_ACTIVATION)
+        self.bottleneck_channels = kwargs.get("bottleneck_channels", None)
+        self.se_size = kwargs.get("se_size", None)
         collector = kwargs.get("collector", None)
 
-        assert bottleneck_channels is not None, ""
-        self.use_se = se_size is not None
+        assert self.bottleneck_channels is not None, ""
+        self.use_se = self.se_size is not None
 
         # The inner layers channels.
-        self.inner_channels = bottleneck_channels
+        self.inner_channels = self.bottleneck_channels
 
         # The main ResidualBlock channels. We say a 15x192
         # resnet. The 192 is outer_channel.
@@ -568,7 +662,7 @@ class BottleneckBlock(nn.Module):
             out_channels=self.inner_channels,
             kernel_size=1,
             use_gamma=False,
-            relu=True,
+            activation=self.activation,
             collector=collector
         )
         self.conv1 = ConvBlock(
@@ -576,7 +670,7 @@ class BottleneckBlock(nn.Module):
             out_channels=self.inner_channels,
             kernel_size=3,
             use_gamma=False,
-            relu=True,
+            activation=self.activation,
             collector=collector
         )
         self.conv2 = ConvBlock(
@@ -584,7 +678,7 @@ class BottleneckBlock(nn.Module):
             out_channels=self.inner_channels,
             kernel_size=3,
             use_gamma=False,
-            relu=True,
+            activation=self.activation,
             collector=collector
         )
         self.post_btl_conv = ConvBlock(
@@ -592,15 +686,17 @@ class BottleneckBlock(nn.Module):
             out_channels=self.outer_channels,
             kernel_size=1,
             use_gamma=True,
-            relu=False,
+            activation="identity",
             collector=collector
         )
         if self.use_se:
             self.se_module = SqueezeAndExcitation(
                 channels=self.outer_channels,
-                se_size=se_size,
+                se_size=self.se_size,
+                activation=self.activation,
                 collector=collector
             )
+        self.act = activation_func(self.activation, inplace=True)
 
     def forward(self, inputs):
         x, mask_buffers = inputs
@@ -614,7 +710,8 @@ class BottleneckBlock(nn.Module):
         if self.use_se:
             out = self.se_module(out, mask_buffers)
         out = out + x
-        return F.relu(out, inplace=True), mask_buffers
+        out = self.act(out)
+        return out, mask_buffers
 
 class ResidualBlock(nn.Module):
     def __init__(self, channels,
@@ -622,17 +719,18 @@ class ResidualBlock(nn.Module):
                        **kwargs):
         super(ResidualBlock, self).__init__()
 
-        se_size = kwargs.get("se_size", None)
+        self.activation = kwargs.get("activation", DEFAULT_ACTIVATION)
+        self.se_size = kwargs.get("se_size", None)
         collector = kwargs.get("collector", None)
 
         self.channels = channels
-        self.use_se = se_size is not None
+        self.use_se = self.se_size is not None
         self.conv1 = ConvBlock(
             in_channels=self.channels,
             out_channels=self.channels,
             kernel_size=3,
             use_gamma=False,
-            relu=True,
+            activation=self.activation,
             collector=collector
         )
         self.conv2 = ConvBlock(
@@ -640,15 +738,17 @@ class ResidualBlock(nn.Module):
             out_channels=self.channels,
             kernel_size=3,
             use_gamma=True,
-            relu=False,
+            activation="identity",
             collector=collector
         )
         if self.use_se:
             self.se_module = SqueezeAndExcitation(
                 channels=self.channels,
-                se_size=se_size,
+                se_size=self.se_size,
+                activation=self.activation,
                 collector=collector
             )
+        self.act = activation_func(self.activation, inplace=True)
 
     def forward(self, inputs):
         x, mask_buffers = inputs
@@ -660,24 +760,27 @@ class ResidualBlock(nn.Module):
         if self.use_se:
             out = self.se_module(out, mask_buffers)
         out = out + x
-        return F.relu(out, inplace=True), mask_buffers
+        out = self.act(out)
+        return out, mask_buffers
 
 class MixerBlock(nn.Module):
     def __init__(self, channels,
                        *args,
                        **kwargs):
         super(MixerBlock, self).__init__()
-        se_size = kwargs.get("se_size", None)
+
+        self.activation = kwargs.get("activation", DEFAULT_ACTIVATION)
+        self.se_size = kwargs.get("se_size", None)
         collector = kwargs.get("collector", None)
 
         self.channels = channels
-        self.use_se = se_size is not None
+        self.use_se = self.se_size is not None
 
         self.depthwise_conv = DepthwiseConvBlock(
             channels=self.channels,
             kernel_size=7,
             use_gamma=True,
-            relu=True,
+            activation=self.activation,
             collector=collector
         )
 
@@ -687,7 +790,7 @@ class MixerBlock(nn.Module):
             out_channels=ffn_channels,
             kernel_size=1,
             use_gamma=False,
-            relu=True,
+            activation=self.activation,
             collector=collector
         )
         self.ffn2 = ConvBlock(
@@ -695,15 +798,17 @@ class MixerBlock(nn.Module):
             out_channels=self.channels,
             kernel_size=1,
             use_gamma=True,
-            relu=False,
+            activation="identity",
             collector=collector
         )
         if self.use_se:
             self.se_module = SqueezeAndExcitation(
                 channels=self.channels,
-                se_size=se_size,
+                se_size=self.se_size,
+                activation=self.activation,
                 collector=collector
             )
+        self.act = activation_func(self.activation, inplace=True)
 
     def forward(self, inputs):
         x, mask_buffers = inputs
@@ -717,7 +822,8 @@ class MixerBlock(nn.Module):
         if self.use_se:
             out = self.se_module(out, mask_buffers)
         out = out + x
-        return F.relu(out, inplace=True), mask_buffers
+        out = self.act(out)
+        return out, mask_buffers
 
 class Network(nn.Module):
     def __init__(self, cfg):
@@ -727,6 +833,7 @@ class Network(nn.Module):
 
         self.nntype = cfg.nntype
 
+        self.activation = cfg.activation.lower()
         self.input_channels = cfg.input_channels
         self.residual_channels = cfg.residual_channels
         self.xsize = cfg.boardsize
@@ -750,7 +857,7 @@ class Network(nn.Module):
             out_channels=self.residual_channels,
             kernel_size=3,
             use_gamma=True,
-            relu=True,
+            activation=self.activation,
             collector=self.layers_collector
         )
 
@@ -784,6 +891,7 @@ class Network(nn.Module):
                 block(channels=main_channels,
                       bottleneck_channels=bottleneck_channels,
                       se_size=se_size,
+                      activation=self.activation,
                       collector=self.layers_collector))
 
         if main_channels != self.residual_channels:
@@ -797,26 +905,26 @@ class Network(nn.Module):
             out_channels=self.policy_extract,
             kernel_size=1,
             use_gamma=False,
-            relu=True,
+            activation=self.activation,
             collector=self.layers_collector
         )
         self.policy_intermediate_fc = FullyConnect(
             in_size=self.policy_extract * 3,
             out_size=self.policy_extract,
-            relu=True,
+            activation=self.activation,
             collector=self.layers_collector
         )
         self.pol_misc = Convolve(
             in_channels=self.policy_extract,
             out_channels=self.policy_outs,
             kernel_size=1,
-            relu=False,
+            activation="identity",
             collector=self.layers_collector
         )
         self.pol_misc_pass_fc = FullyConnect(
             in_size=self.policy_extract,
             out_size=self.policy_outs,
-            relu=False,
+            activation="identity",
             collector=self.layers_collector
         )
 
@@ -826,26 +934,26 @@ class Network(nn.Module):
             out_channels=self.value_extract,
             kernel_size=1,
             use_gamma=False,
-            relu=True,
+            activation=self.activation,
             collector=self.layers_collector
         )
         self.value_intermediate_fc = FullyConnect(
             in_size=self.value_extract * 3,
             out_size=self.value_extract * 3,
-            relu=True,
+            activation=self.activation,
             collector=self.layers_collector
         )
         self.ownership_conv = Convolve(
             in_channels=self.value_extract,
             out_channels=1,
             kernel_size=1,
-            relu=False,
+            activation="identity",
             collector=self.layers_collector
         )
         self.value_misc_fc = FullyConnect(
             in_size=self.value_extract * 3,
             out_size=self.value_misc,
-            relu=False,
+            activation="identity",
             collector=self.layers_collector
         )
 
@@ -859,10 +967,6 @@ class Network(nn.Module):
         mask_sum_hw = torch.sum(mask, dim=(1,2,3))
         mask_sum_hw_sqrt = torch.sqrt(mask_sum_hw)
         mask_buffers = (mask, mask_sum_hw, mask_sum_hw_sqrt)
-
-        policy_mask = torch.flatten(mask, start_dim=1, end_dim=3)
-        b, _ = policy_mask.shape
-        policy_mask = torch.cat((policy_mask, mask.new_ones((b, 1))), dim=1)
 
         # input layer
         x = self.input_conv(planes, mask)
@@ -931,14 +1035,22 @@ class Network(nn.Module):
             all_scores, # {final, current, short, middle, long}
             all_errors # {q error, score error}
         )
+        if use_symm:
+            mask = torch_symmetry(symm, mask, invert=True)
+            mask_buffers = (mask, mask_sum_hw, mask_sum_hw_sqrt)
 
         all_loss_dict = dict()
         if target is not None:
-            all_loss_dict = self.compute_loss(predict, target, mask_sum_hw, loss_weight_dict)
+            all_loss_dict = self.compute_loss(predict, target, mask_buffers, loss_weight_dict)
 
         return predict, all_loss_dict
 
-    def compute_loss(self, pred, target, mask_sum_hw, loss_weight_dict):
+    def compute_loss(self, pred, target, mask_buffers, loss_weight_dict):
+        mask, mask_sum_hw, _ = mask_buffers
+        policy_mask = torch.flatten(mask, start_dim=1, end_dim=3)
+        b, _ = policy_mask.shape
+        policy_mask = torch.cat((policy_mask, mask.new_ones((b, 1))), dim=1)
+
         if loss_weight_dict is None:
             soft_weight = 0.1
         else:
@@ -947,8 +1059,9 @@ class Network(nn.Module):
         p_prob, p_aux_prob, p_soft_prob, p_soft_aux_prob, p_optimistic_prob, p_ownership, p_wdl, p_q_vals, p_scores, p_errors = pred
         t_prob, t_aux_prob, t_ownership, t_wdl, t_q_vals, t_scores, _ = target
 
-        def make_soft_porb(prob, t=4):
-            soft_prob = torch.pow(prob, 1/t)
+        def make_soft_porb(prob, policy_mask, eps=1e-7, t=4):
+            soft_prob = (prob + eps) * policy_mask
+            soft_prob = torch.pow(soft_prob, 1/t)
             soft_prob /= torch.sum(soft_prob, dim=1, keepdim=True)
             return soft_prob
 
@@ -984,10 +1097,10 @@ class Network(nn.Module):
         aux_prob_loss = 0.15 * cross_entropy(p_aux_prob, t_aux_prob)
 
         # current player's soft probabilities loss
-        soft_prob_loss = 1 * soft_weight * cross_entropy(p_soft_prob, make_soft_porb(t_prob))
+        soft_prob_loss = 1 * soft_weight * cross_entropy(p_soft_prob, make_soft_porb(t_prob, policy_mask))
 
         # opponent's soft probabilities loss
-        soft_aux_prob_loss = 0.15 * soft_weight * cross_entropy(p_soft_aux_prob, make_soft_porb(t_aux_prob))
+        soft_aux_prob_loss = 0.15 * soft_weight * cross_entropy(p_soft_aux_prob, make_soft_porb(t_aux_prob, policy_mask))
 
         # short-term optimistic probabilities loss
         z_short_term_q = (short_term_q_target - short_term_q_pred.detach()) / torch.sqrt(short_term_q_error.detach() + 0.0001)
@@ -1084,6 +1197,7 @@ class Network(nn.Module):
         info += "Policy extract channels: {policyextract}\n".format(policyextract=self.policy_extract)
         info += "Value extract channels: {valueextract}\n".format(valueextract=self.value_extract)
         info += "Value misc size: {valuemisc}\n".format(valuemisc=self.value_misc)
+        info += "Default activation: {act}\n".format(act=self.activation)
 
         return info
 
@@ -1106,7 +1220,7 @@ class Network(nn.Module):
                 f.write(layer.tensors_to_text(True))
             f.write(str_to_bin("end parameters\n"))
 
-        with open(filename, 'wb') as f:
+        with open(filename, "wb") as f:
             f.write(str_to_bin("get main\n"))
 
             f.write(str_to_bin("get info\n"))
@@ -1119,7 +1233,7 @@ class Network(nn.Module):
             f.write(str_to_bin("PolicyExtract {}\n".format(self.policy_extract)))
             f.write(str_to_bin("ValueExtract {}\n".format(self.value_extract)))
             f.write(str_to_bin("ValueMisc {}\n".format(self.value_misc)))
-            f.write(str_to_bin("ActivationFunction {}\n".format("relu")))
+            f.write(str_to_bin("ActivationFunction {}\n".format(self.activation)))
             f.write(str_to_bin("end info\n"))
 
             write_stack(f, self.stack)
@@ -1147,7 +1261,7 @@ class Network(nn.Module):
                 f.write(layer.tensors_to_text(False))
             f.write("end parameters\n")
 
-        with open(filename, 'w') as f:
+        with open(filename, "w") as f:
             f.write("get main\n")
 
             f.write("get info\n")
@@ -1160,7 +1274,7 @@ class Network(nn.Module):
             f.write("PolicyExtract {}\n".format(self.policy_extract))
             f.write("ValueExtract {}\n".format(self.value_extract))
             f.write("ValueMisc {}\n".format(self.value_misc))
-            f.write("ActivationFunction {}\n".format("relu"))
+            f.write("ActivationFunction {}\n".format(self.activation))
             f.write("end info\n")
 
             write_stack(f, self.stack)

@@ -6,7 +6,7 @@ void AddSpatialBiases::Forward(const size_t board_size,
                                const size_t channels,
                                std::vector<float> &input,
                                const std::vector<float> &biases,
-                               bool ReLU) {
+                               const Activation act) {
     auto zero_vec = std::vector<float>{};
     Forward(
         board_size,
@@ -14,7 +14,7 @@ void AddSpatialBiases::Forward(const size_t board_size,
         input,
         biases,
         zero_vec,
-        ReLU);
+        act);
 }
 
 void AddSpatialBiases::Forward(const size_t board_size,
@@ -22,14 +22,10 @@ void AddSpatialBiases::Forward(const size_t board_size,
                                std::vector<float> &input,
                                const std::vector<float> &biases,
                                const std::vector<float> &residual,
-                               bool ReLU) {
+                               const Activation act) {
     const auto width = board_size;
     const auto height = board_size;
     const auto spatial_size = width * height;
-
-    const auto lambda_ReLU = [ReLU](const auto val) {
-        return (val > 0.0f || (!ReLU)) ? val : 0.0f;
-    };
 
     float *input_ptr = input.data();
     const float *biases_ptr = biases.empty() ?
@@ -47,7 +43,10 @@ void AddSpatialBiases::Forward(const size_t board_size,
                 val += *residual_ptr;
                 residual_ptr++;
             }
-            *input_ptr = lambda_ReLU(val);
+
+            ACTIVATION_FUNC(val, act);
+
+            *input_ptr = val;
             input_ptr++;
         }
     }
@@ -57,15 +56,11 @@ void AddSpatialBiasesPost::Forward(const size_t board_size,
                                    const size_t channels,
                                    std::vector<float> &input,
                                    const std::vector<float> &biases,
-                                   bool ReLU,
+                                   const Activation act,
                                    const std::vector<float> &residual) {
     const auto width = board_size;
     const auto height = board_size;
     const auto spatial_size = width * height;
-
-    const auto lambda_ReLU = [ReLU](const auto val) {
-        return (val > 0.0f || (!ReLU)) ? val : 0.0f;
-    };
 
     float *input_ptr = input.data();
     const float *biases_ptr = biases.empty() ?
@@ -78,7 +73,9 @@ void AddSpatialBiasesPost::Forward(const size_t board_size,
             bias = biases_ptr[c];
         }
         for (auto b = size_t{0}; b < spatial_size; b++) {
-            float val = lambda_ReLU(*input_ptr + bias);
+            float val = *input_ptr + bias;
+            ACTIVATION_FUNC(val, act);
+
             if (residual_ptr) {
                 val += *residual_ptr;
                 residual_ptr++;
@@ -92,14 +89,11 @@ void AddSpatialBiasesPost::Forward(const size_t board_size,
 void AddVectorBiases::Forward(const size_t size,
                               std::vector<float> &input,
                               const std::vector<float> &biases,
-                              bool ReLU) {
+                              const Activation act) {
     assert(size == biases.size());
-
-    const auto lambda_ReLU = [ReLU](const auto val) {
-        return (val > 0.0f || (!ReLU)) ? val : 0.0f;
-    };
-
     for (auto o = size_t{0}; o < size; ++o) {
-        input[o] = lambda_ReLU(biases[o] + input[o]);
+        float val = biases[o] + input[o];
+        ACTIVATION_FUNC(val, act);
+        input[o] = val;
     }
 }

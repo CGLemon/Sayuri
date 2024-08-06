@@ -8,16 +8,15 @@ namespace cuda {
 
 template <typename T>
 __global__ void add_vectors_kernel(T *c, const T *a, const T *b,
-                                   int size, int asize, int bsize, bool relu) {
+                                   int size, int asize, int bsize,
+                                   Activation act) {
     int i = threadIdx.x + blockDim.x * blockIdx.x;
     if (i < size) {
         float aval = (float)(a[i % asize]);
         float bval = (float)(b[i % bsize]);
         float cval = aval + bval;
 
-        if (relu && (cval < 0)) {
-            cval = 0;
-        }
+        ACTIVATION_FUNC(cval, act);
         c[i] = (T)cval;
     }
 }
@@ -25,12 +24,12 @@ __global__ void add_vectors_kernel(T *c, const T *a, const T *b,
 template <typename T>
 void add_vectors(T *c, const T *a, const T *b,
                  int size, int asize, int bsize,
-                 bool relu, cudaStream_t stream) {
+                 Activation act, cudaStream_t stream) {
     const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(size, block_size);
 
     add_vectors_kernel<<<blocks, block_size, 0, stream>>>(
-        c, a, b, size, asize, bsize, relu);
+        c, a, b, size, asize, bsize, act);
 
     ReportCUDAErrors(cudaGetLastError());
 }
@@ -38,7 +37,8 @@ void add_vectors(T *c, const T *a, const T *b,
 template <typename T>
 __global__ void add_spatial_kernel(T *data, const T *biases,
                                    const T *residual, const T *mask,
-                                   int bsize, int N, int C, int spatial, bool relu) {
+                                   int bsize, int N, int C, int spatial,
+                                   Activation act) {
     int index = threadIdx.x + blockDim.x * blockIdx.x;
     int size = N * C * spatial;
     if (index < size) {
@@ -58,9 +58,7 @@ __global__ void add_spatial_kernel(T *data, const T *biases,
             val *= (float)(mask[batch * spatial + s_index]);
         }
 
-        if (relu && val < 0) {
-            val = 0;
-        }
+        ACTIVATION_FUNC(val, act);
         data[index] = (T)val;
     }
 }
@@ -69,13 +67,13 @@ template <typename T>
 void add_spatial(T *data, const T *biases,
                  const T *residual, const T *mask,
                  int bsize, int batch, int channels, int spatial,
-                 bool relu, cudaStream_t stream) {
+                 Activation act, cudaStream_t stream) {
     const int total_elements = batch * channels * spatial;
     const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(total_elements, block_size);
 
     add_spatial_kernel<<<blocks, block_size, 0, stream>>>(
-        data, biases, residual, mask, bsize, batch, channels, spatial, relu);
+        data, biases, residual, mask, bsize, batch, channels, spatial, act);
 
     ReportCUDAErrors(cudaGetLastError());
 }
@@ -83,7 +81,8 @@ void add_spatial(T *data, const T *biases,
 // template <typename T>
 // __global__ void batchnorm_kernel(T *data, const T *means, const T *stddevs,
 //                                  const T *eltwise, const T *mask,
-//                                  int N, int C, int spatial, bool relu) {
+//                                  int N, int C, int spatial,
+//                                  Activation act) {
 //
 //     int index = threadIdx.x + blockDim.x * blockIdx.x;
 //     int size = N * C * spatial;
@@ -104,9 +103,8 @@ void add_spatial(T *data, const T *biases,
 //         if (mask) {
 //             el *= (float)(mask[batch * spatial + s_index]);
 //         }
-//         if (relu && el < 0) {
-//             el = 0;
-//         }
+//
+//         ACTIVATION_FUNC(el, act);
 //         data[index] = (T)el;
 //     }
 // }
@@ -115,13 +113,13 @@ void add_spatial(T *data, const T *biases,
 // void batchnorm(T *data, const T *means, const T *stddevs,
 //                const T *eltwise, const T *mask,
 //                int batch, int channels, int spatial,
-//                bool relu, cudaStream_t stream) {
+//                Activation act, cudaStream_t stream) {
 //     const int total_elements = batch * channels * spatial;
 //     const int block_size = KBLOCKSIZE;
 //     const int blocks = DivUp(total_elements, block_size);
 //
 //     batchnorm_kernel<<<blocks, block_size, 0 ,stream>>>(
-//         data, means, stddevs, eltwise, mask, batch, channels, spatial, relu);
+//         data, means, stddevs, eltwise, mask, batch, channels, spatial, act);
 //
 //     ReportCUDAErrors(cudaGetLastError());
 // }
@@ -397,7 +395,7 @@ __global__ void se_scale_kernel(T *output,
                                 const T *se_biases,
                                 const T *mask,
                                 int N, int C, int spatial,
-                                bool relu) {
+                                Activation act) {
     int index = threadIdx.x + blockDim.x * blockIdx.x;
     int total_elements = N * C * spatial;
     if (index < total_elements) {
@@ -421,9 +419,8 @@ __global__ void se_scale_kernel(T *output,
         if (mask) {
             val *= (float)(mask[n * spatial + s]);
         }
-        if (relu && val < 0) {
-            val = 0;
-        }
+
+        ACTIVATION_FUNC(val, act);
         output[index] = (T)val;
     }
 }
@@ -431,13 +428,13 @@ __global__ void se_scale_kernel(T *output,
 template <typename T>
 void se_scale(T *output, const T *input, const T *residual,
               const T *se_biases, const T *mask, int batch,
-              int channels, int spatial, bool relu, cudaStream_t stream) {
+              int channels, int spatial, Activation act, cudaStream_t stream) {
     const int total_elements = channels * spatial * batch;
     const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(total_elements, block_size);
 
     se_scale_kernel<<<blocks, block_size, 0, stream>>>(
-        output, input, residual, se_biases, mask, batch, channels, spatial, relu);
+        output, input, residual, se_biases, mask, batch, channels, spatial, act);
 
     ReportCUDAErrors(cudaGetLastError());
 }
@@ -597,7 +594,7 @@ __global__ void transform_out_kernel(T *Y, const T *M,
                                      const int K,
                                      const int k_pad, const int p_pad,
                                      const int board_size,
-                                     const int batch_size, bool relu) {
+                                     const int batch_size, Activation act) {
     const int W = board_size;
     const int H = board_size;
     const int WTILES = board_size / kWinogradM + (board_size % kWinogradM != 0);
@@ -660,9 +657,8 @@ __global__ void transform_out_kernel(T *Y, const T *M,
                         int s_index = out_idx % spatial;
                         val *= (float)(mask[batch * spatial + s_index]);
                     }
-                    if (relu && val < 0) {
-                        val = 0.f;
-                    }
+
+                    ACTIVATION_FUNC(val, act);
                     Y[out_idx] = (T)val;
                 }
             }
@@ -692,7 +688,7 @@ template <typename T>
 void winograd3_transform_out(T *out, const T *M, const T *biases,
                              const T *residual, const T *mask,
                              int batch, int channels, int board_size,
-                             bool relu, cudaStream_t stream) {
+                             Activation act, cudaStream_t stream) {
     const int ptiles = GetWinogradP(board_size);
     const int total_elements = channels * batch * ptiles;
 
@@ -704,7 +700,7 @@ void winograd3_transform_out(T *out, const T *M, const T *biases,
 
     transform_out_kernel<<<blocks, block_size, 0, stream>>>(
         out, M, biases, residual, mask, channels,
-        k_pad, p_pad, board_size, batch, relu);
+        k_pad, p_pad, board_size, batch, act);
 
     ReportCUDAErrors(cudaGetLastError());
 }
@@ -712,7 +708,7 @@ void winograd3_transform_out(T *out, const T *M, const T *biases,
 template <typename T>
 __global__ void depthwise_conv_kernel(T *output, const T *input, const T *weights,
                                       const T *biases, const T *residual, const T *mask,
-                                      int filter_size, int N, int C, int H, int W, bool relu) {
+                                      int filter_size, int N, int C, int H, int W, Activation act) {
     int total_elements = N * C * H * W;
     int index = threadIdx.x + blockDim.x * blockIdx.x;
     if (index < total_elements) {
@@ -742,9 +738,9 @@ __global__ void depthwise_conv_kernel(T *output, const T *input, const T *weight
         if (biases) {
             val += (float)(biases[c_index]);
         }
-        if (relu && val < 0) {
-            val = 0.f;
-        }
+
+        ACTIVATION_FUNC(val, act);
+
         if (residual) {
             val += (float)(residual[index]);
         }
@@ -759,7 +755,7 @@ template <typename T>
 void depthwise_conv(T *output, const T *input, const T *weights,
                     const T *biases, const T *residual, const T *mask,
                     int filter_size, int batch, int channels, int height, int width,
-                    bool relu, cudaStream_t stream) {
+                    Activation act, cudaStream_t stream) {
     const int total_elements = batch * channels * height * width;
     const int block_size = KBLOCKSIZE;
     const int blocks = DivUp(total_elements, block_size);
@@ -768,7 +764,7 @@ void depthwise_conv(T *output, const T *input, const T *weights,
         output, input, weights,
         biases, residual, mask,
         filter_size, batch, channels, height, width,
-        relu);
+        act);
 
     ReportCUDAErrors(cudaGetLastError());
 }
@@ -842,12 +838,12 @@ void gemm_strided_batched<half>(bool TA, bool TB, int M, int N, int K, half ALPH
 #endif
 
 template void add_vectors<float>(float *c, const float *a, const float *b, int size,
-                                 int asize, int bsize, bool relu, cudaStream_t stream);
+                                 int asize, int bsize, Activation act, cudaStream_t stream);
 
 template void add_spatial<float>(float *data, const float *biases,
                                  const float *residual, const float *mask,
                                  int bsize, int batch, int channels, int spatial,
-                                 bool relu, cudaStream_t stream);
+                                 Activation act, cudaStream_t stream);
 
 template void im2col_batched<float>(float *data_col, float *data_im,
                                     int filter_size, int N, int C, int H, int W,
@@ -863,7 +859,7 @@ template void head_global_pooling<float>(float *output, float *input, const floa
 template void se_scale<float>(float *output, const float *input,
                               const float *residual, const float *se_biases,
                               const float *mask, int batch, int channels,
-                              int spatial, bool relu, cudaStream_t stream);
+                              int spatial, Activation act, cudaStream_t stream);
 
 template void winograd3_transform_in<float>(float *V, const float *in, int batch,
                                             int channels, int board_size, cudaStream_t stream);
@@ -871,21 +867,21 @@ template void winograd3_transform_in<float>(float *V, const float *in, int batch
 template void winograd3_transform_out<float>(float *out, const float *M, const float *biases,
                                              const float *residual, const float *mask,
                                              int batch, int channels, int board_size,
-                                             bool relu, cudaStream_t stream);
+                                             Activation act, cudaStream_t stream);
 
 template void depthwise_conv<float>(float *output, const float *input, const float *weights,
                                     const float *biases, const float *residual, const float *mask,
                                     int filter_size, int batch, int channels, int height, int width,
-                                    bool relu, cudaStream_t stream);
+                                    Activation act, cudaStream_t stream);
 
 #ifdef ENABLE_FP16
 template void add_vectors<half>(half *c, const  half *a, const half *b, int size,
-                                int asize, int bsize,  bool relu, cudaStream_t stream);
+                                int asize, int bsize, Activation act, cudaStream_t stream);
 
 template void add_spatial<half>(half *data, const half *biases,
                                 const half *residual, const half *mask,
                                 int bsize, int batch, int channels, int spatial,
-                                bool relu, cudaStream_t stream);
+                                Activation act, cudaStream_t stream);
 
 template void im2col_batched<half>(half *data_col, half *data_im,
                                    int filter_size, int N, int C, int H, int W,
@@ -901,7 +897,7 @@ template void head_global_pooling<half>(half *output, half *input, const half *s
 template void se_scale<half>(half *output, const half *input,
                              const half *residual, const half *se_biases,
                              const half *mask, int batch, int channels,
-                             int spatial, bool relu, cudaStream_t stream);
+                             int spatial, Activation act, cudaStream_t stream);
 
 template void winograd3_transform_in<half>(half *V, const half *in, int batch,
                                            int channels, int board_size, cudaStream_t stream);
@@ -909,12 +905,12 @@ template void winograd3_transform_in<half>(half *V, const half *in, int batch,
 template void winograd3_transform_out<half>(half *out, const half *M, const half *biases,
                                             const half *residual, const half *mask,
                                             int batch, int channels, int board_size,
-                                            bool relu, cudaStream_t stream);
+                                            Activation act, cudaStream_t stream);
 
 template void depthwise_conv<half>(half *output, const half *input, const half *weights,
                                    const half *biases, const half *residual, const half *mask,
                                    int filter_size, int batch, int channels, int height, int width,
-                                   bool relu, cudaStream_t stream);
+                                   Activation act, cudaStream_t stream);
 #endif
 
 } // namespace cuda
