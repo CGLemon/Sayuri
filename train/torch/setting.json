@@ -1,11 +1,12 @@
 {
     "NeuralNetwork" : {
-        "NNType": "Residual",
-        "MaxBoardSize": 19,
-        "ResidualChannels": 64,
-        "PolicyExtract": 16,
-        "ValueExtract": 16,
-        "SeRatio" : 2,
+        "NNType" : "Residual",
+        "MaxBoardSize" : 19,
+        "ResidualChannels" : 64,
+        "PolicyExtract" : 16,
+        "ValueExtract" : 16,
+        "SeRatio": 2,
+        "Activation" : "relu",
 
         "Stack" : [
             "ResidualBlock",
@@ -14,24 +15,24 @@
     },
 
     "Train" : {
-        "UseGPU": null,
-        "Optimizer": "SGD",
+        "UseGPU" : null,
+        "Optimizer" : "SGD",
         "StepsPerEpoch" : 1000,
         "ValidationSteps": 100,
         "VerboseSteps" : 1000,
-        "MaxStepsPerRunning": 2048000,
-        "Workers": 4,
-        "BatchSize": 256,
+        "MaxStepsPerRunning" : 2048000,
+        "Workers" : 4,
+        "BatchSize" : 256,
         "BufferSize" : 524288,
-        "DownSampleRate": 16,
-        "MacroFactor": 1,
-        "WeightDecay": 1e-4,
+        "DownSampleRate" : 16,
+        "MacroFactor" : 1,
+        "WeightDecay" : 1e-4,
         "SoftLossWeight" : 0.1,
         "SwaMaxCount" : 16,
         "SwaSteps" : 100,
         "Activation" : "relu",
 
-        "LearningRateSchedule": [
+        "LearningRateSchedule" : [
             [0,       1e-2],
             [128000,  3e-3],
             [256000,  1e-3],
@@ -41,8 +42,8 @@
             [1024000, 1e-5]
          ],
 
-        "ValidationDirectory": "validate-dir",
-        "TrainDirectory": "train-dir",
+        "ValidationDirectory" : "validate-dir",
+        "TrainDirectory" : "train-dir",
         "StorePath" : "workspace"
     }
 }

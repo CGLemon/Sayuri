@@ -1,10 +1,12 @@
 {
     "NeuralNetwork" : {
-        "NNType": "Residual",
-        "MaxBoardSize": 19,
-        "ResidualChannels": 96,
-        "PolicyExtract": 24,
-        "ValueExtract": 24,
+        "NNType" : "Residual",
+        "MaxBoardSize" : 19,
+        "ResidualChannels" : 96,
+        "PolicyExtract" : 24,
+        "ValueExtract" : 24,
+        "SeRatio" : 2,
+        "Activation" : "relu",
 
         "Stack" : [
             "ResidualBlock",
@@ -17,29 +19,28 @@
     },
 
     "Train" : {
-        "UseGPU": null,
-        "Optimizer": "SGD",
+        "UseGPU" : null,
+        "Optimizer" : "SGD",
         "StepsPerEpoch" : 4000,
-        "ValidationSteps": 100,
+        "ValidationSteps" : 100,
         "VerboseSteps" : 1000,
-        "MaxStepsPerRunning": 4000,
-        "Workers": 12,
-        "BatchSize": 256,
+        "MaxStepsPerRunning" : 4000,
+        "Workers" : 12,
+        "BatchSize" : 256,
         "BufferSize" : 524288,
-        "DownSampleRate": 16,
-        "MacroFactor": 1,
-        "WeightDecay": 1e-4,
+        "DownSampleRate" : 16,
+        "MacroFactor" : 1,
+        "WeightDecay" : 1e-4,
         "NumberChunks" : 5000,
         "SoftLossWeight" : 0.1,
         "SwaMaxCount" : 16,
         "SwaSteps" : 500,
 
-        "LearningRateSchedule": [
+        "LearningRateSchedule " : [
             [0,       5e-3]
          ],
 
-        "FixUpBatchNorm": false,
-        "TrainDirectory": "selfplay/data",
+        "TrainDirectory" : "selfplay/data",
         "StorePath" : "workspace"
     }
 }

@@ -7,15 +7,15 @@ The ```selfplay-setting.json``` controls the training process. Here are the para
 ```
 {
     "NeuralNetwork" : {
-        "NNType": "Residual",
-        "MaxBoardSize": 19,         # The max size in the self-play game. It is
+        "NNType" : "Residual",
+        "MaxBoardSize" : 19,        # The max size in the self-play game. It is
                                     # OK if this value greater than training games.
                                     # But to set it as small size can improve the
                                     # training performance.
 
-        "ResidualChannels": 128,    # Channel size of residual.
-        "PolicyExtract": 24,        # Channel size of policy head.
-        "ValueExtract": 24,         # Channel size of value head.
+        "ResidualChannels" : 128,   # Channel size of residual.
+        "PolicyExtract" : 24,       # Channel size of policy head.
+        "ValueExtract" : 24,        # Channel size of value head.
 
         "Stack" : [
             "ResidualBlock",        # The 1st residual block. It is normal block.
@@ -28,30 +28,30 @@ The ```selfplay-setting.json``` controls the training process. Here are the para
     },
 
     "Train" : {
-        "UseGPU": null,
-        "Optimizer": "SGD",
+        "UseGPU" : null,
+        "Optimizer" : "SGD",
         "StepsPerEpoch" : 4000,      # Save the weight evey this steps.
-        "ValidationSteps": 100,
+        "ValidationSteps" : 100,
         "VerboseSteps" : 1000,
-        "MaxStepsPerRunning": 4000,  # Will stop the training after this steps.
-        "Workers": 4,                # Number of data loader workers.
-        "BatchSize": 256,
+        "MaxStepsPerRunning" : 4000, # Will stop the training after this steps.
+        "Workers" : 4,               # Number of data loader workers.
+        "BatchSize" : 256,
         "BufferSize" : 524288,       # Bigger is better but it will use more memory. If your 
                                      # compute is only 32GB, you can set it as around 256000.
 
-        "DownSampleRate": 16,        # Bigger is better but may be slow down.
-        "MacroFactor": 1,
-        "WeightDecay": 1e-4,
+        "DownSampleRate" : 16,       # Bigger is better but may be slow down.
+        "MacroFactor" : 1,
+        "WeightDecay" : 1e-4,
         "NumberChunks" : 20000,      # Will load last X chunks. Default is 25 games for
                                      # each chunk.
 
-        "LearningRateSchedule": [
+        "LearningRateSchedule" : [
             [0,       1e-2]          # The format is [X, lr]. Will use the lr rate
                                      # after X stpes. You only need to change the lr
                                      # part in the reinforcement learning.
          ],
 
-        "TrainDirectory": "selfplay/data",
+        "TrainDirectory" : "selfplay/data",
         "StorePath" : "workspace"
     }
 }

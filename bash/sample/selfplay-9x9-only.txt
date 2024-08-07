@@ -13,7 +13,7 @@
 --cpuct-base-factor 1
 
 --fpu-reduction 0.25
---fpu-root-reduction 0.25
+--root-fpu-reduction 0.25
 
 --lcb-reduction 0
 --score-utility-factor 0.1
