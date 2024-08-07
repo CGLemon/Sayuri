@@ -36,7 +36,7 @@
         "SwaMaxCount" : 16,
         "SwaSteps" : 500,
 
-        "LearningRateSchedule " : [
+        "LearningRateSchedule" : [
             [0,       5e-3]
          ],
 
