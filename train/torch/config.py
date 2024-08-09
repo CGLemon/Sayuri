@@ -64,7 +64,7 @@ class Config:
         self.residual_channels = network.get("ResidualChannels", None)
         self.policy_extract = network.get("PolicyExtract", None)
         self.value_extract = network.get("ValueExtract", None)
-        self.se_ratio = network.get("SeRatio", 1)
+        self.se_ratio = network.get("SeRatio", 2)
         self.stack = network.get("Stack", [])
 
         assert self.input_channels != None, ""

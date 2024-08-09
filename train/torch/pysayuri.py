@@ -1986,8 +1986,10 @@ if __name__ == "__main__":
     parser.add_argument("-k", "--komi", metavar="<float>",
                         help="The default komi.", type=float, default=KOMI)
     args = parser.parse_args()
-    while args.loop:
+    running = True
+    while running:
         try:
             gtp_loop(args)
         except Exception as e:
             stderr_write("halt the gtp loop, exception: {}\n".format(e))
+        running = args.loop

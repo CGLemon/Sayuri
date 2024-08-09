@@ -12,7 +12,7 @@ from symmetry import torch_symmetry
 from status_loader import StatusLoader
 
 CRAZY_NEGATIVE_VALUE = -5000.0
-DEFAULT_ACTIVATION = "mish"
+DEFAULT_ACTIVATION = "relu"
 
 def activation_func(activation, inplace=False):
     if activation == "identity":
