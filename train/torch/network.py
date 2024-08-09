@@ -371,13 +371,16 @@ class BroadcastDepthwiseConv2d(nn.Module):
         self.weight = nn.Parameter(
             torch.randn((self.channels, 1, self.kernel_size, self.kernel_size), dtype=torch.float)
         )
+        self.gamma = nn.Parameter(
+            torch.ones(self.channels) / math.sqrt(self.channels)
+        )
         if self.use_bias:
             self.bias = nn.Parameter(
                 torch.zeros(self.channels, dtype=torch.float)
             )
 
     def _compute_equivalent_weight(self):
-        return self.weight + torch.sum(self.weight, dim=0, keepdim=True) / math.sqrt(self.channels)
+        return self.weight + torch.sum(self.weight * self.gamma.view(self.channels, 1, 1, 1), dim=0, keepdim=True)
 
     def get_merged_param(self):
         weight = torch.zeros_like(self.weight)
