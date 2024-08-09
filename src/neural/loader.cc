@@ -440,21 +440,22 @@ int DNNLoader::FillBlock(int offset,
         if (outer_channels != pre_btl_conv_shape[0] ||
                 outer_channels != post_btl_conv_shape[1] ||
                 outer_channels != post_btl_bn_shape[0]) {
-            throw std::runtime_error{"rhe outer channels of bottleneck block is wrong"};
+            throw std::runtime_error{"the outer channels of bottleneck block is wrong"};
         }
-        if (inner_channels != res_conv1_shape[0] ||
+        if (inner_channels != pre_btl_bn_shape[0] ||
+                inner_channels != res_conv1_shape[0] ||
                 inner_channels != res_conv1_shape[1] ||
                 inner_channels != res_bn1_shape[0] ||
                 inner_channels != res_conv2_shape[0] ||
                 inner_channels != res_conv2_shape[1] ||
                 inner_channels != res_bn2_shape[0]) {
-            throw std::runtime_error{"rhe inner channels of bottleneck block is wrong"};
+            throw std::runtime_error{"the inner channels of bottleneck block is wrong"};
         }
         if (kernel != res_conv1_shape[2] ||
                 kernel != res_conv2_shape[2] ||
                 1 != pre_btl_conv_shape[2] ||
-                1 != post_btl_bn_shape[2]) {
-            throw std::runtime_error{"rhe kernel of bottleneck block is wrong"};
+                1 != post_btl_conv_shape[2]) {
+            throw std::runtime_error{"the kernel of bottleneck block is wrong"};
         }
     } else if (tower_ptr->IsMixerBlock()) {
         // mixer block
