@@ -52,6 +52,9 @@ void Board::ResetBasicData() {
     prisoners_[kBlack] = 0;
     prisoners_[kWhite] = 0;
 
+    played_stones_[kBlack] = 0;
+    played_stones_[kWhite] = 0;
+
     ko_move_ = kNullVertex;
     last_move_ = kNullVertex;
     last_move_2_ = kNullVertex;
@@ -1497,6 +1500,7 @@ void Board::PlayMoveAssumeLegal(const int vtx, const int color) {
             SetPasses(0);
         }
         ko_move_ = UpdateBoard(vtx, color);
+        played_stones_[color] += 1;
     }
 
     if (ko_move_ != old_ko_move) {
@@ -1538,23 +1542,6 @@ int Board::ComputeScoreOnBoard(const int color, const int scoring,
                 ++black_score_lead;
             } else if (score_area[idx] == kWhite) {
                 --black_score_lead;
-            }
-        }
-    }
-
-    if (scoring == kTerritory) {
-        for (int y = 0; y < board_size_; ++y) {
-            for (int x = 0; x < board_size_; ++x) {
-                const auto vtx = GetVertex(x, y);
-                const auto idx = GetIndex(x, y);
-                if (score_area[idx] == kBlack ||
-                        score_area[idx] == kWhite) {
-                    if (GetState(vtx) == kBlack) {
-                       --black_score_lead;
-                    } else if (GetState(vtx) == kWhite) {
-                        ++black_score_lead;
-                    }
-                }
             }
         }
     }

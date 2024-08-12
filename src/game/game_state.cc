@@ -686,8 +686,8 @@ float GameState::GetPenalty() const {
     float penalty = 0.f;
 
     if (scoring_rule_ == kTerritory) {
-        penalty += board_.GetPrisoner(kWhite);
-        penalty -= board_.GetPrisoner(kBlack);
+        penalty += board_.GetPlayedStones(kBlack);
+        penalty -= board_.GetPlayedStones(kWhite);
     }
     if (scoring_rule_ == kArea) {
         penalty += handicap_;

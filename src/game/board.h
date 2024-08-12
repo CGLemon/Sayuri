@@ -62,6 +62,9 @@ public:
     // Get number of captured stones.
     int GetPrisoner(const int color) const;
 
+    // Get number of played stones.
+    int GetPlayedStones(const int color) const;
+
     // Get board state on this vertex position
     int GetState(const int vtx) const;
     int GetState(const int x, const int y) const;
@@ -250,6 +253,9 @@ private:
 
     // The Prisoners per color
     std::array<int, 2> prisoners_;
+
+    // The number of played stones for each player.
+    std::array<int, 2> played_stones_;
 
     // The Zobrist hash of board position.
     std::uint64_t hash_;
@@ -510,6 +516,10 @@ inline void Board::UpdateZobristPass(const int new_pass,
 
 inline int Board::GetPrisoner(const int color) const {
     return prisoners_[color];
+}
+
+inline int Board::GetPlayedStones(const int color) const {
+    return played_stones_[color];
 }
 
 inline int Board::GetBoardSize() const {
