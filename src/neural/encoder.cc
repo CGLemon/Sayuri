@@ -166,7 +166,11 @@ void Encoder::FillKoMove(const Board* board,
 
 void Encoder::FillArea(const Board* board,
                        const int to_move,
+                       const int scoring,
                        std::vector<float>::iterator area_it) const {
+    if (scoring == kTerritory) {
+        return;
+    }
     auto num_intersections = board->GetNumIntersections();
 
     auto ownership = std::vector<int>(num_intersections, kInvalid);
@@ -241,7 +245,7 @@ void Encoder::FillLadder(const Board* board,
 
 void Encoder::FillMisc(const Board* board,
                        const int to_move,
-                       int scoring, float wave, float komi,
+                       const int scoring, float wave, float komi,
                        std::vector<float>::iterator misc_it) const {
     auto num_intersections = board->GetNumIntersections();
 
@@ -287,14 +291,15 @@ void Encoder::EncoderFeatures(const GameState &state,
     auto misc_it      = it + 13 * shift; // 6p, others
 
     auto color = state.GetToMove();
+    auto scoring = state.GetScoringRule();
 
     FillKoMove(board.get(), ko_it);
-    FillArea(board.get(), color, area_it);
+    FillArea(board.get(), color, scoring, area_it);
     FillLiberties(board.get(), liberties_it);
     FillLadder(board.get(), ladder_it);
     FillMisc(board.get(),
                  color,
-                 state.GetScoringRule(),
+                 scoring,
                  state.GetWave(),
                  state.GetKomiWithPenalty(),
                  misc_it);

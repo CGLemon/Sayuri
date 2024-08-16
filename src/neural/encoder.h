@@ -60,6 +60,7 @@ private:
 
     void FillArea(const Board* board,
                   const int to_move,
+                  const int scoring,
                   std::vector<float>::iterator area_it) const;
 
     void FillLiberties(const Board* board,
@@ -69,8 +70,8 @@ private:
                     std::vector<float>::iterator ladder_it) const;
 
     void FillMisc(const Board* board,
-                  const int color,
-                  int scoring, float wave, float komi,
+                  const int to_move,
+                  const int scoring, float wave, float komi,
                   std::vector<float>::iterator color_it) const;
 
     void EncoderFeatures(const GameState &state,
