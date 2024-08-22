@@ -22,14 +22,17 @@ public:
     InputData GetInputs(const GameState &state, int symmetry = Symmetry::kIdentitySymmetry) const;
 
     /*
-     * Get the v3 Network input planes.
+     * Get the v3~v4 Network input planes.
      *
-     * planes 1 -24 : last 8 history moves
+     * planes 1 -24 : last 8 history moves, for each three planes
+     *                    1. current player's stones on board
+     *                    2. opponent player's stones on board
+     *                    3. last move
      * plane     25 : ko move
      * planes 26-29 : pass-alive and pass-dead area
      * planes 30-33 : strings with 1, 2, 3 and 4 liberties
      * planes 34-37 : ladder features
-     * plane     38 : rule, not used now
+     * plane     38 : scoring rule (area or territory)
      * plane     39 : wave
      * plane     40 : komi/20
      * plane     41 : -komi/20
@@ -76,5 +79,4 @@ private:
 
     void EncoderFeatures(const GameState &state,
                          std::vector<float>::iterator it) const;
-
 };
