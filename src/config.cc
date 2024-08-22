@@ -167,6 +167,9 @@ void ArgsParser::InitBasicParameters() const {
     bool already_set_threads = !IsOptionDefault("threads");
     int reasonable_threads = 0;
     int leela_base_threads = 10; // leela uses 10 threads and 5 batches by default
+
+    // Now we compute the reasonable base on known information, like playouts or
+    // CPU cores number.
     if (already_set_playouts) {
         // Assume the bound is playouts count. Avoid reducing the strength
         // too much. We select thread count based on playouts count.
@@ -186,29 +189,38 @@ void ArgsParser::InitBasicParameters() const {
         } else if (playouts <= 51200) {
             reasonable_threads = 32;
         } else {
-            // Will take long time, allocate the threads as many as
+            // Will take long time, so allocate the threads as many as
             // possible.
             reasonable_threads = 0;
         }
     }
 
     // The performance increase is slow down on normal device (eg. RTX 4060Ti) after
-    // the batch size reaches 32. Maybe we will change this value in the future.
+    // the batch size reaches 32. Maybe we will change this value in the future. Notice
+    // priority of this bound is lower than threads bound.
     const int reasonable_batchsize_bound_per_gpu = 32;
     const int reasonable_batchsize_bound = reasonable_batchsize_bound_per_gpu * num_gpus;
+
+    // The performance would be reduced with large number of search threads because
+    // single playout may be fail when many threads are on the same path. After testing,
+    // the bound should not be greater than 64 even if it runs on the multi-gpu device.
+    const int reasonable_threads_bound = 64;
+
     if (reasonable_threads == 0) {
         // Assume the bound is thinking time. Actually we can't know the thinking time
         // so only selecting the maximum thread count.
         reasonable_threads = use_gpu ?
             2 * reasonable_batchsize_bound :
-            64;
+            reasonable_threads_bound;
     }
+
     if (!already_set_threads) {
         // Assume new comer forgets to set thread count. Avoid eating too
         // much computation resource so we set a lower thread count bound.
-        // We are so nice :-).
+        // We are so nice :-)
         reasonable_threads = std::min(reasonable_threads, leela_base_threads);
     }
+    reasonable_threads = std::min(reasonable_threads, reasonable_threads_bound);
 
     if (use_gpu) {
         if (select_threads == 0 && select_batchsize == 0) {
@@ -259,7 +271,7 @@ void ArgsParser::InitBasicParameters() const {
                       as_default);
     }
 
-   // Set the lag buffer time.
+    // Set the lag buffer time.
     bool already_set_lagbuffer = !IsOptionDefault("lag_buffer");
     if (!already_set_lagbuffer) {
         float lag_buffer_base = 0.25f;
