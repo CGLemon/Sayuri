@@ -8,7 +8,7 @@ from data import Data
 
 from torch.nn import DataParallel
 from lazy_loader import LazyLoader, LoaderFlag
-from status_loader import StatusLoader
+from status_dict import StatusDict
 
 def gather_filenames(root, num_chunks=None, sort_key_fn=None):
     def gather_recursive_files(root):
@@ -255,7 +255,7 @@ class TrainingPipe():
 
         # The Store root directory.
         self.store_path = cfg.store_path
-        self._status_loader = StatusLoader()
+        self._status_dict = StatusDict()
 
         # The SWA setting.
         self.swa_count = 0
@@ -335,18 +335,18 @@ class TrainingPipe():
         sort_fn = os.path.getmtime
         files = gather_filenames(self.checkpoint_path, 1, sort_key_fn=sort_fn)
         if len(files) == 0:
-            self._status_loader.reset()
+            self._status_dict.clear()
         else:
-            status_name = files.pop()
-            self._status_loader.load(status_name, device=torch.device("cpu"))
-        self._status_loader.load_model(self.module)
-        self._status_loader.load_swa_model(self.swa_net)
-        self._status_loader.load_optimizer(self.opt)
+            checkpoint = files.pop()
+            self._status_dict.load(checkpoint, device=torch.device("cpu"))
+        self._status_dict.load_module(StatusDict.MODEL_KEY, self.module)
+        self._status_dict.load_module(StatusDict.SWA_KEY, self.swa_net)
+        self._status_dict.load_module(StatusDict.OPTIM_KEY,self.opt)
 
-        last_steps = self._status_loader.get_steps()
+        last_steps = self._status_dict.fancy_get(StatusDict.STEPS_KEY)
         self.module.update_parameters(last_steps)
 
-        self.swa_count = self._status_loader.get_swa_count()
+        self.swa_count = self._status_dict.fancy_get(StatusDict.SWA_COUNT_KEY)
         curr_lr = self._get_lr_schedule(last_steps)
 
         for param in self.opt.param_groups:
@@ -354,20 +354,19 @@ class TrainingPipe():
             param["weight_decay"] = self.weight_decay
 
         print("Current steps is {}, learning rate is {}.".format(last_steps, curr_lr))
-
         return last_steps
 
     def _save_current_status(self, steps):
         self._validate_the_last_model(steps)
 
         checkpoint = os.path.join(self.checkpoint_path, "s{}-status.pt".format(steps))
-        self._status_loader.set_steps(steps)
-        self._status_loader.set_swa_count(self.swa_count)
-        self._status_loader.set_json_str(self.cfg.json_str)
-        self._status_loader.save_model(self.module)
-        self._status_loader.save_swa_model(self.swa_net)
-        self._status_loader.save_optimizer(self.opt)
-        self._status_loader.save(checkpoint)
+        self._status_dict.set_module(StatusDict.MODEL_KEY, self.module)
+        self._status_dict.set_module(StatusDict.SWA_KEY, self.swa_net)
+        self._status_dict.set_module(StatusDict.OPTIM_KEY, self.opt)
+        self._status_dict.fancy_set(StatusDict.STEPS_KEY, steps)
+        self._status_dict.fancy_set(StatusDict.SWA_COUNT_KEY, self.swa_count)
+        self._status_dict.fancy_set(StatusDict.JSON_KEY, self.cfg.json_str)
+        self._status_dict.save(checkpoint)
 
         weights_name = os.path.join(self.weights_path, "s{}.bin.txt".format(steps))
         cpu_module = self.module.to("cpu")

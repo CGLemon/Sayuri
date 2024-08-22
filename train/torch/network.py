@@ -9,7 +9,6 @@ import struct
 import sys
 
 from symmetry import torch_symmetry
-from status_loader import StatusLoader
 
 CRAZY_NEGATIVE_VALUE = -5000.0
 DEFAULT_ACTIVATION = "relu"
@@ -1158,11 +1157,6 @@ class Network(nn.Module):
             "errors_loss"        : errors_loss
         }
         return all_loss_dict
-
-    def load_pt(self, filename):
-        status_loader = StatusLoader()
-        status_loader.load(filename, device=torch.device("cpu"))
-        status_loader.load_model(self)
 
     def update_parameters(self, curr_steps):
         for layer in self.layers_collector:

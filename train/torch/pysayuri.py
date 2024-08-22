@@ -1,5 +1,5 @@
 from network import Network, CRAZY_NEGATIVE_VALUE
-from status_loader import StatusLoader
+from status_dict import StatusDict
 from config import Config
 
 import colorsys
@@ -1320,7 +1320,7 @@ class Agent():
         self._checkpoint = kwargs.get("checkpoint", None)
         self._use_swa = kwargs.get("use_swa", False)
 
-        self._net, self._loader = self._load_checkpoint()
+        self._net, self._status_dict = self._load_checkpoint()
         self._use_gpu = kwargs.get("use_gpu", False) and torch.cuda.is_available()
         self._device = torch.device("cuda") if self._use_gpu else torch.device("cpu")
         self._net = self._net.to_device(self._device)
@@ -1331,10 +1331,12 @@ class Agent():
 
     def _load_checkpoint(self):
         net_cfg = None
+        status_dict = None
         if self._json_path is None and not self._checkpoint is None:
-            loader = StatusLoader()
-            loader.load(self._checkpoint)
-            net_cfg = Config(loader.get_json_str(), False)
+            status_dict = StatusDict()
+            status_dict.load(self._checkpoint)
+            net_cfg = Config(
+                status_dict.fancy_get(StatusDict.JSON_KEY), is_file=False)
         else:
             net_cfg = Config(self._json_path)
 
@@ -1347,13 +1349,13 @@ class Agent():
         stderr_write(net.simple_info())
 
         if not self._checkpoint is None:
-            loader = StatusLoader()
-            loader.load(self._checkpoint)
-            loader.load_model(net)
+            status_dict = StatusDict()
+            status_dict.load(self._checkpoint)
+            status_dict.load_module(StatusDict.MODEL_KEY, net)
             if self._use_swa:
-                loader.load_swa_model(net)
+                status_dict.load_module(StatusDict.SWA_KEY, net)
         net.eval()
-        return net, loader
+        return net, status_dict
 
     def time_settings(self, main_time, byo_time, byo_stones):
         if main_time <= 0 and byo_time <= 0:
@@ -1493,8 +1495,8 @@ class Agent():
     def get_board(self):
         return self._board
 
-    def get_net_loader(self):
-        return self._loader
+    def get_status_dict(self):
+        return self._status_dict
 
     def __str__(self):
         out = str()
@@ -1949,15 +1951,15 @@ def gtp_loop(args):
             if len(inputs) <= 1:
                 raise Exception("GTP command \"save_bin_weights\": should provide weight's path")
             path = inputs[1]
-            loader = agent.get_net_loader()
-            steps = loader.get_steps()
+            status_dict = agent.get_status_dict()
+            steps = status_dict.fancy_get(StatusDict.STEPS_KEY)
             weights_name = os.path.join(path, "s{}.bin.txt".format(steps))
             swa_weights_name = os.path.join(path, "swa-s{}.bin.txt".format(steps))
-            cfg = Config(loader.get_json_str(), False)
+            cfg = Config(status_dict.fancy_get(StatusDict.JSON_KEY), False)
             cpu_net = Network(cfg).to("cpu")
-            loader.load_model(cpu_net)
+            status_dict.load_module(StatusDict.MODEL_KEY, cpu_net)
             cpu_net.transfer_to_bin(weights_name)
-            loader.load_swa_model(cpu_net)
+            status_dict.load_module(StatusDict.SWA_KEY, cpu_net)
             cpu_net.transfer_to_bin(swa_weights_name)
             gtp_print("")
         else:
