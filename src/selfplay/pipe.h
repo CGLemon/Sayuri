@@ -14,9 +14,11 @@ public:
 
 private:
     void Initialize();
+    void CreateWorkspace();
     void Loop();
 
     bool SaveChunk(const int out_id,
+                   float vdata_prob,
                    std::vector<TrainingData> &chunk);
 
     bool SaveNetQueries(const size_t queries);
@@ -36,8 +38,11 @@ private:
 
     std::string target_directory_;
     std::string sgf_directory_;
-    std::string data_directory_;
-    std::string data_directory_hash_;
+    std::string queies_directory_;
+    std::string tdata_directory_;
+    std::string tdata_directory_hash_;
+    std::string vdata_directory_;
+    std::string vdata_directory_hash_;
     std::string filename_hash_;
 
     std::vector<std::thread> workers_;

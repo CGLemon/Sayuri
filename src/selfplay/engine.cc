@@ -3,6 +3,7 @@
 #include "utils/random.h"
 #include "utils/komi.h"
 #include "utils/filesystem.h"
+#include "utils/log.h"
 #include "game/sgf.h"
 #include "config.h"
 
@@ -145,10 +146,21 @@ void Engine::ParseQueries() {
     if (scoring_set_.empty()) {
         scoring_set_.emplace_back(kArea);
     }
+
+    // Be sure that rule set is valid.
+    const bool has_territory = std::end(scoring_set_) !=
+        std::find(std::begin(scoring_set_), std::end(scoring_set_), kTerritory);
+    const bool has_area = std::end(scoring_set_) !=
+        std::find(std::begin(scoring_set_), std::end(scoring_set_), kArea);
+    if (has_territory && !has_area) {
+        LOGGING << "Nonsensical option: Scoring Territory needs Scroing Area. "
+                   "We add Scoring Territory automatically.";
+        scoring_set_.emplace_back(kTerritory);
+    }
+
     std::sort(std::begin(scoring_set_), std::end(scoring_set_));
     scoring_set_.erase(std::unique(std::begin(scoring_set_), std::end(scoring_set_)),
                        std::end(scoring_set_));
-
 
     // Adjust the matched NN size.
     network_->Reload(max_bsize);

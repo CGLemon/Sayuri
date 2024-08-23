@@ -211,7 +211,7 @@ class TrainingPipe():
         self.macrobatchsize = cfg.macrobatchsize
         self.macrofactor = cfg.macrofactor
 
-        # How many cpu does the 'DataLoader' use?
+        # Number of cpu for the 'DataLoader'.
         self.num_workers = cfg.num_workers
         self.train_dir = cfg.train_dir
         self.validation_dir = cfg.validation_dir
@@ -229,7 +229,7 @@ class TrainingPipe():
 
         # Lazy loader options.
         self.train_buffer_size = self.cfg.buffersize
-        self.validation_buffer_size = self.cfg.buffersize // 10
+        self.validation_buffer_size = self.cfg.buffersize // 4
         self.down_sample_rate = cfg.down_sample_rate
 
         # Steps information
@@ -359,7 +359,7 @@ class TrainingPipe():
         print("Current steps is {}. Will stop the training at {}.".format(self.current_steps, self.max_steps))
 
     def _save_current_status(self):
-        self._validate_the_last_model(self.current_steps)
+        self._validate_the_last_model()
 
         checkpoint = os.path.join(self.checkpoint_path, "s{}-status.pt".format(self.current_steps))
         self._status_dict.set_module(StatusDict.MODEL_KEY, self.module)
@@ -393,7 +393,7 @@ class TrainingPipe():
 
         print("Load the last {} chunks...".format(len(chunks)))
 
-        self.flag = LoaderFlag()
+        self.train_flag = LoaderFlag()
         self.train_lazy_loader = LazyLoader(
             filenames = chunks,
             stream_loader = self._stream_loader,
@@ -403,31 +403,47 @@ class TrainingPipe():
             num_workers = self.num_workers,
             buffer_size = self.train_buffer_size,
             batch_size = self.macrobatchsize,
-            flag = self.flag
+            flag = self.train_flag
         )
-
         # Try to get the first batch, be sure that the loader is ready.
         batch = next(self.train_lazy_loader)
 
-        if self.validation_dir:
+        if self.validation_dir and os.path.isdir(self.validation_dir):
+            self.validation_flag = LoaderFlag()
             self.validation_lazy_loader = LazyLoader(
-                filenames = gather_filenames(self.validation_dir, len(chunks)//10, sort_fn),
+                filenames = gather_filenames(self.validation_dir, len(chunks), sort_fn),
                 stream_loader = self._stream_loader,
                 stream_parser = self._stream_parser,
                 batch_generator = self._batch_gen,
                 down_sample_rate = 0,
-                num_workers = self.num_workers,
+                num_workers = max(1, round(0.25 * self.num_workers)),
                 buffer_size = self.validation_buffer_size,
                 batch_size = self.macrobatchsize,
-                flag = self.flag
+                flag = self.validation_flag
             )
             batch = next(self.validation_lazy_loader)
+            self.validation_flag.set_suspend_flag()
         else:
+            self.validation_dir = None
             self.validation_lazy_loader = None
 
+    def _break_loader(self):
+        self.train_flag.set_stop_flag()
+        try:
+            _, _ = self._gather_data_from_loader(True)
+        except StopIteration:
+            pass
+
+        if self.validation_lazy_loader:
+            self.validation_flag.set_stop_flag()
+            try:
+                _, _ = self._gather_data_from_loader(False)
+            except StopIteration:
+                pass
+
     def _get_new_running_loss_dict(self, all_loss_dict):
-        # Get the new dict.
         running_loss_dict = dict()
+        running_loss_dict["steps"] = 0
         running_loss_dict["loss"] = 0
         for k, v in all_loss_dict.items():
             running_loss_dict[k] = 0
@@ -438,6 +454,7 @@ class TrainingPipe():
             this_item_loss = v.item()
             running_loss_dict[k] += this_item_loss
             running_loss_dict["loss"] += this_item_loss
+        running_loss_dict["steps"] += 1./self.macrofactor
         return running_loss_dict
 
     def _handle_loss(self, all_loss_dict):
@@ -459,24 +476,25 @@ class TrainingPipe():
                     speed,
                     self.opt.param_groups[0]["lr"],
                     self.batchsize)
-        info += " all loss: {:.4f},".format(running_loss_dict["loss"]/self.verbose_steps)
-        info += " prob loss: {:.4f},".format(running_loss_dict["prob_loss"]/self.verbose_steps)
-        info += " aux prob loss: {:.4f},".format(running_loss_dict["aux_prob_loss"]/self.verbose_steps)
-        info += " soft prob loss: {:.4f},".format(running_loss_dict["soft_prob_loss"]/self.verbose_steps)
-        info += " soft aux prob loss: {:.4f},".format(running_loss_dict["soft_aux_prob_loss"]/self.verbose_steps)
-        info += " optimistic loss: {:.4f},".format(running_loss_dict["optimistic_loss"]/self.verbose_steps)
-        info += " ownership loss: {:.4f},".format(running_loss_dict["ownership_loss"]/self.verbose_steps)
-        info += " wdl loss: {:.4f},".format(running_loss_dict["wdl_loss"]/self.verbose_steps)
-        info += " Q values loss: {:.4f},".format(running_loss_dict["q_vals_loss"]/self.verbose_steps)
-        info += " scores loss: {:.4f},".format(running_loss_dict["scores_loss"]/self.verbose_steps)
-        info += " errors loss: {:.4f}".format(running_loss_dict["errors_loss"]/self.verbose_steps)
+        steps = running_loss_dict["steps"]
+        info += " all loss: {:.4f},".format(running_loss_dict["loss"]/steps)
+        info += " prob loss: {:.4f},".format(running_loss_dict["prob_loss"]/steps)
+        info += " aux prob loss: {:.4f},".format(running_loss_dict["aux_prob_loss"]/steps)
+        info += " soft prob loss: {:.4f},".format(running_loss_dict["soft_prob_loss"]/steps)
+        info += " soft aux prob loss: {:.4f},".format(running_loss_dict["soft_aux_prob_loss"]/steps)
+        info += " optimistic loss: {:.4f},".format(running_loss_dict["optimistic_loss"]/steps)
+        info += " ownership loss: {:.4f},".format(running_loss_dict["ownership_loss"]/steps)
+        info += " wdl loss: {:.4f},".format(running_loss_dict["wdl_loss"]/steps)
+        info += " Q values loss: {:.4f},".format(running_loss_dict["q_vals_loss"]/steps)
+        info += " scores loss: {:.4f},".format(running_loss_dict["scores_loss"]/steps)
+        info += " errors loss: {:.4f}".format(running_loss_dict["errors_loss"]/steps)
         return info
 
-    def _save_current_info(self, speed, running_loss_dict):
+    def _save_current_info(self, speed, running_loss_dict, filename):
         line_log = self._get_current_info(speed, running_loss_dict)
         print(line_log)
 
-        log_file = os.path.join(self.store_path, "training.log")
+        log_file = os.path.join(self.store_path, filename)
         with open(log_file, 'a') as f:
             f.write(line_log + '\n')
 
@@ -485,6 +503,8 @@ class TrainingPipe():
         if use_training:
             batch_dict = next(self.train_lazy_loader)
         else:
+            if self.validation_lazy_loader is None:
+                return None, None
             batch_dict = next(self.validation_lazy_loader)
 
         # Move the data to the current device.
@@ -505,32 +525,38 @@ class TrainingPipe():
         )
         return planes, target
 
-    def _validate_the_last_model(self, current_steps):
+    def _validate_the_last_model(self):
         if self.validation_lazy_loader is None:
             return
-        self.module.train()
+        print("Validate the network performance...")
+        self.module.eval()
+        self.validation_flag.reset_flag()
+        self.train_flag.set_suspend_flag()
 
         running_loss_dict = dict()
         total_steps = self.validation_steps * self.macrofactor
         clock_time = time.time()
 
-        for _ in range(total_steps):
-            planes, target = self._gather_data_from_loader(False)
-            _, all_loss_dict = self.net(
-                planes,
-                target,
-                use_symm=True,
-                loss_weight_dict=self._loss_weight_dict
-            )
-            _, all_loss_dict = self._handle_loss(all_loss_dict)
+        with torch.no_grad():
+            for _ in range(total_steps):
+                planes, target = self._gather_data_from_loader(False)
+                _, all_loss_dict = self.net(
+                    planes,
+                    target,
+                    use_symm=True,
+                    loss_weight_dict=self._loss_weight_dict
+                )
+                _, all_loss_dict = self._handle_loss(all_loss_dict)
 
-            if len(running_loss_dict) == 0:
-                running_loss_dict = self._get_new_running_loss_dict(all_loss_dict)
-            running_loss_dict = self._accumulate_loss(running_loss_dict, all_loss_dict)
+                if len(running_loss_dict) == 0:
+                    running_loss_dict = self._get_new_running_loss_dict(all_loss_dict)
+                running_loss_dict = self._accumulate_loss(running_loss_dict, all_loss_dict)
 
         elapsed = time.time() - clock_time
-        self._save_current_info(self.validation_steps/elapsed, running_loss_dict)
-        self.module.eval()
+        self._save_current_info(self.validation_steps/elapsed, running_loss_dict, "validation.log")
+        self.module.train()
+        self.validation_flag.set_suspend_flag()
+        self.train_flag.reset_flag()
 
     def fit_and_store(self):
         self._load_current_status()
@@ -588,7 +614,7 @@ class TrainingPipe():
                         elapsed = time.time() - clock_time
                         clock_time = time.time()
 
-                        self._save_current_info(self.verbose_steps/elapsed, running_loss_dict)
+                        self._save_current_info(self.verbose_steps/elapsed, running_loss_dict, "training.log")
                         running_loss_dict = self._get_new_running_loss_dict(all_loss_dict)
 
                     if self.current_steps % self.swa_steps == 0:
@@ -606,9 +632,5 @@ class TrainingPipe():
 
             # store the last network
             self._save_current_status()
-        self.flag.set_stop_flag()
-        try:
-            planes, target = self._gather_data_from_loader(True)
-        except StopIteration:
-            pass
+        self._break_loader()
         print("Training is over.")

@@ -40,7 +40,8 @@
             [0,       5e-3]
          ],
 
-        "TrainDirectory" : "selfplay/data",
+        "TrainDirectory" : "selfplay/tdata",
+        "ValidationDirectory" : "selfplay/vdata",
         "StorePath" : "workspace"
     }
 }

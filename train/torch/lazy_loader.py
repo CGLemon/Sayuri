@@ -1,6 +1,7 @@
 import multiprocessing as mp
 import threading
 import random
+import time
 
 class ShuffleBuffer:
     def __init__(self, buf_size):
@@ -95,6 +96,7 @@ class LoaderConfig:
 class LoaderFlag:
     NONE = 0
     STOP = 1
+    SUSPEND = 2
 
     def __init__(self):
         self.flag = mp.Value("i", self.NONE)
@@ -104,6 +106,11 @@ class LoaderFlag:
             v = self.flag.value
         return v == self.STOP
 
+    def is_suspend(self):
+        with self.flag.get_lock():
+            v = self.flag.value
+        return v == self.SUSPEND
+
     def reset_flag(self):
         with self.flag.get_lock():
             self.flag.value = self.NONE
@@ -111,6 +118,10 @@ class LoaderFlag:
     def set_stop_flag(self):
         with self.flag.get_lock():
             self.flag.value = self.STOP
+
+    def set_suspend_flag(self):
+        with self.flag.get_lock():
+            self.flag.value = self.SUSPEND
 
 def _load_from_files(config, data_writer):
     # Load the data from disk. Suggest to design a heavy stream parser instead 
@@ -129,6 +140,9 @@ def _load_from_files(config, data_writer):
         if config.flag.is_stop():
             data_writer.close()
             break
+        if config.flag.is_suspend():
+            time.sleep(0.2)
+            continue
         loader.next()
 
 def _gather_batch(config, data_readers, batch_writer):
@@ -232,7 +246,7 @@ def LazyLoader(*args, **kwargs):
                 data_readers[idx].close()
             batch_reader.close()
             batch_writer.close()
-            t.join()
+            # t.join()
             return
         try:
             batch = batch_reader.recv()

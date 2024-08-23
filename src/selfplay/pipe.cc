@@ -22,94 +22,138 @@ void SelfPlayPipe::Initialize() {
     // Disable time management.
     SetOption("timemanage", (int)TimeControl::TimeManagement::kOff);
 
+    // Wait for engine ready.
     engine_.Initialize();
 
-    target_directory_ = GetOption<std::string>("target_directory");
+    // Reset number conuter.
     max_games_ = GetOption<int>("num_games");
     accmulate_games_.store(0, std::memory_order_relaxed);
     played_games_.store(0, std::memory_order_relaxed);
     running_threads_.store(0, std::memory_order_relaxed);
-
     chunk_games_ = 0;
 
+    // Generate the data files name. If the target file already existed, we re-generate
+    // new file name.
+    target_directory_ = GetOption<std::string>("target_directory");
+    tdata_directory_ = ConcatPath(target_directory_, "tdata");
+    vdata_directory_ = ConcatPath(target_directory_, "vdata");
+    sgf_directory_ = ConcatPath(target_directory_, "sgf");
+    queies_directory_ = ConcatPath(target_directory_, "net_queries");
     while (true) {
         auto ss = std::ostringstream();
         ss << std::hex << std::uppercase
                << GetTimeHash() << std::dec;
 
         filename_hash_ = ss.str();
-        sgf_directory_ = ConcatPath(target_directory_, "sgf");
-        data_directory_ = ConcatPath(target_directory_, "data");
-        data_directory_hash_ = ConcatPath(data_directory_, filename_hash_);
+        tdata_directory_hash_ = ConcatPath(tdata_directory_, filename_hash_);
+        vdata_directory_hash_ = ConcatPath(vdata_directory_, filename_hash_);
 
-        bool not_existence = true;
-        if (IsDirectoryExist(data_directory_hash_)) {
-            not_existence = false;
+        bool collision = false;
+
+        if (IsDirectoryExist(tdata_directory_hash_)) {
+            collision = true;
         }
-
+        if (IsDirectoryExist(vdata_directory_hash_)) {
+            collision = true;
+        }
         for (auto sgf_name : GetFileList(sgf_directory_)) {
             if ((filename_hash_ + ".sgf") == sgf_name) {
-                not_existence = false;
+                collision = true;
                 break;
             }
         }
-
-        if (not_existence) {
+        for (auto queies_name : GetFileList(queies_directory_)) {
+            if ((filename_hash_ + ".txt") == queies_name) {
+                collision = true;
+                break;
+            }
+        }
+        if (!collision) {
             break;
         }
         std::this_thread::sleep_for(std::chrono::seconds(1)); // next time hash
     }
 }
 
-bool SelfPlayPipe::SaveChunk(const int out_id,
-                             std::vector<TrainingData> &chunk) {
-    auto out_name = ConcatPath(
-                        data_directory_hash_,
-                        filename_hash_ +
-                            "_" +
-                            std::to_string(out_id) +
-                            ".txt");
+void SelfPlayPipe::CreateWorkspace() {
+    const auto SafeMakeDir = [](std::string dir_name) {
+        if (!IsDirectoryExist(dir_name)) {
+            TryCreateDirectory(dir_name);
+        }
+    };
+    SafeMakeDir(tdata_directory_);
+    SafeMakeDir(tdata_directory_hash_);
+    SafeMakeDir(vdata_directory_);
+    SafeMakeDir(vdata_directory_hash_);
+    SafeMakeDir(sgf_directory_);
+    SafeMakeDir(queies_directory_);
+}
 
-    auto oss = std::ostringstream{};
+bool SelfPlayPipe::SaveChunk(const int out_id,
+                             float vdata_prob,
+                             std::vector<TrainingData> &chunk) {
+    const auto SaveFile = [](std::string out_name, std::ostringstream& oss) {
+        bool is_open = true;
+        auto buf = oss.str();
+        try {
+            SaveGzip(out_name, buf);
+        } catch (const char *err) {
+            auto file = std::ofstream{};
+            file.open(out_name, std::ios_base::app);
+            is_open = file.is_open();
+
+            if (!is_open) {
+                LOGGING << "Fail to create the file: " << out_name << '!' << std::endl;
+            } else {
+                file << buf;
+                file.close();
+            }
+        }
+        return is_open;
+    };
+    auto tdata_out_name = ConcatPath(
+                              tdata_directory_hash_,
+                              filename_hash_ +
+                                  "_" +
+                                  std::to_string(out_id) +
+                                  ".txt");
+    auto vdata_out_name = ConcatPath(
+                              vdata_directory_hash_,
+                              filename_hash_ +
+                                  "_" +
+                                  std::to_string(out_id) +
+                                  ".txt");
+
+    auto tdata_oss = std::ostringstream{};
+    auto vdata_oss = std::ostringstream{};
+    vdata_prob = std::max(std::min(vdata_prob, 1.0f), 0.0f);
+
     for (auto &data : chunk) {
-        data.StreamOut(oss);
+        if (Random<>::Get().Roulette<10000>(1.0f - vdata_prob)) {
+            data.StreamOut(tdata_oss);
+        } else {
+            data.StreamOut(vdata_oss);
+        }
     }
 
     bool is_open = true;
+    is_open &= SaveFile(tdata_out_name, tdata_oss);
+    is_open &= SaveFile(vdata_out_name, vdata_oss);
 
-    try {
-        auto buf = oss.str();
-        SaveGzip(out_name, buf);
-    } catch (const char *err) {
-        auto file = std::ofstream{};
-        file.open(out_name, std::ios_base::app);
-
-        if (!file.is_open()) {
-            is_open = false;
-            LOGGING << "Fail to create the file: " << out_name << '!' << std::endl;
-        } else {
-            for (auto &data : chunk) {
-                data.StreamOut(file);
-            }
-            file.close();
-        }
-    }
     chunk.clear();
     return is_open;
 }
 
 bool SelfPlayPipe::SaveNetQueries(const size_t queries) {
     auto out_name = ConcatPath(
-                        target_directory_,
-                        "net_queries.txt");
+                        queies_directory_,
+                        filename_hash_ + ".txt");
 
     auto file = std::ofstream{};
     file.open(out_name, std::ios_base::app);
 
-    bool is_open = true;
-
-    if (file.is_open()) {
-        is_open = true;
+    bool is_open = file.is_open();
+    if (is_open) {
         file << queries << std::endl;
     } else {
         LOGGING << "Fail to create the file: " << out_name << '!' << std::endl;
@@ -135,6 +179,7 @@ void SelfPlayPipe::Loop() {
     if (!IsGzipValid()) {
         LOGGING << "WARNING: There is no gzip tool. The output chunks may be very large." << std::endl;
     }
+    CreateWorkspace();
 
     // Dump some infomations.
     LOGGING << "============================================" << std::endl;
@@ -142,16 +187,6 @@ void SelfPlayPipe::Loop() {
     LOGGING << "Target self-play games: " << max_games_ << std::endl;
     LOGGING << "Directory for saving: " << target_directory_  << std::endl;
     LOGGING << "Starting time is: " << CurrentDateTime()  << std::endl;
-
-    if (!IsDirectoryExist(data_directory_)) {
-        TryCreateDirectory(data_directory_);
-    }
-    if (!IsDirectoryExist(data_directory_hash_)) {
-        TryCreateDirectory(data_directory_hash_);
-    }
-    if (!IsDirectoryExist(sgf_directory_)) {
-        TryCreateDirectory(sgf_directory_);
-    }
 
     for (int g = 0; g < engine_.GetParallelGames(); ++g) {
         workers_.emplace_back(
@@ -172,7 +207,7 @@ void SelfPlayPipe::Loop() {
                         engine_.GatherTrainingData(chunk_, g);
 
                         if ((chunk_games_+1) % kGamesPerChunk == 0) {
-                            if (!SaveChunk(chunk_games_/kGamesPerChunk, chunk_)) {
+                            if (!SaveChunk(chunk_games_/kGamesPerChunk, 0.1f, chunk_)) {
                                 break;
                             }
                         }
@@ -197,7 +232,7 @@ void SelfPlayPipe::Loop() {
                     // The last thread saves the remaining training data.
                     if (!chunk_.empty() &&
                             running_threads_.load(std::memory_order_relaxed) == 0) {
-                        SaveChunk(chunk_games_/kGamesPerChunk, chunk_);
+                        SaveChunk(chunk_games_/kGamesPerChunk, 0.1f, chunk_);
                         chunk_games_ += 1;
                     }
                 }
