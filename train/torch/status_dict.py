@@ -10,10 +10,11 @@ class StatusDict(dict):
     SWA_COUNT_KEY = "swa_count"
     OPTIM_KEY = "optimizer"
     STEPS_KEY = "steps"
+    SAMPLES_KEY = "samples"
     JSON_KEY = "json_str"
 
     MODULE_KEY_SET = [MODEL_KEY, SWA_KEY, OPTIM_KEY]
-    NUMBER_KEY_SET = [SWA_COUNT_KEY, STEPS_KEY]
+    NUMBER_KEY_SET = [SWA_COUNT_KEY, STEPS_KEY, SAMPLES_KEY]
 
     def __init__(self):
         super(StatusDict, self).__init__()
@@ -29,7 +30,7 @@ class StatusDict(dict):
             self.update(torch.load(filename, map_location=device))
 
     def save(self, filename):
-        torch.save(self.state_dict, filename)
+        torch.save(self, filename)
 
     def get_(self, key, default=None, process_fn=None):
         result = self.get(key, default)
@@ -51,7 +52,7 @@ class StatusDict(dict):
             return json_str
         raise Exception("invalid key")
 
-    def set(self, key, value, process_fn=None):
+    def set_(self, key, value, process_fn=None):
         if process_fn:
             value = process_fn(value)
         self[key] = value

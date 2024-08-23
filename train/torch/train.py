@@ -21,7 +21,7 @@ def gather_filenames(root, num_chunks=None, sort_key_fn=None):
         return l
     chunks = gather_recursive_files(root)
 
-    if num_chunks is not None:
+    if num_chunks:
         if len(chunks) > num_chunks:
             if sort_key_fn is None:
                 random.shuffle(chunks)
@@ -232,8 +232,11 @@ class TrainingPipe():
         self.validation_buffer_size = self.cfg.buffersize // 10
         self.down_sample_rate = cfg.down_sample_rate
 
-        # Max steps per training task.
-        self.max_steps =  cfg.max_steps
+        # Steps information
+        self.current_steps = 0
+        self.max_steps_per_running = cfg.max_steps_per_running
+        self.max_steps = self.max_steps_per_running + self.current_steps
+        self.current_samples = 0
 
         # Which optimizer do we use?
         self.opt_name = cfg.optimizer
@@ -250,9 +253,6 @@ class TrainingPipe():
         self.net = Network(cfg)
         self.net.train()
 
-        self.swa_net = Network(cfg)
-        self.swa_net.eval()
-
         # The Store root directory.
         self.store_path = cfg.store_path
         self._status_dict = StatusDict()
@@ -261,6 +261,8 @@ class TrainingPipe():
         self.swa_count = 0
         self.swa_max_count = self.cfg.swa_max_count
         self.swa_steps = self.cfg.swa_steps
+        self.swa_net = Network(cfg)
+        self.swa_net.eval()
 
         self._setup()
 
@@ -343,36 +345,37 @@ class TrainingPipe():
         self._status_dict.load_module(StatusDict.SWA_KEY, self.swa_net)
         self._status_dict.load_module(StatusDict.OPTIM_KEY,self.opt)
 
-        last_steps = self._status_dict.fancy_get(StatusDict.STEPS_KEY)
-        self.module.update_parameters(last_steps)
+        self.current_samples = self._status_dict.fancy_get(StatusDict.SAMPLES_KEY)
+        self.current_steps = self._status_dict.fancy_get(StatusDict.STEPS_KEY)
+        self.module.update_parameters(self.current_steps)
 
         self.swa_count = self._status_dict.fancy_get(StatusDict.SWA_COUNT_KEY)
-        curr_lr = self._get_lr_schedule(last_steps)
+        curr_lr = self._get_lr_schedule(self.current_steps)
 
         for param in self.opt.param_groups:
             param["lr"] = curr_lr
             param["weight_decay"] = self.weight_decay
+        self.max_steps = self.max_steps_per_running + self.current_steps
+        print("Current steps is {}. Will stop the training at {}.".format(self.current_steps, self.max_steps))
 
-        print("Current steps is {}, learning rate is {}.".format(last_steps, curr_lr))
-        return last_steps
+    def _save_current_status(self):
+        self._validate_the_last_model(self.current_steps)
 
-    def _save_current_status(self, steps):
-        self._validate_the_last_model(steps)
-
-        checkpoint = os.path.join(self.checkpoint_path, "s{}-status.pt".format(steps))
+        checkpoint = os.path.join(self.checkpoint_path, "s{}-status.pt".format(self.current_steps))
         self._status_dict.set_module(StatusDict.MODEL_KEY, self.module)
         self._status_dict.set_module(StatusDict.SWA_KEY, self.swa_net)
         self._status_dict.set_module(StatusDict.OPTIM_KEY, self.opt)
-        self._status_dict.fancy_set(StatusDict.STEPS_KEY, steps)
+        self._status_dict.fancy_set(StatusDict.STEPS_KEY, self.current_steps)
+        self._status_dict.fancy_set(StatusDict.SAMPLES_KEY, self.current_samples)
         self._status_dict.fancy_set(StatusDict.SWA_COUNT_KEY, self.swa_count)
         self._status_dict.fancy_set(StatusDict.JSON_KEY, self.cfg.json_str)
         self._status_dict.save(checkpoint)
 
-        weights_name = os.path.join(self.weights_path, "s{}.bin.txt".format(steps))
+        weights_name = os.path.join(self.weights_path, "s{}.bin.txt".format(self.current_steps))
         cpu_module = self.module.to("cpu")
         cpu_module.transfer_to_bin(weights_name)
 
-        swa_weights_name = os.path.join(self.swa_weights_path, "swa-s{}.bin.txt".format(steps))
+        swa_weights_name = os.path.join(self.swa_weights_path, "swa-s{}.bin.txt".format(self.current_steps))
         cpu_swa_net = self.swa_net.to("cpu")
         cpu_swa_net.transfer_to_bin(swa_weights_name)
 
@@ -406,7 +409,7 @@ class TrainingPipe():
         # Try to get the first batch, be sure that the loader is ready.
         batch = next(self.train_lazy_loader)
 
-        if self.validation_dir is not None:
+        if self.validation_dir:
             self.validation_lazy_loader = LazyLoader(
                 filenames = gather_filenames(self.validation_dir, len(chunks)//10, sort_fn),
                 stream_loader = self._stream_loader,
@@ -448,20 +451,34 @@ class TrainingPipe():
             loss += v
         return loss, all_loss_dict
 
-    def _get_loss_info(self, running_loss_dict):
+    def _get_current_info(self, speed, running_loss_dict):
         info = str()
-        info += "\tloss: {:.4f}\n".format(running_loss_dict["loss"]/self.verbose_steps)
-        info += "\tprob loss: {:.4f}\n".format(running_loss_dict["prob_loss"]/self.verbose_steps)
-        info += "\taux prob loss: {:.4f}\n".format(running_loss_dict["aux_prob_loss"]/self.verbose_steps)
-        info += "\tsoft prob loss: {:.4f}\n".format(running_loss_dict["soft_prob_loss"]/self.verbose_steps)
-        info += "\tsoft aux prob loss: {:.4f}\n".format(running_loss_dict["soft_aux_prob_loss"]/self.verbose_steps)
-        info += "\toptimistic loss: {:.4f}\n".format(running_loss_dict["optimistic_loss"]/self.verbose_steps)
-        info += "\townership loss: {:.4f}\n".format(running_loss_dict["ownership_loss"]/self.verbose_steps)
-        info += "\twdl loss: {:.4f}\n".format(running_loss_dict["wdl_loss"]/self.verbose_steps)
-        info += "\tQ values loss: {:.4f}\n".format(running_loss_dict["q_vals_loss"]/self.verbose_steps)
-        info += "\tscores loss: {:.4f}\n".format(running_loss_dict["scores_loss"]/self.verbose_steps)
-        info += "\terrors loss: {:.4f}".format(running_loss_dict["errors_loss"]/self.verbose_steps)
+        info += "[steps: {}, samples: {}. speed: {:.2f}, learning rate: {}, batch size: {}] ->".format(
+                    self.current_steps,
+                    self.current_samples,
+                    speed,
+                    self.opt.param_groups[0]["lr"],
+                    self.batchsize)
+        info += " all loss: {:.4f},".format(running_loss_dict["loss"]/self.verbose_steps)
+        info += " prob loss: {:.4f},".format(running_loss_dict["prob_loss"]/self.verbose_steps)
+        info += " aux prob loss: {:.4f},".format(running_loss_dict["aux_prob_loss"]/self.verbose_steps)
+        info += " soft prob loss: {:.4f},".format(running_loss_dict["soft_prob_loss"]/self.verbose_steps)
+        info += " soft aux prob loss: {:.4f},".format(running_loss_dict["soft_aux_prob_loss"]/self.verbose_steps)
+        info += " optimistic loss: {:.4f},".format(running_loss_dict["optimistic_loss"]/self.verbose_steps)
+        info += " ownership loss: {:.4f},".format(running_loss_dict["ownership_loss"]/self.verbose_steps)
+        info += " wdl loss: {:.4f},".format(running_loss_dict["wdl_loss"]/self.verbose_steps)
+        info += " Q values loss: {:.4f},".format(running_loss_dict["q_vals_loss"]/self.verbose_steps)
+        info += " scores loss: {:.4f},".format(running_loss_dict["scores_loss"]/self.verbose_steps)
+        info += " errors loss: {:.4f}".format(running_loss_dict["errors_loss"]/self.verbose_steps)
         return info
+
+    def _save_current_info(self, speed, running_loss_dict):
+        line_log = self._get_current_info(speed, running_loss_dict)
+        print(line_log)
+
+        log_file = os.path.join(self.store_path, "training.log")
+        with open(log_file, 'a') as f:
+            f.write(line_log + '\n')
 
     def _gather_data_from_loader(self, use_training=True):
         # Fetch the next batch data from disk.
@@ -488,7 +505,7 @@ class TrainingPipe():
         )
         return planes, target
 
-    def _validate_the_last_model(self, steps):
+    def _validate_the_last_model(self, current_steps):
         if self.validation_lazy_loader is None:
             return
         self.module.train()
@@ -512,29 +529,18 @@ class TrainingPipe():
             running_loss_dict = self._accumulate_loss(running_loss_dict, all_loss_dict)
 
         elapsed = time.time() - clock_time
-        log_outs = "steps: {} -> ".format(steps)
-        log_outs += "speed: {:.2f}, opt: {}, learning rate: {}, batch size: {}\n".format(
-                        self.validation_steps/elapsed,
-                        self.opt_name,
-                        self.opt.param_groups[0]["lr"],
-                        self.batchsize)
-        log_outs += self._get_loss_info(running_loss_dict)
-        log_file = os.path.join(self.store_path, "validation.log")
-        with open(log_file, 'a') as f:
-            f.write(log_outs + '\n')
+        self._save_current_info(self.validation_steps/elapsed, running_loss_dict)
         self.module.eval()
 
     def fit_and_store(self):
-        init_steps = self._load_current_status()
-
+        self._load_current_status()
         self._init_loader()
+
         print("Start training...")
 
         running_loss_dict = dict()
-        num_steps = init_steps
         keep_running = True
         macro_steps = 0
-
         clock_time = time.time()
 
         while keep_running:
@@ -568,48 +574,38 @@ class TrainingPipe():
                     # clip grad
                     # gnorm = torch.nn.utils.clip_grad_norm_(self.net.parameters(), 10000.0)
 
-                    # update network
+                    # update network parameters
                     self.opt.step()
                     self.opt.zero_grad()
 
-                    num_steps += 1
-                    self.module.update_parameters(num_steps)
+                    # update current count
+                    self.current_steps += 1
+                    self.current_samples += self.batchsize
+                    self.module.update_parameters(self.current_steps)
 
-                    # dump the verbose
-                    if num_steps % self.verbose_steps == 0:
+                    # dump the verbose and save the log file
+                    if self.current_steps % self.verbose_steps == 0:
                         elapsed = time.time() - clock_time
                         clock_time = time.time()
 
-                        log_outs = "steps: {} -> ".format(num_steps)
-                        log_outs += "speed: {:.2f}, opt: {}, learning rate: {}, batch size: {}\n".format(
-                                        self.verbose_steps/elapsed,
-                                        self.opt_name,
-                                        self.opt.param_groups[0]["lr"],
-                                        self.batchsize)
-                        log_outs += self._get_loss_info(running_loss_dict)
-                        print(log_outs)
-
-                        # Also save the current running loss.
-                        log_file = os.path.join(self.store_path, "training.log")
-                        with open(log_file, 'a') as f:
-                            f.write(log_outs + '\n')
+                        self._save_current_info(self.verbose_steps/elapsed, running_loss_dict)
                         running_loss_dict = self._get_new_running_loss_dict(all_loss_dict)
 
-                    if num_steps % self.swa_steps == 0:
+                    if self.current_steps % self.swa_steps == 0:
                         self.swa_count = min(self.swa_count+1, self.swa_max_count)
                         self.swa_net.accumulate_swa(self.module, self.swa_count)
 
                     # update learning rate
                     for param in self.opt.param_groups:
-                        param["lr"] = self._get_lr_schedule(num_steps) 
+                        param["lr"] = self._get_lr_schedule(self.current_steps)
 
-                # should we stop it?
-                if num_steps >= self.max_steps + init_steps:
+                # stop the training if achieving max steps
+                if self.current_steps >= self.max_steps:
                     keep_running = False
                     break
 
             # store the last network
-            self._save_current_status(num_steps)
+            self._save_current_status()
         self.flag.set_stop_flag()
         try:
             planes, target = self._gather_data_from_loader(True)

@@ -256,7 +256,7 @@ class BatchNorm2d(nn.Module):
         # improvement may be around x1.6 ~ x1.8 faster.
         self.fixup = fixup
 
-    def get_merged_param(self):
+    def get_merged_params(self):
         bn_mean = torch.zeros(self.num_features)
         bn_std = torch.zeros(self.num_features)
 
@@ -381,7 +381,7 @@ class BroadcastDepthwiseConv2d(nn.Module):
     def _compute_equivalent_weight(self):
         return self.weight + torch.sum(self.weight * self.gamma.view(self.channels, 1, 1, 1), dim=0, keepdim=True)
 
-    def get_merged_param(self):
+    def get_merged_params(self):
         weight = torch.zeros_like(self.weight)
         bias = torch.zeros(self.channels)
 
@@ -546,7 +546,7 @@ class ConvBlock(nn.Module):
         out += tensor_to_text(self.conv.weight, use_bin)
         out += tensor_to_text(torch.zeros(self.out_channels), use_bin) # fill zero
 
-        bn_mean, bn_std = self.bn.get_merged_param()
+        bn_mean, bn_std = self.bn.get_merged_params()
         out += tensor_to_text(bn_mean, use_bin)
         out += tensor_to_text(bn_std, use_bin)
         return out
@@ -607,17 +607,17 @@ class DepthwiseConvBlock(nn.Module):
         else:
             out = str()
 
-        weights, biases = self.conv.get_merged_param()
+        weights, biases = self.conv.get_merged_params()
 
         ps = int((self.kernel_size - 3) / 2)
-        rep3x3_weights, rep3x3_biases = self.rep3x3.get_merged_param()
+        rep3x3_weights, rep3x3_biases = self.rep3x3.get_merged_params()
         weights += F.pad(rep3x3_weights, (ps, ps, ps, ps), "constant", 0)
         biases += rep3x3_biases
 
         out += tensor_to_text(weights, use_bin)
         out += tensor_to_text(biases, use_bin)
 
-        bn_mean, bn_std = self.bn.get_merged_param()
+        bn_mean, bn_std = self.bn.get_merged_params()
         out += tensor_to_text(bn_mean, use_bin)
         out += tensor_to_text(bn_std, use_bin)
         return out

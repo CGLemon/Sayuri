@@ -1,188 +1,145 @@
-import argparse, re
+import argparse, re, os
 import matplotlib.pyplot as plt
 
-FRAMESIZE = 12
-FLOAT_REGEX = "([+-]?(\d+([.]\d*)?([eE][+-]?\d+)?|[.]\d+([eE][+-]?\d+)?))"
-INT_REGEX = "([+-]?\d+)"
+FLOAT_REGEX = "([+-]?(\\d+([.]\\d*)?([eE][+-]?\\d+)?|[.]\\d+([eE][+-]?\\d+)?))" # "([+-]?(\d+([.]\d*)?([eE][+-]?\d+)?|[.]\d+([eE][+-]?\d+)?))"
+INT_REGEX = "([+-]?\\d+)" # "([+-]?\d+)"
 
-class FrameData:
+X_AXIS_TYPE_LIST = ["steps", "samples"]
+Y_AXIS_TYPE_LIST = ["all", "policy", "optimistic", "ownership", "wdl", "q", "score"]
+CUT_FIRST_DEFAULT = 1000
+
+class LineDataParser:
+    def __init__(self, line):
+        self._match(line)
+
+    def _single_match(self, fmt, as_type=None):
+        val = re.search(fmt, self.line).group(1)
+        if as_type:
+            val = as_type(val)
+        return val
+
+    def _match(self, line):
+        self.line = line
+        self.steps      = self._single_match("steps: {}".format(INT_REGEX), int)
+        self.samples    = self._single_match("samples: {}".format(INT_REGEX), int)
+        self.speed      = self._single_match("speed: {}".format(FLOAT_REGEX), float)
+        self.lr         = self._single_match("learning rate: {}".format(FLOAT_REGEX), float)
+        self.batch_size = self._single_match("batch size: {}".format(INT_REGEX), int)
+
+        self.count_dict = dict()
+        self.count_dict["steps"] = self.steps
+        self.count_dict["samples"] = self.samples
+
+        self.loss_dict = dict()
+        self.loss_dict["all"]        = self._single_match("-> all loss: {}".format(FLOAT_REGEX), float)
+        self.loss_dict["policy"]     = self._single_match(", prob loss: {}".format(FLOAT_REGEX), float)
+        self.loss_dict["optimistic"] = self._single_match(", optimistic loss: {}".format(FLOAT_REGEX), float)
+        self.loss_dict["ownership"]  = self._single_match(", ownership loss: {}".format(FLOAT_REGEX), float)
+        self.loss_dict["wdl"]        = self._single_match(", wdl loss: {}".format(FLOAT_REGEX), float)
+        self.loss_dict["q"]          = self._single_match(", Q values loss: {}".format(FLOAT_REGEX), float)
+        self.loss_dict["score"]      = self._single_match(", scores loss: {}".format(FLOAT_REGEX), float)
+
+class GraphInfo:
     def __init__(self):
-        self.steps = 0
-        self.speed = 0
-        self.lr = 0
-        self.batch_size = 0
-        self.loss = 0
+        self._data_list = list()
 
-def matchframe(frame, loss_type):
-    data = FrameData()
-    data.steps = int(re.search("steps: {}".format(INT_REGEX), frame[0]).group(1))
-    data.speed = float(re.search("speed: {}".format(FLOAT_REGEX), frame[0]).group(1))
-    data.lr = float(re.search("learning rate: {}".format(FLOAT_REGEX), frame[0]).group(1))
-    data.batch_size = int(re.search("batch size: {}".format(INT_REGEX), frame[0]).group(1))
-    if loss_type == "all":
-        data.loss = float(re.search("loss: {}".format(FLOAT_REGEX), frame[1]).group(1))
-    elif loss_type == "policy":
-        data.loss = float(re.search("loss: {}".format(FLOAT_REGEX), frame[2]).group(1))
-    elif loss_type == "optimistic":
-        data.loss = float(re.search("loss: {}".format(FLOAT_REGEX), frame[6]).group(1))
-    elif loss_type == "ownership":
-        data.loss = float(re.search("loss: {}".format(FLOAT_REGEX), frame[7]).group(1))
-    elif loss_type == "wdl":
-        data.loss = float(re.search("loss: {}".format(FLOAT_REGEX), frame[8]).group(1))
-    elif loss_type == "q":
-        data.loss = float(re.search("loss: {}".format(FLOAT_REGEX), frame[9]).group(1))
-    elif loss_type == "score":
-        data.loss = float(re.search("loss: {}".format(FLOAT_REGEX), frame[10]).group(1))
-    else:
-        raise Exception("unknown loss type")
-    return data
+    def reset(self):
+        self._data_list.clear()
+
+    def append(self, line):
+        self._data_list.append(LineDataParser(line))
+
+    def get_xy_plot(self, *args, **kwargs):
+        x_axis = kwargs.get("x_axis", X_AXIS_TYPE_LIST[0])
+        y_axis = kwargs.get("y_axis", Y_AXIS_TYPE_LIST[0])
+        cut_first = kwargs.get("cut_first", CUT_FIRST_DEFAULT)
+
+        xx, yy = list(), list()
+        for line_data in self._data_list:
+            if line_data.steps > cut_first:
+                xx.append(line_data.count_dict[x_axis])
+                yy.append(line_data.loss_dict[y_axis])
+        return xx, yy
+
+    def get_avg_speed(self):
+        speed_list = list()
+        for line_data in self._data_list:
+            speed_list.append(line_data.speed)
+        return sum(speed_list)/len(speed_list)
+
+def get_graph_info(lines):
+    graph_info = GraphInfo()
+    for line in lines:
+        graph_info.append(line)
+    return graph_info
 
 def plot_process(args):
-    xxs = list() # steps
-    yys = list() # loss value
-    verticals_list = list() # lr changed
-    log_scale = args.log_scale
-
+    graph_info_list = list()
+    existing_names = set()
     for filename in args.filename:
-        xx, yy, verticals = gather_data(
-            filename, args.loss_type, args.start)
-        xxs.append(xx)
-        yys.append(yy)
-        verticals_list.append(verticals)
+        lines = readfile(filename)
+        graph_info_list.append(
+            (get_graph_info(lines), os.path.split(filename)[-1])
+        )
 
-    plot_multi_loss(xxs, yys, args.filename, args.loss_type, args.log_scale)
-    if args.individual:
-        # Print each loss graph.
-        for xx, yy, verticals, f in zip(xxs, yys, verticals_list, args.filename):
-            plot_individual_loss(xx, yy, verticals, f, args.loss_type, args.log_scale)
-
-def gather_data(filename, loss_type, start):
-    data_list = readfile(filename)
-    xx = list()
-    yy = list()
-    lr_schedule = list()
-    verticals = list()
-
-    for i in data_list:
-        data = matchframe(i, loss_type)
-        x, y, lr = data.steps, data.loss, data.lr
-        if data.steps < start:
+    for graph_info, file_tail in graph_info_list:
+        xx, yy = graph_info.get_xy_plot(
+            x_axis = args.x_axis,
+            y_axis = args.y_axis,
+            cut_first = args.cut_first
+        )
+        if len(xx) <= 1:
+            print("Not enough lines in the \"{}\", skipping it...".format(file_tail))
             continue
-        if len(lr_schedule) == 0:
-            lr_schedule.append(lr)
-        elif lr_schedule[len(lr_schedule)-1] != lr:
-            lr_schedule.append(lr)
-            verticals.append(x)
-        xx.append(x)
-        yy.append(y)
-    return xx, yy, verticals
-
-def plot_multi_loss(xxs, yys, filenames, loss_type, log_scale):
-    size = len(xxs)
-    global_min = min(xxs[0])
-    cnt = 0
-
-    for xx, yy, f in zip(xxs, yys, filenames):
-        cnt_n = min(1, len(xx)/2)
-        for _ in range(cnt_n):
-            xx.pop(0)
-            yy.pop(0)
-        global_min = min(min(yy), global_min)
-
-        alpha = 1 - cnt/size * 0.5
-        cnt += 1
-        plt.plot(xx, yy, linestyle="-", linewidth=1, alpha=alpha, label="{}".format(f))
-
-    plt.axhline(y=global_min, color="red", alpha=1, label="loss={}".format(global_min))
-    plt.ylabel("{} loss".format(loss_type))
-    plt.xlabel("steps")
-    if log_scale:
+        while file_tail in existing_names:
+            fixed_file_tail = file_tail + "-{}".format(len(existing_names))
+            print("The file, \"{}\", is already in the list, replacing \"{}\" with \"{}\"".format(
+                      file_tail, file_tail, fixed_file_tail))
+            file_tail = fixed_file_tail
+        existing_names.add(file_tail)
+        plt.plot(xx, yy, linestyle="-", linewidth=1, label="{}".format(file_tail))
+    plt.ylabel("{} loss".format(args.y_axis))
+    plt.xlabel(args.x_axis)
+    if args.log_scale:
         plt.xscale("log")
+    plt.grid(linestyle="--", linewidth=1, alpha=0.25)
     plt.legend()
     plt.show()
-
-def plot_individual_loss(xx, yy, verticals, f, loss_type, log_scale):
-    cnt_n = min(1, len(xx)/2)
-    for _ in range(cnt_n):
-        xx.pop(0)
-        yy.pop(0)
-
-    y_upper = max(yy)
-    y_lower = min(yy)
-
-    plt.plot(xx, yy, linestyle="-", label="{}".format(f))
-    plt.ylabel("{} loss".format(loss_type))
-    plt.xlabel("steps")
-    if log_scale:
-        plt.xscale("log")
-    plt.ylim([y_lower * 0.95, y_upper * 1.05])
-    plt.axhline(y=y_lower, color="red", label="loss={}".format(y_lower))
-
-    printlable = True
-    for vertical in verticals:
-        vcolor = "blue"
-        if printlable:
-            printlable = False
-            plt.axvline(x=vertical, linestyle="--", linewidth=0.5, color=vcolor, label="lr changed")
-        else:
-            plt.axvline(x=vertical, linestyle="--", linewidth=0.5, color=vcolor)
-    plt.legend()
-    plt.show()
-
-# def plot_tangent_line(xx, yy):
-#     N = 25
-#     R = range(10, len(yy)-N)
-#
-#     if len(yy) < N:
-#         return
-#
-#     tangent = list()
-#     for i in R:
-#         val = yy[i] - yy[i+N-1]
-#         tangent.append(val/N)
-#
-#     plt.plot(R, tangent, 'o',  markersize=3, label="tangent line")
-#     plt.ylabel("rate")
-#     plt.xlabel("scale")
-#     plt.axhline(y=0, color="red")
-#     plt.legend()
-#     plt.show()
 
 def readfile(filename):
-    data_list = list()
-    with open(filename, 'r') as f:
+    lines = list()
+    with open(filename, "r") as f:
         line = f.readline().strip()
         while len(line) != 0:
-            frame = list()
-            frame.append(line)
-            for _ in range(FRAMESIZE-1):
-                frame.append(f.readline().strip())
-            data_list.append(frame)
+            lines.append(line)
             line = f.readline().strip()
-    return data_list
+    return lines
     
 def check(args):
     success = True
     if args.filename == None:
         success = False
-        print("Please add argument --filename <string>")
-    if not args.loss_type in ["all", "policy", "optimistic", "ownership", "wdl", "q", "score"]:
+        print("Please add argument --filename <str>, -f <str> to load the files.")
+    if not args.x_axis in X_AXIS_TYPE_LIST:
         success = False
-        print("Loss type is not correct.")
+        print("X axis should be one of {}.".format("/".join([x for x in X_AXIS_TYPE_LIST])))
+    if not args.y_axis in Y_AXIS_TYPE_LIST:
+        success = False
+        print("Loss type should be one of {}.".format("/".join([y for y in Y_AXIS_TYPE_LIST])))
     return success
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--filename", nargs="+", metavar="<string>",
+    parser.add_argument("-f", "--filename", nargs="+", metavar="<str>",
                         help="The input file name(s).", type=str)
-    parser.add_argument("-i", "--individual", default=False,
-                        help="Draw individual loss.", action="store_true")
-    parser.add_argument("-t", "--loss-type", metavar="<string>", default="all",
-                        help="Loss type in all/policy/optimistic/ownership/wdl/q/score.")
-    parser.add_argument("-s", "--start", metavar="<int>", default=0,
-                        help="Draw the loss from this steps.", type=int)
+    parser.add_argument("--cut-first", metavar="<int>", default=CUT_FIRST_DEFAULT,
+                        help="Cut the first X steps loss information, default is {}.".format(CUT_FIRST_DEFAULT), type=int)
     parser.add_argument("--log-scale", default=False,
                         help="The x-axis will be log scale.", action="store_true")
+    parser.add_argument("--y-axis", "--loss-type", metavar="<str>", default="all",
+                        help="Loss type in {}.".format("/".join([y for y in Y_AXIS_TYPE_LIST])))
+    parser.add_argument("--x-axis", metavar="<str>", default="steps",
+                        help="X axis type in {}.".format("/".join([x for x in X_AXIS_TYPE_LIST])))
     args = parser.parse_args()
     if check(args):
         plot_process(args)
