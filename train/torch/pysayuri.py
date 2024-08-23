@@ -137,6 +137,7 @@ class Board(object):
         ebsize = board_size+2
         self.dir4 = [1, ebsize, -1, -ebsize]
         self.diag4 = [1 + ebsize, ebsize - 1, -ebsize - 1, 1 - ebsize]
+        self.num_stones = np.full(2, 0)
 
         for vtx in range(self.num_vertices):
             self.state[vtx] = INVLD  # set invalid for out border
@@ -220,7 +221,8 @@ class Board(object):
         # Deep copy the board to another board. But they will share the same
         # history board positions.
 
-        b_cpy = Board(self.board_size, self.komi)
+        b_cpy = Board(self.board_size, self.komi, self.scoring_rule)
+        b_cpy.num_stones = np.copy(self.num_stones)
         b_cpy.state = np.copy(self.state)
         b_cpy.id = np.copy(self.id)
         b_cpy.next = np.copy(self.next)
@@ -404,6 +406,7 @@ class Board(object):
                     self.ko = self.sl[id].v_atr
                 self.num_passes = 0
 
+        self.num_stones[self.to_move] += 1
         self.last_move = v
         self.to_move = int(self.to_move == 0) # switch side
         self.move_num += 1
@@ -440,9 +443,8 @@ class Board(object):
                     buf[nv] = True
         return reachable
 
-    def get_scoring_rule(self):
+    def get_scoring_rule_val(self):
         if self.scoring_rule == SCORING_TERRITORY:
-            assert False, "don't support for scoring territorry now"
             return 1.0
         return 0.0 # default, scoring area
 
@@ -726,16 +728,17 @@ class Board(object):
         # planes 26-29
         ownermap = self._get_owner_map()
         beasonmap = self._get_beason_map()
-        for v in range(self.num_vertices):
-            if self.state[v] != INVLD:
-                if beasonmap[self.vertex_to_index(v)] == my_color:
-                    features[25, self.vertex_to_feature_index(v)] = 1
-                elif beasonmap[self.vertex_to_index(v)] == opp_color:
-                    features[26, self.vertex_to_feature_index(v)] = 1
-                if ownermap[self.vertex_to_index(v)] == my_color:
-                    features[27, self.vertex_to_feature_index(v)] = 1
-                elif ownermap[self.vertex_to_index(v)] == opp_color:
-                    features[28, self.vertex_to_feature_index(v)] = 1
+        if not self.scoring_rule == SCORING_TERRITORY:
+            for v in range(self.num_vertices):
+                if self.state[v] != INVLD:
+                    if beasonmap[self.vertex_to_index(v)] == my_color:
+                        features[25, self.vertex_to_feature_index(v)] = 1
+                    elif beasonmap[self.vertex_to_index(v)] == opp_color:
+                        features[26, self.vertex_to_feature_index(v)] = 1
+                    if ownermap[self.vertex_to_index(v)] == my_color:
+                        features[27, self.vertex_to_feature_index(v)] = 1
+                    elif ownermap[self.vertex_to_index(v)] == opp_color:
+                        features[28, self.vertex_to_feature_index(v)] = 1
 
         # planes 30-33
         for i in range(4):
@@ -761,7 +764,7 @@ class Board(object):
         # planes 38-43
         side_komi = self.komi if my_color == BLACK else -self.komi
         wave = self.get_wave()
-        scoring = self.get_scoring_rule()
+        scoring = self.get_scoring_rule_val()
         for v in range(self.num_vertices):
             if self.state[v] != INVLD:
                 features[37, self.vertex_to_feature_index(v)] = scoring
@@ -1005,14 +1008,6 @@ class Node:
         return prob, wdl, score
 
     def expand_children(self, board, net):
-        if board.last_move == PASS:
-            score = board.final_score()
-            if (board.to_move == BLACK and score > 0) or \
-                    (board.to_move == WHITE and score < 0):
-                # Play pass move if we win the game.
-                self.children[PASS] = Node(1.0)
-                return 1;
-
         # Compute the net results.
         policy, value, _ = self._get_net_result(board, net)
 
@@ -1183,11 +1178,10 @@ class Search:
         self.root_node.remove_superko(self.root_board)
         self.root_node.update(val)
 
-    def _descend(self, color, curr_board, node):
-        value = None
-        if curr_board.num_passes >= 2:
-            # The game is over. Compute the final score.
-            score = curr_board.final_score()
+    def _compute_final_score(self, color, board):
+        value = 0.5
+        if board.scoring_rule == SCORING_AREA:
+            score = board.final_score()
             if score > 1e-4:
                 # The black player is winner.
                 value = 1 if color is BLACK else 0
@@ -1197,6 +1191,19 @@ class Search:
             else:
                 # The game is draw
                 value = 0.5
+            stderr_write("use SCORING_AREA...\n")
+        elif board.scoring_rule == SCORING_TERRITORY:
+            _, value, _ = self.root_node._get_net_result(board, self.net)
+            value = value[0]
+            stderr_write("use SCORING_TERRITORY...\n")
+
+        return value
+
+    def _descend(self, color, curr_board, node):
+        value = None
+        if curr_board.num_passes >= 2:
+            # The game is over. Compute the final score.
+            value = self._compute_final_score(color, curr_board)
         elif len(node.children) != 0:
             # Select the next node by PUCT algorithm.
             vtx = node.puct_select()
@@ -1310,10 +1317,19 @@ class Agent():
     def __init__(self, *args, **kwargs):
         self.name = "pysayuri"
         self.version = "0.1.0"
+
+        scoring_dict = {
+            "area" : SCORING_AREA,
+            "territory" : SCORING_TERRITORY
+        }
+        scoring_rule = scoring_dict.get(kwargs.get("scoring_rule", "area"), None)
+        if not scoring_rule:
+             stderr_write("Invalid rule, we select default rule, scoring area.\n")
+             scoring_rule = SCORING_AREA
         self._board = Board(
             kwargs.get("board_size", BOARD_SIZE),
             kwargs.get("komi", KOMI),
-            SCORING_AREA
+            scoring_rule
         )
 
         self._json_path = kwargs.get("json", None)
@@ -1518,6 +1534,7 @@ class PrintUtils:
         # winrate
         wdl = pred_result["wdl"]
         winrate = (wdl[0] - wdl[2] + 1) / 2
+        drawrate = wdl[1]
 
         # score
         scores = pred_result["all_scores"]
@@ -1527,6 +1544,7 @@ class PrintUtils:
         ownership = pred_result["ownership"]
 
         stderr_write("winrate= {:.6f}%\n".format(100 * winrate))
+        stderr_write("drawrate= {:.6f}%\n".format(100 * drawrate))
         stderr_write("score= {:.6f}\n".format(score))
 
         board_size = self._board.board_size
@@ -1731,7 +1749,8 @@ def gtp_loop(args):
         use_swa = args.use_swa,
         use_gpu = args.use_gpu,
         board_size = args.board_size,
-        komi = args.komi
+        komi = args.komi,
+        scoring_rule = args.scoring_rule
     )
     stderr_write("GTP loop is ready...\n")
 
@@ -1987,6 +2006,8 @@ if __name__ == "__main__":
                         help="The default board size.", type=int, default=BOARD_SIZE)
     parser.add_argument("-k", "--komi", metavar="<float>",
                         help="The default komi.", type=float, default=KOMI)
+    parser.add_argument("--scoring-rule", metavar="<string>",
+                        help="The default scoring rule. Should be one of area/territory.", type=str, default="area")
     args = parser.parse_args()
     running = True
     while running:
