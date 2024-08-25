@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <vector>
+#include <string>
 #include <memory>
 
 class LinearLayer {
@@ -137,6 +138,7 @@ public:
 
 class DNNWeights {
 public:
+    std::string sha256;
     bool loaded{false};
     bool winograd{false};
     bool winograd_initialized{false};

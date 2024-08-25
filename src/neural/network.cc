@@ -66,21 +66,21 @@ void Network::Initialize(const std::string &weightsfile) {
     cache_memory_mib_ = 0;
 
     pipe_ = std::make_unique<Backend>();
-    auto dnn_weights = std::make_shared<DNNWeights>();
+    weights_ = std::make_shared<DNNWeights>();
 
     // Parse the NN weights file.
-    DNNLoader::Get().FromFile(dnn_weights, weightsfile);
+    DNNLoader::Get().FromFile(weights_, weightsfile);
 
     // There is no weighs. Will disable the NN forward pipe.
-    if (!dnn_weights->loaded) {
-        dnn_weights.reset();
-        dnn_weights = nullptr;
+    if (!weights_->loaded) {
+        weights_.reset();
+        weights_ = nullptr;
         no_cache_ = false; // Disable cache because it is not
                            // effect on dummy forwarding pipe.
     }
 
     // Initialize the NN forward pipe.
-    pipe_->Initialize(dnn_weights);
+    pipe_->Initialize(weights_);
     SetCacheSize(GetOption<int>("cache_memory_mib"));
 
     num_queries_.store(0, std::memory_order_relaxed);
@@ -121,6 +121,10 @@ void Network::ClearCache() {
 
 size_t Network::GetNumQueries() const {
     return num_queries_.load(std::memory_order_relaxed);
+}
+
+std::string Network::GetSha256() const {
+    return weights_->sha256;
 }
 
 Network::Result Network::DummyForward(const Network::Inputs& inputs) const {

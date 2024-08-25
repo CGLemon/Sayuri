@@ -39,40 +39,10 @@ void SelfPlayPipe::Initialize() {
     vdata_directory_ = ConcatPath(target_directory_, "vdata");
     sgf_directory_ = ConcatPath(target_directory_, "sgf");
     queies_directory_ = ConcatPath(target_directory_, "net_queries");
-    while (true) {
-        auto ss = std::ostringstream();
-        ss << std::hex << std::uppercase
-               << GetTimeHash() << std::dec;
 
-        filename_hash_ = ss.str();
-        tdata_directory_hash_ = ConcatPath(tdata_directory_, filename_hash_);
-        vdata_directory_hash_ = ConcatPath(vdata_directory_, filename_hash_);
-
-        bool collision = false;
-
-        if (IsDirectoryExist(tdata_directory_hash_)) {
-            collision = true;
-        }
-        if (IsDirectoryExist(vdata_directory_hash_)) {
-            collision = true;
-        }
-        for (auto sgf_name : GetFileList(sgf_directory_)) {
-            if ((filename_hash_ + ".sgf") == sgf_name) {
-                collision = true;
-                break;
-            }
-        }
-        for (auto queies_name : GetFileList(queies_directory_)) {
-            if ((filename_hash_ + ".txt") == queies_name) {
-                collision = true;
-                break;
-            }
-        }
-        if (!collision) {
-            break;
-        }
-        std::this_thread::sleep_for(std::chrono::seconds(1)); // next time hash
-    }
+    filename_hash_ = engine_.GetNetSha256();
+    tdata_directory_hash_ = ConcatPath(tdata_directory_, filename_hash_);
+    vdata_directory_hash_ = ConcatPath(vdata_directory_, filename_hash_);
 }
 
 void SelfPlayPipe::CreateWorkspace() {

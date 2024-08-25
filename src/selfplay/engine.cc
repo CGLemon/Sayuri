@@ -342,6 +342,10 @@ size_t Engine::GetNetReportQueries() {
     return report_queries;
 }
 
+std::string Engine::GetNetSha256() const {
+    return network_->GetSha256();
+}
+
 void Engine::Handel(int g) {
     if (g < 0 || g >= parallel_games_) {
         throw std::runtime_error("Selection is out of array.");

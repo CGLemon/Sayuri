@@ -14,19 +14,6 @@ const std::string CurrentDateTime() {
     return buf;
 }
 
-std::uint64_t GetTimeHash() {
-    time_t     now = time(0);
-    struct tm  tstruct;
-    tstruct = *localtime(&now);
-
-    size_t bufsize = sizeof(struct tm);
-    std::vector<char> buf(bufsize);
-    std::memcpy(buf.data(), &tstruct, bufsize);
-    std::string timebuf(buf.data(), buf.data() + bufsize);
-
-    return std::hash<std::string>()(timebuf);
-}
-
 Timer::Timer() {
     Clock();
 }

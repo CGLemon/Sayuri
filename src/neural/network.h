@@ -47,6 +47,7 @@ public:
     void ClearCache();
 
     size_t GetNumQueries() const;
+    std::string GetSha256() const;
 
 private:
     void ActivatePolicy(Network::Result &result, const float temperature) const;
@@ -58,6 +59,7 @@ private:
     Network::Result DummyForward(const Network::Inputs& inputs) const;
 
     std::unique_ptr<NetworkForwardPipe> pipe_{nullptr};
+    std::shared_ptr<DNNWeights> weights_{nullptr};
     Cache nn_cache_;
 
     bool no_cache_;

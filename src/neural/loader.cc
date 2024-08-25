@@ -6,6 +6,7 @@
 #include "utils/parse_float.h"
 #include "utils/option.h"
 #include "utils/time.h"
+#include "utils/sha256.h"
 #include "config.h"
 
 #include <iostream>
@@ -48,6 +49,10 @@ void DNNLoader::FromFile(std::shared_ptr<DNNWeights> weights, std::string filena
     try {
         LOGGING << Format("Load the weights file from, %s.", filename.c_str())
                     << std::endl;
+
+        auto text = buffer.str();
+        weights_->sha256 = GetSha256Digest(text);
+
         Parse(buffer);
         LOGGING << Format("Done! Load the weights file in %.2f sec.",
                               timer.GetDurationMilliseconds()/1000.f)
@@ -56,6 +61,9 @@ void DNNLoader::FromFile(std::shared_ptr<DNNWeights> weights, std::string filena
         // Should be not happned.
         LOGGING << "Fail to load the network file!" << std::endl
                     << Format("    Cause: %s", e.what()) << std::endl;
+
+        auto text = std::string{"random"};
+        weights_->sha256 = GetSha256Digest(text);
     }
 }
 
@@ -300,6 +308,7 @@ void DNNLoader::DumpInfo() const {
     auto out = std::ostringstream{};
 
     out << "Network Verison: " << version_ << '\n';
+    out << "Network Hash: " << weights_->sha256 << '\n';
     out << "Input Channels: " << weights_->input_channels << '\n';
     out << "Residual Blocks: " << weights_->residual_blocks << '\n';
     out << "Residual Channels: " << weights_->residual_channels << '\n';

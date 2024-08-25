@@ -7,9 +7,6 @@
 // Get current date/time, format is YYYY-MM-DD-HH:mm:ss
 const std::string CurrentDateTime();
 
-// Reture the time hash base on localtime().
-std::uint64_t GetTimeHash();
-
 class Timer {
 public:
     Timer();

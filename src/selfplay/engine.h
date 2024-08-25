@@ -19,6 +19,7 @@ public:
 
     int GetParallelGames() const;
     size_t GetNetReportQueries();
+    std::string GetNetSha256() const;
 
 private:
     struct BoardQuery {
