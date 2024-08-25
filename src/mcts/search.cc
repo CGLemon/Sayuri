@@ -672,18 +672,18 @@ bool ShouldResign(GameState &state, ComputationResult &result, Parameters *param
     const auto movenum = state.GetMoveNumber();
     const auto num_intersections = state.GetNumIntersections();
     const auto board_size = state.GetBoardSize();
-
-    const auto move_threshold = num_intersections / 4;
-    if (movenum <= move_threshold) {
-        // Too early to resign.
-        return false;
-    }
-
-    if (state.IsGameOver()) {
-        return false;
-    }
-
     auto resign_threshold = param->resign_threshold;
+
+    if (resign_threshold <= 0.0f ||
+            movenum <= num_intersections / 4 ||
+            state.IsGameOver()) {
+        // one of these cases should not allow resign
+        //
+        // case 1. threshold is zero
+        // case 2. too early in game to resign
+        // case 3. game is finished
+        return false;
+    }
 
     // Seem the 7 is the fair komi for most board size.
     const auto virtual_fair_komi = 7.0f;
@@ -691,13 +691,15 @@ bool ShouldResign(GameState &state, ComputationResult &result, Parameters *param
     const auto to_move = state.GetToMove();
     if ((komi_diff > 0.f && to_move == kBlack) ||
             (komi_diff < 0.f && to_move == kWhite)) {
-        // Shift the resign threshold by komi. Compensate for
-        // komi disadvantages.
         auto blend_ratio = std::min(1.0f, movenum / (0.6f * num_intersections));
-        resign_threshold =
+        auto blended_resign_threshold =
             blend_ratio * resign_threshold +
             (1.0f - blend_ratio) * resign_threshold/
                 std::max(1.f, std::abs(5.f * komi_diff/board_size));
+
+        // Shift the resign threshold by komi. Compensate for
+        // komi disadvantages.
+        resign_threshold = std::min(blended_resign_threshold, resign_threshold);
     }
 
     const auto handicap = state.GetHandicap();
@@ -707,18 +709,13 @@ bool ShouldResign(GameState &state, ComputationResult &result, Parameters *param
         auto blend_ratio = std::min(1.0f, movenum / (0.6f * num_intersections));
         auto blended_resign_threshold = blend_ratio * resign_threshold +
                                             (1.0f - blend_ratio) * handicap_resign_threshold;
-        if (result.best_eval > blended_resign_threshold) {
-            // Allow lower eval for white in handicap games
-            // where opp may fumble.
-            return false;
-        }
+
+        // Allow lower eval for white in handicap games
+        // where opp may fumble.
+        resign_threshold = std::min(blended_resign_threshold, resign_threshold);
     }
 
-    if (result.best_eval > resign_threshold) {
-        return false;
-    }
-
-    return true;
+    return result.best_eval < resign_threshold;
 }
 
 bool ShouldPass(GameState &state, ComputationResult &result, Parameters *param) {
