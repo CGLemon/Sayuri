@@ -171,6 +171,9 @@ public:
     // Get the average final score value.
     float GetFinalScore(const int color) const;
 
+    // Get score ultility evaluation.
+    float GetScoreEval(const int color, float parent_score) const;
+
     // Get the average win-loss value.
     float GetWL(const int color, const bool use_virtual_loss=false) const;
 
@@ -181,6 +184,8 @@ public:
     float GetFpu(const int color,
                  const float total_visited_policy,
                  const bool is_root) const;
+
+    float GetCpuct(int parentvisits) const;
 
     // Get the average ownership value.
     std::array<float, kNumIntersections> GetOwnership(int color);
@@ -232,7 +237,6 @@ private:
 
     int GetValidVisits() const;
     float GetSearchPolicy(Edge& child, bool noise);
-    float GetScoreEval(const int color, float parent_score) const;
     float GetScoreVariance(const float default_var, const int visits) const;
     float GetWLVariance(const float default_var, const int visits) const;
 
