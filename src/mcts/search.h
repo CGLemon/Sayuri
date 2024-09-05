@@ -118,9 +118,9 @@ struct ComputationResult {
 
     std::vector<float> root_ownership;
     std::vector<int> root_visits;
-
-    std::vector<float> root_playouts_dist;
-    std::vector<float> target_playouts_dist;
+    std::vector<float> root_estimated_q;
+    std::vector<float> root_visits_dist;
+    std::vector<float> target_policy_dist;
 
     std::vector<std::vector<int>> alive_strings;
     std::vector<std::vector<int>> dead_strings;

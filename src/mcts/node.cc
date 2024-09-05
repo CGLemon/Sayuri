@@ -434,6 +434,16 @@ float Node::GetDynamicCpuctFactor(Node *node, const int visits, const int parent
     return k;
 }
 
+float Node::GetCpuct(int parentvisits) const {
+    const auto cpuct_init = param_->cpuct_init;
+    const auto cpuct_base_factor = param_->cpuct_base_factor;
+    const auto cpuct_base = param_->cpuct_base;
+
+    const auto cpuct = cpuct_init + cpuct_base_factor *
+                           std::log((float(parentvisits) + cpuct_base + 1) / cpuct_base);
+    return cpuct;
+}
+
 Node *Node::PuctSelectChild(const int color, const bool is_root) {
     WaitExpanded();
     assert(HasChildren());
@@ -467,14 +477,10 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     }
 
     // Cache the hyper-parameters.
-    const auto cpuct_init           = param_->cpuct_init;
-    const auto cpuct_base_factor    = param_->cpuct_base_factor;
-    const auto cpuct_base           = param_->cpuct_base;
     const auto noise                = is_root ? param_->dirichlet_noise : false;
     const auto forced_playouts_k    = is_root ? param_->forced_playouts_k : 0.f;
 
-    const float raw_cpuct     = cpuct_init + cpuct_base_factor *
-                                    std::log((float(parentvisits) + cpuct_base + 1) / cpuct_base);
+    const float raw_cpuct     = GetCpuct(parentvisits);
     const float numerator     = std::sqrt(float(parentvisits));
     const float fpu_value     = GetFpu(color, total_visited_policy, is_root);
     const float parent_score  = GetFinalScore(color);

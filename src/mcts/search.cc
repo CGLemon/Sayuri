@@ -482,11 +482,12 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         }
     }
 
-    // Resize the childern status buffer.
+    // Here we gather the part of training target data.
     result.root_ownership.resize(num_intersections, 0);
-    result.root_playouts_dist.resize(num_intersections+1, 0);
     result.root_visits.resize(num_intersections+1, 0);
-    result.target_playouts_dist.resize(num_intersections+1, 0);
+    result.root_estimated_q.resize(num_intersections+1, 0);
+    result.root_visits_dist.resize(num_intersections+1, 0);
+    result.target_policy_dist.resize(num_intersections+1, 0);
 
     // Fill ownership.
     auto ownership = root_node_->GetOwnership(color);
@@ -494,63 +495,105 @@ void Search::GatherComputationResult(ComputationResult &result) const {
                   std::begin(ownership) + num_intersections,
                   std::begin(result.root_ownership));
 
-    // Fill root visits.
+    // First loop we gather some root's information.
     auto parentvisits = 0;
+    auto total_visited_policy = 0.0f;
     const auto &children = root_node_->GetChildren();
+    for (const auto &child : children) {
+        const auto node = child.Get();
+        const auto visits = node->GetVisits();
+
+        parentvisits += visits;
+        if (visits > 0) {
+            total_visited_policy += node->GetPolicy();
+        }
+    }
+
+    // Fill root visits and estimated Q.
     for (const auto &child : children) {
         const auto node = child.Get();
         const auto visits = node->GetVisits();
         const auto vertex = node->GetVertex();
 
-        parentvisits += visits;
-        if (vertex == kPass) {
-            result.root_visits[num_intersections] = visits;
-            continue;
-        }
-
-        const auto x = root_state_.GetX(vertex);
-        const auto y = root_state_.GetY(vertex);
-        const auto index = root_state_.GetIndex(x, y);
-
+        // Fill root visits for each child.
+        const auto index = vertex == kPass ?
+                               num_intersections :
+                               root_state_.VertexToIndex(vertex);
         result.root_visits[index] = visits;
+
+        // Fill estimated Q value for each child. If the child is
+        // unvisited, set the FPU value.
+        const auto parent_score = result.root_score_lead;
+        const auto q_value = visits == 0 ? 
+                                 node->GetFpu(color, total_visited_policy, true) :
+                                 node->GetWL(color, false) +
+                                     node->GetScoreEval(color, parent_score);
+        result.root_estimated_q[index] = q_value;
     }
 
-    // Fill raw search distribution.
-    if (parentvisits != 0) {
+    // Fill raw visits distribution.
+    if (parentvisits == 0) {
+        // uniform distribution
         for (int idx = 0; idx < num_intersections+1; ++idx) {
-            result.root_playouts_dist[idx] =
-                (float)(result.root_visits[idx]) / parentvisits;
+            result.root_visits_dist[idx] = 1.f/(num_intersections+1);
         }
     } else {
+        // Normalize the distribution. Be sure the sum is 1.
         for (int idx = 0; idx < num_intersections+1; ++idx) {
-            result.root_playouts_dist[idx] = 1.f/(num_intersections+1);
+            result.root_visits_dist[idx] =
+                (float)(result.root_visits[idx]) / parentvisits;
         }
     }
 
-    // Fill target distribution.
+    // Fill policy target distribution. The completed Q policy improve
+    // robust in the low playouts case.
     auto prob_with_completed_q =
         root_node_->GetProbLogitsCompletedQ(root_state_);
 
     if (parentvisits == 0) {
-        // No useful distribution.
-        result.target_playouts_dist = result.root_playouts_dist;
+        // No useful distribution. Apply uniform distribution.
+        result.target_policy_dist = result.root_visits_dist;
     } else if (root_node_->ShouldApplyGumbel() ||
                    param_->always_completed_q_policy) {
-        // Apply Gumbel Target policy.
-        result.target_playouts_dist = prob_with_completed_q;
+        // Apply Gumbel target policy.
+        result.target_policy_dist = prob_with_completed_q;
     } else {
-        // Merge two policy.
-        auto target_dist_buf = result.root_playouts_dist;
+        // Merge completed Q policy and raw visits distribution policy.
+        auto damping = 800.f;
+        auto target_dist_buf = result.root_visits_dist;
         for (int idx = 0; idx < num_intersections+1; ++idx) {
-            float factor = std::min(std::min(parentvisits, 800) / 800.f, 1.0f);
+            float factor = std::min(std::min(parentvisits, (int)damping) / damping, 1.0f);
             target_dist_buf[idx] = factor * target_dist_buf[idx] + (1.0f - factor) * prob_with_completed_q[idx];
         }
 
-        // Prune bad moves.
+        // Find out the max distribution. We assume it is the best move.
+        int best_index = 0;
+        for (int idx = 0; idx < num_intersections+1; ++idx) {
+            if (target_dist_buf[idx] > target_dist_buf[best_index]) {
+                best_index = idx;
+            }
+        }
+
+        // Prune the noise visits based one "Policy Target Pruning". We think
+        // normal PUCT search distribution should be optimal solution. The redundant
+        // visits is noise. Please see here for detail, https://arxiv.org/abs/1902.10565v2
+        const int virtual_visits = std::max(3200, parentvisits);
+        float cpuct = root_node_->GetCpuct(virtual_visits);
         float accm_target_policy = 0.0f;
         for (int idx = 0; idx < num_intersections+1; ++idx) {
-            if (prob_with_completed_q[idx] < 1e-4f) {
-                target_dist_buf[idx] = 0.0f;
+            if (idx != best_index) {
+                const float prob = root_raw_probabilities_[idx];
+                const float puct_scaling = cpuct * prob * virtual_visits;
+                const float value_diff = result.root_estimated_q[best_index] -
+                                             result.root_estimated_q[idx];
+                if (value_diff > 0) {
+                    // The 'wanted_visits' is the bound of optimal solution. Be sure
+                    // the puct value is greater or eqaul to best child.
+                    const int wanted_visits = std::max(0,
+                        (int)std::round(puct_scaling / value_diff) - 1);
+                    const float wanted_prob = (float)wanted_visits / virtual_visits;
+                    target_dist_buf[idx] = std::min(wanted_prob, target_dist_buf[idx]);
+                }
             }
             accm_target_policy += target_dist_buf[idx];
         }
@@ -558,17 +601,19 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         if (accm_target_policy < 1e-4f) {
             // All moves are pruned. We directly use the raw
             // distribution.
-            result.target_playouts_dist = prob_with_completed_q;
         } else {
+            // Normalize the distribution. Be sure the sum is 1.
             for (int idx = 0; idx < num_intersections+1; ++idx) {
                 target_dist_buf[idx] /= accm_target_policy;
             }
-            result.target_playouts_dist = target_dist_buf;
+            result.target_policy_dist = target_dist_buf;
         }
     }
 
+    // Finally, compute the target policy KLD, aka policy surpise. All training
+    // target data are collected done.
     result.policy_kld = GetKlDivergence(
-        result.target_playouts_dist, root_raw_probabilities_);
+        result.target_policy_dist, root_raw_probabilities_);
 
     // Fill the dead strings and live strings.
     constexpr float kOwnershipThreshold = 0.75f; // ~87.5%
@@ -1247,7 +1292,7 @@ void Search::GatherData(const GameState &state,
     data.score_stddev = result.root_score_stddev;
     data.q_stddev = result.root_eval_stddev;
     data.planes = Encoder::Get().GetPlanes(state);
-    data.probabilities = result.target_playouts_dist;
+    data.probabilities = result.target_policy_dist;
     data.wave = state.GetWave();
     data.rule = state.GetScoringRule() == kArea ? 0.f : 1.f;
     data.kld = result.policy_kld;

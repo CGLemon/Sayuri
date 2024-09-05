@@ -905,10 +905,10 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             const auto y = idx / board_size;
             const auto vtx = agent_->GetState().GetVertex(x,y);
 
-            auto prob = result.target_playouts_dist[idx];
+            auto prob = result.target_policy_dist[idx];
             if (prob > ave_pol) {
                 if (max_idx < 0 ||
-                        result.target_playouts_dist[max_idx] < prob) {
+                        result.target_policy_dist[max_idx] < prob) {
                     max_idx = idx;
                 }
 
