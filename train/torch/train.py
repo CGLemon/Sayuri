@@ -51,29 +51,46 @@ class StreamLoader:
         return stream
 
 class StreamParser:
-    def __init__(self, down_sample_rate):
+    def __init__(self, down_sample_rate, policy_surprising_factor=0.0):
         # Use a random sample input data read. This helps improve the spread of
         # games in the shuffle buffer.
         self.down_sample_rate = down_sample_rate
 
+        self.virtual_buffsize = 2000
+        self.running_kld_mean = 1.0
+        self.policy_surprising_factor = policy_surprising_factor
+        self.num_samples_per_proc = 0
+
+    def _sample(self, data):
+        wramup_factor = math.exp((max(self.virtual_buffsize - self.num_samples_per_proc, 0))/ \
+                            (self.virtual_buffsize/2.71828182846))
+        gamma = (1.0/self.virtual_buffsize) * wramup_factor
+        self.running_kld_mean = (1.0 - gamma) * self.running_kld_mean + \
+                                    gamma * data.kld
+        self.num_samples_per_proc += 1
+
+        surprising_freq = (1.0 - self.policy_surprising_factor) + \
+                              self.policy_surprising_factor * (data.kld/self.running_kld_mean)
+        sample_prob = surprising_freq * (1.0 / self.down_sample_rate)
+
+        if self.num_samples_per_proc < self.virtual_buffsize:
+            # wram up
+            return False
+        return sample_prob > random.uniform(0.0, 1.0)
+
     def func(self, stream):
-        if stream is None:
+        if not stream:
             return None
-        data = Data()
 
         while True:
-            skip_this_time = False
-            if self.down_sample_rate > 1:
-                if random.randint(0, self.down_sample_rate-1) != 0:
-                    skip_this_time = True
+            data = Data()
 
-            success = data.parse_from_stream(stream, skip_this_time)
-
-            if success == False:
+            if not data.load_from_stream(stream):
                 return None # stream is end
-            if skip_this_time == False:
-                break
 
+            if self._sample(data):
+                data.parse()
+                break
         data.apply_symmetry(random.randint(0, 7))
         return data
 
@@ -98,7 +115,6 @@ class BatchGenerator:
         wdl = np.zeros(3)
         all_q_vals = np.zeros(5)
         all_scores = np.zeros(5)
-        kld = np.zeros(1)
 
         buf = np.zeros(num_intersections)
         sqr_buf = np.zeros((nn_board_size, nn_board_size))
@@ -152,8 +168,8 @@ class BatchGenerator:
         all_scores[3] = data.mid_avg_score
         all_scores[4] = data.long_avg_score
 
-        # KLD value
-        kld[0] = data.kld
+        # weight value
+        weight = data.weight
 
         return (
             input_planes,
@@ -163,7 +179,7 @@ class BatchGenerator:
             wdl,
             all_q_vals,
             all_scores,
-            kld
+            weight
         )
 
     def func(self, data_list):
@@ -174,10 +190,10 @@ class BatchGenerator:
         batch_wdl = list()
         batch_q_vals = list()
         batch_scores = list()
-        batch_kld = list()
+        batch_weight = list()
 
         for data in data_list:
-            planes, prob, aux_prob, ownership, wdl, q_vals, scores, kld = self._wrap_data(data)
+            planes, prob, aux_prob, ownership, wdl, q_vals, scores, weight = self._wrap_data(data)
 
             batch_planes.append(planes)
             batch_prob.append(prob)
@@ -186,7 +202,7 @@ class BatchGenerator:
             batch_wdl.append(wdl)
             batch_q_vals.append(q_vals)
             batch_scores.append(scores)
-            batch_kld.append(kld)
+            batch_weight.append(weight)
 
         batch_dict = {
             "planes"    : torch.from_numpy(np.array(batch_planes)).float(),
@@ -196,7 +212,7 @@ class BatchGenerator:
             "wdl"       : torch.from_numpy(np.array(batch_wdl)).float(),
             "q_vals"    : torch.from_numpy(np.array(batch_q_vals)).float(),
             "scores"    : torch.from_numpy(np.array(batch_scores)).float(),
-            "kld"       : torch.from_numpy(np.array(batch_kld)).float(),
+            "weight"    : torch.from_numpy(np.array(batch_weight)).float(),
         }
         return batch_dict
 
@@ -263,6 +279,9 @@ class TrainingPipe():
         self.swa_steps = self.cfg.swa_steps
         self.swa_net = Network(cfg)
         self.swa_net.eval()
+
+        # The sample rate factor for policy
+        self.policy_surprising_factor = self.cfg.policy_surprising_factor
 
         self._setup()
 
@@ -385,7 +404,7 @@ class TrainingPipe():
 
     def _init_loader(self):
         self._stream_loader = StreamLoader()
-        self._stream_parser = StreamParser(self.down_sample_rate)
+        self._stream_parser = StreamParser(self.down_sample_rate, self.policy_surprising_factor)
         self._batch_gen = BatchGenerator(self.cfg.boardsize, self.cfg.input_channels)
 
         sort_fn = os.path.getmtime
@@ -399,7 +418,6 @@ class TrainingPipe():
             stream_loader = self._stream_loader,
             stream_parser = self._stream_parser,
             batch_generator = self._batch_gen,
-            down_sample_rate = 0,
             num_workers = self.num_workers,
             buffer_size = self.train_buffer_size,
             batch_size = self.macrobatchsize,
@@ -415,7 +433,6 @@ class TrainingPipe():
                 stream_loader = self._stream_loader,
                 stream_parser = self._stream_parser,
                 batch_generator = self._batch_gen,
-                down_sample_rate = 0,
                 num_workers = max(1, round(0.25 * self.num_workers)),
                 buffer_size = self.validation_buffer_size,
                 batch_size = self.macrobatchsize,
@@ -521,7 +538,7 @@ class TrainingPipe():
             batch_dict["wdl"],
             batch_dict["q_vals"],
             batch_dict["scores"],
-            batch_dict["kld"]
+            batch_dict["weight"]
         )
         return planes, target
 

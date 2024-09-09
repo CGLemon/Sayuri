@@ -31,6 +31,7 @@
         "SwaMaxCount" : 16,
         "SwaSteps" : 100,
         "Activation" : "relu",
+        "PolicySurprisingFactor" : 0.0,
 
         "LearningRateSchedule" : [
             [0,       1e-2],

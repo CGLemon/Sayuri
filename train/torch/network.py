@@ -1059,7 +1059,7 @@ class Network(nn.Module):
             soft_weight = loss_weight_dict["soft"]
 
         p_prob, p_aux_prob, p_soft_prob, p_soft_aux_prob, p_optimistic_prob, p_ownership, p_wdl, p_q_vals, p_scores, p_errors = pred
-        t_prob, t_aux_prob, t_ownership, t_wdl, t_q_vals, t_scores, _ = target
+        t_prob, t_aux_prob, t_ownership, t_wdl, t_q_vals, t_scores, global_weight = target
 
         def make_soft_porb(prob, policy_mask, eps=1e-7, t=4):
             soft_prob = (prob + eps) * policy_mask
@@ -1067,22 +1067,27 @@ class Network(nn.Module):
             soft_prob /= torch.sum(soft_prob, dim=1, keepdim=True)
             return soft_prob
 
-        def cross_entropy(pred, target, weight=1):
+        def cross_entropy(pred, target, weight=1.):
             loss_sum = -torch.sum(torch.mul(F.log_softmax(pred, dim=-1), target), dim=1)
             return torch.mean(weight * loss_sum, dim=0)
 
-        def huber_loss(x, y, delta):
+        def huber_loss(x, y, delta, weight=1.):
             absdiff = torch.abs(x - y)
             loss = torch.where(absdiff > delta, (0.5 * delta*delta) + delta * (absdiff - delta), 0.5 * absdiff * absdiff)
-            return torch.mean(torch.sum(loss, dim=1), dim=0)
+            loss_sum = torch.sum(loss, dim=1)
+            return torch.mean(weight * loss_sum, dim=0)
 
-        def mse_loss_spat(pred, target):
-            spat_sum = torch.sum(torch.square(pred - target), dim=1) / mask_sum_hw
-            return torch.mean(spat_sum, dim=0)
+        def mse_loss(pred, target, weight=1.):
+            loss_sum = torch.mean(torch.square(pred - target), dim=1)
+            return torch.mean(weight * loss_sum, dim=0)
 
-        def square_huber_loss(pred, x, y, delta, eps):
+        def mse_loss_spat(pred, target, weight=1.):
+            loss_sum = torch.sum(torch.square(pred - target), dim=1) / mask_sum_hw
+            return torch.mean(weight * loss_sum, dim=0)
+
+        def square_huber_loss(pred, x, y, delta, eps, weight=1.):
             sqerror = torch.square(x - y) + eps
-            loss = huber_loss(pred, sqerror, delta=delta)
+            loss = huber_loss(pred, sqerror, delta=delta, weight=weight)
             return loss
 
         # will use these values later
@@ -1093,16 +1098,16 @@ class Network(nn.Module):
         short_term_q_error, short_term_score_error = torch.split(p_errors, [1, 1], dim=1)
 
         # current player's probabilities loss
-        prob_loss = 1 * cross_entropy(p_prob, t_prob)
+        prob_loss = 1. * cross_entropy(p_prob, t_prob, global_weight)
 
         # opponent's probabilities loss
-        aux_prob_loss = 0.15 * cross_entropy(p_aux_prob, t_aux_prob)
+        aux_prob_loss = 0.15 * cross_entropy(p_aux_prob, t_aux_prob, global_weight)
 
         # current player's soft probabilities loss
-        soft_prob_loss = 1 * soft_weight * cross_entropy(p_soft_prob, make_soft_porb(t_prob, policy_mask))
+        soft_prob_loss = 1. * soft_weight * cross_entropy(p_soft_prob, make_soft_porb(t_prob, policy_mask), global_weight)
 
         # opponent's soft probabilities loss
-        soft_aux_prob_loss = 0.15 * soft_weight * cross_entropy(p_soft_aux_prob, make_soft_porb(t_aux_prob, policy_mask))
+        soft_aux_prob_loss = 0.15 * soft_weight * cross_entropy(p_soft_aux_prob, make_soft_porb(t_aux_prob, policy_mask), global_weight)
 
         # short-term optimistic probabilities loss
         z_short_term_q = (short_term_q_target - short_term_q_pred.detach()) / torch.sqrt(short_term_q_error.detach() + 0.0001)
@@ -1118,29 +1123,31 @@ class Network(nn.Module):
         optimistic_loss = 1 * cross_entropy(p_optimistic_prob, t_prob, optimistic_weight)
 
         # ownership loss
-        ownership_loss = 1.5 * mse_loss_spat(p_ownership, t_ownership)
+        ownership_loss = 1.5 * mse_loss_spat(p_ownership, t_ownership, global_weight)
 
         # win-draw-lose loss
         wdl_loss = cross_entropy(p_wdl, t_wdl)
 
         # all Q values loss
-        q_vals_loss = F.mse_loss(p_q_vals, t_q_vals)
+        q_vals_loss = mse_loss(p_q_vals, t_q_vals, global_weight)
 
         # all scores loss
-        scores_loss = 0.0012 * huber_loss(p_scores, t_scores, 12.)
+        scores_loss = 0.0012 * huber_loss(p_scores, t_scores, 12., global_weight)
 
         # all short term square error loss
         q_error_loss = 2 * square_huber_loss(
             short_term_q_error,
             short_term_q_pred.detach(),
             short_term_q_target,
-            delta=0.4, eps=1.0e-8
+            delta=0.4, eps=1.0e-8,
+            weight=global_weight
         )
         score_error_loss = 0.00002 * square_huber_loss(
             short_term_score_error,
             short_term_score_pred.detach(),
             short_term_score_target,
-            delta=100.0, eps=1.0e-4
+            delta=100.0, eps=1.0e-4,
+            weight=global_weight
         )
         errors_loss = q_error_loss + score_error_loss
 
