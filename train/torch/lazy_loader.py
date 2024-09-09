@@ -25,7 +25,7 @@ class ShuffleBuffer:
         return item
 
 class DataLoader:
-    def __init__(self, filenames, data_writer, down_sample_rate, stream_loader, stream_parser):
+    def __init__(self, filenames, data_writer, stream_loader, stream_parser):
         self.done = filenames
         self.tasks = list()
 
@@ -33,10 +33,6 @@ class DataLoader:
         self.loader = stream_loader
         self.writer = data_writer
         self.stream = None
-
-        # Use a random sample input data reader. This helps improve the spread of
-        # games in the shuffle buffer.
-        self.rate = down_sample_rate
 
         assert len(filenames) != 0, ""
 
@@ -62,11 +58,6 @@ class DataLoader:
                 self.stream = None
                 continue
 
-            if self.rate > 1:
-                # Apply the down-sample.
-                if random.randint(0, self.rate-1) != 0:
-                    continue
-
             self.writer.send(data)
             break
 
@@ -76,7 +67,6 @@ class LoaderConfig:
         self.stream_loader = None
         self.stream_parser = None
         self.batch_generator = None
-        self.down_sample_rate = 16
         self.num_workers = 0
         self.buffer_size = 0
         self.batch_size = 0
@@ -131,7 +121,6 @@ def _load_from_files(config, data_writer):
     loader = DataLoader(
                  filenames = config.filenames,
                  data_writer = data_writer,
-                 down_sample_rate = config.down_sample_rate,
                  stream_loader = config.stream_loader,
                  stream_parser = config.stream_parser
              )
@@ -194,7 +183,6 @@ def LazyLoader(*args, **kwargs):
     config.stream_loader = kwargs.get("stream_loader", None)
     config.stream_parser = kwargs.get("stream_parser", None)
     config.batch_generator = kwargs.get("batch_generator",None)
-    config.down_sample_rate = kwargs.get("down_sample_rate",  0)
     config.num_workers = kwargs.get("num_workers", 0)
     config.buffer_size = kwargs.get("buffer_size", 0)
     config.batch_size = kwargs.get("batch_size", 0)

@@ -35,6 +35,7 @@
         "SoftLossWeight" : 0.1,
         "SwaMaxCount" : 16,
         "SwaSteps" : 500,
+        "PolicySurprisingFactor" : 0.0,
 
         "LearningRateSchedule" : [
             [0,       5e-3]

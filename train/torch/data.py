@@ -33,7 +33,15 @@ V2_DATA_LINES = 53
 '''
 
 class Data():
+    NULL = 0
+    HALF = 1
+    DONE = 2
+
     def __init__(self):
+        self.status = self.NULL
+        self.lines = list()
+        self.weight = 1.0
+
         self.version = None
         self.mode = None
 
@@ -151,7 +159,7 @@ class Data():
         linecnt = virtual_linecnt + 1
 
         if linecnt == 1:
-            pass
+            self.version = int(line)
         elif linecnt == 2:
             self.mode = int(readline)
         elif linecnt == 3:
@@ -198,6 +206,9 @@ class Data():
             self.kld = float(readline)
 
     def apply_symmetry(self, symm):
+        if self.status != self.DONE:
+            raise Exception("The data should be filled.")
+
         channels       = self.planes.shape[0]
         bsize          = self.board_size
 
@@ -212,25 +223,35 @@ class Data():
         self.prob          = numpy_symmetry_prob(symm, self.prob)
         self.aux_prob      = numpy_symmetry_prob(symm, self.aux_prob)
 
+    def load_from_stream(self, stream):
+        if self.status == self.DONE:
+            raise Exception("The data is already filled.")
 
-    def parse_from_stream(self, stream, skip=False):
         line = stream.readline()
         if len(line) == 0:
             return False # stream is end
 
         self.version = int(line)
-        datalines = 0
         if self.version == 2:
             datalines = V2_DATA_LINES
         else:
             raise Exception("The data is not correct version. The loaded data version is {}.".format(self.version))
 
-        lines = list()
+        self.lines.clear()
+        self.lines.append(line)
         for _ in range(1, datalines):
-            lines.append(stream.readline())
+            self.lines.append(stream.readline())
 
-        if skip == False:
-            for cnt in range(1, datalines):
-                line = lines[cnt-1]
-                self._fill_v2(cnt, line)
+        # KLD may be used for policy surprising.
+        self.kld = float(self.lines[52])
+        self.status = self.HALF
         return True
+
+    def parse(self):
+        if self.status != self.HALF:
+            raise Exception("The data should load the stream first.")
+
+        datalines = len(self.lines)
+        for cnt in range(1, datalines):
+            self._fill_v2(cnt, self.lines[cnt])
+        self.status = self.DONE

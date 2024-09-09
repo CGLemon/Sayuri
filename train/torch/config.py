@@ -42,10 +42,11 @@ class Config:
         self.verbose_steps = train.get("VerboseSteps", 1000)
         self.max_steps_per_running = train.get("MaxStepsPerRunning", 16384000)
         self.down_sample_rate = train.get("DownSampleRate", 16)
-        self.num_chunks  = train.get("NumberChunks", None)
-        self.soft_loss_weight  = train.get("SoftLossWeight", 0.1)
-        self.swa_max_count  = train.get("SwaMaxCount", 16)
-        self.swa_steps  = train.get("SwaSteps", 100)
+        self.num_chunks = train.get("NumberChunks", None)
+        self.soft_loss_weight = train.get("SoftLossWeight", 0.1)
+        self.swa_max_count = train.get("SwaMaxCount", 16)
+        self.swa_steps = train.get("SwaSteps", 100)
+        self.policy_surprising_factor = train.get("PolicySurprisingFactor", 0.0)
 
         assert self.train_dir != None, ""
         assert self.store_path != None, ""
