@@ -601,6 +601,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         if (accm_target_policy < 1e-4f) {
             // All moves are pruned. We directly use the raw
             // distribution.
+            result.target_policy_dist = result.root_visits_dist;
         } else {
             // Normalize the distribution. Be sure the sum is 1.
             for (int idx = 0; idx < num_intersections+1; ++idx) {
@@ -918,6 +919,33 @@ bool ShouldForbidPass(GameState &state,
     return false;
 }
 
+void Search::RewriteTargetPolicy(ComputationResult &result, int move, bool forbid_pass) {
+    if (forbid_pass && move != kPass) {
+        // Pass is not reasonable move so we should suppress the target policy
+        // of pass move.
+        const auto num_intersections = root_state_.GetNumIntersections();
+        auto target_dist_buf = result.target_policy_dist;
+
+        // last one is pass move, suppressing it
+        target_dist_buf[num_intersections] = 0.0f;
+        auto accm_target_policy =
+            std::accumulate(std::begin(target_dist_buf),
+                            std::end(target_dist_buf), 0.0f);
+
+        if (accm_target_policy > 1e-4f) {
+            // Normalize the distribution. Be sure the sum is 1.
+            for (int idx = 0; idx < num_intersections+1; ++idx) {
+                target_dist_buf[idx] /= accm_target_policy;
+            }
+            result.target_policy_dist = target_dist_buf;
+
+            // Recompute the KL Divergence
+            result.policy_kld = GetKlDivergence(
+                result.target_policy_dist, root_raw_probabilities_);
+        }
+    }
+}
+
 int Search::GetSelfPlayMove(OptionTag tag) {
     // We always reuse the sub-tree at fast search phase. The
     // kUnreused option doesn't mean discarding the sub-tree.
@@ -996,6 +1024,9 @@ int Search::GetSelfPlayMove(OptionTag tag) {
             move = result.random_move;
         }
     }
+
+    // Rewrite the target policy based on some decided information.
+    RewriteTargetPolicy(result, move, forbid_pass);
 
     // If the 'discard_it' is true, we will discard the current training
     // data. It is because that the quality of current data is bad. To
