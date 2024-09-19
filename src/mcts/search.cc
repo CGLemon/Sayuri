@@ -853,6 +853,9 @@ int Search::ThinkBestMove() {
 bool ShouldForbidPass(GameState &state,
                       ComputationResult &result,
                       NodeEvals &root_evals) {
+    // We never resign in self-play because some target training datas
+    // are generated from final position. In order to improve the quality
+    // of the training data, we forbid pass when the game is not complete.
 
     const auto num_intersections = state.GetNumIntersections();
     const auto move_threshold = num_intersections / 6;
@@ -861,56 +864,75 @@ bool ShouldForbidPass(GameState &state,
         return true;
     }
 
-    if (state.GetScoringRule() == kTerritory) {
-        // rule accepts pass
-        return false;
-    }
+    if (state.GetScoringRule() == kArea) {
+        // We need to capture all dead stones under the Tromp-Taylor rules and
+        // fill dame to make sure final position is clearly. Then, forbid pass
+        // if any dead stone is still on the board except stones in the pass-dead
+        // area, or if empty area is too large.
+        int to_move = result.to_move;
+        auto safe_ownership = state.GetOwnership();
 
-    int to_move = result.to_move;
-    auto safe_ownership = state.GetOwnership();
+        // Scan the dead strings/stons by root evaluation of
+        // MCTS.
+        for (const auto &string : result.dead_strings) {
+            // All vertices in a string should be same color.
+            const auto vtx = string[0];
+            const auto idx = state.VertexToIndex(vtx);
 
-    for (const auto &string : result.dead_strings) {
-        // All vertices in a string should be same color.
-        const auto vtx = string[0];
-        const auto idx = state.VertexToIndex(vtx);
-
-        // Some opp's strings are death. Forbid the pass
-        // move. Keep to eat all opp's dead strings.
-        if (state.GetState(vtx) == (!to_move) &&
-                safe_ownership[idx] != to_move) {
-            return true;
-        }
-    }
-
-    constexpr float kRawOwnershipThreshold = 0.8f; // ~90%
-
-    for (int idx = 0; idx < num_intersections; ++idx) {
-        float owner = root_evals.black_ownership[idx];
-        if (to_move == kWhite) {
-            owner = 0.f - owner;
+            // Some opp's strings are death. Forbid the pass
+            // move. Keep to eat all opp's dead strings.
+            if (state.GetState(vtx) == (!to_move) &&
+                    safe_ownership[idx] != to_move) {
+                return true;
+            }
         }
 
-        // Some opp's stone are not really alive. Keep to
-        // eat these stones.
-        if (owner >= kRawOwnershipThreshold &&
-                safe_ownership[idx] != to_move) {
-            return true;
+        constexpr float kRawOwnershipThreshold = 0.8f; // ~90%
+
+        // Scan the dead strings/stons by raw NN evaluation,
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            float owner = root_evals.black_ownership[idx];
+            if (to_move == kWhite) {
+                owner = 0.f - owner;
+            }
+
+            // Some opp's stones are not really alive. Keep to
+            // eat these stones.
+            if (owner >= kRawOwnershipThreshold &&
+                    safe_ownership[idx] != to_move) {
+                return true;
+            }
         }
-    }
 
-    constexpr int kMaxEmptyGroupThreshold = 8;
-    auto &board = state.board_;
-    auto buf = std::vector<bool>(state.GetNumVertices(), false);
+        constexpr int kMaxEmptyGroupThreshold = 8;
+        auto &board = state.board_;
+        auto buf = std::vector<bool>(state.GetNumVertices(), false);
 
-    for (int idx = 0; idx < num_intersections; ++idx) {
-        const auto vtx = state.IndexToVertex(idx);
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            const auto vtx = state.IndexToVertex(idx);
 
-        if (safe_ownership[idx] == kEmpty && !buf[vtx]) {
-            int group_size = board.ComputeReachGroup(vtx, kEmpty, buf);
+            if (safe_ownership[idx] == kEmpty && !buf[vtx]) {
+                int group_size = board.ComputeReachGroup(vtx, kEmpty, buf);
 
-            // TODO: The empty group size threshold should be smaller.
-            if (group_size >= kMaxEmptyGroupThreshold) {
-                // Too large empty group.
+                // TODO: The empty group size threshold should be smaller.
+                if (group_size >= kMaxEmptyGroupThreshold) {
+                    // Too large empty group on the board. We think the area
+                    // is not stable so keeping to play untill the area is filled
+                    // or belongs to someone.
+                    return true;
+                }
+            }
+        }
+    } else if (state.GetScoringRule() == kTerritory) {
+        // If we find a child is better than pass under the Japanese-like
+        // rules, the game is not completed.
+        const auto pass_visits = result.root_visits[num_intersections];
+        const auto pass_q = result.root_estimated_q[num_intersections];
+        // for-loop skips pass
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            const auto visits = result.root_visits[idx];
+            const auto q = result.root_estimated_q[idx];
+            if (visits >= pass_visits && q >= pass_q) {
                 return true;
             }
         }
@@ -1051,14 +1073,12 @@ int Search::GetSelfPlayMove(OptionTag tag) {
         root_score = 0.f - root_score;
     }
 
-    // TODO: Use "Policy Surprise Weighting" instead of
-    //       "Playout Cap Randomization". See the document
-    //       here, https://github.com/lightvector/KataGo/blob/master/docs/KataGoMethods.md
+
     const float record_kld = result.policy_kld;
     const char discard_char = discard_it ? 'F' : 'T';
     const int root_visits = root_node_->GetVisits();
 
-    // Save the move comment in the SGF file.
+    // Save the evaluation information comment in the SGF file.
     root_state_.SetComment(
         Format("%d, %d, %.2f, %.2f, %.2f, %c",
             result.playouts, root_visits,
