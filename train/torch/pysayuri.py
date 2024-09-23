@@ -992,24 +992,17 @@ class Node:
 
     def inverse(self, v):
         # Swap the side to move winrate.
-        return 1 - v;
+        return 1. - v;
 
-    @torch.no_grad()
-    def _get_net_result(self, board, net):
+    def expand_children(self, board, net):
+        # Compute the net results.
         result = net.get_output_without_batch(
             features = board.get_features(),
             board_size = board.board_size,
             as_numpy = True
         )
         wdl = result["wdl"]
-        score = result["all_scores"][0]
-        prob = result["optimistic_prob"]
-
-        return prob, wdl, score
-
-    def expand_children(self, board, net):
-        # Compute the net results.
-        policy, value, _ = self._get_net_result(board, net)
+        policy = result["optimistic_prob"]
 
         for idx in range(board.num_intersections):
             vtx = board.index_to_vertex(idx)
@@ -1024,7 +1017,7 @@ class Node:
         self.children[PASS] = Node(policy[-1])
 
         # The nn eval is side-to-move winrate.
-        self.nn_eval = value[0]
+        self.nn_eval = wdl[0] + wdl[1] / 2.
 
         return self.nn_eval
 
@@ -1047,13 +1040,13 @@ class Node:
         numerator = math.sqrt(parent_visits)
         puct_list = list()
 
-        # FPU is for unvisited node.
+        # FPU estimates value of unvisited node.
         fpu = self.values / self.visits - 0.25 * \
                   math.sqrt(sum([ child.policy for _, child in self.children.items() if child.visits != 0 ]))
 
         # Select the best node by PUCT algorithm.
         for vtx, child in self.children.items():
-            q_value = 0 if child.visits == 0 else \
+            q_value = fpu if child.visits == 0 else \
                           self.inverse(child.values / child.visits)
 
             puct = q_value + self.C_PUCT * child.policy * (numerator / (1+child.visits))
@@ -1184,18 +1177,20 @@ class Search:
             score = board.final_score()
             if score > 1e-4:
                 # The black player is winner.
-                value = 1 if color is BLACK else 0
+                value = 1. if color is BLACK else 0.
             elif score < -1e-4:
                 # The white player is winner.
-                value = 1 if color is WHITE else 0
+                value = 1. if color is WHITE else 0.
             else:
                 # The game is draw
                 value = 0.5
-            stderr_write("use SCORING_AREA...\n")
         elif board.scoring_rule == SCORING_TERRITORY:
-            _, value, _ = self.root_node._get_net_result(board, self.net)
-            value = value[0]
-            stderr_write("use SCORING_TERRITORY...\n")
+            result = self.net.get_output_without_batch(
+                features = board.get_features(),
+                board_size = board.board_size,
+                as_numpy = True
+            )
+            value = wdl[0] + wdl[1] / 2.
 
         return value
 
