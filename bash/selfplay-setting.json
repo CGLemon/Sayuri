@@ -6,7 +6,7 @@
         "PolicyExtract" : 24,
         "ValueExtract" : 24,
         "SeRatio" : 2,
-        "Activation" : "relu",
+        "Activation" : "mish",
 
         "Stack" : [
             "ResidualBlock",
@@ -35,7 +35,7 @@
         "SoftLossWeight" : 0.1,
         "SwaMaxCount" : 16,
         "SwaSteps" : 500,
-        "PolicySurprisingFactor" : 0.0,
+        "PolicySurprisingFactor" : 0.5,
 
         "LearningRateSchedule" : [
             [0,       5e-3]

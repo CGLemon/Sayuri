@@ -25,7 +25,6 @@
 
 --gumbel
 --gumbel-playouts-threshold 50
---always-completed-q-policy
 
 --reduce-playouts 50
 --reduce-playouts-prob 0.75

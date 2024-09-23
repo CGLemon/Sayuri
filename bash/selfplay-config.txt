@@ -37,20 +37,20 @@
 --selfplay-query bkp:7:9:0.01
 
 --selfplay-query srs:area
+--selfplay-query srs:territory
 
 --playouts 150
 
 --gumbel
---gumbel-playouts-threshold 50
+--gumbel-playouts-threshold 32
 --gumbel-prom-visits 1
---always-completed-q-policy
 
 --reduce-playouts 50
 --reduce-playouts-prob 0.75
 
 --resign-playouts 75
 --resign-threshold 0.05
---resign-discard-prob 0.85
+--resign-discard-prob 0.5
 
 --parallel-games 128
 --batch-size 64
