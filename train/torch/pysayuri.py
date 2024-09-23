@@ -1,6 +1,7 @@
 from network import Network, CRAZY_NEGATIVE_VALUE
 from status_dict import StatusDict
 from config import Config
+from datetime import datetime
 
 import colorsys
 import torch
@@ -406,14 +407,15 @@ class Board(object):
                     self.ko = self.sl[id].v_atr
                 self.num_passes = 0
 
-        self.num_stones[self.to_move] += 1
+        to_move = self.to_move
+        self.num_stones[to_move] += 1
         self.last_move = v
-        self.to_move = int(self.to_move == 0) # switch side
+        self.to_move = int(to_move == 0) # switch side
         self.move_num += 1
 
         # Push the current board positions to history.
         self.history.append(copy.deepcopy(self.state))
-        self.history_move.append(self.last_move)
+        self.history_move.append((to_move, self.last_move))
 
         return True
 
@@ -443,12 +445,19 @@ class Board(object):
                     buf[nv] = True
         return reachable
 
-    def get_scoring_rule_val(self):
+    def _get_scoring_rule_val(self):
         if self.scoring_rule == SCORING_TERRITORY:
             return 1.0
         return 0.0 # default, scoring area
 
-    def get_wave(self):
+    def _get_scoring_rule_str(self):
+        if self.scoring_rule == SCORING_AREA:
+            return "chinese"
+        elif self.scoring_rule == SCORING_TERRITORY:
+            return "japanese"
+        return "unknown"
+
+    def _get_wave(self):
         if self.scoring_rule == SCORING_TERRITORY:
             return 0.0
 
@@ -717,7 +726,7 @@ class Board(object):
                 elif c == opp_color:
                     features[p*3+1, self.vertex_to_feature_index(v)] = 1
 
-            m = self.history_move[i]
+            _, m = self.history_move[i]
             if m != PASS and m != RESIGN and m != NULL_VERTEX:
                 features[p*3+2, self.vertex_to_feature_index(m)] = 1
 
@@ -763,8 +772,8 @@ class Board(object):
 
         # planes 38-43
         side_komi = self.komi if my_color == BLACK else -self.komi
-        wave = self.get_wave()
-        scoring = self.get_scoring_rule_val()
+        wave = self._get_wave()
+        scoring = self._get_scoring_rule_val()
         for v in range(self.num_vertices):
             if self.state[v] != INVLD:
                 features[37, self.vertex_to_feature_index(v)] = scoring
@@ -786,6 +795,31 @@ class Board(object):
             if hash(h.tobytes()) == curr_hash:
                 return True
         return False
+
+    def as_sgf(self, black="bot", white="bot", result=None):
+        curr_time = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+        rule = self._get_scoring_rule_str()
+        sgf = "(;GM[1]FF[4]SZ[{}]KM[{}]RU[{}]PB[{}]PW[{}]DT[{}]".format(
+                  self.board_size, self.komi, rule, black, white, curr_time)
+        if result:
+            sgf += "RE[{}]".format(result)
+        for color, vertex in self.history_move:
+            cstr = "B" if color == BLACK else "W"
+
+            if vertex == PASS:
+                vstr = "tt"
+            elif vertex == RESIGN:
+                vstr = ""
+            else:
+                x = self.get_x(vertex)
+                y = self.get_y(vertex)
+                y = self.board_size - 1 - y
+                vstr = str()
+                vstr += chr(x + ord('a'))
+                vstr += chr(y + ord('a'))
+            sgf += ";{}[{}]".format(cstr, vstr)
+        sgf += ")"
+        return sgf
 
     def __str__(self):
         def get_xlabel(bsize):
@@ -813,7 +847,8 @@ class Board(object):
             line_str += str(y+1) if y >= 9 else " " + str(y+1)
             out += (line_str + "\n")
         out += get_xlabel(self.board_size)
-        out += "Komi: {:.2f}".format(self.komi)
+        out += "Komi: {:.2f}\n".format(self.komi)
+        out += "Rule: {}".format(self._get_scoring_rule_str())
         return out + "\n"
 
 class NetworkWrap(Network):
@@ -1308,6 +1343,98 @@ class Search:
 
         return self.root_node.get_best_move(resign_threshold), out_verbose
 
+class SgfGame:
+    def __init__(self):
+        self.last_board = Board()
+        self.board_history = list()
+        self.black_player = str()
+        self.white_player = str()
+
+    def load_file(self, filename):
+        try:
+            with open(filename, "r") as f:
+                sgf = f.read()
+            self._parse(sgf)
+        except Exception as err:
+            stderr_write("{}\n".format(err))
+
+    def load_string(self, sgf):
+        try:
+            self._parse(sgf)
+        except Exception as err:
+            stderr_write("{}\n".format(err))
+
+    def _process_key_value(self, key, val):
+        def as_vertex_move(m, board):
+            if len(m) == 0 or m == "tt":
+                return PASS
+            x = ord(m[0]) - ord('a')
+            y = ord(m[1]) - ord('a')
+            y = board.board_size - 1 - y
+            return board.get_vertex(x, y)
+
+        if key == "SZ":
+            board_size = int(val)
+            komi = self.last_board.komi
+            self.last_board.reset(board_size, komi)
+            self.board_history.clear()
+            self.board_history.append(self.last_board.copy())
+        elif key == "KM":
+            komi = float(val)
+            self.last_board.komi = komi
+            self.board_history.clear()
+            self.board_history.append(self.last_board.copy())
+        elif key == "RU":
+            if val.lower() == "chinese" or val.lower() == "area":
+                self.last_board.scoring_rule = SCORING_AREA
+            elif val.lower() == "japanese" or val.lower() == "territory":
+                self.last_board.scoring_rule = SCORING_TERRITORY
+            self.board_history.clear()
+            self.board_history.append(self.last_board.copy())
+        elif key == "B":
+            vtx = as_vertex_move(val, self.last_board)
+            self.last_board.to_move = BLACK
+            self.last_board.play(vtx)
+            self.board_history.append(self.last_board.copy())
+        elif key == "W":
+            vtx = as_vertex_move(val, self.last_board)
+            self.last_board.to_move = WHITE
+            self.last_board.play(vtx)
+            self.board_history.append(self.last_board.copy())
+        elif key == "PB":
+            self.black_player = val
+        elif key == "PW":
+            self.white_player = val
+        elif key == "AB" or key == "AW":
+            raise Exception("Do not support for AB/AW tag in the SGF file.")
+
+    def _parse(self, sgf):
+        level = 0
+        idx = 0
+        node_cnt = 0
+        key = str()
+        while idx < len(sgf):
+            c = sgf[idx]
+            idx += 1;
+
+            if c == '(':
+                level += 1
+            elif c == ')':
+                level -= 1
+
+            if c in ['(', ')', '\t', '\n', '\r'] or level != 1:
+                continue
+            elif c == ';':
+                node_cnt += 1
+            elif c == '[':
+                end = sgf.find(']', idx)
+                val = sgf[idx:end]
+                self._process_key_value(key, val)
+                key = str()
+                idx = end+1
+            else:
+                key += c
+
 class Agent():
     def __init__(self, *args, **kwargs):
         self.name = "pysayuri"
@@ -1489,6 +1616,14 @@ class Agent():
             verbose = verbose
         )
         return verbose
+
+    def load_sgf(self, filename):
+        sgf = SgfGame()
+        sgf.load_file(filename)
+        self._board = sgf.last_board.copy()
+
+    def as_sgf(self):
+        return self._board.as_sgf()
 
     def reset_board(self, board_size=None, komi=None):
         if board_size and board_size > BOARD_SIZE:
@@ -1780,6 +1915,8 @@ def gtp_loop(args):
                 "genmove",
                 "time_settings",
                 "time_left",
+                "printsgf",
+                "loadsgf"
                 "raw-nn",
                 "planes",
                 "save_bin_weights",
@@ -1839,6 +1976,18 @@ def gtp_loop(args):
             time = int(inputs[2])
             stones = int(inputs[3])
             agent.time_left(color, time, stones)
+            gtp_print("")
+        elif main == "printsgf":
+            if len(inputs) <= 1:
+                gtp_print(agent.as_sgf())
+            else:
+                with open(inputs[1], "w") as f:
+                    f.write(agent.as_sgf())
+                gtp_print("")
+        elif main == "loadsgf":
+            if len(inputs) <= 1:
+                raise Exception("GTP command \"loadsgf\": inputs parameters error")
+            agent.load_sgf(inputs[1])
             gtp_print("")
         elif main == "lz-genmove_analyze":
             interval = 0
