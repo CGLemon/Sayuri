@@ -241,7 +241,9 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
         // Not used.
     }
 
-    if (!NotFound(netinfo, "ActivationFunction")) {
+    if (NotFound(netinfo, "ActivationFunction")) {
+        weights_->default_act = Activation::kReLU;
+    } else {
         weights_->default_act = StringToAct(netinfo["ActivationFunction"]);
     }
 
