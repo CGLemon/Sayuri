@@ -61,7 +61,7 @@ void Network::Initialize(const std::string &weightsfile) {
 #endif
 
     // Initialize the parameters.
-    use_optimistic_policy_ = GetOption<bool>("use_optimistic_policy");
+    default_policy_offset_ = static_cast<PolicyBufferOffset>(GetOption<int>("policy_buffer_offset"));
     no_cache_ = GetOption<bool>("no_cache");
     early_symm_cache_ = GetOption<bool>("early_symm_cache");
     cache_memory_mib_ = 0;
@@ -152,11 +152,7 @@ Network::Result Network::GetOutputInternal(const GameState &state,
     // gather input features with symmetry
     auto inputs = Encoder::Get().GetInputs(state, symmetry);
     if (offset == PolicyBufferOffset::kDefault) {
-        if (use_optimistic_policy_) {
-            inputs.offset = PolicyBufferOffset::kOptimistic;
-        } else {
-            inputs.offset = PolicyBufferOffset::kNormal;
-        }
+        inputs.offset = default_policy_offset_;
     } else {
         inputs.offset = offset;
     }

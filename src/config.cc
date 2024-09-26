@@ -9,6 +9,7 @@
 #include "pattern/pattern.h"
 #include "mcts/lcb.h"
 #include "mcts/time_control.h"
+#include "neural/network_basic.h"
 #include "config.h"
 
 #include <limits>
@@ -78,7 +79,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["early_symm_cache"] << Option::SetOption(false);
     kOptionsMap["symm_pruning"] << Option::SetOption(false);
     kOptionsMap["use_stm_winrate"] << Option::SetOption(false);
-    kOptionsMap["use_optimistic_policy"] << Option::SetOption(false);
+    kOptionsMap["policy_buffer_offset"] << Option::SetOption(static_cast<int>(PolicyBufferOffset::kNormal));
     kOptionsMap["use_rollout"] << Option::SetOption(false);
     kOptionsMap["scoring_rule"] << Option::SetOption(static_cast<int>(kArea));
 
@@ -480,7 +481,8 @@ void ArgsParser::Parse(Splitter &spt) {
     }
 
     if (const auto res = spt.Find("--use-optimistic-policy")) {
-        SetOption("use_optimistic_policy", true);
+        SetOption("policy_buffer_offset",
+                  static_cast<int>(PolicyBufferOffset::kOptimistic));
         spt.RemoveWord(res->Index());
     }
 

@@ -62,7 +62,7 @@ private:
     std::unique_ptr<NetworkForwardPipe> pipe_{nullptr};
     Cache nn_cache_;
 
-    bool use_optimistic_policy_;
+    PolicyBufferOffset default_policy_offset_;
     bool no_cache_;
     bool early_symm_cache_;
     size_t cache_memory_mib_;
