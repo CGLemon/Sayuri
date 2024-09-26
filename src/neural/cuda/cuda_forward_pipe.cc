@@ -191,8 +191,6 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         LOGGING << cuda::GetCurrentDeviceInfo(&handles_);
     }
 
-    use_optimistic_policy_ = GetOption<bool>("use_optimistic_policy");
-
     board_size_ = board_size;
     scratch_size_ = 0;
     max_batch_ = max_batch_size;
@@ -877,13 +875,11 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
     for (int b = 0; b < batch_size; ++b) {
         auto &output_result = batch_output_result[b];
+        const auto &input = inputs[b];
         int pol_offset = kOuputProbabilitiesChannels * num_intersections;
         int own_offset = kOuputOwnershipChannels * num_intersections;
         for (int idx = 0; idx < num_intersections; ++idx) {
-            int pol_index = b * pol_offset + 0 * num_intersections + idx;
-            if (use_optimistic_policy_) {
-                pol_index = b * pol_offset + 4 * num_intersections + idx;
-            }
+            int pol_index = b * pol_offset + (int)input.offset * num_intersections + idx;
             int own_index = b * own_offset + 0 * num_intersections + idx;
             output_result.probabilities[idx] = batch_prob[pol_index];
             output_result.ownership[idx] = batch_ownership[own_index];
@@ -898,8 +894,9 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         output_result.q_error = batch_value_misc[b * kOuputValueMisc + 13];
         output_result.score_error = batch_value_misc[b * kOuputValueMisc + 14];
 
-        output_result.board_size = inputs[b].board_size;
-        output_result.komi = inputs[b].komi;
+        output_result.offset = input.offset;
+        output_result.board_size = input.board_size;
+        output_result.komi = input.komi;
         output_result.fp16 = handles_.fp16;
     }
 

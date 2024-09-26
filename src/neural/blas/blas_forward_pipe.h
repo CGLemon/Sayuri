@@ -49,7 +49,5 @@ private:
                            std::vector<float> &conv_in,
                            std::vector<float> &conv_out);
 
-    bool use_optimistic_policy_;
-
     std::shared_ptr<DNNWeights> weights_{nullptr};
 };

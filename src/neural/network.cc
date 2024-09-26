@@ -61,6 +61,7 @@ void Network::Initialize(const std::string &weightsfile) {
 #endif
 
     // Initialize the parameters.
+    use_optimistic_policy_ = GetOption<bool>("use_optimistic_policy");
     no_cache_ = GetOption<bool>("no_cache");
     early_symm_cache_ = GetOption<bool>("early_symm_cache");
     cache_memory_mib_ = 0;
@@ -146,12 +147,22 @@ Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
 }
 
 Network::Result Network::GetOutputInternal(const GameState &state,
-                                           const int symmetry) {
-    Network::Result out_result;
-    Network::Result result_buf;
-
+                                          const int symmetry,
+                                          PolicyBufferOffset offset) {
     // gather input features with symmetry
     auto inputs = Encoder::Get().GetInputs(state, symmetry);
+    if (offset == PolicyBufferOffset::kDefault) {
+        if (use_optimistic_policy_) {
+            inputs.offset = PolicyBufferOffset::kOptimistic;
+        } else {
+            inputs.offset = PolicyBufferOffset::kNormal;
+        }
+    } else {
+        inputs.offset = offset;
+    }
+
+    Network::Result out_result;
+    Network::Result result_buf;
 
     if (pipe_->Valid()) {
         num_queries_.fetch_add(1, std::memory_order_relaxed);
@@ -277,7 +288,7 @@ Network::Result Network::GetOutput(const GameState &state,
 
     if (ensemble == kAverage) {
         for (int symm = Symmetry::kIdentitySymmetry; symm < Symmetry::kNumSymmetris; ++symm) {
-            auto inter_result = GetOutputInternal(state, symm);
+            auto inter_result = GetOutputInternal(state, symm, query.offset);
             const auto boardsize = inter_result.board_size;
             const auto num_intersections = boardsize * boardsize;
             ActivatePolicy(inter_result, query.temperature);
@@ -300,7 +311,7 @@ Network::Result Network::GetOutput(const GameState &state,
             }
         }
     } else {
-        result = GetOutputInternal(state, query.symmetry);
+        result = GetOutputInternal(state, query.symmetry, query.offset);
         if (query.write_cache) {
             nn_cache_.Insert(state.GetHash(), result);
         }

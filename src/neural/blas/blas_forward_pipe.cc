@@ -13,7 +13,6 @@
 void BlasForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
     Load(weights);
     InitWinograd();
-    use_optimistic_policy_ = GetOption<bool>("use_optimistic_policy");
 }
 
 void BlasForwardPipe::InitWinograd() {
@@ -471,6 +470,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     // Now copy the result.
     auto result = OutputResult{};
 
+    result.offset = inpnts.offset;
     result.fp16 = false;
     result.board_size = board_size;
     result.komi = inpnts.komi;
@@ -484,19 +484,12 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
 
     result.pass_probability = output_pass[0];
 
-    auto pol_it = std::begin(output_prob);
-    if (!use_optimistic_policy_) {
-        std::copy(
-            pol_it,
-            pol_it + num_intersections,
-            std::begin(result.probabilities));
-    } else {
-        pol_it += 4 * num_intersections;
-        std::copy(
-            pol_it,
-            pol_it + num_intersections,
-            std::begin(result.probabilities));
-    }
+    auto pol_it = std::begin(output_prob) +
+                      (int)inpnts.offset * num_intersections;
+    std::copy(
+        pol_it,
+        pol_it + num_intersections,
+        std::begin(result.probabilities));
     std::copy(std::begin(output_ownership),
         std::begin(output_ownership) + num_intersections,
         std::begin(result.ownership));

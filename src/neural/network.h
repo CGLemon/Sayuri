@@ -53,13 +53,16 @@ private:
 
     bool ProbeCache(const GameState &state, Network::Result &result);
 
-    Network::Result GetOutputInternal(const GameState &state, const int symmetry);
+    Network::Result GetOutputInternal(const GameState &state,
+                                      const int symmetry,
+                                      PolicyBufferOffset offset);
 
     Network::Result DummyForward(const Network::Inputs& inputs) const;
 
     std::unique_ptr<NetworkForwardPipe> pipe_{nullptr};
     Cache nn_cache_;
 
+    bool use_optimistic_policy_;
     bool no_cache_;
     bool early_symm_cache_;
     size_t cache_memory_mib_;

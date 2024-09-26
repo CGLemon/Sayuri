@@ -13,6 +13,15 @@ static constexpr int kOuputPassProbability = 5;
 static constexpr int kOuputProbabilitiesChannels = 5;
 static constexpr int kOuputOwnershipChannels = 1;
 
+enum class PolicyBufferOffset : int {
+    kNormal = 0,
+    kOpponent = 1,
+    kSoft = 2,
+    kSoftOpponent = 3,
+    kOptimistic = 4,
+    kDefault
+};
+
 struct InputData {
     InputData() {
         planes.fill(0.f);
@@ -21,6 +30,8 @@ struct InputData {
     float komi{0.f};
     int board_size{-1};
     int side_to_move{kInvalid};
+    int symmetry{-1};
+    PolicyBufferOffset offset{PolicyBufferOffset::kDefault};
 
     std::array<float, kInputChannels * kNumIntersections> planes;
 };
@@ -47,6 +58,7 @@ struct OutputResult {
     float final_score{0.f};
     float q_error{0.f};
     float score_error{0.f};
+    PolicyBufferOffset offset{PolicyBufferOffset::kDefault};
 
     std::array<float, 3> wdl;
     std::array<float, kNumIntersections> probabilities;
@@ -77,6 +89,7 @@ struct ForwardQuery {
     int symmetry{-1};
     bool read_cache{true};
     bool write_cache{true};
+    PolicyBufferOffset offset{PolicyBufferOffset::kDefault};
 };
 
 class NetworkForwardPipe {
