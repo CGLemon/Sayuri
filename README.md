@@ -14,15 +14,17 @@ Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network a
 
 ## Quick Start via Terminal
 
-First, you need a executable weights. Download the old v0.6 weights [here](https://drive.google.com/drive/folders/1nawHAKHTBKEpLcizaVrK4GVDSIuVqJ-Q?usp=sharing) or last v0.7 weights [here](https://drive.google.com/drive/folders/1_wnDk50g35ekb41Eg3VcoYlSfXt-ngQl). Some description of weights and RL progression is [here](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJew5OFci). If you want to use the older network, please use the v0.5 engine at the ```save-last-v050``` branch.
-
-Then start the program with GTP mode via the terminal/PowerShell, using 1 thread and 400 visits per move with optimistic policy, please enter
+First, a executable weights is necessary. You could get the released weights from this [page](./docs/MODEL.md). If you want to load the older network, please use the v0.5 engine at the ```save-last-v050``` branch. Then start the program with GTP mode via the terminal/PowerShell, using 1 thread and 400 visits per move with optimistic policy, please enter
 
     $ ./sayuri -w <weights file> -t 1 -p 400 --use-optimistic-policy
 
 You will see the diagnostic verbose. If the verbose includes ```Network Version``` information, it means you success to execute the program with GPT mode. For more arguments, please give the ```--help``` option.
 
     $ ./sayuri --help
+
+Or you may execute pure python engine with checkpoint model. The checkpoint models are released after 4th main run in the [page](./docs/MODEL.md). Run it via the terminal/PowerShell.
+
+    $ python3 train/torch/pysayuri.py -c model.pt --use-swa
 
 ## Execute Engine via Graphical Interface
 
