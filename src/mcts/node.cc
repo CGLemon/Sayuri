@@ -89,7 +89,7 @@ void Node::Recompute(Network &network,
     const float temp = is_root ?
                 param_->root_policy_temp : param_->policy_temp;
     auto raw_netlist = network.GetOutput(
-        state, Network::kRandom, Network::Query::SetTemperature(temp));
+        state, Network::kRandom, Network::Query::Get().SetTemperature(temp));
 
     const auto num_intersections = state.GetNumIntersections();
     auto legal_accumulate = 0.f;
@@ -199,7 +199,7 @@ bool Node::ExpandChildren(Network &network,
     const float temp = is_root ?
                     param_->root_policy_temp : param_->policy_temp;
     auto raw_netlist = network.GetOutput(
-        state, Network::kRandom, Network::Query::SetTemperature(temp));
+        state, Network::kRandom, Network::Query::Get().SetTemperature(temp));
 
     // Store the network reuslt.
     ApplyNetOutput(state, raw_netlist, node_evals, color_);

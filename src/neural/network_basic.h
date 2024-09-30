@@ -68,21 +68,28 @@ struct OutputResult {
 struct ForwardQuery {
     ForwardQuery() = default;
 
-    static ForwardQuery SetTemperature(float temp) {
+    static ForwardQuery Get() {
         ForwardQuery q;
-        q.temperature = temp;
         return q;
     }
-    static ForwardQuery SetSymmetry(int symm) {
-        ForwardQuery q;
-        q.symmetry = symm;
-        return q;
+    ForwardQuery SetTemperature(float temp) {
+        temperature = temp;
+        return *this;
     }
-    static ForwardQuery SetCache(bool use_cache) {
-        ForwardQuery q;
-        q.read_cache = use_cache;
-        q.write_cache = use_cache;
-        return q;
+    ForwardQuery SetSymmetry(int symm) {
+        symmetry = symm;
+        return *this;
+    }
+    ForwardQuery SetCache(bool use_cache) {
+        read_cache = use_cache;
+        write_cache = use_cache;
+        return *this;
+    }
+    ForwardQuery SetOffset(PolicyBufferOffset o) {
+        read_cache = false;
+        write_cache = false;
+        offset = o;
+        return *this;
     }
 
     float temperature{1.0f};

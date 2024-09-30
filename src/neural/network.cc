@@ -377,7 +377,7 @@ void Network::ActivatePolicy(Result &result, const float temperature) const {
 int Network::GetVertexWithPolicy(const GameState &state,
                                  const float temperature,
                                  const bool allow_pass) {
-    const auto result = GetOutput(state, kRandom, Query::SetTemperature(temperature));
+    const auto result = GetOutput(state, kRandom, Query::Get().SetTemperature(temperature));
     const auto boardsize = result.board_size;
     const auto num_intersections = boardsize * boardsize;
 

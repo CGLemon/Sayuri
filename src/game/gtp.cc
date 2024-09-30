@@ -591,7 +591,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         if (symmetry <= 8 && symmetry >= 0) {
             auto ensemble = use_avg ? Network::kAverage : Network::kDirect;
             out << GtpSuccess(agent_->GetNetwork().GetOutputString(
-                       agent_->GetState(), ensemble, Network::Query::SetSymmetry(symmetry)));
+                       agent_->GetState(), ensemble, Network::Query::Get().SetSymmetry(symmetry)));
         } else {
             out << GtpFail("symmetry must be from 0 to 7");
         }
@@ -610,7 +610,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             while (count.load(std::memory_order_relaxed) < eval_cnt) {
                 count.fetch_add(1, std::memory_order_relaxed);
                 agent_->GetNetwork().GetOutput(
-                    agent_->GetState(), Network::kRandom, Network::Query::SetCache(false));
+                    agent_->GetState(), Network::kRandom, Network::Query::Get().SetCache(false));
             }
         };
 
