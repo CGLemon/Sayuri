@@ -629,29 +629,27 @@ class Board(object):
                     break
         return laddermap
 
-    def _remove(self, v):
-        # Remove a string including v.
-
-        v_tmp = v
-        removed = 0
-        while True:
-            removed += 1
-            self.state[v_tmp] = EMPTY  # set empty
-            self.id[v_tmp] = v_tmp  # reset id
-            for d in self.dir4:
-                nv = v_tmp + d
-                # Add liberty to neighbor strings.
-                self.sl[self.id[nv]].add(v_tmp)
-            v_next = self.next[v_tmp]
-            self.next[v_tmp] = v_tmp
-            v_tmp = v_next
-            if v_tmp == v:
-                break  # Finish when all stones are removed.
-        return removed
+    def remove_deadstones(self, marked_stones):
+        for v in marked_stones:
+            if self.state[v] != EMPTY:
+                self._remove(v)
 
     def final_score(self):
-        # Scored the board area with Tromp-Taylor rule.
-        return self._compute_reach_color(BLACK) - self._compute_reach_color(WHITE) - self.komi
+        score_lead = self._compute_reach_color(BLACK) - self._compute_reach_color(WHITE) - self.komi
+
+        if self.scoring_rule == SCORING_TERRITORY:
+            num_blacks = 0
+            num_whites = 0 
+            for color, vertex in self.history_move:
+                if vertex in [PASS, RESIGN, NULL_VERTEX]:
+                    continue
+                if color == BLACK:
+                    num_blacks += 1
+                elif color == WHITE:
+                    num_whites += 1
+            score_lead -= num_blacks
+            score_lead += num_whites
+        return score_lead
 
     def get_x(self, v):
         # vertex to x
@@ -1207,26 +1205,36 @@ class Search:
         self.root_node.update(val)
 
     def _compute_final_score(self, color, board):
-        value = 0.5
         if board.scoring_rule == SCORING_AREA:
             score = board.final_score()
-            if score > 1e-4:
-                # The black player is winner.
-                value = 1. if color is BLACK else 0.
-            elif score < -1e-4:
-                # The white player is winner.
-                value = 1. if color is WHITE else 0.
-            else:
-                # The game is draw
-                value = 0.5
         elif board.scoring_rule == SCORING_TERRITORY:
             result = self.net.get_output_without_batch(
                 features = board.get_features(),
                 board_size = board.board_size,
                 as_numpy = True
             )
-            value = wdl[0] + wdl[1] / 2.
+            opp_color = (color + 1) % 2
+            marked_stones = set()
+            ownership = result["ownership"] 
 
+            for idx in range(board.num_intersections):
+                vtx = board.index_to_vertex(idx)
+                if ownership[idx] > 0.85 and board.state[vtx] == opp_color:
+                    marked_stones.add(vtx)
+                elif ownership[idx] < -0.85 and board.state[vtx] == color:
+                    marked_stones.add(vtx)
+            board.remove_deadstones(marked_stones)
+            score = board.final_score()
+
+        if score > 1e-4:
+            # The black player is winner.
+            value = 1. if color is BLACK else 0.
+        elif score < -1e-4:
+            # The white player is winner.
+            value = 1. if color is WHITE else 0.
+        else:
+            # The game is draw
+            value = 0.5
         return value
 
     def _descend(self, color, curr_board, node):
