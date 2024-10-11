@@ -90,6 +90,9 @@ public:
                      std::function<bool(int, int)> AvoidToMove) const;
     bool IsNeighborColor(const int vtx, const int color) const;
 
+    // Compute influence based on on Bouzy's 5/21 algorithm.
+    std::vector<float> GeteBouzyScore() const;
+
     // Compute ownership based on Tromp Taylor rule.
     std::vector<int> GetOwnership() const;
 

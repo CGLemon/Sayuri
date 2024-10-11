@@ -1622,6 +1622,136 @@ void Board::ComputeScoreArea(std::vector<int> &result,
     }
 }
 
+void Board::ComputeBouzyScore(std::vector<float> &bouzy_score,
+                              const std::vector<int> &territory_helper) const {
+    bouzy_score.resize(num_intersections_);
+    std::fill(std::begin(bouzy_score), std::end(bouzy_score), 0.0f);
+
+    auto fork_board = new Board(*this);
+    auto dead_list = std::vector<int>{};
+    for (int y = 0; y < board_size_; ++y) {
+        for (int x = 0; x < board_size_; ++x) {
+            const auto vtx = GetVertex(x, y);
+            const auto idx = GetIndex(x, y);
+            if ((territory_helper[idx] == kBlack && GetState(vtx) == kWhite) ||
+                    (territory_helper[idx] == kWhite && GetState(vtx) == kBlack)) {
+                dead_list.emplace_back(vtx);
+            }
+        }
+    }
+
+    auto bouzy_score_buf = std::vector<int>(num_intersections_, 0);
+    fork_board->RemoveMarkedStrings(dead_list);
+    fork_board->ComputeBouzyScore(kBlack, 5, 21, bouzy_score_buf);
+    fork_board->ComputeBouzyScore(kWhite, 5, 21, bouzy_score_buf);
+
+    double score_max = 10.0;
+    for (int i = 0; i < num_intersections_; ++i) {
+        double val = bouzy_score_buf[i];
+        val = std::min(val, score_max);
+        val = std::max(val, -score_max);
+        bouzy_score[i] = val / score_max;
+    }
+}
+
+void Board::ComputeBouzyScore(int color, int dilations, int erosions,
+                              std::vector<int> &bouzy_score) const {
+    auto curr_bouzy_score = std::vector<int>(num_vertices_, 0);
+    auto next_bouzy_score = std::vector<int>(num_vertices_, 0);
+    const int opp_color = (!color);
+
+    for (int y = 0; y < board_size_; ++y) {
+        for (int x = 0; x < board_size_; ++x) {
+            const auto vtx = GetVertex(x, y);
+            if (state_[vtx] == color) {
+                curr_bouzy_score[vtx] =
+                    next_bouzy_score[vtx] = 128;
+            } else if (state_[vtx] == opp_color) {
+                curr_bouzy_score[vtx] =
+                    next_bouzy_score[vtx] = -128;
+            }
+        }
+    }
+    // dilation
+    for (int i = 0; i < dilations; ++i) {
+        for (int y = 0; y < board_size_; ++y) {
+            for (int x = 0; x < board_size_; ++x) {
+                const auto vtx = GetVertex(x, y);
+                int vcount[3] = {0, 0, 0}; // positive, negative, out
+                for (int k = 0; k < 4; ++k) {
+                    const auto avtx = directions_[k] + vtx;
+                    if (curr_bouzy_score[avtx] > 0) {
+                        vcount[0]++; // positive
+                    } else if (curr_bouzy_score[avtx] < 0) {
+                        vcount[1]++; // negative
+                    }
+                    if (state_[avtx] == kInvalid) {
+                        vcount[2]++; // out
+                    }
+                }
+                if (curr_bouzy_score[vtx] >= 0 &&
+                        vcount[0] != 0 &&
+                        vcount[1] == 0) {
+                    next_bouzy_score[vtx] += (vcount[0] + 1 * vcount[2]);
+
+                    if (vcount[2] >= 1 &&
+                            vcount[0] + vcount[2] >= 2) {
+                        for (int k = 0; k < 4; ++k) {
+                           const auto avtx = directions_[k] + vtx;
+                           if (curr_bouzy_score[avtx] == 0) {
+                               next_bouzy_score[avtx] += 1;
+                           }
+                        }
+                    }
+                }
+            }
+        }
+        std::copy(std::begin(next_bouzy_score),
+                      std::end(next_bouzy_score),
+                      std::begin(curr_bouzy_score));
+    }
+    // erosion
+    for (int i = 0; i < erosions; ++i) {
+        for (int y = 0; y < board_size_; ++y) {
+            for (int x = 0; x < board_size_; ++x) {
+                const auto vtx = GetVertex(x, y);
+                int vcount[2] = {0, 0}; // positive, negative
+                for (int k = 0; k < 4; ++k) {
+                    const auto avtx = directions_[k] + vtx;
+                    if (curr_bouzy_score[avtx] >= 0 && state_[avtx] != kInvalid) {
+                        vcount[0]++; // positive
+                    }
+                    if (curr_bouzy_score[avtx] <= 0 && state_[avtx] != kInvalid) {
+                        vcount[1]++; // negative
+                    }
+                }
+                if (curr_bouzy_score[vtx] > 0) {
+                    next_bouzy_score[vtx] = std::max(
+                        next_bouzy_score[vtx] - vcount[1], 0);
+                }
+            }
+        }
+        std::copy(std::begin(next_bouzy_score),
+                      std::end(next_bouzy_score),
+                      std::begin(curr_bouzy_score));
+    }
+
+
+    for (int y = 0; y < board_size_; ++y) {
+        for (int x = 0; x < board_size_; ++x) {
+            const auto vtx = GetVertex(x, y);
+            const auto idx = GetIndex(x, y);
+            if (curr_bouzy_score[vtx] > 0) {
+                // int ori_score = bouzy_score[idx];
+                // int updated_score = curr_bouzy_score[vtx];
+
+                bouzy_score[idx] = color == kBlack ?
+                    curr_bouzy_score[vtx] : -curr_bouzy_score[vtx];
+            }
+        }
+    }
+}
+
 std::vector<LadderType> Board::GetLadderMap() const {
     auto result = std::vector<LadderType>(num_intersections_, LadderType::kNotLadder);
     auto ladder = std::vector<int>{};

@@ -174,6 +174,13 @@ public:
     // Compute black area and white area.
     void ComputeReachArea(std::vector<int> &result) const;
 
+    // Compute the black area and white area based on Bouzy's 5/21 algorithm,
+    // http://gnu.ist.utl.pt/software/gnugo/gnugo_14.html
+    void ComputeBouzyScore(std::vector<float> &bouzy_score,
+                           const std::vector<int> &territory_helper) const;
+    void ComputeBouzyScore(int color, int dilations, int erosions,
+                           std::vector<int> &bouzy_score) const;
+
     // Get the ladder type map.
     // LadderType::kLadderDeath means that the ladder string is already death.
     // LadderType::kLadderEscapable means that the ladder string has a chance to escape.

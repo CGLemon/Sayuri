@@ -505,6 +505,12 @@ bool GameState::PlayHandicapStones(std::vector<int> movelist_vertex,
     return true;
 }
 
+std::vector<float> GameState::GeteBouzyScore() const {
+    auto res = std::vector<float>(GetNumIntersections(), 0.0f);
+    board_.ComputeBouzyScore(res, territory_helper_);
+    return res;
+}
+
 std::vector<int> GameState::GetOwnership() const {
     auto res = std::vector<int>(GetNumIntersections(), kInvalid);
 
