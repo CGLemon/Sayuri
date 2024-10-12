@@ -859,13 +859,18 @@ class NetworkWrap(Network):
         if board_size is None:
             return raw_spat
 
-        n, raw_size = raw_spat.shape
+        tshape = list(raw_spat.shape)
+        n_size = 1
+        for d in range(len(tshape) - 1):
+            n_size *= tshape[d]
+        raw_size = tshape[-1]
+        raw_spat = torch.reshape(raw_spat, (n_size, raw_size))
         valid_size = board_size * board_size
 
         if raw_size == NUM_INTESECTIONS + 1:
             valid_size += 1
 
-        valid_spat = torch.zeros((n, valid_size))
+        valid_spat = torch.zeros((n_size, valid_size))
         valid_spat = valid_spat.to(self._device)
 
         for y in range(board_size):
@@ -876,7 +881,8 @@ class NetworkWrap(Network):
 
         if raw_size == NUM_INTESECTIONS + 1:
             valid_spat[:, -1] = raw_spat[:, -1]
-
+        tshape[-1] = valid_size
+        valid_spat = torch.reshape(valid_spat, tshape)
         return valid_spat
 
     def to_device(self, d, *args, **kwargs):
@@ -1478,6 +1484,9 @@ class Agent():
         if self._use_gpu:
             stderr_write("Enable the GPU device...\n")
 
+    def _load_network(self, cfg):
+        return NetworkWrap(cfg)
+
     def _load_checkpoint(self):
         net_cfg = None
         status_dict = None
@@ -1493,7 +1502,7 @@ class Agent():
             raise Exception("config file does not exist")
 
         net_cfg.boardsize = BOARD_SIZE
-        net = NetworkWrap(net_cfg)
+        net = self._load_network(net_cfg)
         stderr_write("Load the weights from: {}\n".format(self._checkpoint))
         stderr_write(net.simple_info())
 
