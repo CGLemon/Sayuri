@@ -125,16 +125,17 @@ class Board(object):
     def __init__(self, board_size=BOARD_SIZE, komi=KOMI, scoring_rule=SCORING_AREA):
         self.state = np.full(NUM_VERTICES, INVLD) # positions state
         self.sl = [StoneLiberty() for _ in range(NUM_VERTICES)]  # stone liberties
-        self.reset(board_size, komi)
-        self.scoring_rule = scoring_rule
+        self.reset(board_size, komi, scoring_rule)
 
-    def reset(self, board_size, komi):
-        # Initialize all board data with current board size and komi.
+    def reset(self, board_size, komi, scoring_rule):
+        # Initialize/clear all board data with current board size and komi and 
+        # scoring rule.
 
         self.board_size = min(board_size, BOARD_SIZE)
         self.num_intersections = self.board_size ** 2
         self.num_vertices = (self.board_size+2) ** 2
         self.komi = komi
+        self.scoring_rule = scoring_rule
         ebsize = board_size+2
         self.dir4 = [1, ebsize, -1, -ebsize]
         self.diag4 = [1 + ebsize, ebsize - 1, -ebsize - 1, 1 - ebsize]
@@ -1384,7 +1385,8 @@ class SgfGame:
         if key == "SZ":
             board_size = int(val)
             komi = self.last_board.komi
-            self.last_board.reset(board_size, komi)
+            scoring_rule = self.last_board.scoring_rule
+            self.last_board.reset(board_size, komi, scoring_rule)
             self.board_history.clear()
             self.board_history.append(self.last_board.copy())
         elif key == "KM":
@@ -1452,8 +1454,9 @@ class Agent():
             "area" : SCORING_AREA,
             "territory" : SCORING_TERRITORY
         }
+
         scoring_rule = scoring_dict.get(kwargs.get("scoring_rule", "area"), None)
-        if not scoring_rule:
+        if scoring_rule is None:
              stderr_write("Invalid rule, we select default rule, scoring area.\n")
              scoring_rule = SCORING_AREA
         self._board = Board(
@@ -1633,18 +1636,21 @@ class Agent():
     def as_sgf(self):
         return self._board.as_sgf()
 
-    def reset_board(self, board_size=None, komi=None):
-        if board_size and board_size > BOARD_SIZE:
-            raise Exception("reset_board(...): board size should be less than {}".format(BOARD_SIZE))
+    def reset_board(self, *args, **kwargs):
+        board_size = kwargs.get("board_size", self._board.board_size)
+        komi = kwargs.get("komi", self._board.komi)
+        scoring_rule = kwargs.get("scoring_rule", self._board.scoring_rule)
 
-        if board_size and komi:
-            self._board.reset(board_size, komi)
-        elif board_size:
-            self._board.reset(board_size, self._board.komi)
-        elif komi:
-            self._board.komi = komi
+        if board_size > BOARD_SIZE:
+            raise Exception("reset_board(...): board size should be less than {}".format(BOARD_SIZE))
+        if board_size < 2:
+            raise Exception("reset_board(...): board size should be larger than 1")
+
+        if board_size != self._board.board_size:
+            self._board.reset(board_size, komi, scoring_rule)
         else:
-            self._board.reset(self._board.board_size, self._board.komi)
+            self._board.komi = komi
+            self._board.scoring_rule = scoring_rule
 
     def get_board(self):
         return self._board
