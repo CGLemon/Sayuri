@@ -9,7 +9,6 @@
 #include "utils/filesystem.h"
 #include "pattern/mm_trainer.h"
 #include "neural/encoder.h"
-#include "summary/accuracy.h"
 
 #include <array>
 #include <atomic>
@@ -731,23 +730,6 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             out << GtpSuccess("");
         } else {
             out << GtpFail("directory name is empty");
-        }
-    } else if (const auto res = spt.Find("summary_accuracy", 0)) {
-        auto sgf_file = std::string{};
-
-        if (const auto sgf = spt.GetWord(1)) {
-            sgf_file = sgf->Get<>();
-        }
-
-        if (sgf_file.empty()) {
-            out << GtpFail("file name is empty");
-        } else {
-            auto report = ComputeNetAccuracy(agent_->GetNetwork(), sgf_file);
-            auto report_out = std::ostringstream{};
-            report_out << Format(
-                "the final accuracy %.2f%, totally %d positions",
-                report.GetAccuracy() * 100, report.num_positions);
-            out << GtpSuccess(report_out.str());
         }
     } else if (const auto res = spt.Find("debug_search", 0)) {
         int playouts = -1;

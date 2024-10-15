@@ -2219,7 +2219,7 @@ void Board::GenerateCandidateMoves(std::vector<int> &moves_set, int color) const
     // TODO: Append others heuristic moves.
 }
 
-std::string Board::GetMoveTypesString(int vtx, int color) const {
+std::string Board::GetMoveDebugString(int vtx, int color) const {
     auto out = std::ostringstream{};
     out << '{';
     int i = 0;

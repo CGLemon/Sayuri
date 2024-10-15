@@ -11,6 +11,7 @@ class GameState {
 public:
     Board board_;
 
+    // Reset all data and clear the board.
     void Reset(const int boardsize,
                const float komi,
                const int scoring);
@@ -21,30 +22,47 @@ public:
     // GTP interface to clear the board.
     void ClearBoard();
 
+    // Play a move on the board but use current game state instead
+    // of first game state in the history buffer. Will return false
+    // if the move is illegal.
     bool AppendMove(const int vtx, const int color);
 
+    // Same as PlayMove(vtx, color) but color is always tomove.
     bool PlayMove(const int vtx);
 
+    // Play a move on board and push current game state to the history
+    // buffer. Will return false if the move is illegal.
     bool PlayMove(const int vtx, const int color);
 
+    // Play undo move and remove last game state of the history buffer.
     bool UndoMove();
 
+    // Set komi.
     void SetKomi(float komi);
 
+    // Set side to move color.
     void SetToMove(const int color);
 
+    // Set winner.
     void SetWinner(GameResult result);
 
+    // Set scoring rule.
     void SetRule(const int scoring);
 
+    // Set the territory helper. The element of vector should be one
+    // of kBlack/kWhite/kEmpty.
     void SetTerritoryHelper(const std::vector<int> &ownership);
 
+    // Transfer GTP vertex string to vertex numeric.
     int TextToVertex(std::string text) const;
 
+    // Transfer GTP color string to color numeric.
     int TextToColor(std::string text) const;
 
+    // Transfer vertex numeric to SGF verterx string.
     std::string VertexToSgf(const int vtx) const;
 
+    // Transfer vertex numeric to  GTP vertex string.
     std::string VertexToText(const int vtx) const;
 
     // For debug...
@@ -65,6 +83,7 @@ public:
     // GTP interface to place free handicap.
     std::vector<int> PlaceFreeHandicap(int handicap);
 
+    // Set number of handicap stones.
     void SetHandicap(int handicap);
 
     // Place the handicap stone one the board. All Handicap() functions
@@ -72,7 +91,7 @@ public:
     bool PlayHandicapStones(std::vector<int> movelist_vertex,
                             bool kata_like_handicap_style);
 
-    // Compute final score based on Tromp Taylor rule.
+    // Compute final score based on current scoring rule.
     float GetFinalScore(const int color) const;
     float GetFinalScore(const int color,
                         const std::vector<int> &territory_helper) const;
@@ -82,12 +101,19 @@ public:
     // to play pass (or resign).
     std::vector<bool> GetStrictSafeArea() const;
 
+    // Return true if the game is finished.
     bool IsGameOver() const;
+
+    // Return true if current position is super ko, repetition position.
     bool IsSuperko() const;
+
+    // Return true if the move is legal.
     bool IsLegalMove(const int vertex) const;
     bool IsLegalMove(const int vertex, const int color) const;
     bool IsLegalMove(const int vertex, const int color,
                      std::function<bool(int, int)> AvoidToMove) const;
+
+    // Reture true if the specified color is adjacent to this vertex.
     bool IsNeighborColor(const int vtx, const int color) const;
 
     // Compute ownership based on Tromp Taylor rule.
@@ -141,6 +167,7 @@ public:
     float GetGammaValue(const int vtx, const int color) const;
     std::vector<float> GetGammasPolicy(const int color) const;
 
+    // Reture the zobrist hash value only for this move.
     std::uint64_t GetMoveHash(const int vtx, const int color) const;
 
     void SetComment(std::string c);
@@ -153,7 +180,7 @@ public:
 private:
     using VertexColor = std::pair<int, int>;
 
-    // Play the move without pushing current board to the history.
+    // Play a move without pushing current game state to the history buffer.
     void PlayMoveFast(const int vtx, const int color);
 
     void PushComment();
@@ -168,8 +195,11 @@ private:
 
     std::vector<std::string> comments_;
 
+    // The territory helper helps us to remove the dead stones for scoring.
+    // final position.
     std::vector<int> territory_helper_;
 
+    // Current scoring rule.
     ScoringRuleType scoring_rule_;
 
     // Comment for next move.

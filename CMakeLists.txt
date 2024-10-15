@@ -55,7 +55,6 @@ set(GAME_SOURCES_DIR ${SOURCE_DIR}/game)
 set(NEURAL_SOURCES_DIR ${SOURCE_DIR}/neural)
 set(PATTERN_SOURCES_DIR ${SOURCE_DIR}/pattern)
 set(MCTS_SOURCES_DIR ${SOURCE_DIR}/mcts)
-set(SUMMARY_SOURCES_DIR ${SOURCE_DIR}/summary)
 set(SELFPLAY_SOURCES_DIR ${SOURCE_DIR}/selfplay)
 set(UTILS_SOURCES_DIR ${SOURCE_DIR}/utils)
 
@@ -111,10 +110,6 @@ set(MCTS_SOURCES
     ${MCTS_SOURCES_DIR}/time_control.cc
     ${MCTS_SOURCES_DIR}/node.cc
     ${MCTS_SOURCES_DIR}/search.cc
-    )
-
-set(SUMMARY_SOURCES
-    ${SUMMARY_SOURCES_DIR}/accuracy.cc
     )
 
 set(SELFPLAY_SOURCES
@@ -350,7 +345,6 @@ add_executable(sayuri
     ${MCTS_SOURCES}
     ${NEURAL_SOURCES}
     ${UTILS_SOURCES}
-    ${SUMMARY_SOURCES}
     ${SELFPLAY_SOURCES}
     ${CUDA_SOURCES}
     )

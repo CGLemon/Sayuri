@@ -104,8 +104,6 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "genpatterns",
 
-    "summary_accuracy",
-
     "genopenings",
 
     "debug_search",

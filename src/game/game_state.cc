@@ -60,7 +60,7 @@ bool GameState::AppendMove(const int vtx, const int color) {
         return false;
     }
     if (move_number_ != 0) {
-        ClearBoard(); // Besure sure that it is the first move.
+        ClearBoard(); // Be sure appended Moves are the first move.
     }
 
     if (IsLegalMove(vtx, color)) {
@@ -71,6 +71,8 @@ bool GameState::AppendMove(const int vtx, const int color) {
         last_comment_.clear();
         move_number_ = 0;
 
+        // Clear the history buffer. Be sure the first game state
+        // in the history buffer should be current game state.
         ko_hash_history_.clear();
         game_history_.clear();
         comments_.clear();
@@ -276,7 +278,7 @@ void GameState::ShowMoveTypes(int vtx, int color) const {
         LOGGING << "White ";
     }
     LOGGING << VertexToText(vtx) << ' '
-                << board_.GetMoveTypesString(vtx, color)
+                << board_.GetMoveDebugString(vtx, color)
                 << std::endl;
 }
 
@@ -404,6 +406,7 @@ bool GameState::SetFixdHandicap(int handicap) {
         }
         return true;
     };
+    // Maybe like this, https://senseis.xmp.net/?HandicapPlacement
 
     const int board_size = GetBoardSize();
     const int high = board_size >= 13 ? 3 : 2;

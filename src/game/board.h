@@ -96,7 +96,10 @@ public:
     // Get the index board.
     int GetIndex(const int x, const int y) const;
 
+    // Tranfer index to vertex except for pass move.
     int IndexToVertex(int idx) const;
+
+    // Tranfer vertex to index except for pass move.
     int VertexToIndex(int vtx) const;
 
     // Reture true if the move is legal.
@@ -151,7 +154,7 @@ public:
     // Compute the symmetry Zobrist ko hashing.
     std::uint64_t ComputeKoHash(int symmetry) const;
 
-    // Reture the zobrist hash value for this move.
+    // Reture the zobrist hash value only for this move.
     std::uint64_t GetMoveHash(const int vtx, const int color) const;
 
     int ComputeReachGroup(int start_vertex, int spread_color,
@@ -162,7 +165,7 @@ public:
     // Remove the marked strings from board.
     void RemoveMarkedStrings(std::vector<int> &marked);
 
-    // Compute score on board (without komi).
+    // Compute score on board (without komi) based on Tromp Taylor rule.
     int ComputeScoreOnBoard(const int color, const int scoring,
                             const std::vector<int> &territory_helper) const;
 
@@ -188,9 +191,11 @@ public:
     // Compute the empty area in the Seki.
     void ComputeSekiPoints(std::vector<bool> &result) const;
 
-    std::string GetMoveTypesString(int vtx, int color) const;
-
+    // Return a candidate random move for rollouts process.
     void GenerateCandidateMoves(std::vector<int> &moves_set, int color) const;
+
+    // Debug function, return the move attribution string.
+    std::string GetMoveDebugString(int vtx, int color) const;
 
     // For patterns...
     static void InitPattern3();
@@ -263,7 +268,7 @@ private:
     // The Zobrist ko hash of board position.
     std::uint64_t ko_hash_;
 
-    // The board size.
+    // The current board size.
     int board_size_;
 
     // The letter box size (board size + 2).
@@ -373,11 +378,13 @@ private:
     // Remove a string from board.
     int RemoveString(const int ip);
 
+    // Update number of prisoner.
     void IncreasePrisoner(const int color, const int val);
 
     // Update the board after doing a legal move.
     int UpdateBoard(const int vtx, const int color);
 
+    // Update the number of consecutive passes.
     void SetPasses(int val);
     void IncrementPasses();
 
@@ -422,13 +429,13 @@ private:
                            std::vector<int> &features,
                            const std::vector<int> &regions_next) const;
 
-    // Gather the vertex if it is true on the buffer.
+    // Gather the vertex base on boolen buffer.
     std::vector<int> GatherVertices(std::vector<bool> &buf) const;
 
     // The 'target' is the string type. We will split all strings (groups) then
-    // store the string (group) index in the 'regions_index' and store next
-    // vertex postion in the 'regions_next'. Becare that the string (group) index
-    // is from 1.
+    // storing the string (group) index in the 'regions_index' and storing next
+    // vertex postion in the 'regions_next'. Becare that the begin index of string
+    // (group) index is 1.
     std::vector<int> ClassifyGroups(const int target,
                                     std::vector<int> &features,
                                     std::vector<int> &regions_index,
