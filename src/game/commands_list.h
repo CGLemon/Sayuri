@@ -90,13 +90,15 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "sayuri-genmove_analyze",
 
+    "sayuri-planes",
+
+    "sayuri-raw_nn",
+
+    "sayuri-setoption",
+
     "kgs-game_over",
 
     "kgs-time_settings",
-
-    "planes",
-
-    "raw-nn",
 
     "benchmark",
 

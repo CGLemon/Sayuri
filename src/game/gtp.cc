@@ -564,7 +564,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         } else {
             out << GtpSuccess("false");
         }
-    } else if (const auto res = spt.Find("planes", 0)) {
+    } else if (const auto res = spt.Find("sayuri-planes", 0)) {
         int symmetry = Symmetry::kIdentitySymmetry;
 
         if (const auto symm = spt.GetWord(1)) {
@@ -576,7 +576,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         } else {
             out << GtpFail("symmetry must be from 0 to 7");
         }
-    } else if (const auto res = spt.Find("raw-nn", 0)) {
+    } else if (const auto res = spt.Find("sayuri-raw_nn", 0)) {
         int symmetry = Symmetry::kIdentitySymmetry;
         bool use_avg = false;
 
@@ -593,6 +593,14 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
                        agent_->GetState(), ensemble, Network::Query::Get().SetSymmetry(symmetry)));
         } else {
             out << GtpFail("symmetry must be from 0 to 7");
+        }
+    } else if (const auto res = spt.Find("sayuri-setoption", 0)) {
+        std::string rep;
+        bool success = ParseOption(spt, rep);
+        if (success) {
+            out << GtpSuccess("");
+        } else {
+            out << GtpFail(rep);
         }
     } else if (const auto res = spt.Find("benchmark", 0)) {
         int eval_cnt = 3200;
@@ -1159,6 +1167,11 @@ std::string GtpLoop::GtpSuccess(std::string response) {
     auto prefix = std::string{"="};
     auto suffix = std::string{"\n\n"};
 
+    while (!response.empty() && response[response.size() - 1] == '\n') {
+        // remove all end line
+        response.resize(response.size() - 1);
+    }
+
     out << prefix;
     if (curr_id_ >= 0) {
         out << curr_id_ << " ";
@@ -1175,6 +1188,10 @@ std::string GtpLoop::GtpFail(std::string response) {
     auto prefix = std::string{"? "};
     auto suffix = std::string{"\n\n"};
 
+    while (!response.empty() && response[response.size() - 1] == '\n') {
+        // remove all end line
+        response.resize(response.size() - 1);
+    }
     out << prefix << response << suffix;
 
     return out.str();
@@ -1323,4 +1340,61 @@ AnalysisConfig GtpLoop::ParseAnalysisConfig(Splitter &spt, int &color) {
     }
 
     return config;
+}
+
+bool GtpLoop::ParseOption(Splitter &spt, std::string &rep) {
+    int name_idx = -1;
+    int value_idx = name_idx - 1;
+    std::string name, value;
+
+    if (const auto res = spt.Find("name")) {
+        name_idx = res->Index();
+    }
+    if (const auto res = spt.Find("value")) {
+        value_idx = res->Index();
+    }
+    if (value_idx < name_idx) {
+        // no name tag, no value tag or value tag is before name
+        rep = "invalid tag";
+        return false;
+    }
+
+    if (const auto res = spt.GetSlice(name_idx+1, value_idx)) {
+        name = res->Get<>();
+    }
+    if (const auto res = spt.GetSlice(value_idx+1)) {
+        value = res->Get<>();
+    }
+    if (name.empty() || value.empty()) {
+        // no name string or no value string
+        rep = "name or value is empty";
+        return false;
+    }
+
+    Parameters * param = agent_->GetSearch().GetParams();
+    try {
+        if (name == "playouts") {
+            param->playouts = std::max(0, std::stoi(value));
+        } else if (name == "resign threshold") {
+            param->resign_threshold =
+                std::min(1.f, std::max(0.f, std::stof(value)));
+        } else if (name == "scoring rule") {
+            if (value == "territory") {
+                agent_->GetState().SetRule(kTerritory);
+            } else if (value == "area") {
+                agent_->GetState().SetRule(kArea);
+            } else {
+                rep = "invalid rule";
+            }
+        } else if (name == "relative rank") {
+            param->relative_rank = std::stoi(value);
+        } else {
+            rep = "invalid option name";
+            return false;
+        }
+    } catch (const std::exception& e) {
+        rep = "invalid option value: " + std::string{e.what()};
+        return false;
+    }
+    return true;
 }

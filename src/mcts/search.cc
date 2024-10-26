@@ -45,8 +45,6 @@ void Search::Initialize() {
     root_node_.reset(nullptr);
 
     group_ = std::make_unique<ThreadGroup<void>>(&ThreadPool::Get());
-
-    max_playouts_ = param_->playouts;
     playouts_.store(0, std::memory_order_relaxed);
 }
 
@@ -846,7 +844,7 @@ int Search::GetBestMove(int playouts, OptionTag tag) {
 
 int Search::ThinkBestMove() {
     auto tag = param_->reuse_tree ? kThinking : (kThinking | kUnreused);
-    int best_move = GetBestMove(max_playouts_, tag);
+    int best_move = GetBestMove(param_->playouts, tag);
     return best_move;
 }
 
@@ -987,10 +985,10 @@ int Search::GetSelfPlayMove(OptionTag tag) {
 
     // Decide the playouts number first. Default is max
     // playouts. May use the lower playouts instead of it.
-    int playouts = max_playouts_;
+    int playouts = param_->playouts;
 
     if (param_->reduce_playouts > 0 &&
-            param_->reduce_playouts < max_playouts_ &&
+            param_->reduce_playouts < param_->playouts &&
             Random<>::Get().Roulette<10000>(param_->reduce_playouts_prob)) {
 
         // The reduce playouts must be smaller than default
@@ -1115,7 +1113,7 @@ int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
     }
 
     int playouts = ponder == true ? GetPonderPlayouts()
-                                      : max_playouts_;
+                                      : param_->playouts;
     int best_move = GetBestMove(playouts, tag);
 
     // Disable to reuse the tree for next move.
@@ -1168,6 +1166,12 @@ void Search::UpdateTerritoryHelper() {
     auto end_state = root_state_;
     root_state_ = temp_state;
     root_state_.SetTerritoryHelper(end_state.GetOwnership());
+}
+
+Parameters *Search::GetParams(bool no_exploring_param) {
+    Parameters * out = no_exploring_param ?
+                           no_exploring_param_.get() : param_.get();
+    return out;
 }
 
 void Search::GatherTrainingBuffer(std::vector<TrainingData> &chunk) {
@@ -1419,7 +1423,7 @@ bool Search::AdvanceToNewRootState(Search::OptionTag tag) {
         // be OK for most case. For example, Leela Zero reuse the tree
         // during the self-play. Look like it is no negative effect.
 
-        int remaining_playouts = max_playouts_ -
+        int remaining_playouts = param_->playouts -
                                      (root_node_->GetVisits() - 1);
         int gumbel_thres = param_->gumbel_playouts_threshold;
         if (remaining_playouts < gumbel_thres) {

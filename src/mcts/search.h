@@ -205,6 +205,9 @@ public:
     // the territory helpe.
     void UpdateTerritoryHelper();
 
+    // Return search parameters table.
+    Parameters *GetParams(bool no_exploring_param = false);
+
 private:
     // Try to reuse the sub-tree.
     bool AdvanceToNewRootState(Search::OptionTag tag);
@@ -237,9 +240,6 @@ private:
     int GetPonderPlayouts() const;
 
     AnalysisConfig analysis_config_;
-
-    // Stop the search if current playouts greater this value.
-    int max_playouts_; 
 
     // Self-play training data.
     std::vector<TrainingData> training_data_buffer_;

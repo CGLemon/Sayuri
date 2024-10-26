@@ -91,6 +91,7 @@ private:
     std::string GtpFail(std::string);
 
     AnalysisConfig ParseAnalysisConfig(Splitter &spt, int &color);
+    bool ParseOption(Splitter &spt, std::string &rep);
 
     std::string Execute(Splitter &spt, bool &try_ponder);
 
