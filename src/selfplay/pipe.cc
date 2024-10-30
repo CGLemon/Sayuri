@@ -223,6 +223,9 @@ void SelfPlayPipe::Loop() {
                         LOGGING << '[' << CurrentDateTime() << ']' << " Played " << played_games << " games." << std::endl;
                         SaveNetQueries(engine_.GetNetReportQueries());
                     }
+                    if (engine_.ShouldHalt()) {
+                        break;
+                    }
                 }
 
                 {

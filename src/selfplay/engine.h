@@ -17,6 +17,7 @@ public:
     void PrepareGame(int g);
     void Selfplay(int g);
 
+    bool ShouldHalt() const;
     int GetParallelGames() const;
     size_t GetNetReportQueries();
 
@@ -54,6 +55,7 @@ private:
     float random_opening_temp_;
     int default_playouts_;
     int parallel_games_;
+    bool halt_when_updating_weights_;
 
     std::vector<BoardQuery> board_queries_;
     std::vector<HandicapQuery> handicap_queries_;
@@ -62,6 +64,7 @@ private:
     std::unique_ptr<Network> network_{nullptr};
     std::vector<std::unique_ptr<Search>> search_pool_;
     std::vector<GameState> game_pool_;
+    std::string curr_weights_name_;
 
     size_t last_net_accm_queries_;
 };

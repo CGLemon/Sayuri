@@ -21,12 +21,14 @@ void Engine::Initialize() {
     random_moves_factor_ = GetOption<float>("random_moves_factor");
     random_opening_temp_ = GetOption<float>("random_opening_temp");
     parallel_games_ = GetOption<int>("parallel_games");
+    halt_when_updating_weights_ = GetOption<bool>("halt_when_updating_weights");
     last_net_accm_queries_ = 0;
 
     if (!network_) {
         network_ = std::make_unique<Network>();
     }
-    network_->Initialize(SelectWeights());
+    curr_weights_name_ = SelectWeights();
+    network_->Initialize(curr_weights_name_);
 
     game_pool_.clear();
     for (int i = 0; i < parallel_games_; ++i) {
@@ -68,6 +70,10 @@ std::string Engine::SelectWeights() const {
     }
 
     return select_weights;
+}
+
+bool Engine::ShouldHalt() const {
+    return curr_weights_name_ != SelectWeights();
 }
 
 void Engine::ParseQueries() {
