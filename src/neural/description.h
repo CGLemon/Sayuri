@@ -3,6 +3,7 @@
 #include "neural/activation.h"
 
 #include <cmath>
+#include <string>
 #include <vector>
 #include <memory>
 
@@ -137,6 +138,7 @@ public:
 
 class DNNWeights {
 public:
+    std::string name;
     bool loaded{false};
     bool winograd{false};
     bool winograd_initialized{false};

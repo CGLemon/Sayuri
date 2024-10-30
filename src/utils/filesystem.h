@@ -6,6 +6,9 @@
 #include <string>
 #include <initializer_list>
 
+// Split the pathname path into a vector.
+std::vector<std::string> SplitPath(std::string path);
+
 // Concatenate paths or filenames.
 std::string ConcatPath(const std::string path_1, const std::string path_2);
 std::string ConcatPath(std::initializer_list<std::string> list);

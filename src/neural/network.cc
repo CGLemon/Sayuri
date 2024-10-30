@@ -120,6 +120,10 @@ void Network::ClearCache() {
     nn_cache_.Clear();
 }
 
+std::string Network::GetName() const {
+    return pipe_->GetName();
+}
+
 size_t Network::GetNumQueries() const {
     return num_queries_.load(std::memory_order_relaxed);
 }

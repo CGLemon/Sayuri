@@ -7,9 +7,10 @@
 #include "game/sgf.h"
 #include "config.h"
 
-#include <sstream>
 #include <algorithm>
 #include <cmath>
+#include <sstream>
+#include <sstream>
 
 void Engine::Initialize() {
     default_playouts_ = GetOption<int>("playouts");
@@ -21,8 +22,6 @@ void Engine::Initialize() {
     random_moves_factor_ = GetOption<float>("random_moves_factor");
     random_opening_temp_ = GetOption<float>("random_opening_temp");
     parallel_games_ = GetOption<int>("parallel_games");
-    halt_when_updating_weights_ = GetOption<bool>("halt_when_updating_weights");
-    last_net_accm_queries_ = 0;
 
     if (!network_) {
         network_ = std::make_unique<Network>();
@@ -340,12 +339,12 @@ int Engine::GetParallelGames() const {
     return parallel_games_;
 }
 
-size_t Engine::GetNetReportQueries() {
-    size_t curr_net_accm_queries = network_->GetNumQueries();
-    const auto report_queries =
-        curr_net_accm_queries - last_net_accm_queries_;
-    last_net_accm_queries_ = curr_net_accm_queries;
-    return report_queries;
+std::string Engine::GetNetReportQueries() {
+    auto oss = std::ostringstream{};
+    oss << network_->GetName()
+            << " "
+            << network_->GetNumQueries();
+    return oss.str();
 }
 
 void Engine::Handel(int g) {

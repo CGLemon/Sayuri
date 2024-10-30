@@ -10,6 +10,26 @@
 #include <sys/stat.h>
 #endif
 
+std::vector<std::string> SplitPath(std::string path) {
+    auto pathvec = std::vector<std::string>{};
+#ifdef WIN32
+    auto target = std::string{"\\"};
+#else
+    auto target = std::string{"/"};
+#endif
+
+    while (true) {
+        std::size_t pos = path.find(target);
+        if (pos == std::string::npos) {
+            break;
+        }
+        pathvec.emplace_back(path.substr(0, pos));
+        path = path.substr(pos+1);
+    }
+    pathvec.emplace_back(path);
+    return pathvec;
+}
+
 std::string ConcatPath(const std::string path_1, const std::string path_2) {
 #ifdef WIN32
     return path_1 + "\\" + path_2;

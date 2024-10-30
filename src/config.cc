@@ -119,7 +119,6 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["komi_big_stddev_prob"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["handicap_fair_komi_prob"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["target_directory"] << Option::SetOption(std::string{});
-    kOptionsMap["halt_when_updating_weights"] << Option::SetOption(false);
 }
 
 void ArgsParser::InitBasicParameters() const {
@@ -951,13 +950,6 @@ void ArgsParser::Parse(Splitter &spt) {
         if (IsParameter(res->Get<>())) {
             SetOption("target_directory", res->Get<>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
-        }
-    }
-
-    if (const auto res = spt.Find("--halt-when-updating-weights")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("halt_when_updating_weights", true);
-            spt.RemoveWord(res->Index());
         }
     }
 

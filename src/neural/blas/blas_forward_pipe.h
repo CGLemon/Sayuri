@@ -48,6 +48,4 @@ private:
                            std::vector<float> &residual,
                            std::vector<float> &conv_in,
                            std::vector<float> &conv_out);
-
-    std::shared_ptr<DNNWeights> weights_{nullptr};
 };

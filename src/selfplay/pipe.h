@@ -20,19 +20,19 @@ private:
     bool SaveChunk(const int out_id,
                    float vdata_prob,
                    std::vector<TrainingData> &chunk);
-
-    bool SaveNetQueries(const size_t queries);
+    bool SaveNetQueries(int games, std::string net_queries);
 
     std::mutex data_mutex_;
     std::mutex log_mutex_;
 
     std::vector<TrainingData> chunk_;
 
-    std::atomic<int> accmulate_games_;
+    std::atomic<int> accumulation_games_;
     std::atomic<int> played_games_;
     std::atomic<int> running_threads_;
 
     int chunk_games_;
+    int saved_chunk_games_;
     int max_games_;
     Engine engine_;
 

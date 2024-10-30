@@ -27,9 +27,10 @@ void SelfPlayPipe::Initialize() {
 
     // Reset number conuter.
     max_games_ = GetOption<int>("num_games");
-    accmulate_games_.store(0, std::memory_order_relaxed);
+    accumulation_games_.store(0, std::memory_order_relaxed);
     played_games_.store(0, std::memory_order_relaxed);
     running_threads_.store(0, std::memory_order_relaxed);
+    saved_chunk_games_ = 0;
     chunk_games_ = 0;
 
     // Generate the data files name. If the target file already existed, we re-generate
@@ -144,7 +145,7 @@ bool SelfPlayPipe::SaveChunk(const int out_id,
     return is_open;
 }
 
-bool SelfPlayPipe::SaveNetQueries(const size_t queries) {
+bool SelfPlayPipe::SaveNetQueries(int games, std::string net_queries) {
     auto out_name = ConcatPath(
                         queies_directory_,
                         filename_hash_ + ".txt");
@@ -154,7 +155,9 @@ bool SelfPlayPipe::SaveNetQueries(const size_t queries) {
 
     bool is_open = file.is_open();
     if (is_open) {
-        file << queries << std::endl;
+        file << games
+                 << " "
+                 << net_queries << std::endl;
     } else {
         LOGGING << "Fail to create the file: " << out_name << '!' << std::endl;
     }
@@ -176,6 +179,11 @@ void SelfPlayPipe::Loop() {
         LOGGING << "The number of self-play games must be greater than one." << std::endl;
         return;
     }
+    if (max_games_ % 25 != 0) {
+        max_games_ = 25 * (1 + max_games_ / 25);
+        LOGGING << "The number of self-play games must be divided by 25. New value is "
+                    << max_games_ << "." << std::endl;
+    }
     if (!IsGzipValid()) {
         LOGGING << "WARNING: There is no gzip tool. The output chunks may be very large." << std::endl;
     }
@@ -191,25 +199,37 @@ void SelfPlayPipe::Loop() {
     for (int g = 0; g < engine_.GetParallelGames(); ++g) {
         workers_.emplace_back(
             [this, g]() -> void {
+                constexpr int kMainThreadIdx = 0;
                 constexpr int kGamesPerChunk = 25;
+                bool should_halt = false;
                 auto sgf_filename = ConcatPath(
                                         sgf_directory_, filename_hash_ + ".sgf");
                 running_threads_.fetch_add(1, std::memory_order_relaxed);
 
-                while (accmulate_games_.fetch_add(1) < max_games_) {
+                while (accumulation_games_.fetch_add(1) < max_games_) {
+                    if (g == kMainThreadIdx && !should_halt) {
+                        if (engine_.ShouldHalt()) {
+                            int accm_games = accumulation_games_.load(std::memory_order_relaxed);
+                            max_games_ = kGamesPerChunk * (1 + accm_games / kGamesPerChunk);
+                            should_halt = true;
+                            LOGGING << '[' << CurrentDateTime() << ']'
+                                        << " Will halt the self-play loop after playing "
+                                        << max_games_ << " games." << std::endl;
+                        }
+                    }
+
                     engine_.PrepareGame(g);
                     engine_.Selfplay(g);
-
                     {
                         // Save the current chunk.
                         std::lock_guard<std::mutex> lock(data_mutex_);
-
                         engine_.GatherTrainingData(chunk_, g);
 
                         if ((chunk_games_+1) % kGamesPerChunk == 0) {
                             if (!SaveChunk(chunk_games_/kGamesPerChunk, 0.1f, chunk_)) {
                                 break;
                             }
+                            saved_chunk_games_ += kGamesPerChunk;
                         }
                         engine_.SaveSgf(sgf_filename, g);
                         chunk_games_ += 1;
@@ -218,25 +238,35 @@ void SelfPlayPipe::Loop() {
                     played_games_.fetch_add(1);
                     auto played_games = played_games_.load(std::memory_order_relaxed);
 
-                    if (played_games % 100 == 0) {
+                    {
+                        // Save some verbose.
                         std::lock_guard<std::mutex> lock(log_mutex_);
-                        LOGGING << '[' << CurrentDateTime() << ']' << " Played " << played_games << " games." << std::endl;
-                        SaveNetQueries(engine_.GetNetReportQueries());
+                        if (played_games % 100 == 0) {
+                            LOGGING << '[' << CurrentDateTime() << ']'
+                                        << " Played " << played_games << " games." << std::endl;
+                        }
+                        if (played_games % kGamesPerChunk == 0) {
+                            // Not a precision value but the final accumulation value is
+                            // correct.
+                            SaveNetQueries(
+                                played_games, engine_.GetNetReportQueries());
+                        }
                     }
-                    if (engine_.ShouldHalt()) {
-                        break;
-                    }
+                    
                 }
+                running_threads_.fetch_sub(1, std::memory_order_relaxed);
 
-                {
-                    std::lock_guard<std::mutex> lock(data_mutex_);
-                    running_threads_.fetch_sub(1, std::memory_order_relaxed);
-
-                    // The last thread saves the remaining training data.
-                    if (!chunk_.empty() &&
-                            running_threads_.load(std::memory_order_relaxed) == 0) {
-                        SaveChunk(chunk_games_/kGamesPerChunk, 0.1f, chunk_);
-                        chunk_games_ += 1;
+                if (g == kMainThreadIdx) {
+                    while (running_threads_.load(std::memory_order_relaxed) != 0) {
+                        std::this_thread::yield();
+                    }
+                    // Still possible remain some chunks in the buffer because we do not
+                    // lock variable, max_games_. We may play too many games. Simply discard
+                    // them be sure every chunk has 25 games training data.
+                    if (!chunk_.empty()) {
+                        LOGGING << '[' << CurrentDateTime() << ']'
+                                    << " Discard " << chunk_games_ - saved_chunk_games_
+                                    << " games training data." << std::endl;
                     }
                 }
             }

@@ -5,6 +5,7 @@
 #include "mcts/search.h"
 #include "neural/training_data.h"
 
+#include <string>
 #include <vector>
 #include <memory>
 
@@ -19,7 +20,7 @@ public:
 
     bool ShouldHalt() const;
     int GetParallelGames() const;
-    size_t GetNetReportQueries();
+    std::string GetNetReportQueries();
 
 private:
     struct BoardQuery {
@@ -55,7 +56,6 @@ private:
     float random_opening_temp_;
     int default_playouts_;
     int parallel_games_;
-    bool halt_when_updating_weights_;
 
     std::vector<BoardQuery> board_queries_;
     std::vector<HandicapQuery> handicap_queries_;
@@ -65,6 +65,4 @@ private:
     std::vector<std::unique_ptr<Search>> search_pool_;
     std::vector<GameState> game_pool_;
     std::string curr_weights_name_;
-
-    size_t last_net_accm_queries_;
 };

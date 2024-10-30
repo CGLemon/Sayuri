@@ -3,6 +3,7 @@
 #include "neural/network_basic.h"
 #include "utils/log.h"
 #include "utils/format.h"
+#include "utils/filesystem.h"
 #include "utils/parse_float.h"
 #include "utils/option.h"
 #include "utils/time.h"
@@ -37,7 +38,7 @@ void DNNLoader::FromFile(std::shared_ptr<DNNWeights> weights, std::string filena
     file.open(filename, std::ifstream::binary | std::ifstream::in);
 
     if (!file.is_open()) {
-        LOGGING << Format("Couldn't open weights file, %s!", filename.c_str())
+        LOGGING << Format("Couldn't open weights file from %s!", filename.c_str())
                     << std::endl;
         return;
     }
@@ -46,12 +47,18 @@ void DNNLoader::FromFile(std::shared_ptr<DNNWeights> weights, std::string filena
     file.close();
 
     try {
-        LOGGING << Format("Load the weights file from, %s.", filename.c_str())
+        LOGGING << Format("Load the weights file from %s.", filename.c_str())
                     << std::endl;
         Parse(buffer);
         LOGGING << Format("Done! Load the weights file in %.2f sec.",
                               timer.GetDurationMilliseconds()/1000.f)
                     << std::endl;
+       auto pathvec = SplitPath(filename);
+       if (!pathvec.empty()) {
+           weights->name = *std::rbegin(pathvec);
+       } else {
+           weights->name = "network";
+       }
     } catch (const std::exception& e) {
         // Should be not happned.
         LOGGING << "Fail to load the network file!" << std::endl

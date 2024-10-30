@@ -3,6 +3,7 @@
 #include "neural/description.h"
 #include "game/types.h"
 #include <array>
+#include <string>
 #include <memory>
 
 static constexpr int kInputChannels = 43; // 8 past moves * 3
@@ -114,4 +115,8 @@ public:
     virtual void Release() = 0;
 
     virtual void Destroy() = 0;
+
+    inline std::string GetName() const { return weights_->name; }
+
+    std::shared_ptr<DNNWeights> weights_{nullptr};
 };

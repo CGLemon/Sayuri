@@ -46,6 +46,7 @@ public:
     size_t GetCacheMib() const;
     void ClearCache();
 
+    std::string GetName() const;
     size_t GetNumQueries() const;
 
 private:
