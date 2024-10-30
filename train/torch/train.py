@@ -379,8 +379,10 @@ class TrainingPipe():
 
     def _save_current_status(self):
         self._validate_the_last_model()
+        perfix = self.module.get_name()
 
-        checkpoint = os.path.join(self.checkpoint_path, "s{}-status.pt".format(self.current_steps))
+        checkpoint = os.path.join(
+            self.checkpoint_path, "{}-s{}-status.pt".format(perfix, self.current_steps))
         self._status_dict.set_module(StatusDict.MODEL_KEY, self.module)
         self._status_dict.set_module(StatusDict.SWA_KEY, self.swa_net)
         self._status_dict.set_module(StatusDict.OPTIM_KEY, self.opt)
@@ -390,11 +392,13 @@ class TrainingPipe():
         self._status_dict.fancy_set(StatusDict.JSON_KEY, self.cfg.json_str)
         self._status_dict.save(checkpoint)
 
-        weights_name = os.path.join(self.weights_path, "s{}.bin.txt".format(self.current_steps))
+        weights_name = os.path.join(
+            self.weights_path, "{}-s{}.bin.txt".format(perfix, self.current_steps))
         cpu_module = self.module.to("cpu")
         cpu_module.transfer_to_bin(weights_name)
 
-        swa_weights_name = os.path.join(self.swa_weights_path, "swa-s{}.bin.txt".format(self.current_steps))
+        swa_weights_name = os.path.join(
+            self.swa_weights_path, "{}-s{}-swa.bin.txt".format(perfix, self.current_steps))
         cpu_swa_net = self.swa_net.to("cpu")
         cpu_swa_net.transfer_to_bin(swa_weights_name)
 

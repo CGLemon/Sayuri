@@ -1202,8 +1202,12 @@ class Network(nn.Module):
         info += "Value extract channels: {valueextract}\n".format(valueextract=self.value_extract)
         info += "Value misc size: {valuemisc}\n".format(valuemisc=self.value_misc)
         info += "Default activation: {act}\n".format(act=self.activation)
-
         return info
+
+    def get_name(self):
+        blocks = len(self.stack)
+        channels = self.residual_channels
+        return "sayuri-b{}xc{}".format(blocks, channels)
 
     def transfer_to_bin(self, filename):
         def write_stack(f, stack):
