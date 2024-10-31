@@ -12,14 +12,14 @@ Use the default setting in the bash directory. The network will reach strong ama
 
 ## Simple Usage
 
-There are two bash files. The ```setup.sh``` will do the initialization. Copy the training script and engine to this directory. The ```selfplay.sh``` will do the self-play and trainig loop.
+There are two bash files. The ```setup.sh``` will do the initialization. Copy the training script and engine to this directory. The ```simple.sh``` will do the self-play and trainig loop.
 
     $ cp -r bash selfplay-course
     $ cd selfplay-course
     $ bash setup.sh -s ..
-    $ bash selfplay.sh
+    $ bash simple.sh
 
-The ```selfplay.sh``` will do the infinite loop. If you want to stop the loop, you need to create a kill file and wait for end of this round.
+The ```simple.sh``` will do the infinite loop. If you want to stop the loop, you need to create a kill file and wait for end of this round.
 
     $ touch kill.txt
 
