@@ -1,49 +1,36 @@
 #!/bin/bash
 
-usage()
+function usage()
 {
-    echo "usage: -h, --help      | dump this verbose"
-    echo "usage: -g, --gpu <int> | select the specific GPU(s) device"
+    echo "usage: -h, --help           | dump this verbose"
+    echo "usage: -n, --no-loop        | execute the code only once"
+    echo "usage: -s, --setting <path> | training setting file path"
+    echo "usage: -g, --gpu <int>      | select the specific GPU(s) device"
+    echo "usage: -k, --kill <path>    | kill file path"
     exit 1
 }
 
-init_params()
-{
-    WORKSPACE="workspace"
-    WEIGHTS_SOURCE="$WORKSPACE/swa"
-    WEIGHTS_DIR="weights"
-    SELFPLAY_DIR="selfplay"
-    SETTING_FILE="selfplay-setting.json"
-    KILL_FILE="kill.txt"
-}
-
-gather_gpu()
+function gather_gpu()
 {
     if [ "$GPU_LIST" = "" ]; then
         GPU_LIST=$(echo $(nvidia-smi -L | wc -l) | awk '{for(i=0;i<$1;i++)printf "%d ",i}')
     fi
 
-    NUM_GPU=0
-    for i in $GPU_LIST; do NUM_GPU=$((NUM_GPU + 1)); CUDA_DEVICES+="$i,"; GPU_FLAG+="-g $i " ; done
+    NUM_GPUS=0
+    for i in $GPU_LIST; do NUM_GPUS=$((NUM_GPUS + 1)); CUDA_DEVICES+="$i,"; GPU_FLAG+="-g $i " ; done
     CUDA_DEVICES=${CUDA_DEVICES::-1}
     GPU_FLAG=${GPU_FLAG::-1}
 }
 
-create_workspace()
-{
-    mkdir -p $SELFPLAY_DIR
-    mkdir -p $WORKSPACE
-    mkdir -p $WEIGHTS_DIR
-}
-
-main_loop()
+function main_loop()
 {
     if ! [ -f $SETTING_FILE ]; then
         echo "The training setting file does not exist. Exit!"
         exit 1
     fi
 
-    create_workspace
+    gather_gpu
+    mkdir -p $WORKSPACE
 
     while true
     do
@@ -56,17 +43,19 @@ main_loop()
         # Train a new model.
         CUDA_VISIBLE_DEVICES=${CUDA_DEVICES} python3 torch/main.py -j ${SETTING_FILE}
 
-        # Copy the weights to the target directory.
-        srcweights=$(ls -At $WEIGHTS_SOURCE | head -n 1)
-        cp -p $WEIGHTS_SOURCE/$srcweights $WEIGHTS_DIR
+        if (($EXECUTE_LOOP == 0)); then
+            break
+        fi
     done
 }
 
-init_params
+source ./default_param.sh
 
 while :; do
     case $1 in
         -h|--help) shift; usage
+        ;;
+        -n|--no-loop) shift; EXECUTE_LOOP=0
         ;;
         -s|--setting) shift; SETTING_FILE=$1
         ;;
@@ -82,6 +71,5 @@ while :; do
     shift
 done
 
-gather_gpu
 main_loop
 

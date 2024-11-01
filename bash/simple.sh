@@ -1,44 +1,28 @@
 #!/bin/bash
 
-usage()
+function usage()
 {
-    echo "usage: -h, --help      | dump this verbose"
-    echo "usage: -g, --gpu <int> | select the specific GPU(s) device"
-    echo "usage: --no-swa        | will use non-SWA weights"
+    echo "usage: -h, --help           | dump this verbose"
+    echo "usage: -s, --setting <path> | training setting file path"
+    echo "usage: -c, --config <path>  | self-paly setting file path"
+    echo "usage: -g, --gpu <int>     | select the specific GPU(s) device"
+    echo "usage: -k, --kill <path>    | kill file path"
     exit 1
 }
 
-init_params()
-{
-    WORKSPACE="workspace"
-    WEIGHTS_DIR="$WORKSPACE/swa"
-    SELFPLAY_DIR="selfplay"
-    SETTING_FILE="selfplay-setting.json"
-    KILL_FILE="kill.txt"
-    CONFIG_FILE="selfplay-config.txt"
-    ENGINE_NAME="sayuri"
-}
-
-gather_gpu()
+function gather_gpu()
 {
     if [ "$GPU_LIST" = "" ]; then
         GPU_LIST=$(echo $(nvidia-smi -L | wc -l) | awk '{for(i=0;i<$1;i++)printf "%d ",i}')
     fi
 
-    NUM_GPU=0
-    for i in $GPU_LIST; do NUM_GPU=$((NUM_GPU + 1)); CUDA_DEVICES+="$i,"; GPU_FLAG+="-g $i " ; done
+    NUM_GPUS=0
+    for i in $GPU_LIST; do NUM_GPUS=$((NUM_GPUS + 1)); CUDA_DEVICES+="$i,"; GPU_FLAG+="-g $i " ; done
     CUDA_DEVICES=${CUDA_DEVICES::-1}
     GPU_FLAG=${GPU_FLAG::-1}
 }
 
-create_workspace()
-{
-    mkdir -p $SELFPLAY_DIR
-    mkdir -p $WORKSPACE
-    mkdir -p $WEIGHTS_DIR
-}
-
-main_loop()
+function main_loop()
 {
     if ! [ -f $SETTING_FILE ]; then
         echo "The training setting file does not exist. Exit!"
@@ -49,32 +33,25 @@ main_loop()
         exit 1
     fi
 
-    create_workspace
+    gather_gpu
 
     while true
     do
-        # Do the self-play.
-        ENGINE_PLAY_CMD="./$ENGINE_NAME --mode selfplay --config $CONFIG_FILE"
-        ENGINE_PLAY_CMD="$ENGINE_PLAY_CMD $GPU_FLAG"
-        ENGINE_PLAY_CMD="$ENGINE_PLAY_CMD --target-directory $SELFPLAY_DIR"
-        ENGINE_PLAY_CMD="$ENGINE_PLAY_CMD --weights-dir $WEIGHTS_DIR"
-
-        echo $ENGINE_PLAY_CMD
-        $ENGINE_PLAY_CMD
-
-        # Train a new model.
-        CUDA_VISIBLE_DEVICES=${CUDA_DEVICES} python3 torch/main.py -j ${SETTING_FILE}
-
         # Stop the loop if we find the kill file.
         if [ -f $KILL_FILE ]; then
             echo "Find the kill file. Stop the self-play loop."
             rm $KILL_FILE
             break
         fi
+
+        NULL_KILL_FILE="null"
+        bash selfplay-worker.sh -c $CONFIG_FILE -k $NULL_KILL_FILE $GPU_FLAG --no-loop
+        bash training-worker.sh -s $SETTING_FILE -k $NULL_KILL_FILE $GPU_FLAG --no-loop
+        bash gate-worker.sh -k $NULL_KILL_FILE --no-loop
     done
 }
 
-init_params
+source ./default_param.sh
 
 while :; do
     case $1 in
@@ -88,8 +65,6 @@ while :; do
         ;;
         -k|--kill) shift; KILL_FILE=$1;
         ;;
-        --no-swa) shift; WEIGHTS_DIR="$WORKSPACE/weights";
-        ;;
         "") break
         ;;
         *) echo "Unknown argument: $1"; usage
@@ -98,6 +73,5 @@ while :; do
     shift
 done
 
-gather_gpu
 main_loop
 
