@@ -2,11 +2,12 @@
 
 function usage()
 {
-    echo "usage: -h, --help           | dump this verbose"
-    echo "usage: -n, --no-loop        | execute the code only once"
-    echo "usage: -s, --setting <path> | training setting file path"
-    echo "usage: -g, --gpu <int>      | select the specific GPU(s) device"
-    echo "usage: -k, --kill <path>    | kill file path"
+    echo "usage: -h, --help             | dump this verbose"
+    echo "usage: -n, --no-loop          | execute the code only once"
+    echo "usage: -s, --setting <path>   | training setting file path"
+    echo "usage: -g, --gpu <int>        | select the specific GPU(s) device"
+    echo "usage: -k, --kill <path>      | kill file path"
+    echo "usage: -w, --workspace <path> | workspace path"
     exit 1
 }
 
@@ -41,7 +42,7 @@ function main_loop()
         fi
 
         # Train a new model.
-        CUDA_VISIBLE_DEVICES=${CUDA_DEVICES} python3 torch/main.py -j ${SETTING_FILE}
+        CUDA_VISIBLE_DEVICES=${CUDA_DEVICES} python3 torch/main.py -j ${SETTING_FILE} -w ${WORKSPACE}
 
         if (($EXECUTE_LOOP == 0)); then
             break
@@ -62,6 +63,8 @@ while :; do
         -g|--gpu) shift; GPU_LIST="$GPU_LIST $1";
         ;;
         -k|--kill) shift; KILL_FILE=$1;
+        ;;
+        -w|--workspace) shift; WORKSPACE=$1;
         ;;
         "") break
         ;;

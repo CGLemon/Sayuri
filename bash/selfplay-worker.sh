@@ -50,6 +50,8 @@ function main_loop()
         echo $ENGINE_PLAY_CMD
         $ENGINE_PLAY_CMD
 
+        sleep 1
+
         if (($EXECUTE_LOOP == 0)); then
             break
         fi

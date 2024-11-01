@@ -2,11 +2,12 @@
 
 function usage()
 {
-    echo "usage: -h, --help           | dump this verbose"
-    echo "usage: -s, --setting <path> | training setting file path"
-    echo "usage: -c, --config <path>  | self-paly setting file path"
-    echo "usage: -g, --gpu <int>     | select the specific GPU(s) device"
-    echo "usage: -k, --kill <path>    | kill file path"
+    echo "usage: -h, --help             | dump this verbose"
+    echo "usage: -s, --setting <path>   | training setting file path"
+    echo "usage: -c, --config <path>    | self-paly setting file path"
+    echo "usage: -g, --gpu <int>        | select the specific GPU(s) device"
+    echo "usage: -k, --kill <path>      | kill file path"
+    echo "usage: -w, --workspace <path> | workspace path"
     exit 1
 }
 
@@ -46,8 +47,8 @@ function main_loop()
 
         NULL_KILL_FILE="null"
         bash selfplay-worker.sh -c $CONFIG_FILE -k $NULL_KILL_FILE $GPU_FLAG --no-loop
-        bash training-worker.sh -s $SETTING_FILE -k $NULL_KILL_FILE $GPU_FLAG --no-loop
-        bash gate-worker.sh -k $NULL_KILL_FILE --no-loop
+        bash training-worker.sh -s $SETTING_FILE -k $NULL_KILL_FILE -w $WORKSPACE $GPU_FLAG --no-loop
+        bash gate-worker.sh -k $NULL_KILL_FILE -w $WORKSPACE --no-loop
     done
 }
 
@@ -64,6 +65,8 @@ while :; do
         -g|--gpu) shift; GPU_LIST="$GPU_LIST $1";
         ;;
         -k|--kill) shift; KILL_FILE=$1;
+        ;;
+        -w|--workspace) shift; WORKSPACE=$1;
         ;;
         "") break
         ;;

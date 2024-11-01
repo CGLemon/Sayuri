@@ -2,9 +2,10 @@
 
 function usage()
 {
-    echo "usage: -h, --help        | dump this verbose"
-    echo "usage: -n, --no-loop     | execute the code only once"
-    echo "usage: -k, --kill <path> | kill file path"
+    echo "usage: -h, --help             | dump this verbose"
+    echo "usage: -n, --no-loop          | execute the code only once"
+    echo "usage: -k, --kill <path>      | kill file path"
+    echo "usage: -w, --workspace <path> | workspace path"
     exit 1
 }
 
@@ -29,10 +30,11 @@ function main_loop()
         srcweights=$(ls -At $WEIGHTS_SOURCE | head -n 1)
         tgtweights=$(ls -At $WEIGHTS_DIR | head -n 1)
 
+        # Wait for source weights ready and avoid busy waiting.
+        sleep 10
+
         # TODO: We should implement gate engine to pick self-play weights.
-        if [ "$srcweights" == "$tgtweights" ]; then
-            sleep 1
-        else
+        if [ "$srcweights" != "$tgtweights" ]; then
             cp -p $WEIGHTS_SOURCE/$srcweights $WEIGHTS_DIR
         fi
 
@@ -51,6 +53,8 @@ while :; do
         -n|--no-loop) shift; EXECUTE_LOOP=0
         ;;
         -k|--kill) shift; KILL_FILE=$1;
+        ;;
+        -w|--workspace) shift; WORKSPACE=$1;
         ;;
         "") break
         ;;

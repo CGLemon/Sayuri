@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Training setting file path.
-SETTING_FILE="selfplay-setting.json"
+SETTING_FILE="configs/selfplay-setting.json"
 
 # Save the current training status here.
 WORKSPACE="workspace"
@@ -13,7 +13,7 @@ WEIGHTS_DIR="weights"
 SELFPLAY_DIR="selfplay"
 
 # Self-paly setting file path.
-CONFIG_FILE="selfplay-config.txt"
+CONFIG_FILE="configs/selfplay-config.txt"
 
 # Kill file path.
 KILL_FILE="kill.txt"
