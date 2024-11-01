@@ -116,7 +116,7 @@ public:
 
     virtual void Destroy() = 0;
 
-    inline std::string GetName() const { return weights_->name; }
+    inline std::string GetName() const { return weights_ ? weights_->name : "random"; }
 
     std::shared_ptr<DNNWeights> weights_{nullptr};
 };
