@@ -354,6 +354,9 @@ ArgsParser::ArgsParser(int argc, char** argv) {
 
     Parse(spt);
     SetOption("inputs", inputs_);
+
+    DumpWarning();
+    InitBasicParameters();
 }
 
 void ArgsParser::Parse(Splitter &spt) {
@@ -965,9 +968,6 @@ void ArgsParser::Parse(Splitter &spt) {
     if (ErrorCommands(spt) || GetOption<bool>("help")) {
         DumpHelper();
     }
-    DumpWarning();
-
-    InitBasicParameters();
 }
 
 void ArgsParser::DumpHelper() const {
