@@ -2,26 +2,34 @@
 
 ## Requirements
 
-* Be sure that you had built the engine. The engine should be in the ```build``` directory. Recommend to use the ```-DUSE_ZLIB=1``` option.
+* Be sure that you had built the engine. The engine should be in the ```build``` directory. Recommend to use the ```-DUSE_ZLIB=1``` option to save your disk memory.
 * PyTorch 1.x (for python)
 * NumPy (for python)
 
-## Note
+## Performance
 
-Use the default setting in the bash directory. The network will reach strong amateur level in 1 ~ 2 weeks on 19x19 with the RTX 2070s computer.
+Use the default setting in the bash directory. The network will at least reach strong amateur level in 1 ~ 2 weeks on 19x19 with a RTX 2070s computer.
 
 ## Simple Usage
 
-There are two bash files. The ```setup.sh``` will do the initialization. Copy the training script and engine to this directory. The ```simple.sh``` will do the self-play and trainig loop.
+There are two bash files. The ```setup.sh``` will copy the engine and training script to the current directory. Then executing ```simple.sh``` and start simple synchronized loop. And default will use all GPUs.
 
     $ cp -r bash selfplay-course
     $ cd selfplay-course
     $ bash setup.sh -s ..
     $ bash simple.sh
 
-The ```simple.sh``` will do the infinite loop. If you want to stop the loop, you need to create a kill file and wait for end of this round.
+The ```simple.sh``` will do the infinite loop. If you want to halt the loop, you need to create a ```kill.txt``` file and wait for end of this round.
 
     $ touch kill.txt
+
+Maybe you have powerful computer with multi-GPUs but don't want to use all GPUs. You may add option ```-g``` to run the self-play and training on the specific GPU.
+
+    $ bash simple.sh -g 1    # run it on the 2nd GPU
+
+Or select specific multi-GPUs.
+
+    $ bash simple.sh -g 1 -g 2    # run it on the 2nd and 3rd GPU
 
 ## Sample Configuration File
 
