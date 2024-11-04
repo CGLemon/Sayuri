@@ -276,7 +276,7 @@ void SelfPlayPipe::Loop() {
                     {
                         // Save some verbose.
                         std::lock_guard<std::mutex> lock(log_mutex_);
-                        if (played_games % 10 == 0) {
+                        if (played_games % 100 == 0) {
                             LOGGING << '[' << CurrentDateTime() << ']'
                                         << " Played " << played_games << " games." << std::endl;
                         }
