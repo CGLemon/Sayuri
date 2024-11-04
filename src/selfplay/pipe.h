@@ -3,16 +3,19 @@
 #include "selfplay/engine.h"
 #include "neural/training_data.h"
 
+#include <atomic>
 #include <vector>
 #include <thread>
 #include <string>
-#include <atomic>
+#include <memory>
 
 class SelfPlayPipe {
 public:
     SelfPlayPipe();
 
 private:
+    using GameTrainingData = std::vector<TrainingData>;
+
     void Initialize();
     void CreateWorkspace();
     void Loop();
@@ -21,18 +24,18 @@ private:
                    float vdata_prob,
                    std::vector<TrainingData> &chunk);
     bool SaveNetQueries(int games, std::string net_queries);
+    bool GatherChunkFromBuffer(int games, std::vector<TrainingData> &chunk);
+    int FancyCeil(int val, int step) const;
 
     std::mutex data_mutex_;
     std::mutex log_mutex_;
 
-    std::vector<TrainingData> chunk_;
-
+    std::vector<std::shared_ptr<GameTrainingData>> game_chunk_buffer_;
     std::atomic<int> accumulation_games_;
     std::atomic<int> played_games_;
     std::atomic<int> running_threads_;
 
-    int chunk_games_;
-    int saved_chunk_games_;
+    int num_saved_chunks_;
     int max_games_;
     Engine engine_;
 
