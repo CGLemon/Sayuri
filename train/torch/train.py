@@ -234,6 +234,7 @@ class TrainingPipe():
 
         # How many last chunks do we load?
         self.num_chunks = cfg.num_chunks
+        self.num_all_chunks = 0
 
         # The stpes of storing the last model and validating it per epoch.
         self.steps_per_epoch =  cfg.steps_per_epoch
@@ -379,10 +380,10 @@ class TrainingPipe():
 
     def _save_current_status(self):
         self._validate_the_last_model()
-        perfix = self.module.get_name()
+        status = "{}-s{}-c{}".format(self.module.get_name(), self.current_steps, self.num_all_chunks)
 
         checkpoint = os.path.join(
-            self.checkpoint_path, "{}-s{}-status.pt".format(perfix, self.current_steps))
+            self.checkpoint_path, "{}-status.pt".format(status))
         self._status_dict.set_module(StatusDict.MODEL_KEY, self.module)
         self._status_dict.set_module(StatusDict.SWA_KEY, self.swa_net)
         self._status_dict.set_module(StatusDict.OPTIM_KEY, self.opt)
@@ -393,12 +394,12 @@ class TrainingPipe():
         self._status_dict.save(checkpoint)
 
         weights_name = os.path.join(
-            self.weights_path, "{}-s{}.bin.txt".format(perfix, self.current_steps))
+            self.weights_path, "{}.bin.txt".format(status))
         cpu_module = self.module.to("cpu")
         cpu_module.transfer_to_bin(weights_name)
 
         swa_weights_name = os.path.join(
-            self.swa_weights_path, "{}-s{}-swa.bin.txt".format(perfix, self.current_steps))
+            self.swa_weights_path, "{}-swa.bin.txt".format(status))
         cpu_swa_net = self.swa_net.to("cpu")
         cpu_swa_net.transfer_to_bin(swa_weights_name)
 
@@ -413,8 +414,9 @@ class TrainingPipe():
 
         sort_fn = os.path.getmtime
         chunks = gather_filenames(self.train_dir, self.num_chunks, sort_fn)
+        self.num_all_chunks = len(gather_filenames(self.train_dir))
 
-        print("Load the last {} chunks...".format(len(chunks)))
+        print("Load the last {} chunks from all {} chunks...".format(len(chunks), self.num_all_chunks))
 
         self.train_flag = LoaderFlag()
         self.train_lazy_loader = LazyLoader(
