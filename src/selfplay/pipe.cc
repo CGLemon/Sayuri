@@ -32,6 +32,7 @@ void SelfPlayPipe::Initialize() {
     accumulation_games_.store(0, std::memory_order_relaxed);
     played_games_.store(0, std::memory_order_relaxed);
     running_threads_.store(0, std::memory_order_relaxed);
+    writing_worker_running_.store(true, std::memory_order_relaxed);
     num_saved_chunks_ = 0;
 
     // Generate the data files name. If the target file already existed, we re-generate
@@ -89,6 +90,27 @@ void SelfPlayPipe::CreateWorkspace() {
     SafeMakeDir(vdata_directory_hash_);
     SafeMakeDir(sgf_directory_);
     SafeMakeDir(queies_directory_);
+}
+
+bool SelfPlayPipe::SaveSgf(std::string &sgfstring) {
+    const auto SaveFile = [](std::string out_name, std::string &buf) {
+        auto file = std::ofstream{};
+        file.open(out_name, std::ios_base::app);
+        bool is_open = file.is_open();
+        if (!is_open) {
+            LOGGING << "Fail to create the file: " << out_name << '!' << std::endl;
+        } else {
+            file << buf;
+            file.close();
+        }
+
+        return is_open;
+    };
+
+    auto sgf_filename = ConcatPath(
+                            sgf_directory_, filename_hash_ + ".sgf");
+    bool is_open = SaveFile(sgf_filename, sgfstring);
+    return is_open;
 }
 
 bool SelfPlayPipe::SaveChunk(const int out_id,
@@ -166,24 +188,135 @@ bool SelfPlayPipe::SaveNetQueries(int games, std::string net_queries) {
     return is_open;
 }
 
-bool SelfPlayPipe::GatherChunkFromBuffer(int games, std::vector<TrainingData> &chunk) {
-    if ((int)game_chunk_buffer_.size() < games) {
-        return false;
-    }
-    std::shuffle(std::begin(game_chunk_buffer_),
-        std::end(game_chunk_buffer_), Random<>::Get());
-    for (int i = 0; i < games; ++i) {
-        auto game_data = game_chunk_buffer_.back();
-        game_chunk_buffer_.pop_back();
-        for (auto &data : *game_data) {
-            chunk.emplace_back(data);
-        }
-    }
-    return true;
-}
-
 int SelfPlayPipe::FancyCeil(int val, int step) const {
     return step * (val / step + static_cast<bool>(val % step));
+}
+
+void SelfPlayPipe::AssignDataWorker() {
+    workers_.emplace_back(
+        [this]() -> void {
+            constexpr float kValidationRatio = 0.1f;
+
+            const int games = engine_.GetParallelGames();
+            bool keep_running = writing_worker_running_.load(std::memory_order_relaxed);
+            auto data_buffer = std::vector<std::shared_ptr<DataSgfPair>>{};
+            auto queries_buffer = std::list<GamesQueriesPair>{};
+
+            while (keep_running) {
+                std::this_thread::yield();
+                keep_running = writing_worker_running_.load(std::memory_order_relaxed);
+                {
+                    // Gather the item the to the local buffer.
+                    std::lock_guard<std::mutex> lock(data_mutex_);
+                    while (!data_sgf_buffer_.empty()) {
+                        data_buffer.emplace_back(data_sgf_buffer_.front());
+                        data_sgf_buffer_.pop_front();
+                        keep_running |= true;
+                    }
+                }
+                {
+                    // Gather the item the to the local buffer.
+                    std::lock_guard<std::mutex> lock(log_mutex_);
+                    while (!games_queries_buffer_.empty()) {
+                        queries_buffer.emplace_back(games_queries_buffer_.front());
+                        games_queries_buffer_.pop_front();
+                        keep_running |= true;
+                    }
+                }
+
+                // Write the data from the local buffer.
+                const int games_buffer_size =
+                    writing_worker_running_.load(std::memory_order_relaxed) ? games : 1;
+                while ((int)data_buffer.size() >= games_buffer_size) {
+                    std::shuffle(std::begin(data_buffer), std::end(data_buffer), Random<>::Get());
+
+                    auto data_sgf_pair = data_buffer.back();
+                    data_buffer.pop_back();
+                    if (SaveChunk(num_saved_chunks_, kValidationRatio, data_sgf_pair->first)) {
+                        num_saved_chunks_ += 1;
+                    }
+                    SaveSgf(data_sgf_pair->second);
+                }
+                while (!queries_buffer.empty()) {
+                    auto queries_pair = queries_buffer.front();
+                    queries_buffer.pop_front();
+                    SaveNetQueries(queries_pair.first, queries_pair.second);
+                }
+            }
+        }
+    );
+}
+
+void SelfPlayPipe::AssignSelfplayWorkers() {
+    for (int g = 0; g < engine_.GetParallelGames(); ++g) {
+        workers_.emplace_back(
+            [this, g]() -> void {
+                constexpr int kMainThreadIdx = 0;
+                constexpr int kBufferGames = 25;
+                constexpr int kVerboseGames = 100;
+                bool should_halt = false;
+                running_threads_.fetch_add(1, std::memory_order_relaxed);
+
+                while (accumulation_games_.fetch_add(1) < max_games_) {
+                    if (g == kMainThreadIdx && !should_halt) {
+                        if (engine_.ShouldHalt()) {
+                            int accum_games = std::max(
+                                engine_.GetParallelGames(),
+                                accumulation_games_.load(std::memory_order_relaxed));
+                            // Assume no data racing so we do not lock max_games_.
+                            max_games_ = std::min(
+                                max_games_,
+                                FancyCeil(accum_games + kBufferGames, kBufferGames));
+                            should_halt = true;
+                            LOGGING << '[' << CurrentDateTime() << ']'
+                                        << " Will halt the self-play loop after playing "
+                                        << max_games_ << " games." << std::endl;
+                        }
+                    }
+
+                    // Engine play the self-play game then save the data into queue.
+                    auto data_sgf_pair = std::make_shared<DataSgfPair>();
+                    engine_.PrepareGame(g);
+                    engine_.Selfplay(g);
+                    engine_.GatherTrainingData(data_sgf_pair->first, g);
+                    engine_.GatherSgfString(data_sgf_pair->second, g);
+                    {
+                        std::lock_guard<std::mutex> lock(data_mutex_);
+                        data_sgf_buffer_.emplace_back(data_sgf_pair);
+                    }
+                    auto played_games = played_games_.fetch_add(1) + 1;
+
+                    {
+                        // Save some verbose.
+                        std::lock_guard<std::mutex> lock(log_mutex_);
+                        if (played_games % kVerboseGames == 0) {
+                            LOGGING << '[' << CurrentDateTime() << ']'
+                                        << " Played " << played_games << " games." << std::endl;
+                        }
+                        // Not a precision value but the final accumulation value is
+                        // correct.
+                        games_queries_buffer_.emplace_back(
+                            played_games, engine_.GetNetReportQueries());
+                    }
+                    
+                }
+                running_threads_.fetch_sub(1, std::memory_order_relaxed);
+
+                if (g == kMainThreadIdx) {
+                    while (running_threads_.load(std::memory_order_relaxed) != 0) {
+                        std::this_thread::yield();
+                    }
+                    writing_worker_running_.store(false, std::memory_order_relaxed);
+                }
+            }
+        );
+    }
+}
+
+void SelfPlayPipe::WaitForWorkers() {
+    for (auto &t : workers_) {
+        t.join();
+    }
 }
 
 void SelfPlayPipe::Loop() {
@@ -201,13 +334,8 @@ void SelfPlayPipe::Loop() {
         return;
     }
     if (max_games_ < engine_.GetParallelGames()) {
-        max_games_ = FancyCeil(engine_.GetParallelGames(), 25);
+        max_games_ = engine_.GetParallelGames();
         LOGGING << "The number of self-play games must be greater than parallel games. New value is "
-                    << max_games_ << "." << std::endl;
-    }
-    if (max_games_ % 25 != 0) {
-        max_games_ = FancyCeil(max_games_, 25);
-        LOGGING << "The number of self-play games must be divided by 25. New value is "
                     << max_games_ << "." << std::endl;
     }
     if (!IsGzipValid()) {
@@ -222,106 +350,10 @@ void SelfPlayPipe::Loop() {
     LOGGING << "Directory for saving: " << target_directory_  << std::endl;
     LOGGING << "Starting time is: " << CurrentDateTime()  << std::endl;
 
-    for (int g = 0; g < engine_.GetParallelGames(); ++g) {
-        workers_.emplace_back(
-            [this, g]() -> void {
-                constexpr int kMainThreadIdx = 0;
-                constexpr int kGamesPerChunk = 25;
-                bool should_halt = false;
-                auto sgf_filename = ConcatPath(
-                                        sgf_directory_, filename_hash_ + ".sgf");
-                running_threads_.fetch_add(1, std::memory_order_relaxed);
+    AssignDataWorker();
+    AssignSelfplayWorkers();
+    WaitForWorkers();
 
-                while (accumulation_games_.fetch_add(1) < max_games_) {
-                    if (g == kMainThreadIdx && !should_halt) {
-                        if (engine_.ShouldHalt()) {
-                            int accm_games = std::max(
-                                engine_.GetParallelGames(),
-                                accumulation_games_.load(std::memory_order_relaxed));
-                            // Assume no data racing so we do not lock max_games_.
-                            max_games_ = std::min(
-                                max_games_,
-                                FancyCeil(accm_games + kGamesPerChunk, kGamesPerChunk));
-                            should_halt = true;
-                            LOGGING << '[' << CurrentDateTime() << ']'
-                                        << " Will halt the self-play loop after playing "
-                                        << max_games_ << " games." << std::endl;
-                        }
-                    }
-
-                    auto game_data = std::make_shared<GameTrainingData>();
-                    engine_.PrepareGame(g);
-                    engine_.Selfplay(g);
-                    engine_.GatherTrainingData(*game_data, g);
-                    {
-                        // Save the current chunk.
-                        std::lock_guard<std::mutex> lock(data_mutex_);
-                        game_chunk_buffer_.emplace_back(game_data);
-                        int num_games_in_buffer = game_chunk_buffer_.size();
-                        if (num_games_in_buffer >= kGamesPerChunk &&
-                                num_games_in_buffer >= engine_.GetParallelGames()) {
-                            std::vector<TrainingData> chunk_buffer;
-                            GatherChunkFromBuffer(kGamesPerChunk, chunk_buffer);
-                            if (!SaveChunk(num_saved_chunks_, 0.1f, chunk_buffer)) {
-                                break;
-                            }
-                            num_saved_chunks_ += 1;
-                        }
-                        engine_.SaveSgf(sgf_filename, g);
-                    }
-
-                    played_games_.fetch_add(1);
-                    auto played_games = played_games_.load(std::memory_order_relaxed);
-
-                    {
-                        // Save some verbose.
-                        std::lock_guard<std::mutex> lock(log_mutex_);
-                        if (played_games % 100 == 0) {
-                            LOGGING << '[' << CurrentDateTime() << ']'
-                                        << " Played " << played_games << " games." << std::endl;
-                        }
-                        if (played_games % kGamesPerChunk == 0) {
-                            // Not a precision value but the final accumulation value is
-                            // correct.
-                            SaveNetQueries(
-                                played_games, engine_.GetNetReportQueries());
-                        }
-                    }
-                    
-                }
-                running_threads_.fetch_sub(1, std::memory_order_relaxed);
-
-                if (g == kMainThreadIdx) {
-                    while (running_threads_.load(std::memory_order_relaxed) != 0) {
-                        std::this_thread::yield();
-                    }
-
-                    // Save remaining chunks.
-                    std::vector<TrainingData> chunk_buffer;
-                    while(GatherChunkFromBuffer(kGamesPerChunk, chunk_buffer)) {
-                        if (!SaveChunk(num_saved_chunks_, 0.1f, chunk_buffer)) {
-                            break;
-                        }
-                        num_saved_chunks_ += 1;
-                    }
-
-                    // Still possible remain some chunks in the buffer because we do not
-                    // lock variable, max_games_. We may play too many games. Simply discard
-                    // them be sure every chunk has 25 games training data.
-                    if (!game_chunk_buffer_.empty()) {
-                        LOGGING << '[' << CurrentDateTime() << ']'
-                                    << " Discard "
-                                    << game_chunk_buffer_.size()
-                                    << " games training data." << std::endl;
-                    }
-                }
-            }
-        );
-    }
-
-    for (auto &t : workers_) {
-        t.join();
-    }
     LOGGING << '[' << CurrentDateTime() << ']'
                 << " Finish the self-play loop. Totally played "
                 << played_games_.load(std::memory_order_relaxed) << " games." << std::endl;

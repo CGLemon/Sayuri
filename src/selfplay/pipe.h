@@ -8,6 +8,8 @@
 #include <thread>
 #include <string>
 #include <memory>
+#include <utility>
+#include <list>
 
 class SelfPlayPipe {
 public:
@@ -15,11 +17,14 @@ public:
 
 private:
     using GameTrainingData = std::vector<TrainingData>;
+    using DataSgfPair = std::pair<GameTrainingData, std::string>;
+    using GamesQueriesPair = std::pair<int, std::string>;
 
     void Initialize();
     void CreateWorkspace();
     void Loop();
 
+    bool SaveSgf(std::string &sgfstring);
     bool SaveChunk(const int out_id,
                    float vdata_prob,
                    std::vector<TrainingData> &chunk);
@@ -27,13 +32,19 @@ private:
     bool GatherChunkFromBuffer(int games, std::vector<TrainingData> &chunk);
     int FancyCeil(int val, int step) const;
 
+    void AssignDataWorker();
+    void AssignSelfplayWorkers();
+    void WaitForWorkers();
+
     std::mutex data_mutex_;
     std::mutex log_mutex_;
+    std::list<std::shared_ptr<DataSgfPair>> data_sgf_buffer_;
+    std::list<GamesQueriesPair> games_queries_buffer_;
 
-    std::vector<std::shared_ptr<GameTrainingData>> game_chunk_buffer_;
     std::atomic<int> accumulation_games_;
     std::atomic<int> played_games_;
     std::atomic<int> running_threads_;
+    std::atomic<bool> writing_worker_running_;
 
     int num_saved_chunks_;
     int max_games_;

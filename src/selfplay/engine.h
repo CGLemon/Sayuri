@@ -13,7 +13,7 @@ class Engine {
 public:
     void Initialize();
 
-    void SaveSgf(std::string filename, int g);
+    void GatherSgfString(std::string &sgf, int g);
     void GatherTrainingData(std::vector<TrainingData> &chunk, int g);
     void PrepareGame(int g);
     void Selfplay(int g);

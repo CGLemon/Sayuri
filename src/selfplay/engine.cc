@@ -171,11 +171,11 @@ void Engine::ParseQueries() {
     network_->Reload(max_bsize);
 }
 
-void Engine::SaveSgf(std::string filename, int g) {
+void Engine::GatherSgfString(std::string &sgf, int g) {
     Handel(g);
     auto &state = game_pool_[g];
     state.RewriteComment(state.GetRuleString(), 0);
-    Sgf::Get().ToFile(filename, game_pool_[g]);
+    sgf = Sgf::Get().ToString(game_pool_[g]);
 }
 
 void Engine::GatherTrainingData(std::vector<TrainingData> &chunk, int g) {
@@ -349,6 +349,6 @@ std::string Engine::GetNetReportQueries() {
 
 void Engine::Handel(int g) {
     if (g < 0 || g >= parallel_games_) {
-        throw std::runtime_error("Selection is out of array.");
+        throw std::runtime_error("The game index is out of array.");
     }
 }
