@@ -106,6 +106,7 @@ struct ComputationResult {
     int random_move{kNullVertex};
     int gumbel_move{kNullVertex};
     int gumbel_no_pass_move{kNullVertex};
+    int rank_move{kNullVertex};
     int capture_all_dead_move{kNullVertex};
 
     VertexType to_move;
@@ -232,6 +233,8 @@ private:
     void GatherData(const GameState &state,
                     ComputationResult &result,
                     bool discard);
+
+    Node *AdvanceToNextNode(Node *const node, const int color, const int depth);
 
     void PlaySimulation(GameState &currstate, Node *const node,
                         const int depth, SearchResult &search_result);

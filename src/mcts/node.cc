@@ -6,7 +6,6 @@
 #include "utils/format.h"
 #include "utils/logits.h"
 #include "utils/kldivergence.h"
-#include "utils/ai_style.h"
 #include "game/symmetry.h"
 
 #include <cassert>
@@ -54,7 +53,7 @@ bool Node::PrepareRootNode(Network &network,
     }
 
     // Adjust the strength by pruning children.
-    RandomPruneRootChildren(state);
+    RandomPruneRootChildren(network, state);
 
     // Remove all superkos at the root. In the most case,
     // it will help simplify the state.
@@ -121,59 +120,6 @@ void Node::Recompute(Network &network,
     if (passnode) {
         passnode->SetPolicy(
             raw_netlist.pass_probability/legal_accumulate);
-    }
-}
-
-void Node::RandomPruneRootChildren(GameState &state) {
-    if (param_->relative_rank < 0) {
-        return;
-    }
-    if (state.GetBoardSize() != 19) {
-        return;
-    }
-
-    auto GetCoord = [](GameState &state, int vtx) {
-        auto coord = std::array<int, 2>({-1, -1});
-        if (vtx != kPass
-                && vtx != kResign
-                && vtx != kNullVertex) {
-            coord[0] = state.GetX(vtx);
-            coord[1] = state.GetY(vtx);
-        }
-        return coord;
-    };
-
-    auto selection = SelectionVector<Node *>{};
-    for (const auto &child : children_) {
-        const auto node = child.Get();
-        if (node->IsActive()) {
-            auto coord = GetCoord(state, node->GetVertex());
-            selection.emplace_back(
-                child.GetPolicy(), coord, node);
-        }
-    }
-
-    selection = GetRelativeRankVector(
-        selection, param_->relative_rank,
-        state.GetBoardSize(),
-        GetCoord(state, state.GetLastMove()));
-
-    // prune all active node first
-    for (const auto &child : children_) {
-        const auto node = child.Get();
-        if (!node->IsActive()) {
-            continue;
-        }
-        node->SetActive(false);
-    }
-
-    // activate the selection children
-    for (auto &it : selection) {
-        const auto node = std::get<2>(it);
-
-        if (node->IsPruned()) {
-            node->SetActive(true);
-        }
     }
 }
 
@@ -542,6 +488,32 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
         }
     }
 
+    Inflate(*best_node);
+    return best_node->Get();
+}
+
+Node *Node::LowestVisitsSelectChild() {
+    Edge* best_node = nullptr;
+    int best_value = std::numeric_limits<int>::max();
+
+    for (auto &child : children_) {
+        const auto node = child.Get();
+        const bool is_pointer = node != nullptr;
+
+        // The node is pruned or invalid. Skip it.
+        if (is_pointer && !node->IsActive()) {
+            continue;
+        }
+
+        int visits = 0;
+        if (is_pointer) {
+            visits = node->GetVisits() + node->GetThreads();
+        }
+        if (visits < best_value) {
+            best_node = &child;
+            best_value = visits;
+        }
+    }
     Inflate(*best_node);
     return best_node->Get();
 }
@@ -1134,9 +1106,12 @@ const std::vector<Node::Edge> &Node::GetChildren() const {
     return children_;
 }
 
+int Node::GetThreads() const {
+    return running_threads_.load(std::memory_order_relaxed);
+}
+
 int Node::GetVirtualLoss() const {
-    return VIRTUAL_LOSS_COUNT *
-               running_threads_.load(std::memory_order_relaxed);
+    return VIRTUAL_LOSS_COUNT * GetThreads();
 }
 
 int Node::GetVertex() const {

@@ -109,6 +109,7 @@ set(PATTERN_SOURCES
 set(MCTS_SOURCES
     ${MCTS_SOURCES_DIR}/time_control.cc
     ${MCTS_SOURCES_DIR}/node.cc
+    ${MCTS_SOURCES_DIR}/node_style.cc
     ${MCTS_SOURCES_DIR}/search.cc
     )
 

@@ -48,6 +48,18 @@ void Search::Initialize() {
     playouts_.store(0, std::memory_order_relaxed);
 }
 
+Node *Search::AdvanceToNextNode(Node *const node, const int color, const int depth) {
+    bool is_root = depth == 0;
+    Node *next = nullptr;
+
+    if (is_root && param_->relative_rank >= 0) {
+        next = node->LowestVisitsSelectChild();
+    } else {
+        next = node->PuctSelectChild(color, is_root);
+    }
+    return next;
+}
+
 void Search::PlaySimulation(GameState &currstate, Node *const node,
                             const int depth, SearchResult &search_result) {
     node->IncrementThreads();
@@ -90,10 +102,9 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
     // Not the terminated node, search the next node.
     if (node->HasChildren() && !search_result.IsValid()) {
         auto color = currstate.GetToMove();
-        Node *next = nullptr;
 
         // Go to the next node by PUCT algoritim.
-        next = node->PuctSelectChild(color, depth == 0);
+        Node *next = AdvanceToNextNode(node, color, depth);
 
         auto vtx = next->GetVertex();
         currstate.PlayMove(vtx, color);
@@ -467,6 +478,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     }
     result.gumbel_move = root_node_->GetGumbelMove(true);
     result.gumbel_no_pass_move = root_node_->GetGumbelMove(false);
+    result.rank_move = root_node_->GetRankMove();
     result.root_score_lead = root_node_->GetFinalScore(color);
     result.root_eval = root_node_->GetWL(color, false);
     result.root_score_stddev = root_node_->GetScoreStddev();
@@ -823,6 +835,9 @@ int Search::GetBestMove(int playouts, OptionTag tag) {
     int best_move = result.best_move;
     const int random_moves_cnt = param_->random_moves_factor *
                                      root_state_.GetNumIntersections();
+    if (param_->relative_rank >= 0) {
+        best_move = result.rank_move;
+    }
     if (root_state_.GetMoveNumber() < random_moves_cnt) {
         // TODO: It is possible the pass move. Should we prune it?
         best_move = result.random_move;

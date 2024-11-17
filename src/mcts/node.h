@@ -112,6 +112,9 @@ public:
     // Select the best PUCT value node.
     Node *PuctSelectChild(const int color, const bool is_root);
 
+    // Select the lowest visits node.
+    Node *LowestVisitsSelectChild();
+
     // Randomly select one child by visits.
     int RandomMoveProportionally(float temp,
                                  float min_ratio,
@@ -136,6 +139,8 @@ public:
 
     // Get best move(vertex) with Gumbel-Top-k trick.
     int GetGumbelMove(bool allow_pass);
+
+    int GetRankMove();
 
     const std::vector<Edge> &GetChildren() const;
 
@@ -221,7 +226,7 @@ public:
     std::string GetPvString(GameState &state);
 
 private:
-    void RandomPruneRootChildren(GameState &state);
+    void RandomPruneRootChildren(Network &network, GameState &state);
     void Recompute(Network &network,
                    GameState &state,
                    const bool is_root);
@@ -245,6 +250,7 @@ private:
 
     void InflateAllChildren();
     void ReleaseAllChildren();
+    int GetThreads() const;
     int GetVirtualLoss() const;
 
     float GetGumbelEval(int color, float parent_score) const;

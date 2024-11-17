@@ -130,8 +130,6 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "gogui-ladder_map",
 
-    "gogui-rank_selection",
-
     "gogui-rules_game_id",
 
     "gogui-rules_board",
