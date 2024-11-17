@@ -8,6 +8,7 @@
 #include "config.h"
 
 #include <algorithm>
+#include <stdexcept>
 
 SelfPlayPipe::SelfPlayPipe() {
     Initialize();
@@ -103,7 +104,6 @@ bool SelfPlayPipe::SaveSgf(std::string &sgfstring) {
             file << buf;
             file.close();
         }
-
         return is_open;
     };
 
@@ -121,7 +121,7 @@ bool SelfPlayPipe::SaveChunk(const int out_id,
         auto buf = oss.str();
         try {
             SaveGzip(out_name, buf);
-        } catch (const char *err) {
+        } catch (const std::exception& e) {
             auto file = std::ofstream{};
             file.open(out_name, std::ios_base::app);
             is_open = file.is_open();
@@ -137,14 +137,12 @@ bool SelfPlayPipe::SaveChunk(const int out_id,
     };
     auto tdata_out_name = ConcatPath(
                               tdata_directory_hash_,
-                              filename_hash_ +
-                                  "_" +
+                              "game_" +
                                   std::to_string(out_id) +
                                   ".txt");
     auto vdata_out_name = ConcatPath(
                               vdata_directory_hash_,
-                              filename_hash_ +
-                                  "_" +
+                              "game_" +
                                   std::to_string(out_id) +
                                   ".txt");
 

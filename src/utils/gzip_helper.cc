@@ -17,8 +17,8 @@ void SaveGzip(std::string filename, std::string &buffer) {
     std::memcpy(in_buff.get(), buffer.data(), in_buff_size);
 
     auto comp_size = gzwrite(out, in_buff.get(), in_buff_size);
-    if (!comp_size) {
-        throw "Error in gzip output";
+    if (in_buff_size && !comp_size) {
+        throw std::runtime_error{"Error in gzip output"};
     }
     gzclose(out);
 }
@@ -26,11 +26,10 @@ void SaveGzip(std::string filename, std::string &buffer) {
 #else
 
 void SaveGzip(std::string /* filename */, std::string & /* buffer */ ) {
-    throw "No gzip library";
+    throw std::runtime_error{"No gzip library"};
 }
 
 #endif
-
 
 bool IsGzipValid() {
 #ifdef USE_ZLIB
