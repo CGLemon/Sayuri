@@ -2,7 +2,9 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 import random, time, math, os, glob, io, gzip
+import argparse
 
+from config import Config
 from network import Network
 from data import Data
 
@@ -657,3 +659,27 @@ class TrainingPipe():
             self._save_current_status()
         self._break_loader()
         print("Training is over.")
+
+
+def train_process(args):
+    cfg = Config(args.json)
+
+    # overwrite some values
+    if not args.workspace is None:
+        cfg.store_path = args.workspace
+
+    pipe = TrainingPipe(cfg)
+    pipe.fit_and_store()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-j", "--json", metavar="<string>",
+                        help="The setting json file name.", type=str)
+    parser.add_argument("-w", "--workspace", metavar="<string>",
+                        help="Overwrite the store path.", type=str)
+    args = parser.parse_args()
+
+    if args.json == None:
+        print("Please give the setting json file.")
+    else:
+        train_process(args)

@@ -2,9 +2,9 @@
 
 ## Supervised Learning
 
-You should prepare the training data and config json file. Rewrite the ```TrainDirectory``` as your training data path. You may ask how to find out the data? The only way is you need to generate the data by yourself via RL script. Please go to the bash to see the detail. After you run RL loop, the generated data should be at the ```selfplay/tdata```. Then type the following script
+You should prepare the training data and config json file. Then rewriting the ```TrainDirectory``` as your training data path. You may ask how to find out the data? The only way is you need to generate the data by yourself via RL script. Please go to the bash to see the detail. After you run RL loop, the generated data should be at the ```selfplay/tdata```. Then type the following script
 
-    $ python3 torch/main.py -j sl-setting.json
+    $ python3 torch/train.py -j sl-setting.json
 
 
 ## Python Engine

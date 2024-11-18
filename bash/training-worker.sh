@@ -42,7 +42,7 @@ function main_loop()
         fi
 
         # Train a new model.
-        CUDA_VISIBLE_DEVICES=${CUDA_DEVICES} python3 torch/main.py -j ${SETTING_FILE} -w ${WORKSPACE}
+        CUDA_VISIBLE_DEVICES=${CUDA_DEVICES} python3 torch/train.py -j ${SETTING_FILE} -w ${WORKSPACE}
 
         if (($EXECUTE_LOOP == 0)); then
             break

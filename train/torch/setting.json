@@ -43,7 +43,6 @@
             [1024000, 1e-5]
          ],
 
-        "ValidationDirectory" : "validate-dir",
         "TrainDirectory" : "train-dir",
         "StorePath" : "workspace"
     }
