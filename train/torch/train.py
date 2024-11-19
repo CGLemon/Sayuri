@@ -283,6 +283,9 @@ class TrainingPipe():
         self.swa_net = Network(cfg)
         self.swa_net.eval()
 
+        # Warm up steps.
+        self.warmup_steps = self.cfg.warmup_steps
+
         # The sample rate factor for policy
         self.policy_surprising_factor = self.cfg.policy_surprising_factor
 
@@ -353,6 +356,9 @@ class TrainingPipe():
                 curr_lr = lr
             else:
                 break
+
+        if self.warmup_steps > 0 and num_steps < self.warmup_steps:
+            curr_lr = curr_lr * (num_steps/self.warmup_steps)
         return curr_lr
 
     def _load_current_status(self):

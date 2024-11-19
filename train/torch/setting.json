@@ -30,7 +30,7 @@
         "SoftLossWeight" : 0.1,
         "SwaMaxCount" : 16,
         "SwaSteps" : 100,
-        "Activation" : "relu",
+        "WarmUpSteps" : 20000,
         "PolicySurprisingFactor" : 0.0,
 
         "LearningRateSchedule" : [

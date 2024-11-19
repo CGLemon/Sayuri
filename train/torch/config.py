@@ -46,6 +46,7 @@ class Config:
         self.soft_loss_weight = train.get("SoftLossWeight", 0.1)
         self.swa_max_count = train.get("SwaMaxCount", 16)
         self.swa_steps = train.get("SwaSteps", 100)
+        self.warmup_steps = train.get("WarmUpSteps", 0)
         self.policy_surprising_factor = train.get("PolicySurprisingFactor", 0.0)
 
         assert self.train_dir != None, ""
