@@ -1168,7 +1168,7 @@ class Network(nn.Module):
     def update_parameters(self, curr_steps):
         for layer in self.layers_collector:
             if isinstance(layer, ConvBlock) or \
-                   isinstance(layer, MixerBlock):
+                   isinstance(layer, DepthwiseConvBlock):
                 layer.bn.update_renorm_clips(curr_steps)
             else:
                 pass
