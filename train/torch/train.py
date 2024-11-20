@@ -475,28 +475,20 @@ class TrainingPipe():
     def _get_new_running_loss_dict(self, all_loss_dict):
         running_loss_dict = dict()
         running_loss_dict["steps"] = 0
-        running_loss_dict["loss"] = 0
         for k, v in all_loss_dict.items():
             running_loss_dict[k] = 0
         return running_loss_dict
 
     def _accumulate_loss(self, running_loss_dict, all_loss_dict):
         for k, v in all_loss_dict.items():
-            this_item_loss = v.item()
-            running_loss_dict[k] += this_item_loss
-            running_loss_dict["loss"] += this_item_loss
+            running_loss_dict[k] += v.item()
         running_loss_dict["steps"] += 1./self.macrofactor
         return running_loss_dict
 
     def _handle_loss(self, all_loss_dict):
         for k, v in all_loss_dict.items():
             v /= self.macrofactor
-
-        loss = all_loss_dict["prob_loss"]
-        for k, v in all_loss_dict.items():
-            if k == "prob_loss":
-               continue
-            loss += v
+        loss = all_loss_dict["loss"]
         return loss, all_loss_dict
 
     def _get_current_info(self, speed, running_loss_dict):
@@ -665,7 +657,6 @@ class TrainingPipe():
             self._save_current_status()
         self._break_loader()
         print("Training is over.")
-
 
 def train_process(args):
     cfg = Config(args.json)

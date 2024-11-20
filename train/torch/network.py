@@ -1151,7 +1151,21 @@ class Network(nn.Module):
         )
         errors_loss = q_error_loss + score_error_loss
 
+        # add all loss
+        loss = prob_loss + \
+                   aux_prob_loss + \
+                   soft_prob_loss + \
+                   soft_aux_prob_loss + \
+                   optimistic_loss + \
+                   ownership_loss + \
+                   wdl_loss + \
+                   q_vals_loss + \
+                   scores_loss + \
+                   errors_loss
+
+        # make loss dictionary
         all_loss_dict = {
+            "loss"               : loss,
             "prob_loss"          : prob_loss,
             "aux_prob_loss"      : aux_prob_loss,
             "soft_prob_loss"     : soft_prob_loss,
