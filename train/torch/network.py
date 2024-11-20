@@ -415,6 +415,7 @@ class FullyConnect(nn.Module):
             out_size,
             bias=True
         )
+        self.lora_hook_fn = None
         self.activation = activation
         self.act = activation_func(self.activation, inplace=True)
         self._init_weights()
@@ -429,6 +430,9 @@ class FullyConnect(nn.Module):
         if collector is not None:
             collector.append(self)
 
+    def set_rola_hook(self, hook_fn):
+        self.lora_hook_fn = hook_fn
+
     def shape_to_text(self):
         return fullyconnect_to_text(self.in_size, self.out_size)
 
@@ -442,7 +446,10 @@ class FullyConnect(nn.Module):
         return out
 
     def forward(self, x):
-        x = self.linear(x)
+        if self.lora_hook_fn:
+            x = self.linear(x) + self.lora_hook_fn(x)
+        else:
+            x = self.linear(x)
         x = self.act(x)
         return x
 

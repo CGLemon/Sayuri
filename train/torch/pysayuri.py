@@ -1,6 +1,7 @@
 from network import Network, CRAZY_NEGATIVE_VALUE
 from status_dict import StatusDict
 from config import Config
+from finetuning import fine_tuning
 from datetime import datetime
 
 import colorsys
@@ -15,6 +16,7 @@ import argparse
 import time
 import select
 import os
+import glob
 
 BOARD_SIZE = 19
 KOMI = 7.5
@@ -1370,8 +1372,10 @@ class SgfGame:
             with open(filename, "r") as f:
                 sgf = f.read()
             self._parse(sgf)
+            return True
         except Exception as err:
             stderr_write("{}\n".format(err))
+        return False
 
     def load_string(self, sgf):
         try:
@@ -1639,11 +1643,80 @@ class Agent():
 
     def load_sgf(self, filename):
         sgf = SgfGame()
-        sgf.load_file(filename)
-        self._board = sgf.last_board.copy()
+        if sgf.load_file(filename):
+            self._board = sgf.last_board.copy()
 
     def as_sgf(self):
         return self._board.as_sgf()
+
+    def fine_tuning(self, dirname):
+        def transfer_move(move, board):
+            if move in [PASS, RESIGN]:
+                pos = NUM_INTESECTIONS
+            else: 
+                pos = board.vertex_to_index(move)
+            return pos
+
+        data_buffer = list()
+
+        num_sgf = 0
+        filenames = glob.glob(os.path.join(dirname, "*.sgf"))
+        stderr_write("we get {} SGF files...\n".format(len(filenames)))
+
+        for filename in filenames:
+            sgf = SgfGame()
+            if not sgf.load_file(filename):
+                continue
+            if sgf.last_board.board_size != BOARD_SIZE:
+                stderr_write("SGF game should be {}x{}.\n".format(BOARD_SIZE, BOARD_SIZE))
+                continue
+            num_sgf += 1
+
+            num_moves = len(sgf.board_history) - 2
+            for m in range(num_moves):
+                curr_board = sgf.board_history[m + 0]
+                next_board = sgf.board_history[m + 1]
+                futu_board = sgf.board_history[m + 2]
+                planes = curr_board.get_features()
+
+                # gather policy target
+                our_policy = np.zeros(NUM_INTESECTIONS + 1)
+                our_policy[transfer_move(next_board.last_move, next_board)] = 1.0
+                opp_policy = np.zeros(NUM_INTESECTIONS + 1)
+                opp_policy[transfer_move(futu_board.last_move, futu_board)] = 1.0
+
+                # gather misc target
+                result = self._net.get_output_without_batch(
+                    features = planes,
+                    board_size = curr_board.board_size,
+                    as_numpy = True
+                )
+                ownership = result["ownership"]
+                wdl = result["wdl"]
+                q_vals = result["all_q_vals"]
+                scores = result["all_scores"]
+                global_weight = 1.0
+
+                # gather all targets
+                target = (
+                    our_policy,
+                    opp_policy,
+                    ownership,
+                    wdl,
+                    q_vals,
+                    scores,
+                    global_weight
+                )
+                data_buffer.append((planes, target))
+            stderr_write("gather {} positions pair from {} SGF games...\n".format(len(data_buffer), num_sgf))
+        stderr_write("totally gather {} positions pair from {} SGF games, starting fine-tuning...\n".format(len(data_buffer), num_sgf))
+        fine_tuning(self._net, data_buffer, self._use_gpu)
+        stderr_write("finish fine-tuning process...\n")
+
+        # save the text weights for cpp engine
+        weights_path = "weights-finetuning.txt"
+        self._net.transfer_to_bin("{}".format(weights_path))
+        stderr_write("save the weights to {}...\n".format(weights_path))
 
     def reset_board(self, *args, **kwargs):
         board_size = kwargs.get("board_size", self._board.board_size)
@@ -1943,6 +2016,7 @@ def gtp_loop(args):
                 "raw-nn",
                 "planes",
                 "save_bin_weights",
+                "fine_tuning",
                 "gogui-analyze_commands",
                 "lz-genmove_analyze",
                 "lz-analyze"
@@ -2147,6 +2221,12 @@ def gtp_loop(args):
             cpu_net.transfer_to_bin(weights_name)
             status_dict.load_module(StatusDict.SWA_KEY, cpu_net)
             cpu_net.transfer_to_bin(swa_weights_name)
+            gtp_print("")
+        elif main == "fine_tuning":
+            if len(inputs) <= 1:
+                raise Exception("GTP command \"fine_tuning\": should provide SGF directory path")
+            path = inputs[1]
+            agent.fine_tuning(path)
             gtp_print("")
         else:
             gtp_print("unknown command", False)
