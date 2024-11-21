@@ -81,7 +81,7 @@ class FineTuningDataset(Dataset):
         self.data_buffer = list()
 
         for planes, target in data_buffer:
-            our_policy, opp_policy, ownership, wdl, q_vals, scores, global_weight = target
+            our_policy, opp_policy, ownership, wdl, q_vals, scores = target
 
             self.data_buffer.append((
                 torch.from_numpy(planes).float(),
@@ -91,8 +91,7 @@ class FineTuningDataset(Dataset):
                     torch.from_numpy(ownership).float(),
                     torch.from_numpy(wdl).float(),
                     torch.from_numpy(q_vals).float(),
-                    torch.from_numpy(scores).float(),
-                    global_weight
+                    torch.from_numpy(scores).float()
                 )
             ))
 
@@ -102,7 +101,7 @@ class FineTuningDataset(Dataset):
     def __getitem__(self, idx):
         return self.data_buffer[idx]
 
-def fine_tuning(net, data_buffer, use_gpu=False):
+def fine_tuning(net, data_buffer, device):
     def handle_loss(all_loss_dict):
         loss = all_loss_dict["prob_loss"].new_zeros(1).mean()
         for _, v in all_loss_dict.items():
@@ -110,17 +109,22 @@ def fine_tuning(net, data_buffer, use_gpu=False):
         return loss, all_loss_dict
 
     def handel_data(planes, target, device):
-        our_policy, opp_policy, ownership, wdl, q_vals, scores, global_weight = target
-        for tensor in [planes, our_policy, opp_policy, ownership, wdl, q_vals, scores]:
-            tensor = tensor.to(device)
-        target = (our_policy, opp_policy, ownership, wdl, q_vals, scores, global_weight)
+        our_policy, opp_policy, ownership, wdl, q_vals, scores = target
+
+        planes = planes.to(device)
+        our_policy = our_policy.to(device)
+        opp_policy = opp_policy.to(device)
+        ownership = ownership.to(device)
+        wdl = wdl.to(device)
+        q_vals = q_vals.to(device)
+        scores = scores.to(device)
+
+        target = (our_policy, opp_policy, ownership, wdl, q_vals, scores, 1.0)
         return planes, target
 
     def compute_avg_loss(running_loss):
         return sum(running_loss)/len(running_loss)
 
-    device = torch.device("cuda") \
-                 if use_gpu and torch.cuda.is_available() else torch.device("cpu")
     lora = LoRAParameters()
     lora.set_lora_layers(net)
     lora.freeze_bone_params(net)

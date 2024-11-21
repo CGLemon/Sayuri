@@ -1695,7 +1695,6 @@ class Agent():
                 wdl = result["wdl"]
                 q_vals = result["all_q_vals"]
                 scores = result["all_scores"]
-                global_weight = 1.0
 
                 # gather all targets
                 target = (
@@ -1704,18 +1703,20 @@ class Agent():
                     ownership,
                     wdl,
                     q_vals,
-                    scores,
-                    global_weight
+                    scores
                 )
                 data_buffer.append((planes, target))
             stderr_write("gather {} positions pair from {} SGF games...\n".format(len(data_buffer), num_sgf))
         stderr_write("totally gather {} positions pair from {} SGF games, starting fine-tuning...\n".format(len(data_buffer), num_sgf))
-        fine_tuning(self._net, data_buffer, self._use_gpu)
+        fine_tuning(self._net, data_buffer, self._device)
         stderr_write("finish fine-tuning process...\n")
 
         # save the text weights for cpp engine
         weights_path = "weights-finetuning.txt"
-        self._net.transfer_to_bin("{}".format(weights_path))
+        if self._use_gpu:
+            self._net.to_device("cpu")
+            self._net.transfer_to_bin("{}".format(weights_path))
+            self._net.to_device(self._device)
         stderr_write("save the weights to {}...\n".format(weights_path))
 
     def reset_board(self, *args, **kwargs):
@@ -2258,8 +2259,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     running = True
     while running:
-        try:
+        # try:
             gtp_loop(args)
-        except Exception as e:
-            stderr_write("halt the gtp loop, exception: {}\n".format(e))
-        running = args.loop
+        # except Exception as e:
+        #     stderr_write("halt the gtp loop, exception: {}\n".format(e))
+        # running = args.loop
