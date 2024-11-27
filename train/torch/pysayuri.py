@@ -1707,6 +1707,9 @@ class Agent():
                 )
                 data_buffer.append((planes, target))
             stderr_write("gather {} positions pair from {} SGF games...\n".format(len(data_buffer), num_sgf))
+        if len(data_buffer) == 0:
+            stderr_write("no trainable data...")
+            return
         stderr_write("totally gather {} positions pair from {} SGF games, starting fine-tuning...\n".format(len(data_buffer), num_sgf))
         fine_tuning(self._net, data_buffer, self._device)
         stderr_write("finish fine-tuning process...\n")
@@ -2259,8 +2262,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     running = True
     while running:
-        # try:
+        try:
             gtp_loop(args)
-        # except Exception as e:
-        #     stderr_write("halt the gtp loop, exception: {}\n".format(e))
-        # running = args.loop
+        except Exception as e:
+            stderr_write("halt the gtp loop, exception: {}\n".format(e))
+        running = args.loop

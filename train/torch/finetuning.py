@@ -1,3 +1,4 @@
+from network import FullyConnect, Convolve, ConvBlock, ResidualBlock, BottleneckBlock
 from functools import partial
 import sys, math
 
@@ -11,6 +12,12 @@ def stderr_write(val):
     sys.stderr.write(val)
     sys.stderr.flush()
 
+def linear_algo_wrapper(x, w):
+    return F.linear(x, w)
+
+def conv2d_algo_wrapper(padding, groups, weight_shape, x, w):
+    return F.conv2d(x, w.view(weight_shape), padding=padding, groups=groups)
+
 class LoRAParameters:
     def __init__(self):
         self.lora_a_params = list()
@@ -18,43 +25,74 @@ class LoRAParameters:
         self.layers = list()
         self.lora_setting = list()
 
-    def lora_fn(self, idx, x):
-        # https://github.com/microsoft/LoRA/blob/main/loralib/layers.py
+    def lora_fn(self, idx, algo, x):
         lora_A = self.lora_a_params[idx]
         lora_B = self.lora_b_params[idx]
         scaling = self.lora_setting[idx]["scaling"]
-        return F.linear(F.linear(x, lora_A), lora_B) * scaling
+        return algo(x, torch.matmul(lora_B, lora_A) * scaling)
 
-    def add_lora_fn(self, fc_layer, alpha, rank):
-        idx = len(self.layers)
-        in_size = fc_layer.in_size
-        out_size = fc_layer.out_size
-        scaling = alpha / rank
-        weight = fc_layer.linear.weight
-        lora_A = nn.Parameter(weight.new_zeros((rank, in_size)))
-        lora_B = nn.Parameter(weight.new_zeros((out_size, rank)))
+    def add_lora_fn(self, layer, alpha, rank):
+        if isinstance(layer, FullyConnect):
+            in_size = layer.in_size
+            out_size = layer.out_size
+            weight = layer.linear.weight
 
-        nn.init.kaiming_uniform_(lora_A, a=math.sqrt(5))
-        nn.init.zeros_(lora_B)
+            # set up lora parameters
+            lora_A = nn.Parameter(weight.new_zeros((rank, in_size)))
+            lora_B = nn.Parameter(weight.new_zeros((out_size, rank)))
+            nn.init.kaiming_uniform_(lora_A, a=math.sqrt(5))
+            nn.init.zeros_(lora_B)
 
-        self.lora_a_params.append(lora_A)
-        self.lora_b_params.append(lora_B)
-        self.layers.append(fc_layer)
-        self.lora_setting.append( {"alpha" : alpha, "rank" : rank, "scaling" : scaling} )
+            # push into stack
+            self.lora_a_params.append(lora_A)
+            self.lora_b_params.append(lora_B)
+            self.layers.append(layer)
+            self.lora_setting.append( {"alpha" : alpha, "rank" : rank, "scaling" : alpha / rank} )
 
-        hook_fn = partial(self.lora_fn, idx)
-        fc_layer.set_rola_hook(hook_fn)
+            # set the hook
+            algo = linear_algo_wrapper
+            hook_fn = partial(self.lora_fn, len(self.layers) - 1, algo)
+            layer.set_rola_hook(hook_fn)
+        elif isinstance(layer, Convolve) or \
+                 isinstance(layer, ConvBlock):
+            in_channels = layer.in_channels
+            out_channels = layer.out_channels
+            kernel_size = layer.kernel_size
+            weight = layer.conv.weight
+
+            # set up lora parameters
+            lora_A = nn.Parameter(weight.new_zeros((rank * kernel_size, in_channels * kernel_size)))
+            lora_B = nn.Parameter(weight.new_zeros((out_channels * kernel_size, rank * kernel_size)))
+            nn.init.kaiming_uniform_(lora_A, a=math.sqrt(5))
+            nn.init.zeros_(lora_B)
+
+            # push into stack
+            self.lora_a_params.append(lora_A)
+            self.lora_b_params.append(lora_B)
+            self.layers.append(layer)
+            self.lora_setting.append( {"alpha" : alpha, "rank" : rank, "scaling" : alpha / rank} )
+
+            # set the hook
+            algo = partial(conv2d_algo_wrapper, "same", 1, weight.shape)
+            hook_fn = partial(self.lora_fn, len(self.layers) - 1, algo)
+            layer.set_rola_hook(hook_fn)
+        else:
+            stderr_write("The {} layer does not support for LoRA.".format(type(layer)))
 
     def merge_lora_layers(self):
-        # https://github.com/microsoft/LoRA/blob/main/loralib/layers.py
-        # def T(w):
-        #     return w.transpose(0, 1)
         for idx in range(len(self.layers)):
-           fc_layer = self. layers[idx]
+           layer = self. layers[idx]
            lora_A = self.lora_a_params[idx]
            lora_B = self.lora_b_params[idx]
            scaling = self.lora_setting[idx]["scaling"]
-           fc_layer.linear.weight.data += torch.matmul(lora_B, lora_A) * scaling
+
+           if isinstance(layer, FullyConnect):
+               layer.linear.weight.data += torch.matmul(lora_B, lora_A) * scaling
+           elif isinstance(layer, Convolve) or \
+                    isinstance(layer, ConvBlock):
+               layer.conv.weight.data += torch.matmul(lora_B, lora_A).view(layer.conv.weight.shape) * scaling
+           else:
+               stderr_write("Unsupported layer {}".format(type(layer)))
 
     def freeze_bone_params(self, net):
         net.eval()
@@ -63,10 +101,15 @@ class LoRAParameters:
 
     def set_lora_layers(self, net):
         for block in net.residual_tower:
-            if not block.use_se:
-                continue
-            self.add_lora_fn(block.se_module.squeeze, 1.0, net.residual_channels // 16)
-            self.add_lora_fn(block.se_module.excite, 1.0, net.residual_channels // 8)
+            alpha, rank = 4, 4
+            if block.use_se:
+                self.add_lora_fn(block.se_module.squeeze, alpha, rank)
+                self.add_lora_fn(block.se_module.excite, alpha, rank)
+            if isinstance(block, ResidualBlock):
+                # self.add_lora_fn(block.conv1, alpha, rank)
+                self.add_lora_fn(block.conv2, alpha, rank)
+            else:
+                pass
 
     def get_parameters(self):
         module_parameters = list()
@@ -78,6 +121,7 @@ class LoRAParameters:
 
 class FineTuningDataset(Dataset):
     def __init__(self, data_buffer):
+        super(FineTuningDataset, self).__init__()
         self.data_buffer = list()
 
         for planes, target in data_buffer:
@@ -134,12 +178,12 @@ def fine_tuning(net, data_buffer, device):
 
     opt = torch.optim.SGD(
         lora.get_parameters(),
-        lr=5e-5,
+        lr=5e-4,
         momentum=0.9,
         nesterov=True,
         weight_decay=1e-4,
     )
-    epoches = 20
+    epoches = 200
     for e in range(epoches):
         main_running_loss = list()
         prob_running_loss = list()
@@ -151,9 +195,9 @@ def fine_tuning(net, data_buffer, device):
             loss, all_loss_dict = handle_loss(all_loss_dict)
 
             loss.backward()
-
             main_running_loss.append(loss.item())
             prob_running_loss.append(all_loss_dict["prob_loss"].item())
+
             opt.step()
             opt.zero_grad()
         stderr_write("[{}/{}] loss: {:.4f}, prob loss: {:.4f}\n".format(

@@ -471,6 +471,7 @@ class Convolve(nn.Module):
             padding="same",
             bias=True,
         )
+        self.lora_hook_fn = None
         self.activation = activation
         self.act = activation_func(self.activation, inplace=True)
         self._init_weights()
@@ -485,6 +486,9 @@ class Convolve(nn.Module):
         if collector is not None:
             collector.append(self)
 
+    def set_rola_hook(self, hook_fn):
+        self.lora_hook_fn = hook_fn
+
     def shape_to_text(self):
         return conv_to_text(self.in_channels, self.out_channels, self.kernel_size)
 
@@ -498,7 +502,10 @@ class Convolve(nn.Module):
         return out
 
     def forward(self, x, mask):
-        x = self.conv(x) * mask
+        if self.lora_hook_fn:
+            x = (self.conv(x) + self.lora_hook_fn(x)) * mask
+        else:
+            x = self.conv(x) * mask
         x = self.act(x)
         return x
 
@@ -526,6 +533,7 @@ class ConvBlock(nn.Module):
             eps=1e-5,
             use_gamma=use_gamma
         )
+        self.lora_hook_fn = None
         self.activation = activation
         self.act = activation_func(self.activation, inplace=True)
         self._init_weights()
@@ -538,6 +546,9 @@ class ConvBlock(nn.Module):
     def _try_collect(self, collector):
         if collector is not None:
             collector.append(self)
+
+    def set_rola_hook(self, hook_fn):
+        self.lora_hook_fn = hook_fn
 
     def shape_to_text(self):
         out = str()
@@ -559,7 +570,10 @@ class ConvBlock(nn.Module):
         return out
 
     def forward(self, x, mask):
-        x = self.conv(x) * mask
+        if self.lora_hook_fn:
+            x = (self.conv(x) + self.lora_hook_fn(x)) * mask
+        else:
+            x = self.conv(x) * mask
         x = self.bn(x, mask)
         x = self.act(x)
         return x
