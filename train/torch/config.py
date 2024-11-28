@@ -24,7 +24,7 @@ class Config:
         train = json_data.get("Train", None)
 
         self.optimizer = train.get("Optimizer", "SGD")
-        self.use_gpu = train.get("UseGPU", None)
+        self.use_gpu = torch.cuda.is_available() if train.get("UseGPU", None) is None else train.get("UseGPU")
         self.weight_decay = train.get("WeightDecay", 1e-4)
         self.lr_schedule = train.get("LearningRateSchedule", [[0, 0.2]])
 
@@ -51,10 +51,6 @@ class Config:
 
         assert self.train_dir != None, ""
         assert self.store_path != None, ""
-
-        if self.use_gpu == None:
-            if torch.cuda.is_available():
-                self.use_gpu = True
 
     def parse_nn_config(self, json_data):
         network = json_data.get("NeuralNetwork", None)

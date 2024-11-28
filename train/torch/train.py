@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
-import random, time, math, os, glob, io, gzip
+import random, time, math, os, glob, io, gzip, sys
 import argparse
 
 from config import Config
@@ -11,6 +11,14 @@ from data import Data
 from torch.nn import DataParallel
 from lazy_loader import LazyLoader, LoaderFlag
 from status_dict import StatusDict
+
+def stderr_write(val):
+    sys.stderr.write(val)
+    sys.stderr.flush()
+
+def stdout_write(val):
+    sys.stdout.write(val)
+    sys.stdout.flush()
 
 def gather_filenames(root, num_chunks=None, sort_key_fn=None):
     def gather_recursive_files(root):
@@ -43,13 +51,13 @@ class StreamLoader:
 
         try:
             if filename.find(".gz") >= 0:
-                with gzip.open(filename, 'rt') as f:
+                with gzip.open(filename, "rt") as f:
                     stream = io.StringIO(f.read())
             else:
-                with open(filename, 'r') as f:
+                with open(filename, "r") as f:
                     stream = io.StringIO(f.read())
         except:
-            print("Could not open the file: {}".format(filename))
+            stdout_write("Could not open the file: {}\n".format(filename))
         return stream
 
 class StreamParser:
@@ -64,6 +72,8 @@ class StreamParser:
         self.num_samples_per_proc = 0
 
     def _sample(self, data):
+        # quick find out the KLD running average so we increase the factor value in
+        # the early samples.
         wramup_factor = math.exp((max(self.virtual_buffsize - self.num_samples_per_proc, 0))/ \
                             (self.virtual_buffsize/2.71828182846))
         gamma = (1.0/self.virtual_buffsize) * wramup_factor
@@ -71,6 +81,7 @@ class StreamParser:
                                     gamma * data.kld
         self.num_samples_per_proc += 1
 
+        # compute policy surprising sample probability
         surprising_freq = (1.0 - self.policy_surprising_factor) + \
                               self.policy_surprising_factor * (data.kld/self.running_kld_mean)
         sample_prob = surprising_freq * (1.0 / self.down_sample_rate)
@@ -248,7 +259,7 @@ class TrainingPipe():
 
         # Lazy loader options.
         self.train_buffer_size = self.cfg.buffersize
-        self.validation_buffer_size = self.cfg.buffersize // 4
+        self.validation_buffer_size = self.train_buffer_size // 4
         self.down_sample_rate = cfg.down_sample_rate
 
         # Steps information
@@ -266,9 +277,7 @@ class TrainingPipe():
 
         # The training device.
         self.use_gpu = cfg.use_gpu
-        self.device = torch.device("cpu")
-        if self.use_gpu:
-            self.device = torch.device("cuda")
+        self.device = torch.device("cuda") if self.use_gpu else torch.device("cpu")
         self.net = Network(cfg)
         self.net.train()
 
@@ -314,7 +323,7 @@ class TrainingPipe():
                 lr=init_lr,
                 weight_decay=self.weight_decay,
             )
-        elif self.opt_name == "SGD":
+        elif self.opt_name == "SGD" or not self.opt_name in ["Adam", "SGD"]:
             # Recommanded optimizer, the SGD is better than Adam
             # in this kind of training task.
             self.opt = torch.optim.SGD(
@@ -325,6 +334,7 @@ class TrainingPipe():
                 weight_decay=self.weight_decay,
             )
 
+        # create workspace
         if not os.path.isdir(self.store_path):
             os.makedirs(self.weights_path)
 
@@ -358,7 +368,7 @@ class TrainingPipe():
                 break
 
         if self.warmup_steps > 0 and num_steps < self.warmup_steps:
-            curr_lr = curr_lr * (num_steps/self.warmup_steps)
+            curr_lr = curr_lr * ((num_steps+1)/self.warmup_steps)
         return curr_lr
 
     def _load_current_status(self):
@@ -384,7 +394,7 @@ class TrainingPipe():
             param["lr"] = curr_lr
             param["weight_decay"] = self.weight_decay
         self.max_steps = self.max_steps_per_running + self.current_steps
-        print("Current steps is {}. Will stop the training at {}.".format(self.current_steps, self.max_steps))
+        stdout_write("Current steps is {}. Will stop the training at {}.\n".format(self.current_steps, self.max_steps))
 
     def _save_current_status(self):
         self._validate_the_last_model()
@@ -424,7 +434,7 @@ class TrainingPipe():
         chunks = gather_filenames(self.train_dir, self.num_chunks, sort_fn)
         self.num_all_chunks = len(gather_filenames(self.train_dir))
 
-        print("Load the last {} chunks from all {} chunks...".format(len(chunks), self.num_all_chunks))
+        stdout_write("Load the last {} chunks from all {} chunks...\n".format(len(chunks), self.num_all_chunks))
 
         self.train_flag = LoaderFlag()
         self.train_lazy_loader = LazyLoader(
@@ -452,6 +462,7 @@ class TrainingPipe():
                 batch_size = self.macrobatchsize,
                 flag = self.validation_flag
             )
+            # Try to get the first batch, be sure that the loader is ready.
             batch = next(self.validation_lazy_loader)
             self.validation_flag.set_suspend_flag()
         else:
@@ -515,11 +526,11 @@ class TrainingPipe():
 
     def _save_current_info(self, speed, running_loss_dict, filename):
         line_log = self._get_current_info(speed, running_loss_dict)
-        print(line_log)
+        stdout_write(line_log + "\n")
 
         log_file = os.path.join(self.store_path, filename)
         with open(log_file, 'a') as f:
-            f.write(line_log + '\n')
+            f.write(line_log + "\n")
 
     def _gather_data_from_loader(self, use_training=True):
         # Fetch the next batch data from disk.
@@ -551,8 +562,8 @@ class TrainingPipe():
     def _validate_the_last_model(self):
         if self.validation_lazy_loader is None:
             return
-        print("Validate the network performance...")
-        self.module.eval()
+        stdout_write("Validate the network performance...\n")
+        self.net.eval()
         self.validation_flag.reset_flag()
         self.train_flag.set_suspend_flag()
 
@@ -565,7 +576,7 @@ class TrainingPipe():
                 planes, target = self._gather_data_from_loader(False)
                 _, all_loss_dict = self.net(
                     planes,
-                    target,
+                    target=target,
                     use_symm=True,
                     loss_weight_dict=self._loss_weight_dict
                 )
@@ -577,7 +588,7 @@ class TrainingPipe():
 
         elapsed = time.time() - clock_time
         self._save_current_info(self.validation_steps/elapsed, running_loss_dict, "validation.log")
-        self.module.train()
+        self.net.train()
         self.validation_flag.set_suspend_flag()
         self.train_flag.reset_flag()
 
@@ -585,12 +596,12 @@ class TrainingPipe():
         self._load_current_status()
         self._init_loader()
 
-        print("Start training...")
+        stdout_write("Start training loop...\n")
 
         running_loss_dict = dict()
-        keep_running = True
-        macro_steps = 0
-        clock_time = time.time()
+        keep_running = True # true will keep the loop
+        macro_steps = 0 # actually network forwarding times
+        clock_time = time.time() # current time stamp
 
         while keep_running:
             for _ in range(self.steps_per_epoch):
@@ -599,7 +610,7 @@ class TrainingPipe():
                 # forward and backforwad
                 _, all_loss_dict = self.net(
                     planes,
-                    target,
+                    target=target,
                     use_symm=True,
                     loss_weight_dict=self._loss_weight_dict
                 )
@@ -615,31 +626,33 @@ class TrainingPipe():
                 running_loss_dict = self._accumulate_loss(running_loss_dict, all_loss_dict)
  
                 if math.isnan(running_loss_dict["loss"]):
-                    print("The gradient is explosion. Stop the training...")
+                    stdout_write("The gradient is explosion. Stop the training...\n")
                     keep_running = False
                     break
 
                 if macro_steps % self.macrofactor == 0:
                     # clip grad
-                    # gnorm = torch.nn.utils.clip_grad_norm_(self.net.parameters(), 10000.0)
+                    gnorm = torch.nn.utils.clip_grad_norm_(self.net.parameters(), 10000.0)
 
                     # update network parameters
                     self.opt.step()
-                    self.opt.zero_grad()
+                    self.opt.zero_grad() 
 
                     # update current count
                     self.current_steps += 1
                     self.current_samples += self.batchsize
                     self.module.update_parameters(self.current_steps)
 
-                    # dump the verbose and save the log file
                     if self.current_steps % self.verbose_steps == 0:
+                        # update time stamp
                         elapsed = time.time() - clock_time
                         clock_time = time.time()
 
+                        # dump the verbose and save the log file
                         self._save_current_info(self.verbose_steps/elapsed, running_loss_dict, "training.log")
                         running_loss_dict = self._get_new_running_loss_dict(all_loss_dict)
 
+                    # update SWA model
                     if self.current_steps % self.swa_steps == 0:
                         self.swa_count = min(self.swa_count+1, self.swa_max_count)
                         self.swa_net.accumulate_swa(self.module, self.swa_count)
@@ -656,7 +669,7 @@ class TrainingPipe():
             # store the last network
             self._save_current_status()
         self._break_loader()
-        print("Training is over.")
+        stdout_write("Training is over.\n")
 
 def train_process(args):
     cfg = Config(args.json)
@@ -677,6 +690,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.json == None:
-        print("Please give the setting json file.")
+        stdout_write("Please give the setting json file.\n")
     else:
         train_process(args)

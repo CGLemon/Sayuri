@@ -327,8 +327,6 @@ class BatchNorm2d(nn.Module):
         return x
 
     def forward(self, x, mask):
-        #TODO: Improve the performance.
-
         if self.training and not self.fixup:
             mask_sum = torch.sum(mask) # global sum
 
@@ -959,7 +957,11 @@ class Network(nn.Module):
             collector=self.layers_collector
         )
 
-    def forward(self, planes, target=None, use_symm=False, loss_weight_dict=None):
+    def forward(self, planes, *args, **kwargs):
+        target = kwargs.get("target", None)
+        use_symm = kwargs.get("use_symm", False)
+        loss_weight_dict = kwargs.get("loss_weight_dict", None)
+
         symm = int(np.random.choice(8, 1)[0])
         if use_symm:
             planes = torch_symmetry(symm, planes, invert=False)
