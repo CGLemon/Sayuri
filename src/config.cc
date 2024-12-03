@@ -119,6 +119,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["komi_big_stddev_prob"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["handicap_fair_komi_prob"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["target_directory"] << Option::SetOption(std::string{});
+    kOptionsMap["input_sgf_directory"] << Option::SetOption(std::string{});
 }
 
 void ArgsParser::InitBasicParameters() const {
@@ -399,7 +400,7 @@ void ArgsParser::Parse(Splitter &spt) {
 
     if (const auto res = spt.FindNext({"--mode", "-m"})) {
         if (IsParameter(res->Get<>()) &&
-                AcceptSet(res->Get<>(), {"gtp", "selfplay"})) {
+                AcceptSet(res->Get<>(), {"gtp", "selfplay", "writer"})) {
             SetOption("mode", res->Get<>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
@@ -952,6 +953,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--target-directory")) {
         if (IsParameter(res->Get<>())) {
             SetOption("target_directory", res->Get<>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--input-sgf-directory")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("input_sgf_directory", res->Get<>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

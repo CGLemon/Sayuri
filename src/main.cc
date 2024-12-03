@@ -33,6 +33,15 @@ void StartSelfplayLoop() {
     }
 }
 
+void StartWriterLoop() {
+    try {
+        auto loop = std::make_unique<SupervisedWriter>();
+    } catch (const std::exception& e) {
+        LOGGING << Format(
+            "Get the exception during the supervised-writer loop. Exception: %s.\n", e.what());
+    }
+}
+
 int main(int argc, char **argv) {
     ArgsParser(argc, argv);
 
@@ -44,6 +53,8 @@ int main(int argc, char **argv) {
         StartGtpLoop();
     } else if (GetOption<std::string>("mode") == "selfplay") {
         StartSelfplayLoop();
+    } else if (GetOption<std::string>("mode") == "writer") {
+        StartWriterLoop();
     }
     return 0;
 }
