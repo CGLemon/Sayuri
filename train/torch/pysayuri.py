@@ -903,7 +903,7 @@ class NetworkWrap(Network):
             raise Exception("get_output_without_batch(...): Tensor should be torch or numpy array")
 
         planes = torch.from_numpy(features).float().to(self._device)
-        pred, _ = self.forward(torch.unsqueeze(planes, 0))
+        pred, _ = self.forward(torch.unsqueeze(planes, 0), *args, **kwargs)
 
         labels = (
             "prob",            # logits

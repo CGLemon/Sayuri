@@ -698,7 +698,8 @@ class BottleneckBlock(nn.Module):
             )
         self.act = activation_func(self.activation, inplace=True)
 
-    def forward(self, x, mask_buffers):
+    def forward(self, x, mask_buffers, *args, **kwargs):
+        bias_adaptation = kwargs.get("bias_adaptation", None)
         mask, _, _ = mask_buffers
 
         out = x
@@ -709,6 +710,9 @@ class BottleneckBlock(nn.Module):
         if self.use_se:
             out = self.se_module(out, mask_buffers)
         out = out + x
+        if not bias_adaptation is None:
+            b, c = bias_adaptation.shape
+            out = out + bias_adaptation.view(b, c, 1, 1)
         out = self.act(out)
         return out, mask_buffers
 
@@ -749,7 +753,8 @@ class ResidualBlock(nn.Module):
             )
         self.act = activation_func(self.activation, inplace=True)
 
-    def forward(self, x, mask_buffers):
+    def forward(self, x, mask_buffers, *args, **kwargs):
+        bias_adaptation = kwargs.get("bias_adaptation", None)
         mask, _, _ = mask_buffers
 
         out = x
@@ -758,6 +763,9 @@ class ResidualBlock(nn.Module):
         if self.use_se:
             out = self.se_module(out, mask_buffers)
         out = out + x
+        if not bias_adaptation is None:
+            b, c = bias_adaptation.shape
+            out = out + bias_adaptation.view(b, c, 1, 1)
         out = self.act(out)
         return out
 
@@ -808,7 +816,8 @@ class MixerBlock(nn.Module):
             )
         self.act = activation_func(self.activation, inplace=True)
 
-    def forward(self, x, mask_buffers):
+    def forward(self, x, mask_buffers, *args, **kwargs):
+        bias_adaptation = kwargs.get("bias_adaptation", None)
         mask, _, _ = mask_buffers
 
         x = self.depthwise_conv(x, mask) + x
@@ -819,8 +828,50 @@ class MixerBlock(nn.Module):
         if self.use_se:
             out = self.se_module(out, mask_buffers)
         out = out + x
+        if not bias_adaptation is None:
+            b, c = bias_adaptation.shape
+            out = out + bias_adaptation.view(b, c, 1, 1)
         out = self.act(out)
         return out
+
+class BiasAdaptationEncoder(nn.Module):
+    def __init__(self, in_size,
+                       mid_size,
+                       out_size,
+                       blocks,
+                       activation,
+                       collector=None):
+        super(BiasAdaptationEncoder, self).__init__()
+
+        self.in_size = in_size
+        self.mid_size = mid_size
+        self.out_size = out_size
+        self.layers = nn.ModuleList(
+            [self._build_encoder_layer(activation, collector) for _ in range(blocks)]
+        )
+
+    def _build_encoder_layer(self, activation, collector=None):
+        layer = nn.Sequential(
+            FullyConnect(
+                in_size=self.in_size,
+                out_size=self.mid_size,
+                activation=activation,
+                collector=collector
+            ),
+            FullyConnect(
+                in_size=self.mid_size,
+                out_size=self.out_size,
+                activation="identity",
+                collector=collector
+            )
+        )
+        return layer
+
+    def forward(self, x):
+        bias_adaptations = list()
+        for layer in self.layers:
+            bias_adaptations.append(layer(x))
+        return bias_adaptations
 
 class Network(nn.Module):
     def __init__(self, cfg):
@@ -957,6 +1008,7 @@ class Network(nn.Module):
         target = kwargs.get("target", None)
         use_symm = kwargs.get("use_symm", False)
         loss_weight_dict = kwargs.get("loss_weight_dict", None)
+        bias_adaptations = kwargs.get("bias_adaptations", list())
 
         symm = int(np.random.choice(8, 1)[0])
         if use_symm:
@@ -972,8 +1024,13 @@ class Network(nn.Module):
         x = self.input_conv(planes, mask)
 
         # residual tower
-        for _, block in enumerate(self.residual_tower):
-            x = block(x, mask_buffers)
+        for i, block in enumerate(self.residual_tower):
+            bias_adaptation = None if \
+                len(bias_adaptations) <= i else bias_adaptations[i]
+            print(bias_adaptation)
+            if not bias_adaptation is None:
+                print(bias_adaptation.shape)
+            x = block(x, mask_buffers, bias_adaptation=bias_adaptation)
 
         # policy head
         pol = self.policy_conv(x, mask)
