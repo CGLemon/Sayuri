@@ -95,10 +95,10 @@ void TrainingData::StreamOut(std::ostream &out) const {
     out << kld << std::endl;
 }
 
-int GetTrainingVersion() {
+int GetDefaultVersion() {
     return 2;
 }
 
-int GetTrainingMode() {
+int GetDefaultMode() {
     return 0;
 }

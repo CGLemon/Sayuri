@@ -1333,8 +1333,8 @@ void Search::GatherData(const GameState &state,
     }
 
     auto data = TrainingData{};
-    data.version = GetTrainingVersion();
-    data.mode = GetTrainingMode();
+    data.version = GetDefaultVersion();
+    data.mode = GetDefaultMode();
     data.discard = discard;
 
     data.board_size = result.board_size;
