@@ -698,8 +698,7 @@ class BottleneckBlock(nn.Module):
             )
         self.act = activation_func(self.activation, inplace=True)
 
-    def forward(self, inputs):
-        x, mask_buffers = inputs
+    def forward(self, x, mask_buffers):
         mask, _, _ = mask_buffers
 
         out = x
@@ -750,8 +749,7 @@ class ResidualBlock(nn.Module):
             )
         self.act = activation_func(self.activation, inplace=True)
 
-    def forward(self, inputs):
-        x, mask_buffers = inputs
+    def forward(self, x, mask_buffers):
         mask, _, _ = mask_buffers
 
         out = x
@@ -761,7 +759,7 @@ class ResidualBlock(nn.Module):
             out = self.se_module(out, mask_buffers)
         out = out + x
         out = self.act(out)
-        return out, mask_buffers
+        return out
 
 class MixerBlock(nn.Module):
     def __init__(self, channels,
@@ -810,8 +808,7 @@ class MixerBlock(nn.Module):
             )
         self.act = activation_func(self.activation, inplace=True)
 
-    def forward(self, inputs):
-        x, mask_buffers = inputs
+    def forward(self, x, mask_buffers):
         mask, _, _ = mask_buffers
 
         x = self.depthwise_conv(x, mask) + x
@@ -823,7 +820,7 @@ class MixerBlock(nn.Module):
             out = self.se_module(out, mask_buffers)
         out = out + x
         out = self.act(out)
-        return out, mask_buffers
+        return out
 
 class Network(nn.Module):
     def __init__(self, cfg):
@@ -863,7 +860,8 @@ class Network(nn.Module):
 
         # residual tower
         main_channels = self.residual_channels
-        nn_stack = list()
+        self.residual_tower = nn.ModuleList()
+
         for s in self.stack:
             block = None
             se_size = None
@@ -887,7 +885,7 @@ class Network(nn.Module):
             if block is None:
                 raise Exception("There is no basic block.")
 
-            nn_stack.append(
+            self.residual_tower.append(
                 block(channels=main_channels,
                       bottleneck_channels=bottleneck_channels,
                       se_size=se_size,
@@ -896,8 +894,6 @@ class Network(nn.Module):
 
         if main_channels != self.residual_channels:
             raise Exception("Invalid block stack.")
-
-        self.residual_tower = nn.Sequential(*nn_stack)
 
         # policy head
         self.policy_conv = ConvBlock(
@@ -976,7 +972,8 @@ class Network(nn.Module):
         x = self.input_conv(planes, mask)
 
         # residual tower
-        x, _ = self.residual_tower((x, mask_buffers))
+        for _, block in enumerate(self.residual_tower):
+            x = block(x, mask_buffers)
 
         # policy head
         pol = self.policy_conv(x, mask)
