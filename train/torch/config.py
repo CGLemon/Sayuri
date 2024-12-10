@@ -48,6 +48,7 @@ class Config:
         self.swa_steps = train.get("SwaSteps", 100)
         self.warmup_steps = train.get("WarmUpSteps", 0)
         self.policy_surprising_factor = train.get("PolicySurprisingFactor", 0.0)
+        self.use_encoder = train.get("UseEncoder", False)
 
         assert self.train_dir != None, ""
         assert self.store_path != None, ""

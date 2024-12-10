@@ -280,6 +280,7 @@ class TrainingPipe():
         self.device = torch.device("cuda") if self.use_gpu else torch.device("cpu")
         self.net = Network(cfg)
         self.net.train()
+        self.use_encoder = cfg.use_encoder
 
         # The Store root directory.
         self.store_path = cfg.store_path
@@ -302,6 +303,10 @@ class TrainingPipe():
 
     def _setup(self):
         self.module = self.net # linking
+
+        # Freeze bone network in fine-tuning mode.
+        if self.use_encoder:
+            self.module.freeze_bone_network()
 
         if self.use_gpu:
             self.net = self.net.to(self.device)
@@ -381,7 +386,10 @@ class TrainingPipe():
             self._status_dict.load(checkpoint, device=torch.device("cpu"))
         self._status_dict.load_module(StatusDict.MODEL_KEY, self.module)
         self._status_dict.load_module(StatusDict.SWA_KEY, self.swa_net)
-        self._status_dict.load_module(StatusDict.OPTIM_KEY,self.opt)
+        try:
+            self._status_dict.load_module(StatusDict.OPTIM_KEY, self.opt)
+        except:
+            stdout_write("Fail to load the Optimizer from checkpoint, so we initialize it only.\n")
 
         self.current_samples = self._status_dict.fancy_get(StatusDict.SAMPLES_KEY)
         self.current_steps = self._status_dict.fancy_get(StatusDict.STEPS_KEY)
@@ -588,7 +596,8 @@ class TrainingPipe():
 
         elapsed = time.time() - clock_time
         self._save_current_info(self.validation_steps/elapsed, running_loss_dict, "validation.log")
-        self.net.train()
+        if not self.use_encoder:
+            self.net.train()
         self.validation_flag.set_suspend_flag()
         self.train_flag.reset_flag()
 

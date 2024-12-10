@@ -2178,8 +2178,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     running = True
     while running:
-        try:
+        # try:
             gtp_loop(args)
-        except Exception as e:
-            stderr_write("halt the gtp loop, exception: {}\n".format(e))
-        running = args.loop
+        # except Exception as e:
+        #     stderr_write("halt the gtp loop, exception: {}\n".format(e))
+        # running = args.loop

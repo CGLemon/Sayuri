@@ -850,6 +850,9 @@ class BiasAdaptationEncoder(nn.Module):
             [self._build_encoder_layer(activation, collector) for _ in range(blocks)]
         )
 
+    def get_latency(self, batch, device):
+        return torch.randn(batch, self.in_size).to(device)
+
     def _build_encoder_layer(self, activation, collector=None):
         layer = nn.Sequential(
             FullyConnect(
@@ -878,9 +881,10 @@ class Network(nn.Module):
         super(Network, self).__init__()
 
         self.layers_collector = list()
+        self.encoder_collector = list()
 
         self.nntype = cfg.nntype
-
+        self.use_encoder = cfg.use_encoder
         self.activation = cfg.activation.lower()
         self.input_channels = cfg.input_channels
         self.residual_channels = cfg.residual_channels
@@ -899,6 +903,16 @@ class Network(nn.Module):
     def construct_layers(self):
         self.global_pool = GlobalPool(is_value_head=False)
         self.global_pool_val = GlobalPool(is_value_head=True)
+
+        if self.use_encoder:
+            self.encoder = BiasAdaptationEncoder(
+                in_size=192,
+                mid_size=256,
+                out_size=self.residual_channels,
+                blocks=len(self.stack),
+                activation=self.activation,
+                collector=self.encoder_collector
+            )
 
         self.input_conv = ConvBlock(
             in_channels=self.input_channels,
@@ -1008,7 +1022,7 @@ class Network(nn.Module):
         target = kwargs.get("target", None)
         use_symm = kwargs.get("use_symm", False)
         loss_weight_dict = kwargs.get("loss_weight_dict", None)
-        bias_adaptations = kwargs.get("bias_adaptations", list())
+        latency = kwargs.get("latency", None)
 
         symm = int(np.random.choice(8, 1)[0])
         if use_symm:
@@ -1024,12 +1038,14 @@ class Network(nn.Module):
         x = self.input_conv(planes, mask)
 
         # residual tower
+        if latency is None and self.use_encoder:
+            b, _, _, _ = planes.shape
+            latency = self.encoder.get_latency(b, planes.device)
+        bias_adaptations = self.encoder(latency) if \
+                               self.use_encoder else list()
         for i, block in enumerate(self.residual_tower):
             bias_adaptation = None if \
                 len(bias_adaptations) <= i else bias_adaptations[i]
-            print(bias_adaptation)
-            if not bias_adaptation is None:
-                print(bias_adaptation.shape)
             x = block(x, mask_buffers, bias_adaptation=bias_adaptation)
 
         # policy head
@@ -1242,6 +1258,12 @@ class Network(nn.Module):
                 layer.bn.update_renorm_clips(curr_steps)
             else:
                 pass
+
+    def freeze_bone_network(self):
+        for layer in self.layers_collector:
+            for parameter in layer.parameters():
+                parameter.requires_grad = False
+        self.eval()
 
     def accumulate_swa(self, other_network, swa_count):
         def accum_weights(v, w, n):

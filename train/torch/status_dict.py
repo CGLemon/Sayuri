@@ -73,4 +73,4 @@ class StatusDict(dict):
     def load_module(self, key, module):
         state_dict = self.fancy_get(key)
         if state_dict:
-            module.load_state_dict(state_dict)
+            module.load_state_dict(state_dict, strict=False)
