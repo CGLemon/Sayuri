@@ -52,7 +52,7 @@ class LoRAParameters:
             # set the hook
             algo = linear_algo_wrapper
             hook_fn = partial(self.lora_fn, len(self.layers) - 1, algo)
-            layer.set_rola_hook(hook_fn)
+            layer.set_lora_hook(hook_fn)
         elif isinstance(layer, Convolve) or \
                  isinstance(layer, ConvBlock):
             in_channels = layer.in_channels
@@ -75,24 +75,26 @@ class LoRAParameters:
             # set the hook
             algo = partial(conv2d_algo_wrapper, "same", 1, weight.shape)
             hook_fn = partial(self.lora_fn, len(self.layers) - 1, algo)
-            layer.set_rola_hook(hook_fn)
+            layer.set_lora_hook(hook_fn)
         else:
             stderr_write("The {} layer does not support for LoRA.".format(type(layer)))
 
     def merge_lora_layers(self):
         for idx in range(len(self.layers)):
-           layer = self. layers[idx]
-           lora_A = self.lora_a_params[idx]
-           lora_B = self.lora_b_params[idx]
-           scaling = self.lora_setting[idx]["scaling"]
+            layer = self. layers[idx]
+            lora_A = self.lora_a_params[idx]
+            lora_B = self.lora_b_params[idx]
+            scaling = self.lora_setting[idx]["scaling"]
 
-           if isinstance(layer, FullyConnect):
-               layer.linear.weight.data += torch.matmul(lora_B, lora_A) * scaling
-           elif isinstance(layer, Convolve) or \
-                    isinstance(layer, ConvBlock):
-               layer.conv.weight.data += torch.matmul(lora_B, lora_A).view(layer.conv.weight.shape) * scaling
-           else:
-               stderr_write("Unsupported layer {}".format(type(layer)))
+            if isinstance(layer, FullyConnect):
+                layer.linear.weight.data += torch.matmul(lora_B, lora_A) * scaling
+            elif isinstance(layer, Convolve) or \
+                     isinstance(layer, ConvBlock):
+                layer.conv.weight.data += torch.matmul(lora_B, lora_A).view(layer.conv.weight.shape) * scaling
+            else:
+                stderr_write("Unsupported layer {}".format(type(layer)))
+            layer.set_lora_hook(None)
+        self.layers.clear()
 
     def freeze_bone_params(self, net):
         net.eval()
@@ -178,12 +180,12 @@ def fine_tuning(net, data_buffer, device):
 
     opt = torch.optim.SGD(
         lora.get_parameters(),
-        lr=5e-4,
+        lr=1e-4,
         momentum=0.9,
         nesterov=True,
         weight_decay=1e-4,
     )
-    epoches = 200
+    epoches = 250
     for e in range(epoches):
         main_running_loss = list()
         prob_running_loss = list()

@@ -430,7 +430,7 @@ class FullyConnect(nn.Module):
         if collector is not None:
             collector.append(self)
 
-    def set_rola_hook(self, hook_fn):
+    def set_lora_hook(self, hook_fn):
         self.lora_hook_fn = hook_fn
 
     def shape_to_text(self):
@@ -486,7 +486,7 @@ class Convolve(nn.Module):
         if collector is not None:
             collector.append(self)
 
-    def set_rola_hook(self, hook_fn):
+    def set_lora_hook(self, hook_fn):
         self.lora_hook_fn = hook_fn
 
     def shape_to_text(self):
@@ -547,7 +547,7 @@ class ConvBlock(nn.Module):
         if collector is not None:
             collector.append(self)
 
-    def set_rola_hook(self, hook_fn):
+    def set_lora_hook(self, hook_fn):
         self.lora_hook_fn = hook_fn
 
     def shape_to_text(self):
