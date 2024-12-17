@@ -217,11 +217,8 @@ class BatchNorm2d(nn.Module):
                        eps=1e-5,
                        momentum=0.01,
                        use_gamma=False,
-                       fixup=False):
-        # According to the paper "Batch Renormalization: Towards Reducing Minibatch Dependence
-        # in Batch-Normalized Models", Batch-Renormalization is much faster and steady than 
-        # traditional Batch-Normalized when it is small batch size.
-
+                       mode="renorm",
+                       renorm_clipping={"rmax" : 1, "dmax" : 0}):
         super(BatchNorm2d, self).__init__()
         self.register_buffer(
             "running_mean", torch.zeros(num_features, dtype=torch.float)
@@ -229,8 +226,6 @@ class BatchNorm2d(nn.Module):
         self.register_buffer(
             "running_var", torch.ones(num_features, dtype=torch.float)
         )
-        self.rmax = 1
-        self.dmax = 0
 
         self.gamma = None
         if use_gamma:
@@ -242,19 +237,26 @@ class BatchNorm2d(nn.Module):
             torch.zeros(num_features, dtype=torch.float)
         )
 
-        # Enable the batch renorm if we set true, else will use the batch norm.
-        self.use_renorm = True
-
         self.use_gamma = use_gamma
         self.num_features = num_features
         self.eps = eps
         self.momentum = self._clamp(momentum)
 
+        self.mode = mode
+        assert self.mode in ["norm", "renorm", "fixup"]
+
+        # According to the paper "Batch Renormalization: Towards Reducing Minibatch Dependence
+        # in Batch-Normalized Models", Batch-Renormalization is much faster and steady than 
+        # traditional Batch-Normalized when batch size is very small, eg bs=4.
+        self.use_renorm = mode == "renorm"
+        self.rmax = renorm_clipping["rmax"]
+        self.dmax = renorm_clipping["dmax"]
+
         # Fixup Batch Normalization layer. According to kataGo, Batch Normalization may cause
         # some wierd reuslts becuse the inference and training computation results are different.
         # Fixup can avoid the weird forwarding result. Fixup also speeds up the performance. The
         # improvement may be around x1.6 ~ x1.8 faster.
-        self.fixup = fixup
+        self.fixup = mode == "fixup"
 
     def get_merged_params(self):
         bn_mean = torch.zeros(self.num_features)
@@ -285,23 +287,6 @@ class BatchNorm2d(nn.Module):
         x = max(lower, x)
         x = min(upper, x)
         return x
-
-    def update_renorm_clips(self, curr_steps):
-        # first 5k training step, rmax = 1
-        # after 25k training step, rmax = 3
-        self.rmax = self._clamp(
-            (2/35000) * curr_steps + 25/35,
-            lower=1.0,
-            upper=3.0
-        )
-
-        # first 5k training step, dmax = 0
-        # after 25k training step, dmax = 5
-        self.dmax = self._clamp(
-            (5/20000) * curr_steps - 25/20,
-            lower=0.0,
-            upper=5.0
-        )
 
     def _apply_renorm(self, x, mean, var):
         mean = mean.view(1, self.num_features, 1, 1)
@@ -498,6 +483,7 @@ class ConvBlock(nn.Module):
                        out_channels,
                        kernel_size,
                        use_gamma,
+                       renorm_clipping,
                        activation,
                        collector=None):
         super(ConvBlock, self).__init__()
@@ -515,7 +501,9 @@ class ConvBlock(nn.Module):
         self.bn = BatchNorm2d(
             num_features=out_channels,
             eps=1e-5,
-            use_gamma=use_gamma
+            use_gamma=use_gamma,
+            mode="renorm",
+            renorm_clipping=renorm_clipping
         )
         self.activation = activation
         self.act = activation_func(self.activation, inplace=True)
@@ -559,6 +547,7 @@ class DepthwiseConvBlock(nn.Module):
     def __init__(self, channels,
                        kernel_size,
                        use_gamma,
+                       renorm_clipping,
                        activation,
                        collector=None):
         # Implement it based on "Scaling Up Your Kernels to 31x31: Revisiting Large Kernel Design
@@ -586,7 +575,9 @@ class DepthwiseConvBlock(nn.Module):
         self.bn = BatchNorm2d(
             num_features=self.channels,
             eps=1e-5,
-            use_gamma=use_gamma
+            use_gamma=use_gamma,
+            mode="renorm",
+            renorm_clipping=renorm_clipping
         )
         self.activation = activation
         self.act = activation_func(self.activation, inplace=True)
@@ -643,6 +634,7 @@ class BottleneckBlock(nn.Module):
         super(BottleneckBlock, self).__init__()
 
         self.activation = kwargs.get("activation", DEFAULT_ACTIVATION)
+        self.renorm_clipping = kwargs.get("renorm_clipping", {"rmax" : 1, "dmax" : 0})
         self.bottleneck_channels = kwargs.get("bottleneck_channels", None)
         self.se_size = kwargs.get("se_size", None)
         collector = kwargs.get("collector", None)
@@ -662,6 +654,7 @@ class BottleneckBlock(nn.Module):
             out_channels=self.inner_channels,
             kernel_size=1,
             use_gamma=False,
+            renorm_clipping=self.renorm_clipping,
             activation=self.activation,
             collector=collector
         )
@@ -670,6 +663,7 @@ class BottleneckBlock(nn.Module):
             out_channels=self.inner_channels,
             kernel_size=3,
             use_gamma=False,
+            renorm_clipping=self.renorm_clipping,
             activation=self.activation,
             collector=collector
         )
@@ -678,6 +672,7 @@ class BottleneckBlock(nn.Module):
             out_channels=self.inner_channels,
             kernel_size=3,
             use_gamma=False,
+            renorm_clipping=self.renorm_clipping,
             activation=self.activation,
             collector=collector
         )
@@ -686,6 +681,7 @@ class BottleneckBlock(nn.Module):
             out_channels=self.outer_channels,
             kernel_size=1,
             use_gamma=True,
+            renorm_clipping=self.renorm_clipping,
             activation="identity",
             collector=collector
         )
@@ -698,8 +694,7 @@ class BottleneckBlock(nn.Module):
             )
         self.act = activation_func(self.activation, inplace=True)
 
-    def forward(self, inputs):
-        x, mask_buffers = inputs
+    def forward(self, x, mask_buffers):
         mask, _, _ = mask_buffers
 
         out = x
@@ -711,7 +706,7 @@ class BottleneckBlock(nn.Module):
             out = self.se_module(out, mask_buffers)
         out = out + x
         out = self.act(out)
-        return out, mask_buffers
+        return out
 
 class ResidualBlock(nn.Module):
     def __init__(self, channels,
@@ -720,6 +715,7 @@ class ResidualBlock(nn.Module):
         super(ResidualBlock, self).__init__()
 
         self.activation = kwargs.get("activation", DEFAULT_ACTIVATION)
+        self.renorm_clipping = kwargs.get("renorm_clipping", {"rmax" : 1, "dmax" : 0})
         self.se_size = kwargs.get("se_size", None)
         collector = kwargs.get("collector", None)
 
@@ -730,6 +726,7 @@ class ResidualBlock(nn.Module):
             out_channels=self.channels,
             kernel_size=3,
             use_gamma=False,
+            renorm_clipping=self.renorm_clipping,
             activation=self.activation,
             collector=collector
         )
@@ -738,6 +735,7 @@ class ResidualBlock(nn.Module):
             out_channels=self.channels,
             kernel_size=3,
             use_gamma=True,
+            renorm_clipping=self.renorm_clipping,
             activation="identity",
             collector=collector
         )
@@ -750,8 +748,7 @@ class ResidualBlock(nn.Module):
             )
         self.act = activation_func(self.activation, inplace=True)
 
-    def forward(self, inputs):
-        x, mask_buffers = inputs
+    def forward(self, x, mask_buffers):
         mask, _, _ = mask_buffers
 
         out = x
@@ -761,7 +758,7 @@ class ResidualBlock(nn.Module):
             out = self.se_module(out, mask_buffers)
         out = out + x
         out = self.act(out)
-        return out, mask_buffers
+        return out
 
 class MixerBlock(nn.Module):
     def __init__(self, channels,
@@ -770,6 +767,7 @@ class MixerBlock(nn.Module):
         super(MixerBlock, self).__init__()
 
         self.activation = kwargs.get("activation", DEFAULT_ACTIVATION)
+        self.renorm_clipping = kwargs.get("renorm_clipping", {"rmax" : 1, "dmax" : 0})
         self.se_size = kwargs.get("se_size", None)
         collector = kwargs.get("collector", None)
 
@@ -780,6 +778,7 @@ class MixerBlock(nn.Module):
             channels=self.channels,
             kernel_size=7,
             use_gamma=True,
+            renorm_clipping=self.renorm_clipping,
             activation=self.activation,
             collector=collector
         )
@@ -790,6 +789,7 @@ class MixerBlock(nn.Module):
             out_channels=ffn_channels,
             kernel_size=1,
             use_gamma=False,
+            renorm_clipping=self.renorm_clipping,
             activation=self.activation,
             collector=collector
         )
@@ -798,6 +798,7 @@ class MixerBlock(nn.Module):
             out_channels=self.channels,
             kernel_size=1,
             use_gamma=True,
+            renorm_clipping=self.renorm_clipping,
             activation="identity",
             collector=collector
         )
@@ -810,8 +811,7 @@ class MixerBlock(nn.Module):
             )
         self.act = activation_func(self.activation, inplace=True)
 
-    def forward(self, inputs):
-        x, mask_buffers = inputs
+    def forward(self, x, mask_buffers):
         mask, _, _ = mask_buffers
 
         x = self.depthwise_conv(x, mask) + x
@@ -823,7 +823,7 @@ class MixerBlock(nn.Module):
             out = self.se_module(out, mask_buffers)
         out = out + x
         out = self.act(out)
-        return out, mask_buffers
+        return out
 
 class Network(nn.Module):
     def __init__(self, cfg):
@@ -841,6 +841,7 @@ class Network(nn.Module):
         self.policy_extract = cfg.policy_extract
         self.value_extract = cfg.value_extract
         self.se_ratio = cfg.se_ratio
+        self.renorm_clipping = {"rmax" : cfg.renorm_max_r, "dmax" : cfg.renorm_max_d}
         self.value_misc = 15
         self.policy_outs = 5
         self.stack = cfg.stack
@@ -857,13 +858,15 @@ class Network(nn.Module):
             out_channels=self.residual_channels,
             kernel_size=3,
             use_gamma=True,
+            renorm_clipping=self.renorm_clipping,
             activation=self.activation,
             collector=self.layers_collector
         )
 
         # residual tower
         main_channels = self.residual_channels
-        nn_stack = list()
+        self.residual_tower = nn.ModuleList()
+
         for s in self.stack:
             block = None
             se_size = None
@@ -887,7 +890,7 @@ class Network(nn.Module):
             if block is None:
                 raise Exception("There is no basic block.")
 
-            nn_stack.append(
+            self.residual_tower.append(
                 block(channels=main_channels,
                       bottleneck_channels=bottleneck_channels,
                       se_size=se_size,
@@ -897,14 +900,13 @@ class Network(nn.Module):
         if main_channels != self.residual_channels:
             raise Exception("Invalid block stack.")
 
-        self.residual_tower = nn.Sequential(*nn_stack)
-
         # policy head
         self.policy_conv = ConvBlock(
             in_channels=self.residual_channels,
             out_channels=self.policy_extract,
             kernel_size=1,
             use_gamma=False,
+            renorm_clipping=self.renorm_clipping,
             activation=self.activation,
             collector=self.layers_collector
         )
@@ -934,6 +936,7 @@ class Network(nn.Module):
             out_channels=self.value_extract,
             kernel_size=1,
             use_gamma=False,
+            renorm_clipping=self.renorm_clipping,
             activation=self.activation,
             collector=self.layers_collector
         )
@@ -976,7 +979,8 @@ class Network(nn.Module):
         x = self.input_conv(planes, mask)
 
         # residual tower
-        x, _ = self.residual_tower((x, mask_buffers))
+        for block in self.residual_tower:
+            x = block(x, mask_buffers)
 
         # policy head
         pol = self.policy_conv(x, mask)
@@ -1182,12 +1186,7 @@ class Network(nn.Module):
         return all_loss_dict
 
     def update_parameters(self, curr_steps):
-        for layer in self.layers_collector:
-            if isinstance(layer, ConvBlock) or \
-                   isinstance(layer, DepthwiseConvBlock):
-                layer.bn.update_renorm_clips(curr_steps)
-            else:
-                pass
+        pass
 
     def accumulate_swa(self, other_network, swa_count):
         def accum_weights(v, w, n):

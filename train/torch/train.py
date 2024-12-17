@@ -66,7 +66,8 @@ class StreamParser:
         # games in the shuffle buffer.
         self.down_sample_rate = down_sample_rate
 
-        self.virtual_buffsize = 2000
+        # We assume each game has 50 positions on average. 
+        self.virtual_buffsize = 2000 * 50
         self.running_kld_mean = 1.0
         self.policy_surprising_factor = policy_surprising_factor
         self.num_samples_per_proc = 0
@@ -74,9 +75,9 @@ class StreamParser:
     def _sample(self, data):
         # quick find out the KLD running average so we increase the factor value in
         # the early samples.
-        wramup_factor = math.exp((max(self.virtual_buffsize - self.num_samples_per_proc, 0))/ \
+        gamma_factor = math.exp((max(self.virtual_buffsize - self.num_samples_per_proc, 0))/ \
                             (self.virtual_buffsize/2.71828182846))
-        gamma = (1.0/self.virtual_buffsize) * wramup_factor
+        gamma = (1.0/self.virtual_buffsize) * gamma_factor
         self.running_kld_mean = (1.0 - gamma) * self.running_kld_mean + \
                                     gamma * data.kld
         self.num_samples_per_proc += 1
@@ -87,7 +88,7 @@ class StreamParser:
         sample_prob = surprising_freq * (1.0 / self.down_sample_rate)
 
         if self.num_samples_per_proc < self.virtual_buffsize:
-            # wram up
+            # be sure each worker sees enough games
             return False
         return sample_prob > random.uniform(0.0, 1.0)
 
@@ -247,6 +248,9 @@ class TrainingPipe():
 
         # How many last chunks do we load?
         self.num_chunks = cfg.num_chunks
+        self.chunks_increasing_c = cfg.chunks_increasing_c
+        self.chunks_increasing_alpha = cfg.chunks_increasing_alpha
+        self.chunks_increasing_beta = cfg.chunks_increasing_beta
         self.num_all_chunks = 0
 
         # The stpes of storing the last model and validating it per epoch.
@@ -399,6 +403,8 @@ class TrainingPipe():
     def _save_current_status(self):
         self._validate_the_last_model()
         status = "{}-s{}-c{}".format(self.module.get_name(), self.current_steps, self.num_all_chunks)
+        if not self.num_chunks is None:
+            status += "-w{}".format(self.num_chunks)
 
         checkpoint = os.path.join(
             self.checkpoint_path, "{}-status.pt".format(status))
@@ -426,13 +432,28 @@ class TrainingPipe():
             self.swa_net = self.swa_net.to(self.device)
 
     def _init_loader(self):
+        def compute_window_size(N, c=5000, alpha=0.75, beta=0.4):
+            return round(c * (1 + beta * (math.pow(N/c, alpha) - 1) / alpha))
+
         self._stream_loader = StreamLoader()
         self._stream_parser = StreamParser(self.down_sample_rate, self.policy_surprising_factor)
         self._batch_gen = BatchGenerator(self.cfg.boardsize, self.cfg.input_channels)
 
+        self.num_all_chunks = len(gather_filenames(self.train_dir))
+        if not self.chunks_increasing_c is None:
+            # Compute the best window size for self-play learning. The formula is based on
+            # "Accelerating Self-Play Learning in Go".
+            num_chunks_for_window = compute_window_size(
+                N = self.num_all_chunks,
+                c = self.chunks_increasing_c,
+                alpha = self.chunks_increasing_alpha,
+                beta = self.chunks_increasing_beta
+            )
+            num_chunks_upper = self.num_all_chunks \
+                if self.num_chunks is None else min(self.num_all_chunks, self.num_chunks)
+            self.num_chunks = min(num_chunks_upper, num_chunks_for_window)
         sort_fn = os.path.getmtime
         chunks = gather_filenames(self.train_dir, self.num_chunks, sort_fn)
-        self.num_all_chunks = len(gather_filenames(self.train_dir))
 
         stdout_write("Load the last {} chunks from all {} chunks...\n".format(len(chunks), self.num_all_chunks))
 

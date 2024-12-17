@@ -43,10 +43,15 @@ class Config:
         self.max_steps_per_running = train.get("MaxStepsPerRunning", 16384000)
         self.down_sample_rate = train.get("DownSampleRate", 16)
         self.num_chunks = train.get("NumberChunks", None)
+        self.chunks_increasing_c = train.get("ChunksIncreasingC", None)
+        self.chunks_increasing_alpha = train.get("ChunksIncreasingAlpha", 0.75)
+        self.chunks_increasing_beta = train.get("ChunksIncreasingBeta", 0.4)
         self.soft_loss_weight = train.get("SoftLossWeight", 0.1)
         self.swa_max_count = train.get("SwaMaxCount", 16)
         self.swa_steps = train.get("SwaSteps", 100)
         self.warmup_steps = train.get("WarmUpSteps", 0)
+        self.renorm_max_r = train.get("RenormMaxR", 1)
+        self.renorm_max_d = train.get("RenormMaxD", 0)
         self.policy_surprising_factor = train.get("PolicySurprisingFactor", 0.0)
 
         assert self.train_dir != None, ""
