@@ -31,7 +31,6 @@ struct InputData {
     float komi{0.f};
     int board_size{-1};
     int side_to_move{kInvalid};
-    int symmetry{-1};
     PolicyBufferOffset offset{PolicyBufferOffset::kDefault};
 
     std::array<float, kInputChannels * kNumIntersections> planes;

@@ -204,7 +204,7 @@ void SelfPlayPipe::AssignDataWorker() {
                 std::this_thread::yield();
                 keep_running = writing_worker_running_.load(std::memory_order_relaxed);
                 {
-                    // Gather the item the to the local buffer.
+                    // Gather the item to the local buffer.
                     std::lock_guard<std::mutex> lock(data_mutex_);
                     while (!data_sgf_buffer_.empty()) {
                         data_buffer.emplace_back(data_sgf_buffer_.front());
@@ -213,7 +213,7 @@ void SelfPlayPipe::AssignDataWorker() {
                     }
                 }
                 {
-                    // Gather the item the to the local buffer.
+                    // Gather the item to the local buffer.
                     std::lock_guard<std::mutex> lock(log_mutex_);
                     while (!games_queries_buffer_.empty()) {
                         queries_buffer.emplace_back(games_queries_buffer_.front());
@@ -296,7 +296,6 @@ void SelfPlayPipe::AssignSelfplayWorkers() {
                         games_queries_buffer_.emplace_back(
                             played_games, engine_.GetNetReportQueries());
                     }
-                    
                 }
                 running_threads_.fetch_sub(1, std::memory_order_relaxed);
 

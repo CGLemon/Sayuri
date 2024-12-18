@@ -20,7 +20,7 @@ public:
     bool IsValid() const { return nn_evals_ != nullptr; }
     NodeEvals *GetEvals() const { return nn_evals_.get(); }
 
-    void FromNetEvals(NodeEvals nn_evals) { 
+    void FromNetEvals(NodeEvals nn_evals) {
         nn_evals_ = std::make_unique<NodeEvals>(nn_evals);
     }
 
@@ -245,12 +245,12 @@ private:
     std::vector<TrainingData> training_data_buffer_;
 
     // True if it is searhing.
-    std::atomic<bool> running_; 
+    std::atomic<bool> running_;
 
     // The current playouts.
-    std::atomic<int> playouts_; 
+    std::atomic<int> playouts_;
 
-    // The tree search time control. 
+    // The tree search time control.
     TimeControl time_control_;
 
     // The current game state.
@@ -263,7 +263,7 @@ private:
     Network &network_;
 
     // The root node of tree.
-    std::unique_ptr<Node> root_node_; 
+    std::unique_ptr<Node> root_node_;
 
     // The root networl eval.
     NodeEvals root_evals_;

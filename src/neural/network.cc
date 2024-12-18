@@ -414,7 +414,6 @@ int Network::GetVertexWithPolicy(const GameState &state,
     }
 
     return select_vtx;
-
 }
 
 bool Network::Valid() const {

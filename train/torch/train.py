@@ -442,7 +442,8 @@ class TrainingPipe():
         self.num_all_chunks = len(gather_filenames(self.train_dir))
         if not self.chunks_increasing_c is None:
             # Compute the best window size for self-play learning. The formula is based on
-            # "Accelerating Self-Play Learning in Go".
+            # "Accelerating Self-Play Learning in Go". Please see the formula here,
+            # https://arxiv.org/abs/1902.10565v2
             num_chunks_for_window = compute_window_size(
                 N = self.num_all_chunks,
                 c = self.chunks_increasing_c,

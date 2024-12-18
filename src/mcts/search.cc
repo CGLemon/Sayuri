@@ -522,7 +522,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         // Fill estimated Q value for each child. If the child is
         // unvisited, set the FPU value.
         const auto parent_score = result.root_score_lead;
-        const auto q_value = visits == 0 ? 
+        const auto q_value = visits == 0 ?
                                  node->GetFpu(color, total_visited_policy, true) :
                                  node->GetWL(color, false) +
                                      node->GetScoreEval(color, parent_score);
