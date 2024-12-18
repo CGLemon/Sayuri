@@ -41,7 +41,7 @@ bool Node::PrepareRootNode(Network &network,
     if (!success) {
         // The setting of root policy and children may be different,
         // like softmax temperature, so we refill the children policy.
-        Recompute(network, state, is_root);
+        Recompute(is_root);
     }
     if (param_->dirichlet_noise) {
         // Generate the dirichlet noise and gather it.
@@ -76,51 +76,30 @@ bool Node::PrepareRootNode(Network &network,
     return success;
 }
 
-void Node::Recompute(Network &network,
-                     GameState &state,
-                     const bool is_root) {
+void Node::Recompute(const bool is_root) {
     WaitExpanded();
     if (!HasChildren()) {
         return;
     }
 
-    // Policy softmax temperature. If 't' is greater than 1, policy
-    // will be broader. If 't' is less than 1, policy will be sharper.
-    const float temp = is_root ?
-                param_->root_policy_temp : param_->policy_temp;
-    auto raw_netlist = network.GetOutput(
-        state, Network::kRandom, Network::Query::Get().SetTemperature(temp));
-
-    const auto num_intersections = state.GetNumIntersections();
-    auto legal_accumulate = 0.f;
-
-    // Filter the illegal or pruned nodes.
-    for (int idx = 0; idx < num_intersections; ++idx) {
-        const auto vtx = state.IndexToVertex(idx);
-        auto node = GetChild(vtx);
-        if (node) {
-            legal_accumulate +=
-                raw_netlist.probabilities[idx];
-        }
-    }
-    auto passnode = GetChild(kPass);
-    if (passnode) {
-        legal_accumulate += raw_netlist.pass_probability;
+    const auto ori_policy_temp = policy_temp_;
+    policy_temp_ = is_root ?
+        param_->root_policy_temp : param_->policy_temp;
+    if (std::abs(ori_policy_temp - policy_temp_) < 1e-4f) {
+        // Temperature is as same as old one.
+        return;
     }
 
-    // Assign the new policy for children.
-    for (int idx = 0; idx < num_intersections; ++idx) {
-        const auto vtx = state.IndexToVertex(idx);
-        auto node = GetChild(vtx);
-        if (node) {
-            const auto policy =
-                raw_netlist.probabilities[idx]/legal_accumulate;
-            node->SetPolicy(policy);
-        }
+    auto buffer = std::vector<float>{};
+    for (auto &child : children_) {
+        buffer.emplace_back(child.GetPolicy());
     }
-    if (passnode) {
-        passnode->SetPolicy(
-            raw_netlist.pass_probability/legal_accumulate);
+
+    buffer = ReSoftmax(buffer, policy_temp_);
+    int idx = 0;
+    // Assume we already inflated all children. Refill the new policy.
+    for (auto &child : children_) {
+        child.Get()->SetPolicy(buffer[idx++]);
     }
 }
 
@@ -196,10 +175,10 @@ bool Node::ExpandChildren(Network &network,
 
     // Policy softmax temperature. If 't' is greater than 1, policy
     // will be broader. If 't' is less than 1, policy will be sharper.
-    const float temp = is_root ?
-                    param_->root_policy_temp : param_->policy_temp;
+    policy_temp_ = is_root ?
+        param_->root_policy_temp : param_->policy_temp;
     auto raw_netlist = network.GetOutput(
-        state, Network::kRandom, Network::Query::Get().SetTemperature(temp));
+        state, Network::kRandom, Network::Query::Get().SetTemperature(policy_temp_));
 
     // Store the network reuslt.
     ApplyNetOutput(state, raw_netlist, node_evals, color_);
@@ -602,7 +581,7 @@ int Node::RandomMoveWithLogitsQ(GameState &state, float temp) {
     const auto num_intersections = state.GetNumIntersections();
     auto prob = std::vector<float>(num_intersections+1, 0.f);
     auto vertices_table = std::vector<int>(num_intersections+1, kNullVertex);
-    int accm_visists = 0;
+    int accum_visists = 0;
 
     for (const auto &child : children_) {
         auto node = child.Get();
@@ -618,18 +597,18 @@ int Node::RandomMoveWithLogitsQ(GameState &state, float temp) {
                       state.GetX(vtx), state.GetY(vtx));
         }
         if (visits != 0) {
-            accm_visists += visits;
+            accum_visists += visits;
             prob[idx] = visits;
             vertices_table[idx] = vtx;
         }
     }
 
-    if (accm_visists == 0) {
+    if (accum_visists == 0) {
         // There is no visits. Reture the best policy move.
         return GetBestMove(true);
     }
     for (float &p : prob) {
-        p /= (float)accm_visists;
+        p /= (float)accum_visists;
     }
     MixLogitsCompletedQ(state, prob);
 

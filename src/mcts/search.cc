@@ -577,7 +577,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         // visits is noise. Please see here for detail, https://arxiv.org/abs/1902.10565v2
         const int virtual_visits = std::max(3200, parentvisits);
         float cpuct = root_node_->GetCpuct(virtual_visits);
-        float accm_target_policy = 0.0f;
+        float accum_target_policy = 0.0f;
         for (int idx = 0; idx < num_intersections+1; ++idx) {
             if (idx != best_index) {
                 const float prob = root_raw_probabilities_[idx];
@@ -593,17 +593,17 @@ void Search::GatherComputationResult(ComputationResult &result) const {
                     target_dist_buf[idx] = std::min(wanted_prob, target_dist_buf[idx]);
                 }
             }
-            accm_target_policy += target_dist_buf[idx];
+            accum_target_policy += target_dist_buf[idx];
         }
 
-        if (accm_target_policy < 1e-4f) {
+        if (accum_target_policy < 1e-4f) {
             // All moves are pruned. We directly use the raw
             // distribution.
             result.target_policy_dist = result.root_visits_dist;
         } else {
             // Normalize the distribution. Be sure the sum is 1.
             for (int idx = 0; idx < num_intersections+1; ++idx) {
-                target_dist_buf[idx] /= accm_target_policy;
+                target_dist_buf[idx] /= accum_target_policy;
             }
             result.target_policy_dist = target_dist_buf;
         }
@@ -948,14 +948,14 @@ void Search::RewriteTargetPolicy(ComputationResult &result, int move, bool forbi
 
         // last one is pass move, suppressing it
         target_dist_buf[num_intersections] = 0.0f;
-        auto accm_target_policy =
+        auto accum_target_policy =
             std::accumulate(std::begin(target_dist_buf),
                             std::end(target_dist_buf), 0.0f);
 
-        if (accm_target_policy > 1e-4f) {
+        if (accum_target_policy > 1e-4f) {
             // Normalize the distribution. Be sure the sum is 1.
             for (int idx = 0; idx < num_intersections+1; ++idx) {
-                target_dist_buf[idx] /= accm_target_policy;
+                target_dist_buf[idx] /= accum_target_policy;
             }
             result.target_policy_dist = target_dist_buf;
 

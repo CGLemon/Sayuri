@@ -222,9 +222,7 @@ public:
 
 private:
     void RandomPruneRootChildren(GameState &state);
-    void Recompute(Network &network,
-                   GameState &state,
-                   const bool is_root);
+    void Recompute(const bool is_root);
     float GetDynamicCpuctFactor(Node *node, const int visits, const int parentvisits);
     void ApplyDirichletNoise(const float alpha);
     void ApplyNetOutput(GameState& state,
@@ -300,6 +298,9 @@ private:
     // the bouns is not side to move bouns. It will award any side
     // score utility.
     float score_bouns_{0.f};
+
+    // The softmax policy temperature.
+    float policy_temp_{1.0f};
 
     // The network win-loss value.
     float black_wl_{0.5f};
