@@ -95,7 +95,7 @@ void Node::Recompute(const bool is_root) {
         buffer.emplace_back(child.GetPolicy());
     }
 
-    buffer = ReSoftmax(buffer, policy_temp_);
+    buffer = ReSoftmax(buffer, policy_temp_ / ori_policy_temp);
     int idx = 0;
     // Assume we already inflated all children. Refill the new policy.
     for (auto &child : children_) {

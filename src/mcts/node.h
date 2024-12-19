@@ -26,7 +26,7 @@ struct AnalysisConfig {
         kLeela
     };
 
-    struct MoveToAvoid{
+    struct MoveToAvoid {
         int vertex{kNullVertex}, color{kInvalid}, until_move{-1};
         bool Valid() const {
             return vertex != kNullVertex &&
