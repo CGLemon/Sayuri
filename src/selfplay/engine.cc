@@ -29,6 +29,12 @@ void Engine::Initialize() {
     curr_weights_name_ = SelectWeights();
     network_->Initialize(curr_weights_name_);
 
+    if (network_->GetName().find("random") != std::string::npos) {
+        // Will be CPU-bound so reducing number of threads.
+        parallel_games_ = std::min(
+            static_cast<int>(std::thread::hardware_concurrency()) - 1, parallel_games_);
+    }
+
     game_pool_.clear();
     for (int i = 0; i < parallel_games_; ++i) {
         game_pool_.emplace_back(GameState{});
