@@ -32,6 +32,8 @@
         "SwaSteps" : 100,
         "WarmUpSteps" : 20000,
         "PolicySurprisingFactor" : 0.0,
+        "RenormMaxR" : 1,
+        "RenormMaxD" : 0,
 
         "LearningRateSchedule" : [
             [0,       1e-2],
