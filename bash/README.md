@@ -23,7 +23,7 @@ The ```simple.sh``` will do the infinite loop. If you want to halt the loop, you
 
     $ touch kill.txt
 
-Maybe you have powerful computer with multi-GPUs but don't want to use all GPUs. You may add option ```-g``` to run the self-play and training on the specific GPU.
+Maybe you have a powerful computer with multi-GPUs but don't want to use all GPUs. You may add the option ```-g``` to execute the self-play and training on the specific GPU.
 
     $ bash simple.sh -g 1    # run it on the 2nd GPU
 

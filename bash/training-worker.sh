@@ -56,7 +56,7 @@ while :; do
     case $1 in
         -h|--help) shift; usage
         ;;
-        -n|--no-loop) shift; EXECUTE_LOOP=0
+        -n|--no-loop) EXECUTE_LOOP=0
         ;;
         -s|--setting) shift; SETTING_FILE=$1
         ;;

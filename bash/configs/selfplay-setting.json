@@ -5,7 +5,7 @@
         "ResidualChannels" : 96,
         "PolicyExtract" : 24,
         "ValueExtract" : 24,
-        "SeRatio" : 2,
+        "SeRatio" : 4,
         "Activation" : "mish",
 
         "Stack" : [
@@ -14,7 +14,7 @@
             "ResidualBlock-SE",
             "ResidualBlock",
             "ResidualBlock",
-            "ResidualBlock-SE"
+            "MixerBlock-SE"
         ]
     },
 
@@ -38,8 +38,8 @@
         "SwaSteps" : 500,
         "WarmUpSteps" : 20000,
         "PolicySurprisingFactor" : 0.5,
-        "RenormMaxR" : 1,
-        "RenormMaxD" : 0,
+        "RenormMaxR" : 3,
+        "RenormMaxD" : 4,
 
         "LearningRateSchedule" : [
             [0,       5e-3]

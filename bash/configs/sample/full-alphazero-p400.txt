@@ -7,7 +7,7 @@
 
 --handicap-fair-komi-prob 0.5
 
---cpuct-init 1.25
+--cpuct-init 0.5
 --cpuct-base 19652
 --cpuct-base-factor 1
 
@@ -43,7 +43,7 @@
 
 --resign-playouts 80
 --resign-threshold 0.05
---resign-discard-prob 0.85
+--resign-discard-prob 0.9
 
 --parallel-games 128
 --batch-size 64

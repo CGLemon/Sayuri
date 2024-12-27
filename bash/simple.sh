@@ -77,4 +77,3 @@ while :; do
 done
 
 main_loop
-

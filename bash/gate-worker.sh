@@ -50,7 +50,7 @@ while :; do
     case $1 in
         -h|--help) shift; usage
         ;;
-        -n|--no-loop) shift; EXECUTE_LOOP=0
+        -n|--no-loop) EXECUTE_LOOP=0
         ;;
         -k|--kill) shift; KILL_FILE=$1;
         ;;

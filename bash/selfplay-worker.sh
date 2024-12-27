@@ -64,7 +64,7 @@ while :; do
     case $1 in
         -h|--help) shift; usage
         ;;
-        -n|--no-loop) shift; EXECUTE_LOOP=0
+        -n|--no-loop) EXECUTE_LOOP=0
         ;;
         -c|--config) shift; CONFIG_FILE=$1
         ;;
@@ -81,4 +81,3 @@ while :; do
 done
 
 main_loop
-
