@@ -67,7 +67,7 @@ class StreamParser:
         self.down_sample_rate = down_sample_rate
 
         # We assume each game has 50 positions on average. 
-        self.virtual_buffsize = 2000 * 50
+        self.virtual_buffsize = 8000 * 50
         self.running_kld_mean = 1.0
         self.policy_surprising_factor = policy_surprising_factor
         self.num_samples_per_proc = 0

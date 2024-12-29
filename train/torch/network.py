@@ -218,7 +218,8 @@ class BatchNorm2d(nn.Module):
                        momentum=0.01,
                        use_gamma=False,
                        mode="renorm",
-                       renorm_clipping={"rmax" : 1, "dmax" : 0}):
+                       renorm_clipping={"rmax" : 1, "dmax" : 0},
+                       momentum_basic_batchsize=None):
         super(BatchNorm2d, self).__init__()
         self.register_buffer(
             "running_mean", torch.zeros(num_features, dtype=torch.float)
@@ -241,6 +242,7 @@ class BatchNorm2d(nn.Module):
         self.num_features = num_features
         self.eps = eps
         self.momentum = self._clamp(momentum)
+        self.momentum_basic_batchsize = momentum_basic_batchsize
 
         self.mode = mode
         assert self.mode in ["norm", "renorm", "fixup"]
@@ -288,6 +290,12 @@ class BatchNorm2d(nn.Module):
         x = min(upper, x)
         return x
 
+    def _get_momentum(self, x):
+        if self.momentum_basic_batchsize is None:
+            return self.momentum 
+        b, _, _, _ = x.shape
+        return self.momentum * b / self.momentum_basic_batchsize
+
     def _apply_renorm(self, x, mean, var):
         mean = mean.view(1, self.num_features, 1, 1)
         std = torch.sqrt(var+self.eps).view(1, self.num_features, 1, 1)
@@ -325,8 +333,9 @@ class BatchNorm2d(nn.Module):
                 x = self._apply_norm(x , batch_mean, batch_var)
 
             # Update moving averages.
-            self.running_mean += self.momentum * (batch_mean.detach() - self.running_mean)
-            self.running_var += self.momentum * (batch_var.detach() - self.running_var)
+            momentum = self._get_momentum(x)
+            self.running_mean += momentum * (batch_mean.detach() - self.running_mean)
+            self.running_var += momentum * (batch_var.detach() - self.running_var)
         else:
             # Inference step or fixup, they are equal.
             x = self._apply_norm(x, self.running_mean, self.running_var)
@@ -503,7 +512,8 @@ class ConvBlock(nn.Module):
             eps=1e-5,
             use_gamma=use_gamma,
             mode="renorm",
-            renorm_clipping=renorm_clipping
+            renorm_clipping=renorm_clipping,
+            momentum_basic_batchsize=2048
         )
         self.activation = activation
         self.act = activation_func(self.activation, inplace=True)
@@ -577,7 +587,8 @@ class DepthwiseConvBlock(nn.Module):
             eps=1e-5,
             use_gamma=use_gamma,
             mode="renorm",
-            renorm_clipping=renorm_clipping
+            renorm_clipping=renorm_clipping,
+            momentum_basic_batchsize=2048
         )
         self.activation = activation
         self.act = activation_func(self.activation, inplace=True)
