@@ -55,11 +55,10 @@ OutputResult CudaForwardPipe::Forward(const InputData &input) {
         entry_queue_.emplace_back(entry);
     }
 
-    if (entry_queue_.size() >= (size_t)max_batch_per_nn_) {
+    if (static_cast<int>(entry_queue_.size()) >= max_batch_per_nn_) {
         cv_.notify_one(); // Wake up one worker if there are enough batch size.
     }
     entry->cv.wait(lock); // Wait for batch forwarding worker.
-    entry->done.store(true, std::memory_order_relaxed);
 
     // Reorder the outputs data.
     OutputResult reordered_ouput = output;
@@ -954,6 +953,8 @@ CudaForwardPipe::NNGraph::~NNGraph() {
 
 void CudaForwardPipe::PrepareWorkers() {
     worker_running_.store(true);
+    waittime_.store(GetOption<int>("gpu_waittime"), std::memory_order_relaxed);
+
     if (workers_.empty()) {
         for (int gpu = 0; gpu < (int)nngraphs_.size(); ++gpu) {
             workers_.emplace_back([g=gpu, this](){ Worker(g); });
@@ -962,88 +963,66 @@ void CudaForwardPipe::PrepareWorkers() {
 }
 
 void CudaForwardPipe::Worker(int gpu) {
-    const auto gpu_waittime_base = GetOption<int>("gpu_waittime");
-    waittime_.store(gpu_waittime_base, std::memory_order_relaxed);
-
-    const auto GatherBatches = [this, gpu_waittime_base](){
-        const auto max_waittime = std::max(10 * gpu_waittime_base, 100);
+    const auto GatherBatches = [this](int gpu_waittime) {
         auto entries = std::vector<std::shared_ptr<ForwawrdEntry>>{};
 
-        // Running the loop until there are enough entries or time out, then break
-        // the loop.
-        while(true) {
-            if (!worker_running_.load(std::memory_order_relaxed)) {
-                return entries;
-            }
-
-            bool should_be_fast = fast_pipe_.exchange(false, std::memory_order_relaxed);
-            int waittime = waittime_.load(std::memory_order_relaxed);
-
-            if ((int)entry_queue_.size() >= max_batch_per_nn_) {
-                // We gather enough entries, break the loop now.
-                waittime_.store(
-                    std::min(waittime, gpu_waittime_base),
-                    std::memory_order_relaxed);
-                break;
-            }
-
-            // Wait for some time to avoid busy waiting.
+        // Running the loop until there are enough entries in the queue or time out,
+        // then breaking the loop.
+        {
             std::unique_lock<std::mutex> lock(worker_mutex_);
-            bool timeout = !cv_.wait_for(lock, std::chrono::milliseconds(waittime),
-                                             [this](){ return !((int)entry_queue_.size() < max_batch_per_nn_); }
-                                         );
-
-            // Reset the waiting time.
-            if (!entry_queue_.empty()) {
-                waittime = std::min(waittime, gpu_waittime_base);
-
-                if (timeout && should_be_fast) {
-                    // We already waited two times and fail to gather the full
-                    // batch data. Simply assume we will be still fail next time
-                    // so set the waiting time as zero.
-                    waittime = 0;
-                } else if (waittime > 0) {
-                    // Decrease the waiting time if it is time out.
-                    waittime -= 2;
+            while(true) {
+                if (!worker_running_.load(std::memory_order_relaxed)) {
+                    return entries;
+                }
+                if (static_cast<int>(entry_queue_.size()) >= max_batch_per_nn_) {
+                    break;
                 }
 
-                // Set the next waiting time.
-                waittime_.store(std::max(waittime, 0), std::memory_order_relaxed);
+                bool timeout = false;
+                if (waittime_.load(std::memory_order_relaxed) != 0) {
+                    // Wait for some time to avoid busy waiting.
+                    timeout = !cv_.wait_for(
+                        lock, std::chrono::milliseconds(waittime_.load(std::memory_order_relaxed)),
+                        [this]() {
+                            return !worker_running_.load(std::memory_order_relaxed) ||
+                                       static_cast<int>(entry_queue_.size()) >= max_batch_per_nn_; });
+                }
 
-                // Finish the loop.
-                break;
-            } else {
-                // We can't receive any entry. Assume we are resting. Increase the waiting
-                // time to avoid busy waiting.
-                if (waittime < gpu_waittime_base) {
-                    waittime_.store(waittime+1, std::memory_order_relaxed);
-                } else if (waittime < max_waittime) {
-                    // Quicky increase waiting time because we receive no entry several
-                    // times.
-                    waittime_.store(waittime+10, std::memory_order_relaxed);
+                if (entry_queue_.empty()) {
+                    // No any entry in the queue. In this case, we can not
+                    // expect next forwarding time. Keep increasing waiting
+                    // time.
+                    auto last_waittime = waittime_.fetch_add(1, std::memory_order_relaxed);
+                    if (last_waittime >= gpu_waittime) {
+                        waittime_.store(gpu_waittime, std::memory_order_relaxed);
+                    }
+                } else {
+                    if (timeout) {
+                        // May be CPU-bound time. Boost forwarding.
+                        waittime_.store(0, std::memory_order_relaxed);
+                    }
+                    break;
                 }
             }
         }
 
-        // Gather the entries.
-        std::lock_guard<std::mutex> queue_lock(queue_mutex_);
-        auto count = entry_queue_.size();
-        if ((int)count > max_batch_per_nn_) {
-            count = max_batch_per_nn_;
+        // Gather the entries and return.
+        {
+            std::unique_lock<std::mutex> lock(queue_mutex_);
+            auto count = std::min(static_cast<int>(entry_queue_.size()), max_batch_per_nn_);
+            auto end = std::begin(entry_queue_);
+            std::advance(end, count);
+            std::move(std::begin(entry_queue_), end, std::back_inserter(entries));
+            entry_queue_.erase(std::begin(entry_queue_), end);
         }
-
-        auto end = std::begin(entry_queue_);
-        std::advance(end, count);
-        std::move(std::begin(entry_queue_), end, std::back_inserter(entries));
-        entry_queue_.erase(std::begin(entry_queue_), end);
-
         return entries;
     };
 
+    const auto gpu_waittime_base = GetOption<int>("gpu_waittime");
     while (true) {
         if (!worker_running_.load(std::memory_order_relaxed)) return;
 
-        auto entries = GatherBatches();
+        auto entries = GatherBatches(gpu_waittime_base);
         const auto batch_size = entries.size();
 
         if (batch_size == 0) {
@@ -1056,23 +1035,16 @@ void CudaForwardPipe::Worker(int gpu) {
             inputs[b] = entries[b]->input;
         }
 
-        // Forward...
+        // Forwarding...
         auto outputs = nngraphs_[gpu]->BatchForward(inputs);
 
         for (auto b = size_t{0}; b < batch_size; ++b) {
             entries[b]->output = outputs[b];
-
-            // Keep to wake up the worker. Be sure the sleeping worker
-            // receives the signal.
-            while (!entries[b]->done.load(std::memory_order_relaxed)) {
-                entries[b]->cv.notify_all();
+            {
+                // Be sure the condition variable of current entry is ready.
+                std::unique_lock<std::mutex> lk(entries[b]->mutex);
             }
-        }
-
-        // There is no enough items in queue. Assume the current state is CPU
-        // bound. Try reduce the waiting for time next forwarding query.
-        if ((int)batch_size <= max_batch_per_nn_) {
-            fast_pipe_.store(true, std::memory_order_relaxed);
+            entries[b]->cv.notify_all();
         }
     }
 }
