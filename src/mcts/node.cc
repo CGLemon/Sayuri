@@ -909,6 +909,19 @@ std::string Node::ToAnalysisString(GameState &state,
         return std::string{};
     }
 
+    auto root = Get();
+    if (config.output_format == AnalysisConfig::kSayuri) {
+        out << Format("info move null visits %d winrate %.6f draw %.6f scorelead %.6f ",
+                         root->GetVisits(),
+                         root->GetWL(color, false),
+                         root->GetDraw(),
+                         root->GetFinalScore(color)
+                     );
+        if (config.ownership) {
+            out << OwnershipToString(state, color, "ownership", root);
+        }
+    }
+
     int order = 0;
     for (auto &lcb_pair : lcblist) {
         if (order+1 > config.max_moves) {
@@ -919,9 +932,9 @@ std::string Node::ToAnalysisString(GameState &state,
         const auto vertex = lcb_pair.second;
 
         auto child = GetChild(vertex);
-        const auto final_score = child->GetFinalScore(color);
-        const auto winrate = child->GetWL(color, false);
         const auto visits = child->GetVisits();
+        const auto winrate = child->GetWL(color, false);
+        const auto final_score = child->GetFinalScore(color);
         const auto prior = child->GetPolicy();
         const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
 
@@ -961,18 +974,17 @@ std::string Node::ToAnalysisString(GameState &state,
                              pv_string.c_str()
                          );
         }
-        if (config.moves_ownership) {
-            if (config.output_format == AnalysisConfig::kSayuri) {
-                out << OwnershipToString(state, color, "movesownership", child);
-            } else {
-                out << OwnershipToString(state, color, "movesOwnership", child);
-            }
+        if (config.ownership && config.output_format == AnalysisConfig::kSayuri) {
+            out << OwnershipToString(state, color, "ownership", child);
+        }
+        if (config.moves_ownership && config.output_format != AnalysisConfig::kSayuri) {
+            out << OwnershipToString(state, color, "movesOwnership", child);
         }
         order += 1;
     }
 
-    if (config.ownership) {
-        out << OwnershipToString(state, color, "ownership", this->Get());
+    if (config.ownership && config.output_format != AnalysisConfig::kSayuri) {
+        out << OwnershipToString(state, color, "ownership", root);
     }
     out << std::endl;
 
