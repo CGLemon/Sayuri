@@ -911,7 +911,7 @@ std::string Node::ToAnalysisString(GameState &state,
 
     auto root = Get();
     if (config.output_format == AnalysisConfig::kSayuri) {
-        out << Format("info move null visits %d winrate %.6f draw %.6f scorelead %.6f ",
+        out << Format("info move null visits %d winrate %.6f drawrate %.6f scorelead %.6f ",
                          root->GetVisits(),
                          root->GetWL(color, false),
                          root->GetDraw(),
@@ -940,7 +940,7 @@ std::string Node::ToAnalysisString(GameState &state,
 
         if (config.output_format == AnalysisConfig::kSayuri) {
             const auto drawrate = child->GetDraw();
-            out << Format("info move %s visits %d winrate %.6f draw %.6f scorelead %.6f prior %.6f lcb %.6f order %d pv %s",
+            out << Format("info move %s visits %d winrate %.6f drawrate %.6f scorelead %.6f prior %.6f lcb %.6f order %d pv %s",
                              state.VertexToText(vertex).c_str(),
                              visits,
                              winrate,
