@@ -1097,15 +1097,21 @@ void Search::TryPonder() {
 }
 
 int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
+    // Set the current analysis config.
+    analysis_config_ = analysis_config;
+
     auto analysis_tag = kAnalysis;
     auto reuse_tag = param_->reuse_tree ?
                          kNullTag : kUnreused;
+    if (analysis_config_.use_reuse_label) {
+        // Cover the reuse tree tag, only this time.
+        reuse_tag = analysis_config_.reuse_tree ?
+                        kNullTag : kUnreused;
+    }
+
     auto ponder_tag = ponder ? kPonder : kThinking;
 
     auto tag = reuse_tag | ponder_tag | analysis_tag;
-
-    // Set the current analysis config.
-    analysis_config_ = analysis_config;
 
     // The tree shape may be different with last move.
     if (analysis_config_.MoveRestrictions()) {
@@ -1114,6 +1120,11 @@ int Search::Analyze(bool ponder, AnalysisConfig &analysis_config) {
 
     int playouts = ponder == true ? GetPonderPlayouts()
                                       : param_->playouts;
+    if (analysis_config_.use_playouts_label) {
+        // Cover the playouts, only this time.
+        playouts = analysis_config_.playouts;
+    }
+
     int best_move = GetBestMove(playouts, tag);
 
     // Disable to reuse the tree for next move.

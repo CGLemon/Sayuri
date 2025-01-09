@@ -1243,6 +1243,32 @@ AnalysisConfig GtpLoop::ParseAnalysisConfig(Splitter &spt, int &color) {
             continue;
         }
 
+        if (token->Lower() == "reuse") {
+            if (auto true_token = spt.GetWord(curr_idx)) {
+                if (true_token->Lower() == "true") {
+                    config.use_reuse_label = true;
+                    config.reuse_tree = true;
+                    curr_idx += 1;
+                } else if (true_token->Lower() == "false") {
+                    config.use_reuse_label = true;
+                    config.reuse_tree = false;
+                    curr_idx += 1;
+                } 
+            }
+            continue;
+        }
+
+        if (token->Lower() == "playouts") {
+            if (auto interval_token = spt.GetWord(curr_idx)) {
+                if (interval_token->IsDigit()) {
+                    config.use_playouts_label = true;
+                    config.playouts = interval_token->Get<int>();
+                    curr_idx += 1;
+                }
+            }
+            continue;
+        }
+
         if (token->Lower() == "ownership") {
             if (auto true_token = spt.GetWord(curr_idx)) {
                 if (true_token->Lower() == "true") {
@@ -1343,6 +1369,13 @@ AnalysisConfig GtpLoop::ParseAnalysisConfig(Splitter &spt, int &color) {
 }
 
 bool GtpLoop::ParseOption(Splitter &spt, std::string &rep) {
+    const auto GetLowerString = [](std::string val) -> std::string {
+        for (auto & c: val) {
+            c = std::tolower(c);
+        }
+        return val;
+    };
+
     int name_idx = -1;
     int value_idx = name_idx - 1;
     std::string name, value;
@@ -1375,19 +1408,36 @@ bool GtpLoop::ParseOption(Splitter &spt, std::string &rep) {
     try {
         if (name == "playouts") {
             param->playouts = std::max(0, std::stoi(value));
+        } else if (name == "reuse tree") {
+            if (GetLowerString(value) == "true") {
+                param->reuse_tree = true;
+            } else if (GetLowerString(value) == "false") {
+                param->reuse_tree = false;
+            } else {
+                rep = "invalid value";
+                return false;
+            }
+        } else if (name == "pondering") {
+            if (GetLowerString(value) == "true") {
+                param->ponder = true;
+            } else if (GetLowerString(value) == "false") {
+                param->ponder = false;
+            } else {
+                rep = "invalid value";
+                return false;
+            }
         } else if (name == "resign threshold") {
             param->resign_threshold =
                 std::min(1.f, std::max(0.f, std::stof(value)));
         } else if (name == "scoring rule") {
-            if (value == "territory") {
+            if (GetLowerString(value) == "territory") {
                 agent_->GetState().SetRule(kTerritory);
-            } else if (value == "area") {
+            } else if (GetLowerString(value) == "area") {
                 agent_->GetState().SetRule(kArea);
             } else {
                 rep = "invalid rule";
+                return false;
             }
-        } else if (name == "relative rank") {
-            param->relative_rank = std::stoi(value);
         } else {
             rep = "invalid option name";
             return false;

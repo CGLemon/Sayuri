@@ -39,6 +39,11 @@ struct AnalysisConfig {
     bool ownership{false};
     bool moves_ownership{false};
 
+    bool use_reuse_label{false};
+    bool reuse_tree;
+    bool use_playouts_label{false};
+    int playouts;
+
     int interval{0};
     int min_moves{0};
     int max_moves{kPotentialMoves};
@@ -60,6 +65,8 @@ struct AnalysisConfig {
         avoid_moves.clear();
         allow_moves.clear();
         interval = 0;
+        use_reuse_label =
+            use_playouts_label = false;
     }
 
     bool IsLegal(const int vertex, const int color, const int movenum) const {
