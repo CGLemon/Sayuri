@@ -37,7 +37,7 @@ EMPTY = 2
 INVLD = 3
 
 NUM_VERTICES = (BOARD_SIZE+2) ** 2 # max vertices number
-NUM_INTESECTIONS = BOARD_SIZE ** 2 # max intersections number
+NUM_INTERSECTIONS = BOARD_SIZE ** 2 # max intersections number
 
 PASS = -1  # pass
 RESIGN = -2 # resign
@@ -485,7 +485,7 @@ class Board(object):
         return wave;
 
     def _get_owner_map(self):
-        ownermap = np.full(NUM_INTESECTIONS, INVLD)
+        ownermap = np.full(NUM_INTERSECTIONS, INVLD)
         black_buf = [False] * NUM_VERTICES
         white_buf = [False] * NUM_VERTICES
         self._compute_reach_color(BLACK, black_buf)
@@ -505,7 +505,7 @@ class Board(object):
         pass
 
     def _get_beason_map(self):
-        beasonmap  = np.full(NUM_INTESECTIONS, INVLD)
+        beasonmap  = np.full(NUM_INTERSECTIONS, INVLD)
         vitals = np.full(NUM_VERTICES, False)
 
         self._beason_search(beasonmap, BLACK)
@@ -710,7 +710,7 @@ class Board(object):
         opp_color = (self.to_move + 1) % 2
         past_moves = min(8, len(self.history))
 
-        features = np.zeros((INPUT_CHANNELS, NUM_INTESECTIONS), dtype=np.float32)
+        features = np.zeros((INPUT_CHANNELS, NUM_INTERSECTIONS), dtype=np.float32)
 
         # planes 1-24
         for p in range(past_moves):
@@ -867,7 +867,7 @@ class NetworkWrap(Network):
         raw_spat = torch.reshape(raw_spat, (n_size, raw_size))
         valid_size = board_size * board_size
 
-        if raw_size == NUM_INTESECTIONS + 1:
+        if raw_size == NUM_INTERSECTIONS + 1:
             valid_size += 1
 
         valid_spat = torch.zeros((n_size, valid_size))
@@ -879,7 +879,7 @@ class NetworkWrap(Network):
                 net_idx = y * BOARD_SIZE + x
                 valid_spat[:, valid_idx] = raw_spat[:, net_idx]
 
-        if raw_size == NUM_INTESECTIONS + 1:
+        if raw_size == NUM_INTERSECTIONS + 1:
             valid_spat[:, -1] = raw_spat[:, -1]
         tshape[-1] = valid_size
         valid_spat = torch.reshape(valid_spat, tshape)
