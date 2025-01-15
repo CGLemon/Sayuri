@@ -3,7 +3,7 @@ import matplotlib.image as mpimg
 import torch
 import numpy as np
 import pysayuri
-import argparse, colorsys, math, os
+import argparse, colorsys, os
 
 class VisualizedNetworkWrap(pysayuri.NetworkWrap):
     def __init__(self, cfg):
@@ -21,7 +21,8 @@ class VisualizedNetworkWrap(pysayuri.NetworkWrap):
         x = self.input_conv(planes, mask)
 
         # residual tower
-        x, _ = self.residual_tower((x, mask_buffers))
+        for block in self.residual_tower:
+            x = block(x, mask_buffers)
 
         # policy head
         pol = self.policy_conv(x, mask)
@@ -42,11 +43,6 @@ class VisualizedNetworkWrap(pysayuri.NetworkWrap):
             val
         )
         return predict
-
-    @torch.no_grad()
-    def shift_tensor(self, tensor):
-        mean = tensor.mean()
-        std = tensor.std()
 
     @torch.no_grad()
     def get_output_without_batch(self, features, *args, **kwargs):
@@ -71,7 +67,6 @@ class VisualizedNetworkWrap(pysayuri.NetworkWrap):
         for tensors, label in zip(pred, labels):
             _, channels, _ = tensors.shape
             tensors = self._get_valid_spat(tensors, board_size)
-            # print(tensors.shape)
             for c in range(channels):
                 tensor = tensors[:, c, :]
                 mean = tensor.mean()
@@ -107,6 +102,7 @@ class PlotBoard:
         self.grid_margin = self.imagesize/20.
         self.gridsize = (self.imagesize - self.grid_margin)/self.board_size
         self.gridpos = [ self.gridsize * (i + 0.5) + self.grid_margin/2. for i in range(self.board_size) ]
+        self.circle_grid = np.mgrid[:self.imagesize, :self.imagesize]
         self.board_img = np.ones((self.imagesize, self.imagesize, 3))
 
     def _draw_board(self):
@@ -129,44 +125,13 @@ class PlotBoard:
         self.board_img[ystart:yend, xstart:xend, :] = alpha_col[:]
 
     def _draw_circle(self, x, y, col, line_col=(0.,0.,0.), scale=1.):
-        r = scale * self.gridsize
-        localsize = round(self.gridsize + 1)
-        circlemap = np.zeros((localsize,localsize))
-        linemap = np.zeros((localsize,localsize))
-
-        for pixel in range(round(max(1, round(r/10)))):
-            pixelscale = 1.0 - (2.0 * pixel/localsize)
-            N = round(pixelscale * localsize * 8)
-            for i in range(N):
-                xpos = round(pixelscale * r * np.cos(2. * np.pi * i/N) + self.gridsize/2.)
-                ypos = round(pixelscale * r * np.sin(2. * np.pi * i/N) + self.gridsize/2.)
-                linemap[ypos,xpos] = 1
-        circlemap[:] = linemap[:]
-
-        ct = round(self.gridsize/2.)
-        que=[(ct,ct)]
-        circlemap[ct,ct] = 1
-        while len(que) != 0:
-            xpos, ypos = que.pop(0)
-            for xdir, ydir in [(1,0),(0,1),(-1,0),(0,-1)]:
-                xnext = xpos + xdir
-                ynext = ypos + ydir
-                if circlemap[ynext,xnext] == 0:
-                    que.append((xnext,ynext))
-                    circlemap[ynext,xnext] = 1
-
-        for iy in range(localsize):
-            for ix in range(localsize):
-                if circlemap[iy,ix] == 1:
-                    xpos = round(ix + self.gridpos[x] - self.gridsize/2.)
-                    ypos = round(iy + self.gridpos[y] - self.gridsize/2.)
-                    self.board_img[ypos,xpos,:] = col[:]
-        for iy in range(localsize):
-            for ix in range(localsize):
-                if linemap[iy,ix] == 1:
-                    xpos = round(ix + self.gridpos[x] - self.gridsize/2.)
-                    ypos = round(iy + self.gridpos[y] - self.gridsize/2.)
-                    self.board_img[ypos,xpos,:] = line_col[:]
+        x, y = self.gridpos[x], self.gridpos[y]
+        yy, xx = self.circle_grid
+        circle = np.sqrt((xx - x) ** 2 + (yy - y) ** 2)
+        radius = scale * self.gridsize
+        linewidth = 0.1 * radius
+        self.board_img[np.where(circle < radius, True, False), :] = col[:]
+        self.board_img[np.where((circle < radius) & (circle > radius - linewidth), True, False), :] = line_col[:]
 
     def display(self, *args, **kwargs):
         show = kwargs.get("show", True)

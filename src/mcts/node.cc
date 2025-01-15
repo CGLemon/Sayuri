@@ -878,37 +878,34 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     return out.str();
 }
 
-std::string Node::OwnershipToString(GameState &state, const int color, std::string name, Node *node) {
-    auto out = std::ostringstream{};
-    const auto board_size = state.GetBoardSize();
-
-    auto ownership = node->GetOwnership(color);
-
-    // TODO: A wrapper for row major iterator staring
-    //       from A19.
-    out << name << ' ';
-    for (int y = board_size-1; y >= 0; --y) {
-        for (int x = 0; x < board_size; ++x) {
-            out << Format("%.6f ", ownership[state.GetIndex(x,y)]);
-        }
-    }
-
-    return out.str();
-}
-
 std::string Node::ToAnalysisString(GameState &state,
                                    const int color,
                                    AnalysisConfig &config) {
+    const auto OwnershipToString = [](GameState &state,
+                                      const int color,
+                                      std::string name,
+                                      Node *node) -> std::string {
+        auto out = std::ostringstream{};
+        const auto board_size = state.GetBoardSize();
+
+        auto ownership = node->GetOwnership(color);
+
+        // TODO: A wrapper for row major iterator staring
+        //       from A19.
+        out << name << ' ';
+        for (int y = board_size-1; y >= 0; --y) {
+            for (int x = 0; x < board_size; ++x) {
+                out << Format("%.6f ", ownership[state.GetIndex(x,y)]);
+            }
+        }
+        return out.str();
+    };
+
     // Gather the analysis string. You can see the detail here
     // https://github.com/SabakiHQ/Sabaki/blob/master/docs/guides/engine-analysis-integration.md
 
     auto out = std::ostringstream{};
     const auto lcblist = GetSortedLcbUtilityList(color);
-
-    if (lcblist.empty()) {
-        return std::string{};
-    }
-
     auto root = Get();
     if (config.output_format == AnalysisConfig::kSayuri) {
         out << Format("info move null visits %d winrate %.6f drawrate %.6f scorelead %.6f ",
@@ -986,7 +983,15 @@ std::string Node::ToAnalysisString(GameState &state,
     if (config.ownership && config.output_format != AnalysisConfig::kSayuri) {
         out << OwnershipToString(state, color, "ownership", root);
     }
-    out << std::endl;
+
+    // There may be no output information so only add new line character for
+    // non-empty string.
+    out.seekp(0, std::ios::end);
+    if (out.tellp() > 0) {
+        out << std::endl;
+    }
+    out.seekp(0, std::ios::end);
+
 
     return out.str();
 }
@@ -1071,16 +1076,16 @@ std::vector<std::pair<float, int>> Node::GetSortedLcbUtilityList(const int color
 
         const auto visits = node->GetVisits();
         if (visits > 0) {
-            // Mix LCB value and score eval be sure that bias of LCB with scoring
+            // Mix LCB value and score eval. Be sure that bias of LCB with scoring
             // could be as same as Q eval in PUCT phase.
             const auto mixed_lcb = node->GetLcb(color) +
                                        node->GetScoreEval(color, parent_score);
 
-            // Reduce some LCB value to avoid select low visits move. For example,
+            // Reduce some LCB value to avoid selecting low visits move. For example,
             // The node 'A' has 100 visits and its LCB is 90%. The node 'B' has
             // 1000000 visits and its LCB is 89%. Based on the normal LCB formula,
             // We will select the node 'A'. Obviously the node 'A' is unstable because
-            // it has only few visits. Actually, we should select the node 'B'.
+            // it has only few visits. Therefore, we should select the node 'B'.
             const auto rlcb = mixed_lcb * (1.0f - lcb_reduction) +
                                   lcb_reduction * ((float)visits/parentvisits);
             lcblist.emplace_back(rlcb, node->GetVertex());
