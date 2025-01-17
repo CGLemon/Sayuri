@@ -216,7 +216,7 @@ class Board(object):
         self.move_num = 0  # move number
         self.last_move = NULL_VERTEX  # last move
         self.removed_cnt = 0  # removed stones count
-        self.history = [] # history board positions.
+        self.history_state = [] # history board positions.
         self.history_move = [] # history last move.
 
     def copy(self):
@@ -241,8 +241,8 @@ class Board(object):
         b_cpy.last_move = self.last_move
         b_cpy.removed_cnt = self.removed_cnt
 
-        for h in self.history:
-            b_cpy.history.append(h)
+        for h in self.history_state:
+            b_cpy.history_state.append(h)
 
         for m in self.history_move:
             b_cpy.history_move.append(m)
@@ -415,7 +415,7 @@ class Board(object):
         self.move_num += 1
 
         # Push the current board positions to history.
-        self.history.append(copy.deepcopy(self.state))
+        self.history_state.append(copy.deepcopy(self.state))
         self.history_move.append((to_move, self.last_move))
 
         return True
@@ -458,7 +458,7 @@ class Board(object):
             return "japanese"
         return "unknown"
 
-    def _get_wave(self):
+    def _get_wave_val(self):
         if self.scoring_rule == SCORING_TERRITORY:
             return 0.0
 
@@ -636,8 +636,8 @@ class Board(object):
                 self._remove(v)
 
     def final_score(self):
-        score_lead = self._compute_reach_color(BLACK) - self._compute_reach_color(WHITE) - self.komi
-
+        score_lead = self._compute_reach_color(BLACK) - \
+                         self._compute_reach_color(WHITE) - self.komi
         if self.scoring_rule == SCORING_TERRITORY:
             num_blacks = 0
             num_whites = 0 
@@ -706,21 +706,21 @@ class Board(object):
         # plane     41 : -komi/20
         # plane     42 : intersections/361
         # plane     43 : fill ones
-        my_color = self.to_move
+        our_color = self.to_move
         opp_color = (self.to_move + 1) % 2
-        past_moves = min(8, len(self.history))
+        past_moves = min(8, len(self.history_state))
 
         features = np.zeros((INPUT_CHANNELS, NUM_INTERSECTIONS), dtype=np.float32)
 
         # planes 1-24
         for p in range(past_moves):
-            i = len(self.history) - p - 1
+            i = len(self.history_state) - p - 1
 
             # Fill past board positions features.
-            h = self.history[i]
+            h = self.history_state[i]
             for v in range(self.num_vertices):
                 c = h[v]
-                if c == my_color:
+                if c == our_color:
                     features[p*3+0, self.vertex_to_feature_index(v)] = 1
                 elif c == opp_color:
                     features[p*3+1, self.vertex_to_feature_index(v)] = 1
@@ -739,11 +739,11 @@ class Board(object):
         if not self.scoring_rule == SCORING_TERRITORY:
             for v in range(self.num_vertices):
                 if self.state[v] != INVLD:
-                    if beasonmap[self.vertex_to_index(v)] == my_color:
+                    if beasonmap[self.vertex_to_index(v)] == our_color:
                         features[25, self.vertex_to_feature_index(v)] = 1
                     elif beasonmap[self.vertex_to_index(v)] == opp_color:
                         features[26, self.vertex_to_feature_index(v)] = 1
-                    if ownermap[self.vertex_to_index(v)] == my_color:
+                    if ownermap[self.vertex_to_index(v)] == our_color:
                         features[27, self.vertex_to_feature_index(v)] = 1
                     elif ownermap[self.vertex_to_index(v)] == opp_color:
                         features[28, self.vertex_to_feature_index(v)] = 1
@@ -770,9 +770,9 @@ class Board(object):
                     features[36, self.vertex_to_feature_index(v)] = 1
 
         # planes 38-43
-        side_komi = self.komi if my_color == BLACK else -self.komi
-        wave = self._get_wave()
+        side_komi = self.komi if our_color == BLACK else -self.komi
         scoring = self._get_scoring_rule_val()
+        wave = self._get_wave_val()
         for v in range(self.num_vertices):
             if self.state[v] != INVLD:
                 features[37, self.vertex_to_feature_index(v)] = scoring
@@ -788,9 +788,9 @@ class Board(object):
         # Return true if the current position is superko.
 
         curr_hash = hash(self.state.tobytes())
-        s = len(self.history)
+        s = len(self.history_state)
         for p in range(s-1):
-            h = self.history[p]
+            h = self.history_state[p]
             if hash(h.tobytes()) == curr_hash:
                 return True
         return False
@@ -1477,8 +1477,7 @@ class Agent():
 
         self._net, self._status_dict = self._load_checkpoint()
         self._use_gpu = kwargs.get("use_gpu", False) and torch.cuda.is_available()
-        self._device = torch.device("cuda") if self._use_gpu else torch.device("cpu")
-        self._net = self._net.to_device(self._device)
+        self._net = self._net.to_device(torch.device("cuda") if self._use_gpu else torch.device("cpu"))
         self._time_control = TimeControl()
 
         if self._use_gpu:
@@ -1940,7 +1939,7 @@ def gtp_loop(args):
                 "time_left",
                 "printsgf",
                 "loadsgf"
-                "raw-nn",
+                "raw_nn",
                 "planes",
                 "save_bin_weights",
                 "gogui-analyze_commands",
@@ -2043,7 +2042,7 @@ def gtp_loop(args):
                 analysis_config = {"interval": interval/100}
             )
             stdout_write("\n")
-        elif main == "raw-nn":
+        elif main == "raw_nn":
             pred_result = agent.get_net_output_without_batch(as_numpy=True)
             print_utils.raw_nn(pred_result)
             gtp_print("")
