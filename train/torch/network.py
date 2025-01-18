@@ -352,6 +352,7 @@ class BroadcastDepthwiseConv2d(nn.Module):
     def __init__(self, channels,
                        kernel_size,
                        padding="same",
+                       dilation=1,
                        bias=True):
         super(BroadcastDepthwiseConv2d, self).__init__()
         self.channels = channels
@@ -574,12 +575,21 @@ class DepthwiseConvBlock(nn.Module):
             self.channels,
             self.kernel_size,
             padding="same",
+            dilation=1,
             bias=True
         )
         self.rep3x3 = BroadcastDepthwiseConv2d(
             self.channels,
             3,
             padding="same",
+            dilation=1,
+            bias=True
+        )
+        self.dil3x3 = BroadcastDepthwiseConv2d(
+            self.channels,
+            3,
+            padding="same",
+            dilation=2,
             bias=True
         )
         self.bn = BatchNorm2d(
@@ -600,6 +610,18 @@ class DepthwiseConvBlock(nn.Module):
             self.conv.weight, gain=compute_gain(self.activation))
         nn.init.xavier_normal_(
             self.rep3x3.weight, gain=compute_gain(self.activation))
+        nn.init.xavier_normal_(
+            self.dil3x3.weight, gain=compute_gain(self.activation))
+
+    def _pad_zeros_dilation(self, kernel, dilation):
+        _, oc, _, _ = kernel.shape
+        out = F.conv_transpose2d(
+            kernel,
+            torch.ones((oc, 1, 1, 1)),
+            stride=dilation,
+            groups=oc
+        )
+        return out
 
     def tensors_to_text(self, use_bin):
         if use_bin:
@@ -609,10 +631,18 @@ class DepthwiseConvBlock(nn.Module):
 
         weights, biases = self.conv.get_merged_params()
 
+        # merge small 3x3 kernel
         ps = int((self.kernel_size - 3) / 2)
         rep3x3_weights, rep3x3_biases = self.rep3x3.get_merged_params()
         weights += F.pad(rep3x3_weights, (ps, ps, ps, ps), "constant", 0)
         biases += rep3x3_biases
+
+        # merge dilation 3x3 kernel
+        ps = int((self.kernel_size - 5) / 2)
+        dil3x3_weights, dil3x3_biases = self.dil3x3.get_merged_params()
+        dil3x3_weights = self._pad_zeros_dilation(dil3x3_weights, dilation=self.dil3x3.dilation)
+        weights += F.pad(dil3x3_weights, (ps, ps, ps, ps), "constant", 0)
+        biases += dil3x3_biases
 
         out += tensor_to_text(weights, use_bin)
         out += tensor_to_text(biases, use_bin)
@@ -633,7 +663,7 @@ class DepthwiseConvBlock(nn.Module):
         return out
 
     def forward(self, x, mask):
-        x = (self.conv(x) + self.rep3x3(x)) * mask
+        x = (self.conv(x) + self.rep3x3(x) + self.dil3x3(x)) * mask
         x = self.bn(x, mask)
         x = self.act(x)
         return x
