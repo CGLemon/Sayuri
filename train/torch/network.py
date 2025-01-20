@@ -358,6 +358,7 @@ class BroadcastDepthwiseConv2d(nn.Module):
         self.channels = channels
         self.kernel_size = kernel_size
         self.padding = padding
+        self.dilation = dilation
         self.use_bias = bias
 
         self.weight = nn.Parameter(
@@ -389,6 +390,7 @@ class BroadcastDepthwiseConv2d(nn.Module):
             x,
             weight,
             padding=self.padding,
+            dilation=self.dilation,
             groups=self.channels
         )
         if self.use_bias:
