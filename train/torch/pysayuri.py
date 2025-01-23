@@ -1645,6 +1645,7 @@ class Agent():
         return self._board.as_sgf()
 
     def reset_board(self, *args, **kwargs):
+        clear_board = kwargs.get("clear_board", False)
         board_size = kwargs.get("board_size", self._board.board_size)
         komi = kwargs.get("komi", self._board.komi)
         scoring_rule = kwargs.get("scoring_rule", self._board.scoring_rule)
@@ -1654,7 +1655,7 @@ class Agent():
         if board_size < 2:
             raise Exception("reset_board(...): board size should be larger than 1")
 
-        if board_size != self._board.board_size:
+        if clear_board or board_size != self._board.board_size:
             self._board.reset(board_size, komi, scoring_rule)
         else:
             self._board.komi = komi
@@ -1925,6 +1926,7 @@ def gtp_loop(args):
             gtp_print("2")
         elif main == "list_commands":
             supported_list = [
+                "quit",
                 "name",
                 "version",
                 "protocol_version",
@@ -1949,12 +1951,11 @@ def gtp_loop(args):
             out = str()
             for i in sorted(supported_list):
                 out += (i + "\n")
-            out = out[:-1]
             gtp_print(out)
         elif main == "showboard":
             gtp_print("\n" + str(agent))
         elif main == "clear_board":
-            agent.reset_board()
+            agent.reset_board(clear_board=True)
             gtp_print("")
         elif main == "boardsize":
             if len(inputs) <= 1 or not inputs[1].isdigit():
