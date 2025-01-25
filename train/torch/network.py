@@ -794,6 +794,18 @@ class MixerBlock(nn.Module):
             collector=collector
         )
 
+        # Experimental skip layer for mixer block. CPP engine does
+        # not support it yet.
+        self.skip_conv3 = ConvBlock(
+            in_channels=self.channels,
+            out_channels=self.channels,
+            kernel_size=3,
+            use_gamma=False,
+            renorm_clipping=self.renorm_clipping,
+            activation=self.activation,
+            collector=collector
+        )
+
         ffn_channels = int(1.5 * self.channels)
         self.ffn1 = ConvBlock(
             in_channels=self.channels,
@@ -832,7 +844,7 @@ class MixerBlock(nn.Module):
         out = self.ffn2(out, mask)
         if self.use_se:
             out = self.se_module(out, mask_buffers)
-        out = out + x
+        out = out + self.skip_conv3(x, mask) + x
         out = self.act(out)
         return out
 
