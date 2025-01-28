@@ -785,10 +785,21 @@ class MixerBlock(nn.Module):
         self.channels = channels
         self.use_se = self.se_size is not None
 
-        self.depthwise_conv = DepthwiseConvBlock(
-            channels=self.channels,
-            kernel_size=7,
-            use_gamma=True,
+        # self.depthwise_conv = DepthwiseConvBlock(
+        #     channels=self.channels,
+        #     kernel_size=7,
+        #     use_gamma=True,
+        #     renorm_clipping=self.renorm_clipping,
+        #     activation=self.activation,
+        #     collector=collector
+        # )
+        # Experimental skip layer for mixer block. CPP engine does
+        # not support it yet.
+        self.skip_conv3 = ConvBlock(
+            in_channels=self.channels,
+            out_channels=self.channels,
+            kernel_size=3,
+            use_gamma=False,
             renorm_clipping=self.renorm_clipping,
             activation=self.activation,
             collector=collector
@@ -825,7 +836,7 @@ class MixerBlock(nn.Module):
     def forward(self, x, mask_buffers):
         mask, _, _ = mask_buffers
 
-        x = self.depthwise_conv(x, mask) + x
+        x = self.skip_conv3(x, mask) + x
 
         out = x
         out = self.ffn1(out, mask)
