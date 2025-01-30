@@ -793,26 +793,37 @@ class MixerBlock(nn.Module):
             activation=self.activation,
             collector=collector
         )
-
-        ffn_channels = int(1.5 * self.channels)
-        self.ffn1 = ConvBlock(
+        # Experimental skip layer for mixer block. CPP engine does
+        # not support it yet.
+        self.skip_conv3 = ConvBlock(
             in_channels=self.channels,
-            out_channels=ffn_channels,
-            kernel_size=1,
+            out_channels=self.channels,
+            kernel_size=3,
             use_gamma=False,
             renorm_clipping=self.renorm_clipping,
             activation=self.activation,
             collector=collector
         )
-        self.ffn2 = ConvBlock(
-            in_channels=ffn_channels,
-            out_channels=self.channels,
-            kernel_size=1,
-            use_gamma=True,
-            renorm_clipping=self.renorm_clipping,
-            activation="identity",
-            collector=collector
-        )
+
+        # ffn_channels = int(1.5 * self.channels)
+        # self.ffn1 = ConvBlock(
+        #     in_channels=self.channels,
+        #     out_channels=ffn_channels,
+        #     kernel_size=1,
+        #     use_gamma=False,
+        #     renorm_clipping=self.renorm_clipping,
+        #     activation=self.activation,
+        #     collector=collector
+        # )
+        # self.ffn2 = ConvBlock(
+        #     in_channels=ffn_channels,
+        #     out_channels=self.channels,
+        #     kernel_size=1,
+        #     use_gamma=True,
+        #     renorm_clipping=self.renorm_clipping,
+        #     activation="identity",
+        #     collector=collector
+        # )
         if self.use_se:
             self.se_module = SqueezeAndExcitation(
                 channels=self.channels,
@@ -828,8 +839,9 @@ class MixerBlock(nn.Module):
         x = self.depthwise_conv(x, mask) + x
 
         out = x
-        out = self.ffn1(out, mask)
-        out = self.ffn2(out, mask)
+        out = self.skip_conv3(out, mask)
+        # out = self.ffn1(out, mask)
+        # out = self.ffn2(out, mask)
         if self.use_se:
             out = self.se_module(out, mask_buffers)
         out = out + x
