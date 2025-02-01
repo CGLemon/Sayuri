@@ -825,9 +825,8 @@ class MixerBlock(nn.Module):
     def forward(self, x, mask_buffers):
         mask, _, _ = mask_buffers
 
-        x = self.depthwise_conv(x, mask) + x
-
         out = x
+        out = self.depthwise_conv(out, mask)
         out = self.ffn1(out, mask)
         out = self.ffn2(out, mask)
         if self.use_se:
