@@ -56,6 +56,25 @@ def compute_gain(activation):
         raise Exception("The {} is invalid activation function for computing gain.".format(activation))
     return gain
 
+def drop_path(x, drop_prob: float = 0., training: bool = False, scale_by_keep: bool = True):
+    """
+    Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
+
+    This is the same as the DropConnect impl I created for EfficientNet, etc networks, however,
+    the original name is misleading as 'Drop Connect' is a different form of dropout in a separate paper...
+    See discussion: https://github.com/tensorflow/tpu/issues/494#issuecomment-532968956 ... I've opted for
+    changing the layer and argument names to 'drop path' rather than mix DropConnect as a layer name and use
+    'survival rate' as the argument.
+    """
+    if drop_prob == 0. or not training:
+        return x
+    keep_prob = 1 - drop_prob
+    shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
+    random_tensor = x.new_empty(shape).bernoulli_(keep_prob)
+    if keep_prob > 0.0 and scale_by_keep:
+        random_tensor.div_(keep_prob)
+    return x * random_tensor
+
 def dwconv_to_text(in_channels, out_channels, kernel_size):
     return "DepthwiseConvolution {iC} {oC} {KS}\n".format(
                iC=in_channels,
@@ -102,6 +121,21 @@ def tensor_to_text(t: torch.Tensor, use_bin):
     if use_bin:
         return tensor_to_bin(t)
     return " ".join([str(w) for w in tensor_to_list(t)]) + "\n"
+
+class DropPath(nn.Module):
+    """
+    Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
+    """
+    def __init__(self, drop_prob: float = 0., scale_by_keep: bool = True):
+        super(DropPath, self).__init__()
+        self.drop_prob = drop_prob
+        self.scale_by_keep = scale_by_keep
+
+    def forward(self, x):
+        return drop_path(x, self.drop_prob, self.training, self.scale_by_keep)
+
+    def extra_repr(self):
+        return f'drop_prob={round(self.drop_prob,3):0.3f}'
 
 # It is imported from KataGo.
 class SoftPlusWithGradientFloorFunction(torch.autograd.Function):
@@ -793,6 +827,7 @@ class MixerBlock(nn.Module):
             activation=self.activation,
             collector=collector
         )
+        self.drop_path = DropPath(0.1)
 
         ffn_channels = int(1.5 * self.channels)
         self.ffn1 = ConvBlock(
@@ -825,7 +860,7 @@ class MixerBlock(nn.Module):
     def forward(self, x, mask_buffers):
         mask, _, _ = mask_buffers
 
-        x = self.depthwise_conv(x, mask) + x
+        x = self.depthwise_conv(x, mask) + self.drop_path(x)
 
         out = x
         out = self.ffn1(out, mask)
