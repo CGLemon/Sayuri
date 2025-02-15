@@ -57,8 +57,6 @@ public:
         random_fastsearch_prob = GetOption<float>("random_fastsearch_prob");
         resign_discard_prob = GetOption<float>("resign_discard_prob");
 
-        relative_rank = GetOption<int>("relative_rank");
-
         lag_buffer = GetOption<float>("lag_buffer");
         ponder = GetOption<bool>("ponder");
         reuse_tree = GetOption<bool>("reuse_tree");
@@ -122,8 +120,6 @@ public:
     float random_fastsearch_prob;
     float lag_buffer;
     float resign_discard_prob;
-
-    int relative_rank;
 
     bool ponder;
     bool reuse_tree;

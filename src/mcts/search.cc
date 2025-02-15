@@ -1390,12 +1390,6 @@ bool Search::AdvanceToNewRootState(Search::OptionTag tag) {
         return false;
     }
 
-    if (param_->relative_rank >= 0) {
-        // This option will prune most legal children. Avoid to
-        // reuse the pruned children. We most discard tree.
-        return false;
-    }
-
     while (!move_list.empty()) {
         int vtx = move_list.top();
 

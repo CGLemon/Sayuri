@@ -6,7 +6,6 @@
 #include "utils/format.h"
 #include "utils/logits.h"
 #include "utils/kldivergence.h"
-#include "utils/ai_style.h"
 #include "game/symmetry.h"
 
 #include <cassert>
@@ -53,9 +52,6 @@ bool Node::PrepareRootNode(Network &network,
         ApplyDirichletNoise(alpha);
     }
 
-    // Adjust the strength by pruning children.
-    RandomPruneRootChildren(state);
-
     // Remove all superkos at the root. In the most case,
     // it will help simplify the state.
     KillRootSuperkos(state);
@@ -100,59 +96,6 @@ void Node::Recompute(const bool is_root) {
     // Assume we already inflated all children. Refill the new policy.
     for (auto &child : children_) {
         child.Get()->SetPolicy(buffer[idx++]);
-    }
-}
-
-void Node::RandomPruneRootChildren(GameState &state) {
-    if (param_->relative_rank < 0) {
-        return;
-    }
-    if (state.GetBoardSize() != 19) {
-        return;
-    }
-
-    auto GetCoord = [](GameState &state, int vtx) {
-        auto coord = std::array<int, 2>({-1, -1});
-        if (vtx != kPass
-                && vtx != kResign
-                && vtx != kNullVertex) {
-            coord[0] = state.GetX(vtx);
-            coord[1] = state.GetY(vtx);
-        }
-        return coord;
-    };
-
-    auto selection = SelectionVector<Node *>{};
-    for (const auto &child : children_) {
-        const auto node = child.Get();
-        if (node->IsActive()) {
-            auto coord = GetCoord(state, node->GetVertex());
-            selection.emplace_back(
-                child.GetPolicy(), coord, node);
-        }
-    }
-
-    selection = GetRelativeRankVector(
-        selection, param_->relative_rank,
-        state.GetBoardSize(),
-        GetCoord(state, state.GetLastMove()));
-
-    // prune all active node first
-    for (const auto &child : children_) {
-        const auto node = child.Get();
-        if (!node->IsActive()) {
-            continue;
-        }
-        node->SetActive(false);
-    }
-
-    // activate the selection children
-    for (auto &it : selection) {
-        const auto node = std::get<2>(it);
-
-        if (node->IsPruned()) {
-            node->SetActive(true);
-        }
     }
 }
 

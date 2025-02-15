@@ -227,7 +227,6 @@ public:
     std::string GetPvString(GameState &state);
 
 private:
-    void RandomPruneRootChildren(GameState &state);
     void Recompute(const bool is_root);
     float GetDynamicCpuctFactor(Node *node, const int visits, const int parentvisits);
     void ApplyDirichletNoise(const float alpha);

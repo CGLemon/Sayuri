@@ -1,7 +1,6 @@
 #include "game/gtp.h"
 #include "game/sgf.h"
 #include "game/commands_list.h"
-#include "utils/ai_style.h"
 #include "utils/log.h"
 #include "utils/time.h"
 #include "utils/komi.h"
@@ -1063,38 +1062,6 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         }
 
         out << GtpSuccess(ladder_map.str());
-    } else if (const auto res = spt.Find("gogui-rank_selection", 0)) {
-        const auto result = agent_->GetNetwork().GetOutput(agent_->GetState(), Network::kNone);
-        const auto board_size = agent_->GetState().GetBoardSize();
-        const auto relative_rank = GetOption<int>("relative_rank");
-        auto selection = SelectionVector<int>{};
-
-        if (!(relative_rank < 0 || board_size != 19)) {
-            for (int y = 0; y < board_size; ++y) {
-                for (int x = 0; x < board_size; ++x) {
-                    const auto idx = agent_->GetState().GetIndex(x, y);
-                    const auto vtx = agent_->GetState().GetVertex(x, y);
-                    const auto coord = std::array<int, 2>({x, y});
-                    if (agent_->GetState().IsLegalMove(vtx)) {
-                        selection.emplace_back(
-                            result.probabilities[idx], coord, vtx);
-                    }
-                }
-            }
-            selection = GetRelativeRankVector(
-                selection, relative_rank,
-                board_size, {-1, -1});
-        }
-
-        auto selection_map = std::ostringstream{};
-        for (auto &it: selection) {
-            const auto vtx = std::get<2>(it);
-            selection_map << GoguiColor(1.0, agent_->GetState().VertexToText(vtx));
-            selection_map << '\n';
-        }
-        auto outstr = selection_map.str();
-        outstr.resize(std::max(int(outstr.size()) - 1, 0));
-        out << GtpSuccess(outstr);
     } else if (const auto res = spt.Find("gogui-rules_game_id", 0)) {
         out << GtpSuccess("Go");
     } else if (const auto res = spt.Find("gogui-rules_board", 0)) {
