@@ -9,15 +9,15 @@ The ```selfplay-setting.json``` controls the training process. Here are the para
     "NeuralNetwork" : {
         "NNType" : "Residual",
         "MaxBoardSize" : 19,          # The max size in the self-play game. It is
-                                      # OK if this value greater than training games.
-                                      # But to set it as small size can improve the
-                                      # training performance.
+                                      # OK if this value greater than training games,
+                                      # but will hurt the performance.
+
 
         "ResidualChannels" : 128,     # Channel size of residual.
         "PolicyExtract" : 24,         # Channel size of policy head.
         "ValueExtract" : 24,          # Channel size of value head.
 
-        "SeRatio" : 2,                # squeeze ration of SE module
+        "SeRatio" : 4,                # squeeze ration of SE module
         "Activation" : "mish",        # should be one of relu/mish
 
         "Stack" : [
@@ -45,10 +45,14 @@ The ```selfplay-setting.json``` controls the training process. Here are the para
         "DownSampleRate" : 16,          # Bigger is better but may be slow down.
         "MacroFactor" : 1,
         "WeightDecay" : 1e-4,
-        "NumberChunks" : 20000,         # Will load last X chunks. Default is 25 games for
-                                        # each chunk.
 
-        "PolicySurprisingFactor" : 0.5, # One factor of sample rate
+        "ChunksIncreasingC" : 5000,     # Slowly increase the replay buffer size when probing at least
+                                        # chunks. Will load "NumberChunks" chunks if we don't give
+                                        # any value (or null).
+        "NumberChunks" : 20000,         # Will load last X chunks at most. Each chunk has only one game
+                                        # by default.
+
+        "PolicySurpriseFactor" : 0.5,   # One factor of sample rate
 
         "LearningRateSchedule" : [
             [0,       1e-2]             # The format is [X, lr]. Will use the lr rate
@@ -81,7 +85,7 @@ The ```selfplay-config.txt``` controls the self-play process. Here are the param
 --komi-stddev 2.5              # Apply the random komi in the self-play
                                # games.
 
---cpuct-init 1.25
+--cpuct-init 0.5
 --lcb-reduction 0
 --score-utility-factor 0.05
 

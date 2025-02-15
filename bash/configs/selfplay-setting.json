@@ -37,7 +37,7 @@
         "SwaMaxCount" : 16,
         "SwaSteps" : 500,
         "WarmUpSteps" : 20000,
-        "PolicySurprisingFactor" : 0.5,
+        "PolicySurpriseFactor" : 0.5,
         "RenormMaxR" : 3,
         "RenormMaxD" : 4,
 

@@ -61,7 +61,7 @@ class StreamLoader:
         return stream
 
 class StreamParser:
-    def __init__(self, down_sample_rate, policy_surprising_factor=0.0):
+    def __init__(self, down_sample_rate, policy_surprise_factor=0.0):
         # Use a random sample input data read. This helps improve the spread of
         # games in the shuffle buffer.
         self.down_sample_rate = down_sample_rate
@@ -69,7 +69,7 @@ class StreamParser:
         # We assume each game has 50 positions on average. 
         self.virtual_buffsize = 8000 * 50
         self.running_kld_mean = 1.0
-        self.policy_surprising_factor = policy_surprising_factor
+        self.policy_surprise_factor = policy_surprise_factor
         self.num_samples_per_proc = 0
 
     def _sample(self, data):
@@ -82,10 +82,10 @@ class StreamParser:
                                     gamma * data.kld
         self.num_samples_per_proc += 1
 
-        # compute policy surprising sample probability
-        surprising_freq = (1.0 - self.policy_surprising_factor) + \
-                              self.policy_surprising_factor * (data.kld/self.running_kld_mean)
-        sample_prob = surprising_freq * (1.0 / self.down_sample_rate)
+        # compute policy surprise sample probability
+        surprise_freq = (1.0 - self.policy_surprise_factor) + \
+                              self.policy_surprise_factor * (data.kld/self.running_kld_mean)
+        sample_prob = surprise_freq * (1.0 / self.down_sample_rate)
 
         if self.num_samples_per_proc < self.virtual_buffsize:
             # be sure each worker sees enough games
@@ -249,6 +249,7 @@ class TrainingPipe():
         # How many last chunks do we load?
         self.num_chunks = cfg.num_chunks
         self.chunks_increasing_c = cfg.chunks_increasing_c
+        self.chunks_increasing_scale = cfg.chunks_increasing_scale
         self.chunks_increasing_alpha = cfg.chunks_increasing_alpha
         self.chunks_increasing_beta = cfg.chunks_increasing_beta
         self.num_all_chunks = 0
@@ -300,7 +301,7 @@ class TrainingPipe():
         self.warmup_steps = self.cfg.warmup_steps
 
         # The sample rate factor for policy
-        self.policy_surprising_factor = self.cfg.policy_surprising_factor
+        self.policy_surprise_factor = self.cfg.policy_surprise_factor
 
         self._setup()
 
@@ -340,7 +341,7 @@ class TrainingPipe():
 
         # create workspace
         if not os.path.isdir(self.store_path):
-            os.makedirs(self.weights_path)
+            os.makedirs(self.store_path)
 
         self.weights_path = os.path.join(self.store_path, "weights")
         if not os.path.isdir(self.weights_path):
@@ -432,21 +433,22 @@ class TrainingPipe():
             self.swa_net = self.swa_net.to(self.device)
 
     def _init_loader(self):
-        def compute_window_size(N, c=5000, alpha=0.75, beta=0.4):
-            return round(c * (1 + beta * (math.pow(N/c, alpha) - 1) / alpha))
+        def compute_window_size(N, c=5000, scale=1.0, alpha=0.75, beta=0.4):
+            return round(scale * c * (1 + beta * (math.pow(N/c, alpha) - 1) / alpha))
 
         self._stream_loader = StreamLoader()
-        self._stream_parser = StreamParser(self.down_sample_rate, self.policy_surprising_factor)
+        self._stream_parser = StreamParser(self.down_sample_rate, self.policy_surprise_factor)
         self._batch_gen = BatchGenerator(self.cfg.boardsize, self.cfg.input_channels)
 
         self.num_all_chunks = len(gather_filenames(self.train_dir))
         if not self.chunks_increasing_c is None:
             # Compute the best window size for self-play learning. The formula is based on
             # "Accelerating Self-Play Learning in Go". Please see the formula here,
-            # https://arxiv.org/abs/1902.10565v2
+            # https://arxiv.org/abs/1902.10565v5
             num_chunks_for_window = compute_window_size(
                 N = self.num_all_chunks,
                 c = self.chunks_increasing_c,
+                scale = self.chunks_increasing_scale,
                 alpha = self.chunks_increasing_alpha,
                 beta = self.chunks_increasing_beta
             )

@@ -44,6 +44,7 @@ class Config:
         self.down_sample_rate = train.get("DownSampleRate", 16)
         self.num_chunks = train.get("NumberChunks", None)
         self.chunks_increasing_c = train.get("ChunksIncreasingC", None)
+        self.chunks_increasing_scale = train.get("ChunksIncreasingScale", 1.0)
         self.chunks_increasing_alpha = train.get("ChunksIncreasingAlpha", 0.75)
         self.chunks_increasing_beta = train.get("ChunksIncreasingBeta", 0.4)
         self.soft_loss_weight = train.get("SoftLossWeight", 0.1)
@@ -52,7 +53,7 @@ class Config:
         self.warmup_steps = train.get("WarmUpSteps", 0)
         self.renorm_max_r = train.get("RenormMaxR", 1)
         self.renorm_max_d = train.get("RenormMaxD", 0)
-        self.policy_surprising_factor = train.get("PolicySurprisingFactor", 0.0)
+        self.policy_surprise_factor = train.get("PolicySurpriseFactor", 0.0)
 
         assert self.train_dir != None, ""
         assert self.store_path != None, ""

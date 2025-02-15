@@ -242,7 +242,6 @@ class Data():
         for _ in range(1, datalines):
             self.lines.append(stream.readline())
 
-        # KLD may be used for policy surprising.
         self.kld = float(self.lines[52])
         self.status = self.HALF
         return True
