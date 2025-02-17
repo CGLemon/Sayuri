@@ -1023,6 +1023,9 @@ void ArgsParser::DumpHelper() const {
                 << "\t--timemanage [off/on/fast/keep]\n"
                 << "\t\tWill save the thinking time if we enable the option.\n\n"
 
+                << "\t--scoring-rule [area/territory]\n"
+                << "\t\tSelect a specific scoring rule.\n\n"
+
                 << "\t--weights, -w <weight file name>\n"
                 << "\t\tFile with network weights.\n\n"
 

@@ -7,7 +7,7 @@
 
 ## Let's ROCK!
 
-Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. Learning the game of Go without strategic knowledge from human with AlphaZero-based algorithm. She is strongly inspired by Leela Zero and KataGo. The board data structure, search algorithm and network format are borrowed from Leela Zero in the beginning. Current version follows the KataGo research, the engine supports variable komi and board size now. Some methods or reports you may see my articles (some are chinese).
+Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. Learning the game of Go without strategic knowledge from human with AlphaZero-based algorithm. She is strongly inspired by Leela Zero and KataGo. The board data structure, search algorithm and network format are borrowed from Leela Zero in the beginning. Current version follows the KataGo research, the engine supports variable rules, komi and board size now. Some methods or reports you may see my articles (some are Chinese).
 
 * [開發日誌](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/BJgfay0Yc)
 * [The performance report before UEC15 (v0.6)](https://drive.google.com/file/d/1ATd_u-E-OnviczsDH8wVL0c3Q1NzUCKW/view?usp=share_link)
@@ -18,11 +18,13 @@ First, a executable weights is necessary. You could get the released weights fro
 
     $ ./sayuri -w <weights file> -t 1 -p 400 --use-optimistic-policy
 
-You will see the diagnostic verbose. If the verbose includes ```Network Version``` information, it means you success to execute the program with GPT mode. For more arguments, please give the ```--help``` option.
+You will see the diagnostic verbose. If the verbose includes ```Network Version``` information, it means you success to execute the program with GPT mode. But the GTP mode is not designed for human. You need a GUI application. Please see Graphical Interface part. For more arguments, please give the ```--help``` option.
 
     $ ./sayuri --help
 
-Or you may execute pure python engine with checkpoint model. The checkpoint models are released after 4th main run in the [page](./docs/MODEL.md). Run it via the terminal/PowerShell. More detail you may see [here](./train/README.md).
+The default engine is Chinese-like rule. The engine will keep to remove non-pass-alive stones even though the area is clear. To avoid the stupid pass move, please add ```--friendly-pass``` option under the Chinese-like rule or select Japnese-like rule by adding ```--scoring-rule territory``` option.
+
+You may execute pure Python engine with checkpoint model except for CPP engine since 4th run. The released checkpoint models could be found from this [page](./docs/MODEL.md). Thought the Python engine is very weak, you could run the raw model quickly. More detail you may see [here](./train/README.md).
 
     $ python3 train/torch/pysayuri.py -c model.pt --use-swa
 
@@ -64,7 +66,6 @@ Sayuri is a fairly fast self-play learning system for the game of Go. The pictut
 * [YouTube](https://www.youtube.com/watch?v=82UclNrXGxg), playing with Pachi.
 * Supported analysis commands, [analyze](./docs/ANALYZE.md).
 * [AlphaZero 之加速演算法實作 (v0.4~v0.5)](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/HJI9_p70i), describe some methods for old version.
-* [Journal](./docs/JOURNAL.md)
 
 ## License
 

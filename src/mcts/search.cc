@@ -763,7 +763,9 @@ bool ShouldResign(GameState &state, ComputationResult &result, Parameters *param
 }
 
 bool ShouldPass(GameState &state, ComputationResult &result, Parameters *param) {
-    if (!(param->friendly_pass) || state.GetLastMove() != kPass) {
+    if (!(param->friendly_pass) ||
+            state.GetLastMove() != kPass ||
+            state.GetScoringRule() != kArea) {
         return false;
     }
     const auto num_intersections = state.GetNumIntersections();
