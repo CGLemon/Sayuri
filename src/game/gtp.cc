@@ -776,7 +776,6 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         gogui_cmds << "\ngfx/Book Rating/gogui-book_rating";
         gogui_cmds << "\ngfx/Gammas Heatmap/gogui-gammas_heatmap";
         gogui_cmds << "\ngfx/Ladder Map/gogui-ladder_map";
-        gogui_cmds << "\ngfx/Rank Selection/gogui-rank_selection";
 
         out << GtpSuccess(gogui_cmds.str());
     } else if (const auto res = spt.Find("gogui-wdl_rating", 0)) {
