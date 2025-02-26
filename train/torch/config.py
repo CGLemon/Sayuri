@@ -25,6 +25,7 @@ class Config:
 
         self.optimizer = train.get("Optimizer", "SGD")
         self.use_gpu = torch.cuda.is_available() if train.get("UseGPU", None) is None else train.get("UseGPU")
+        self.use_fp16 = train.get("UseFp16", False) if self.use_gpu else False
         self.weight_decay = train.get("WeightDecay", 1e-4)
         self.lr_schedule = train.get("LearningRateSchedule", [[0, 0.2]])
 

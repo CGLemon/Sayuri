@@ -283,6 +283,8 @@ class TrainingPipe():
         # The training device.
         self.use_gpu = cfg.use_gpu
         self.device = torch.device("cuda") if self.use_gpu else torch.device("cpu")
+        self.use_fp16 = cfg.use_fp16
+        self.scaler = torch.amp.GradScaler("cuda") if self.use_fp16 else None
         self.net = Network(cfg)
         self.net.train()
 
@@ -631,17 +633,21 @@ class TrainingPipe():
             for _ in range(self.steps_per_epoch):
                 planes, target = self._gather_data_from_loader(True)
 
-                # forward and backforwad
-                _, all_loss_dict = self.net(
-                    planes,
-                    target=target,
-                    use_symm=True,
-                    loss_weight_dict=self._loss_weight_dict
-                )
+                # forward and backward for loss
+                with torch.amp.autocast("cuda", enabled=self.use_fp16):
+                    _, all_loss_dict = self.net(
+                        planes,
+                        target=target,
+                        use_symm=True,
+                        loss_weight_dict=self._loss_weight_dict
+                    )
+                    loss, all_loss_dict = self._handle_loss(all_loss_dict)
 
-                # compute loss
-                loss, all_loss_dict = self._handle_loss(all_loss_dict)
-                loss.backward()
+                if self.use_fp16:
+                    self.scaler.scale(loss).backward()
+                    self.scaler.unscale_(self.opt)
+                else:
+                    loss.backward()
                 macro_steps += 1
 
                 # accumulate loss
@@ -659,7 +665,11 @@ class TrainingPipe():
                     gnorm = torch.nn.utils.clip_grad_norm_(self.net.parameters(), 10000.0)
 
                     # update network parameters
-                    self.opt.step()
+                    if self.use_fp16:
+                        self.scaler.step(self.opt)
+                        self.scaler.update()
+                    else:
+                        self.opt.step()
                     self.opt.zero_grad() 
 
                     # update current count
