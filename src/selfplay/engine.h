@@ -12,6 +12,7 @@
 class Engine {
 public:
     void Initialize();
+    void Abort();
 
     void GatherSgfString(std::string &sgf, int g);
     void GatherTrainingData(std::vector<TrainingData> &chunk, int g);

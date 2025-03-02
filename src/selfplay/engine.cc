@@ -48,9 +48,15 @@ void Engine::Initialize() {
         search_pool_.emplace_back(std::make_unique<Search>(game_pool_[i], *network_));
     }
 
-    ThreadPool::Get(GetOption<int>("threads") * parallel_games_);
+    ThreadPool::Get("search", GetOption<int>("threads") * parallel_games_);
 
     ParseQueries();
+}
+
+void Engine::Abort() {
+    network_->Destroy();
+    game_pool_.clear();
+    search_pool_.clear();
 }
 
 std::string Engine::SelectWeights() const {

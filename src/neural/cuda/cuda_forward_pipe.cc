@@ -15,9 +15,11 @@ void CudaForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
 
     dump_gpu_info_ = true;
 
+    group_ = std::make_unique<ThreadGroup<void>>(&ThreadPool::Get());
+
     Load(weights); // Will select max batch size.
 
-    PrepareWorkers(); // Run the batch forwarding worker.
+    AssignWorkers(); // Run the batch forwarding worker.
 }
 
 OutputResult CudaForwardPipe::Forward(const InputData &input) {
@@ -951,13 +953,14 @@ CudaForwardPipe::NNGraph::~NNGraph() {
     DestroyGraph();
 }
 
-void CudaForwardPipe::PrepareWorkers() {
+void CudaForwardPipe::AssignWorkers() {
     worker_running_.store(true);
     waittime_.store(GetOption<int>("gpu_waittime"), std::memory_order_relaxed);
 
-    if (workers_.empty()) {
+    ThreadPool::Get("cuda-forward-pipe", nngraphs_.size());
+    if (group_->FutureEmpty()) {
         for (int gpu = 0; gpu < (int)nngraphs_.size(); ++gpu) {
-            workers_.emplace_back([g=gpu, this](){ Worker(g); });
+            group_->AddTask([g=gpu, this](){ Worker(g); });
         }
     }
 }
@@ -1052,9 +1055,7 @@ void CudaForwardPipe::Worker(int gpu) {
 void CudaForwardPipe::QuitWorkers() {
     worker_running_.store(false);
     cv_.notify_all();
-    for (auto &t : workers_) {
-        t.join();
-    }
+    group_->WaitToJoin();
 }
 
 #endif

@@ -28,6 +28,9 @@ void SelfPlayPipe::Initialize() {
     // Wait for engine ready.
     engine_.Initialize();
 
+    // Group for self-play workers and data writer worker.
+    group_ = std::make_unique<ThreadGroup<void>>(&ThreadPool::Get());
+
     // Reset number conuter.
     max_games_ = GetOption<int>("num_games");
     accumulation_games_.store(0, std::memory_order_relaxed);
@@ -191,7 +194,8 @@ int SelfPlayPipe::FancyCeil(int val, int step) const {
 }
 
 void SelfPlayPipe::AssignDataWorker() {
-    workers_.emplace_back(
+    ThreadPool::Get("data-writer", 1);
+    group_->AddTask(
         [this]() -> void {
             constexpr float kValidationRatio = 0.1f;
 
@@ -246,8 +250,9 @@ void SelfPlayPipe::AssignDataWorker() {
 }
 
 void SelfPlayPipe::AssignSelfplayWorkers() {
+    ThreadPool::Get("selfplay", engine_.GetParallelGames());
     for (int g = 0; g < engine_.GetParallelGames(); ++g) {
-        workers_.emplace_back(
+        group_->AddTask(
             [this, g]() -> void {
                 constexpr int kMainThreadIdx = 0;
                 constexpr int kBufferGames = 25;
@@ -310,12 +315,6 @@ void SelfPlayPipe::AssignSelfplayWorkers() {
     }
 }
 
-void SelfPlayPipe::WaitForWorkers() {
-    for (auto &t : workers_) {
-        t.join();
-    }
-}
-
 void SelfPlayPipe::Loop() {
     // Be sure that all data are ready.
     if (target_directory_.size() == 0) {
@@ -349,7 +348,9 @@ void SelfPlayPipe::Loop() {
 
     AssignDataWorker();
     AssignSelfplayWorkers();
-    WaitForWorkers();
+
+    group_->WaitToJoin();
+    engine_.Abort();
 
     LOGGING << '[' << CurrentDateTime() << ']'
                 << " Finish the self-play loop. Totally played "

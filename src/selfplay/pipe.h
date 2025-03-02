@@ -2,6 +2,7 @@
 
 #include "selfplay/engine.h"
 #include "neural/training_data.h"
+#include "utils/threadpool.h"
 
 #include <atomic>
 #include <vector>
@@ -34,7 +35,6 @@ private:
 
     void AssignDataWorker();
     void AssignSelfplayWorkers();
-    void WaitForWorkers();
 
     std::mutex data_mutex_;
     std::mutex log_mutex_;
@@ -59,5 +59,5 @@ private:
     std::string vdata_directory_hash_;
     std::string filename_hash_;
 
-    std::vector<std::thread> workers_;
+    std::unique_ptr<ThreadGroup<void>> group_;
 };

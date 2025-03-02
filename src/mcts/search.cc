@@ -46,6 +46,7 @@ void Search::Initialize() {
 
     group_ = std::make_unique<ThreadGroup<void>>(&ThreadPool::Get());
     playouts_.store(0, std::memory_order_relaxed);
+    ThreadPool::Get("tree-destruction", 1);
 }
 
 void Search::PlaySimulation(GameState &currstate, Node *const node,

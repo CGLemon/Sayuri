@@ -1121,7 +1121,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         } else {
             out << GtpSuccess(Format("B+%f", score));
         }
-    }  else {
+    } else {
         try_ponder = prev_pondering_;
         out << GtpFail("unknown command");
     }

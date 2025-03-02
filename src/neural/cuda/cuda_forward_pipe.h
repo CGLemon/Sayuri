@@ -7,7 +7,6 @@
 #include <array>
 #include <vector>
 #include <mutex>
-#include <thread>
 #include <condition_variable>
 
 #include "neural/cuda/cuda_common.h"
@@ -15,6 +14,7 @@
 #include "neural/activation.h"
 #include "neural/network_basic.h"
 #include "neural/description.h"
+#include "utils/threadpool.h"
 
 class CudaForwardPipe : public NetworkForwardPipe {
 public:
@@ -142,13 +142,13 @@ private:
     std::atomic<bool> worker_running_;
 
     std::vector<std::unique_ptr<NNGraph>> nngraphs_;
-    std::vector<std::thread> workers_;
+    std::unique_ptr<ThreadGroup<void>> group_;
 
     bool dump_gpu_info_;
     int max_batch_per_nn_;
     int board_size_{0};
 
-    void PrepareWorkers();
+    void AssignWorkers();
     void Worker(int gpu);
     void QuitWorkers();
 };
