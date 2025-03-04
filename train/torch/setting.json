@@ -16,6 +16,7 @@
 
     "Train" : {
         "UseGPU" : null,
+        "UseFp16" : true,
         "Optimizer" : "SGD",
         "StepsPerEpoch" : 1000,
         "ValidationSteps": 100,
