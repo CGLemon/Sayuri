@@ -294,7 +294,7 @@ class BatchNorm2d(nn.Module):
         if self.momentum_basic_batchsize is None:
             return self.momentum 
         b, _, _, _ = x.shape
-        return self.momentum * b / self.momentum_basic_batchsize
+        return self.momentum * math.sqrt(b / self.momentum_basic_batchsize)
 
     def _apply_renorm(self, x, mean, var):
         mean = mean.view(1, self.num_features, 1, 1)
@@ -513,7 +513,7 @@ class ConvBlock(nn.Module):
             use_gamma=use_gamma,
             mode="renorm",
             renorm_clipping=renorm_clipping,
-            momentum_basic_batchsize=2048
+            momentum_basic_batchsize=256
         )
         self.activation = activation
         self.act = activation_func(self.activation, inplace=True)
@@ -588,7 +588,7 @@ class DepthwiseConvBlock(nn.Module):
             use_gamma=use_gamma,
             mode="renorm",
             renorm_clipping=renorm_clipping,
-            momentum_basic_batchsize=2048
+            momentum_basic_batchsize=256
         )
         self.activation = activation
         self.act = activation_func(self.activation, inplace=True)
