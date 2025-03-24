@@ -344,15 +344,6 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
                                            root_state_, color, analysis_config_);
             }
         }
-        if (param_->resign_playouts > 0 &&
-                AchieveCap(param_->resign_playouts, tag)) {
-            // If someone already won the game, the Q value was not very effective
-            // in the MCTS. Low playouts with policy network is good enough. Just
-            // simply stop the tree search.
-            float wl = root_node_->GetWL(color, false);
-            keep_running &= !(wl < param_->resign_threshold ||
-                                wl > (1.f-param_->resign_threshold));
-        }
         if (tag & kThinking) {
             keep_running &= (elapsed < thinking_time);
         }
@@ -480,6 +471,8 @@ void Search::GatherComputationResult(ComputationResult &result) const {
            result.best_eval = result.root_eval;
         }
     }
+    result.side_resign = result.root_eval < param_->resign_threshold ||
+                             result.root_eval > (1.f - param_->resign_threshold);
 
     // Here we gather the part of training target data.
     result.root_ownership.resize(num_intersections, 0);
@@ -982,6 +975,8 @@ int Search::GetSelfPlayMove(OptionTag tag) {
         tag = tag | kUnreused;
     }
 
+    bool already_lost = training_data_buffer_.empty() ?
+                            false : std::rbegin(training_data_buffer_)->accum_resign_cnt > 0;
     const int random_moves_cnt = param_->random_moves_factor *
                                      root_state_.GetNumIntersections();
     bool is_opening_random = root_state_.GetMoveNumber() < random_moves_cnt;
@@ -990,15 +985,29 @@ int Search::GetSelfPlayMove(OptionTag tag) {
     // playouts. May use the lower playouts instead of it.
     int playouts = param_->playouts;
 
+    float fast_search_prob = param_->reduce_playouts_prob;
+    if (already_lost) {
+        // Someone already won the game. Do not record this kind
+        // of positions too much to avoid introducing pathological
+        // biases in the training data
+        float record_prob = (1.0f - fast_search_prob) * (1.0f - param_->resign_discard_prob);
+        fast_search_prob = 1.0f - record_prob;
+    }
+
     if (param_->reduce_playouts > 0 &&
             param_->reduce_playouts < param_->playouts &&
-            Random<>::Get().Roulette<10000>(param_->reduce_playouts_prob)) {
+            Random<>::Get().Roulette<10000>(fast_search_prob)) {
 
         // The reduce playouts must be smaller than default
         // playouts. It is fast search phase so we also disable
         // all exploring settings.
-        playouts = std::min(
-            playouts, param_->reduce_playouts);
+        playouts = std::min(playouts, param_->reduce_playouts);
+
+        if (already_lost) {
+            // If someone already won the game, the Q value was not very effective
+            // in the MCTS. Low playouts with policy network is good enough. 
+            playouts = std::min(playouts, param_->resign_playouts);
+        }
         tag = tag | kNoExploring;
     }
 
@@ -1032,8 +1041,6 @@ int Search::GetSelfPlayMove(OptionTag tag) {
     // Do we lose the the game?
     float root_eval = result.root_eval;
     float root_score = result.root_score_lead;
-    bool already_lost = root_eval < param_->resign_threshold ||
-                            root_eval > (1.f - param_->resign_threshold);
 
     // Do the random move in the opening stage in order to improve the
     // game state diversity. we thought Gumbel noise may be good enough.
@@ -1060,20 +1067,11 @@ int Search::GetSelfPlayMove(OptionTag tag) {
         // not record the low quality datas.
         discard_it = true;
     }
-    if (already_lost) {
-        // Someone already won the game. Do not record this kind
-        // of positions too much to avoid introducing pathological
-        // biases in the training data
-        if (Random<>::Get().Roulette<10000>(param_->resign_discard_prob)) {
-            discard_it = true;
-        }
-    }
     if (result.to_move == kWhite) {
         // Always record the black's view point.
         root_eval = 1.0f - root_eval;
         root_score = 0.f - root_score;
     }
-
 
     const float record_kld = result.policy_kld;
     const char discard_char = discard_it ? 'F' : 'T';
@@ -1365,6 +1363,10 @@ void Search::GatherData(const GameState &state,
     data.wave = state.GetWave();
     data.rule = state.GetScoringRule() == kArea ? 0.f : 1.f;
     data.kld = result.policy_kld;
+
+    // Fill resign count
+    data.accum_resign_cnt = training_data_buffer_.empty() || !result.side_resign ?
+                                0 : std::rbegin(training_data_buffer_)->accum_resign_cnt + 1;
 
     training_data_buffer_.emplace_back(data);
 }

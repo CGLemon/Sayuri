@@ -32,6 +32,7 @@ struct TrainingData {
     float rule;
     float wave;
 
+    int accum_resign_cnt;
     bool discard{false};
 
  /*

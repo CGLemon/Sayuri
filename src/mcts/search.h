@@ -132,6 +132,7 @@ struct ComputationResult {
     float seconds;
 
     float policy_kld;
+    bool side_resign;
 };
 
 class Search {
