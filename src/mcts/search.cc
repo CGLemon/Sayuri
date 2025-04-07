@@ -54,15 +54,27 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
     node->IncrementThreads();
 
     const bool end_by_passes = currstate.GetPasses() >= 2;
+    const auto scoring = currstate.GetScoringRule();
     if (end_by_passes) {
-        search_result.FromGameOver(network_, currstate);
+        if (scoring == kArea) {
+            search_result.FromGameOver(network_, currstate);
+        } else if (scoring == kTerritory) {
+            // The scoring area should be easier rule for network,
+            // so we switch the rule into territory and keep playing. 
+            while (currstate.GetPasses() >= 1) {
+                currstate.UndoMove();
+            }
+            const auto komi_with_penalty = currstate.GetKomiWithPenalty();
+            currstate.SetRule(kArea);
+            currstate.SetKomi(komi_with_penalty);
+        }
     }
 
     // Terminated node, try to expand it.
     if (node->Expandable()) {
         const auto last_move = currstate.GetLastMove();
 
-        if (end_by_passes) {
+        if (end_by_passes && scoring == kArea) {
             if (node->SetTerminal() &&
                     search_result.IsValid()) {
                 // The game is over, setting the game result value.
@@ -1169,7 +1181,10 @@ void Search::UpdateTerritoryHelper() {
         while (root_state_.GetLastMove() == kPass) {
             root_state_.UndoMove();
         }
+        const auto komi_with_penalty = root_state_.GetKomiWithPenalty();
         root_state_.SetRule(kArea);
+        root_state_.SetKomi(komi_with_penalty);
+
         while (!root_state_.IsGameOver()) {
             auto tag = Search::kNoExploring | Search::kNoBuffer;
             root_state_.PlayMove(GetSelfPlayMove(tag));
