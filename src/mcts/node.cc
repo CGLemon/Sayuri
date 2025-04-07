@@ -56,6 +56,8 @@ bool Node::PrepareRootNode(Network &network,
     // it will help simplify the state.
     KillRootSuperkos(state);
 
+    FillMoveTypeForChildren(state);
+
     // Reset the bouns.
     SetScoreBouns(0.f);
     for (auto &child : children_) {
@@ -70,6 +72,27 @@ bool Node::PrepareRootNode(Network &network,
     }
 
     return success;
+}
+
+void Node::FillMoveTypeForChildren(GameState &state) {
+    WaitExpanded();
+    if (!HasChildren()) {
+        return;
+    }
+    const auto color = state.GetToMove();
+    Board &board = state.board_;
+
+    InflateAllChildren();
+    for (auto &child : children_) {
+        auto node = child.Get();
+        const auto vtx = node->GetVertex();
+        if (board.IsSeki(vtx)) {
+            node->move_type_ = node->move_type_ | MoveType::kSeki;
+        }
+        if (board.IsCaptureMove(vtx, color)) {
+            node->move_type_ = node->move_type_ | MoveType::kCapture;
+        }
+    }
 }
 
 void Node::Recompute(const bool is_root) {

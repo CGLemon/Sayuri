@@ -5,6 +5,7 @@
 #include "mcts/node_pointer.h"
 #include "mcts/parameters.h"
 #include "neural/network.h"
+#include "utils/operators.h"
 
 #include <array>
 #include <vector>
@@ -227,6 +228,7 @@ public:
     std::string GetPvString(GameState &state);
 
 private:
+    void FillMoveTypeForChildren(GameState &state);
     void Recompute(const bool is_root);
     float GetDynamicCpuctFactor(Node *node, const int visits, const int parentvisits);
     void ApplyDirichletNoise(const float alpha);
@@ -262,6 +264,15 @@ private:
                              std::vector<float> &prob);
 
     void KillRootSuperkos(GameState &state);
+
+    enum class MoveType : std::uint8_t {
+        kNormal = 0,
+        kSeki = 1 << 1,
+        kCapture = 1 << 2
+    };
+    MoveType move_type_{MoveType::kNormal};
+
+    ENABLE_FRIEND_BITWISE_OPERATORS_ON(MoveType);
 
     enum class StatusType : std::uint8_t {
         kInvalid, // kInvalid means that this node is illegal, like
