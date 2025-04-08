@@ -116,6 +116,9 @@ public:
     // Reture true if the specified color is adjacent to this vertex.
     bool IsNeighborColor(const int vtx, const int color) const;
 
+    // Reture true if the move is in the seki.
+    bool IsSeki(const int vtx) const;
+
     // Compute ownership based on Tromp Taylor rule.
     std::vector<int> GetOwnership() const;
 

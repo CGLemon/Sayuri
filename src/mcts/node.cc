@@ -56,43 +56,10 @@ bool Node::PrepareRootNode(Network &network,
     // it will help simplify the state.
     KillRootSuperkos(state);
 
-    FillMoveTypeForChildren(state);
-
-    // Reset the bouns.
-    SetScoreBouns(0.f);
-    for (auto &child : children_) {
-        auto node = child.Get();
-        if (param_->first_pass_bonus &&
-                child.GetVertex() == kPass) {
-            // Half komi bouns may efficiently end the game.
-            node->SetScoreBouns(0.5f);
-        } else {
-            node->SetScoreBouns(0.f);
-        }
-    }
+    // reset
+    score_bouns_ = 0.0f;
 
     return success;
-}
-
-void Node::FillMoveTypeForChildren(GameState &state) {
-    WaitExpanded();
-    if (!HasChildren()) {
-        return;
-    }
-    const auto color = state.GetToMove();
-    Board &board = state.board_;
-
-    InflateAllChildren();
-    for (auto &child : children_) {
-        auto node = child.Get();
-        const auto vtx = node->GetVertex();
-        if (board.IsSeki(vtx)) {
-            node->move_type_ = node->move_type_ | MoveType::kSeki;
-        }
-        if (board.IsCaptureMove(vtx, color)) {
-            node->move_type_ = node->move_type_ | MoveType::kCapture;
-        }
-    }
 }
 
 void Node::Recompute(const bool is_root) {
@@ -658,6 +625,22 @@ void Node::Update(const NodeEvals *evals) {
     }
 }
 
+void Node::UpdateScoreBouns(GameState &state) {
+    if (!param_->first_pass_bonus) {
+        return;
+    }
+
+    const auto color = state.GetToMove();
+    const auto ownerhsip = GetOwnership(color);
+
+    assert(HasChildren());
+    InflateAllChildren();
+    for (auto &child : children_) {
+        const auto node = child.Get();
+        node->ComputeScoreBonus(state, ownerhsip);
+    }
+}
+
 void Node::ApplyEvals(const NodeEvals *evals) {
     black_wl_ = evals->black_wl;
     black_fs_ = evals->black_final_score;
@@ -729,6 +712,52 @@ float Node::GetLcb(const int color) const {
     return mean - z * (stddev/visits);
 }
 
+void Node::ComputeScoreBonus(GameState &state,
+                             const std::array<float, kNumIntersections> &parent_ownership) {
+    const auto vtx = GetVertex();
+    if (!param_->first_pass_bonus ||
+            state.GetKoMove() != kNullVertex ||
+            state.IsSeki(vtx)) {
+        score_bouns_ = 0.0f;
+        return;
+    }
+
+    constexpr float end_bouns = 0.5f;
+    float score_bouns = 0.0f;
+    if (state.GetScoringRule() == kArea) {
+        // Under the scoring area, simply encourage the passing, so the player try to
+        // pass first.
+        if (vtx == kPass) {
+            score_bouns += end_bouns;
+        } else {
+            score_bouns = 0.0f;
+        }
+    } else if (state.GetScoringRule() == kTerritory) {
+        // Under the scoring, slightly encourage dame-filling by discouraging passing, so
+        // that the player will try to do everything non-point-losing first, like filling
+        // dame. But cosmetically, it's also not great if we just encourage useless threat
+        // moves in the opponent's territory to prolong the game. So also discourage those
+        // moves to.
+        if (vtx == kPass) {
+            score_bouns -= (2.f/3.f) * end_bouns;
+        } else {
+            constexpr float extreme = 0.95f; // ~97.5%
+            constexpr float tail = 1.0f - extreme;
+
+            const auto idx = state.VertexToIndex(vtx);
+            const auto owner = parent_ownership[idx];
+            float owner_penalty_factor = 0.0f;
+            if (owner > extreme) {
+                owner_penalty_factor = (owner - extreme) / tail;
+            } else if (owner < extreme) {
+                owner_penalty_factor = (-extreme - owner) / tail;
+            }
+            score_bouns -= owner_penalty_factor * end_bouns;
+        }
+    }
+    score_bouns_ = score_bouns;
+}
+
 std::string Node::GetPathVerboseString(GameState &state, int color,
                                        std::vector<int> &moves) {
     auto curr_node = Get();
@@ -792,6 +821,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
             << std::setw(space1) << "P(%)"
             << std::setw(space1) << "N(%)"
             << std::setw(space1) << "S"
+            << std::setw(space1) << "B"
             << std::endl;
 
     for (auto &lcb_pair : lcblist) {
@@ -804,6 +834,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
         assert(visits != 0);
 
         const auto final_score = child->GetFinalScore(color);
+        const auto score_bouns = child->score_bouns_;
         const auto eval = child->GetWL(color, false);
         const auto draw = child->GetDraw();
 
@@ -819,6 +850,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
                 << std::setw(space1) << pobability * 100.f     // move probability
                 << std::setw(space1) << visit_ratio * 100.f    // visits ratio
                 << std::setw(space1) << final_score            // score lead
+                << std::setw(space1) << score_bouns
                 << std::setw(6) << "| PV:" << ' ' << pv_string // principal variation
                 << std::endl;
     }
@@ -1745,10 +1777,6 @@ int Node::GetGumbelMove(bool allow_pass) {
     }
 
     return GumbelSelectChild(color_, true, allow_pass)->GetVertex();
-}
-
-void Node::SetScoreBouns(float val) {
-    score_bouns_ = val;
 }
 
 void Node::KillRootSuperkos(GameState &state) {

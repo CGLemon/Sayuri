@@ -969,7 +969,7 @@ bool Board::IsSuicide(const int vtx, const int color) const {
 
 bool Board::IsSeki(const int vtx) const {
     if (state_[vtx] != kEmpty) {
-        // Not empty point in the seki.
+        // Seki should be empyu point.
         return false;
     }
 

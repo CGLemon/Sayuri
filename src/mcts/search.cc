@@ -70,6 +70,11 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
         }
     }
 
+    // Set the score bouns for children.
+    if (depth == 0) {
+        node->UpdateScoreBouns(currstate);
+    }
+
     // Terminated node, try to expand it.
     if (node->Expandable()) {
         const auto last_move = currstate.GetLastMove();

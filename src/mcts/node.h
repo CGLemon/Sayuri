@@ -131,6 +131,9 @@ public:
     // Update the node.
     void Update(const NodeEvals *evals);
 
+    // Update score bouns for children.
+    void UpdateScoreBouns(GameState &state);
+
     // Get children's LCB with utility values.
     std::vector<std::pair<float, int>> GetSortedLcbUtilityList(const int color);
     std::vector<std::pair<float, int>> GetSortedLcbUtilityList(const int color,
@@ -207,8 +210,6 @@ public:
     bool ShouldApplyGumbel() const;
     std::vector<float> GetProbLogitsCompletedQ(GameState &state);
 
-    void SetScoreBouns(float val);
-
     void IncrementThreads();
     void DecrementThreads();
 
@@ -228,7 +229,6 @@ public:
     std::string GetPvString(GameState &state);
 
 private:
-    void FillMoveTypeForChildren(GameState &state);
     void Recompute(const bool is_root);
     float GetDynamicCpuctFactor(Node *node, const int visits, const int parentvisits);
     void ApplyDirichletNoise(const float alpha);
@@ -244,6 +244,9 @@ private:
     float GetSearchPolicy(Edge& child, bool noise);
     float GetScoreVariance(const float default_var, const int visits) const;
     float GetWLVariance(const float default_var, const int visits) const;
+
+    void ComputeScoreBonus(GameState &state,
+                           const std::array<float, kNumIntersections> &parent_ownership);
 
     void Inflate(Edge& child);
     void Release(Edge& child);
@@ -264,15 +267,6 @@ private:
                              std::vector<float> &prob);
 
     void KillRootSuperkos(GameState &state);
-
-    enum class MoveType : std::uint8_t {
-        kNormal = 0,
-        kSeki = 1 << 1,
-        kCapture = 1 << 2
-    };
-    MoveType move_type_{MoveType::kNormal};
-
-    ENABLE_FRIEND_BITWISE_OPERATORS_ON(MoveType);
 
     enum class StatusType : std::uint8_t {
         kInvalid, // kInvalid means that this node is illegal, like

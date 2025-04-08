@@ -887,3 +887,7 @@ std::string GameState::GetRuleString() const {
 bool GameState::IsNeighborColor(const int vtx, const int color) const {
     return board_.IsNeighborColor(vtx, color);
 }
+
+bool GameState::IsSeki(const int vtx) const {
+    return board_.IsSeki(vtx);
+}
