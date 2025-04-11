@@ -67,11 +67,11 @@ private:
         while (fork_state.GetPasses() >= 2) {
             fork_state.UndoMove();
         }
-        if (fork_state.GetScoringRule() != kTerritory) {
+        if (fork_state.GetScoringRule() == kArea) {
             return;
         }
         fork_state.SetRule(kArea);
-        constexpr float kOwnshipThreshold = 0.75f;
+        constexpr float kRawOwnershipThreshold = 0.8f;
 
         auto netlist = network.GetOutput(fork_state, Network::kRandom);
         auto color = fork_state.GetToMove();
@@ -86,9 +86,9 @@ private:
             if (safe_area[idx]) {
                 continue;
             }
-            if (black_owner > kOwnshipThreshold) {
+            if (black_owner > kRawOwnershipThreshold) {
                 ownership[idx] = kBlack;
-            } else if (black_owner < -kOwnshipThreshold) {
+            } else if (black_owner < -kRawOwnershipThreshold) {
                 ownership[idx] = kWhite;
             } else {
                 ownership[idx] = kEmpty;

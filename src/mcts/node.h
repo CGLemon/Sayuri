@@ -132,7 +132,7 @@ public:
     void Update(const NodeEvals *evals);
 
     // Update score bouns for children.
-    void UpdateScoreBouns(GameState &state);
+    void UpdateScoreBouns(GameState &state, NodeEvals &node_evals);
 
     // Get children's LCB with utility values.
     std::vector<std::pair<float, int>> GetSortedLcbUtilityList(const int color);
@@ -178,6 +178,9 @@ public:
 
     // Get the network final score value.
     float GetNetScore(const int color) const;
+
+    // Get the additional score bouns or penalty.
+    float GetScoreBouns(const int color) const;
 
     // Get the average final score value.
     float GetFinalScore(const int color) const;
@@ -232,9 +235,13 @@ private:
     void Recompute(const bool is_root);
     float GetDynamicCpuctFactor(Node *node, const int visits, const int parentvisits);
     void ApplyDirichletNoise(const float alpha);
-    void ApplyNetOutput(GameState& state,
+    void ApplyNetOutput(GameState &state,
                         const Network::Result &raw_netlist,
                         NodeEvals& node_evals, const int color);
+    void FillNodeEvalsFromNet(GameState &state,
+                              const Network::Result &raw_netlist,
+                              NodeEvals& node_evals, const int color) const;
+
     void SetPolicy(float p);
     void SetVisits(int v);
 
@@ -245,8 +252,7 @@ private:
     float GetScoreVariance(const float default_var, const int visits) const;
     float GetWLVariance(const float default_var, const int visits) const;
 
-    void ComputeScoreBonus(GameState &state,
-                           const std::array<float, kNumIntersections> &parent_ownership);
+    void ComputeScoreBonus(GameState &state, NodeEvals& parent_node_evals);
 
     void Inflate(Edge& child);
     void Release(Edge& child);
@@ -307,7 +313,7 @@ private:
     // in order to do not affect the training result. Be care that
     // the bouns is not side to move bouns. It will award any side
     // score utility.
-    float score_bouns_{0.f};
+    float black_sb_{0.f};
 
     // The softmax policy temperature.
     float policy_temp_{1.0f};

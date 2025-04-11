@@ -41,6 +41,13 @@ bool Node::PrepareRootNode(Network &network,
         // The setting of root policy and children may be different,
         // like softmax temperature, so we refill the children policy.
         Recompute(is_root);
+
+        // Fill the evals buffer even if the node is complete. We may
+        // use it later.
+        auto raw_netlist = network.GetOutput(
+            state, Network::kRandom,
+            Network::Query::Get().SetTemperature(param_->root_policy_temp));
+        FillNodeEvalsFromNet(state, raw_netlist, node_evals, state.GetToMove());
     }
     if (param_->dirichlet_noise) {
         // Generate the dirichlet noise and gather it.
@@ -56,10 +63,27 @@ bool Node::PrepareRootNode(Network &network,
     // it will help simplify the state.
     KillRootSuperkos(state);
 
-    // reset
-    score_bouns_ = 0.0f;
+    // Compute the score bouns for children.
+    UpdateScoreBouns(state, node_evals);
 
     return success;
+}
+
+void Node::UpdateScoreBouns(GameState &state, NodeEvals &node_evals) {
+    if (!param_->first_pass_bonus) {
+        return;
+    }
+
+    assert(HasChildren());
+
+    // reset
+    black_sb_ = 0.0f;
+
+    InflateAllChildren();
+    for (auto &child : children_) {
+        const auto node = child.Get();
+        node->ComputeScoreBonus(state, node_evals);
+    }
 }
 
 void Node::Recompute(const bool is_root) {
@@ -219,14 +243,24 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
     assert(!children_.empty());
 }
 
-void Node::ApplyNetOutput(GameState& state,
+void Node::ApplyNetOutput(GameState &state,
                           const Network::Result &raw_netlist,
                           NodeEvals& node_evals, const int color) {
+    FillNodeEvalsFromNet(state, raw_netlist, node_evals, color);
+
+    black_wl_ = node_evals.black_wl;
+    black_fs_ = node_evals.black_final_score;
+    avg_black_ownership_.fill(0.f);
+}
+
+void Node::FillNodeEvalsFromNet(GameState &state,
+                                const Network::Result &raw_netlist,
+                                NodeEvals& node_evals, const int color) const {
     auto black_ownership = std::array<float, kNumIntersections>{};
-    auto draw =raw_netlist.wdl[1];
+    auto draw = raw_netlist.wdl[1];
 
     // Compute the black side to move evals.
-    auto wl = float(0.5f);
+    auto wl = 0.5f;
 
     if (param_->use_stm_winrate) {
         wl = raw_netlist.stm_winrate;
@@ -241,16 +275,12 @@ void Node::ApplyNetOutput(GameState& state,
         final_score = 0.0f - final_score;
     }
 
-    black_wl_ = wl;
-    black_fs_ = final_score;
-
     for (int idx = 0; idx < kNumIntersections; ++idx) {
         auto owner = raw_netlist.ownership[idx];
         if (color == kWhite) {
             owner = 0.f - owner;
         }
         black_ownership[idx] = owner;
-        avg_black_ownership_[idx] = 0.f;
     }
 
     if (param_->use_rollout) {
@@ -262,9 +292,9 @@ void Node::ApplyNetOutput(GameState& state,
     }
 
     // Store the network evals.
-    node_evals.black_wl = black_wl_;
+    node_evals.black_wl = wl;
     node_evals.draw = draw;
-    node_evals.black_final_score = black_fs_;
+    node_evals.black_final_score = final_score;
 
     for (int idx = 0; idx < kNumIntersections; ++idx) {
         node_evals.black_ownership[idx] = black_ownership[idx];
@@ -354,6 +384,13 @@ float Node::GetCpuct(int parentvisits) const {
     const auto cpuct = cpuct_init + cpuct_base_factor *
                            std::log((float(parentvisits) + cpuct_base + 1) / cpuct_base);
     return cpuct;
+}
+
+float Node::GetScoreBouns(const int color) const {
+    if (color == kBlack) {
+        return black_sb_;
+    }
+    return 0.f - black_sb_;
 }
 
 Node *Node::PuctSelectChild(const int color, const bool is_root) {
@@ -625,22 +662,6 @@ void Node::Update(const NodeEvals *evals) {
     }
 }
 
-void Node::UpdateScoreBouns(GameState &state) {
-    if (!param_->first_pass_bonus) {
-        return;
-    }
-
-    const auto color = state.GetToMove();
-    const auto ownerhsip = GetOwnership(color);
-
-    assert(HasChildren());
-    InflateAllChildren();
-    for (auto &child : children_) {
-        const auto node = child.Get();
-        node->ComputeScoreBonus(state, ownerhsip);
-    }
-}
-
 void Node::ApplyEvals(const NodeEvals *evals) {
     black_wl_ = evals->black_wl;
     black_fs_ = evals->black_final_score;
@@ -663,7 +684,7 @@ std::array<float, kNumIntersections> Node::GetOwnership(int color) {
 float Node::GetScoreEval(const int color, float parent_score) const {
     const auto factor = param_->score_utility_factor;
     const auto div = param_->score_utility_div;
-    const auto score = GetFinalScore(color) + score_bouns_;
+    const auto score = GetFinalScore(color) + GetScoreBouns(color);
     return factor * std::tanh((score - parent_score)/div);
 }
 
@@ -712,25 +733,29 @@ float Node::GetLcb(const int color) const {
     return mean - z * (stddev/visits);
 }
 
-void Node::ComputeScoreBonus(GameState &state,
-                             const std::array<float, kNumIntersections> &parent_ownership) {
-    const auto vtx = GetVertex();
+void Node::ComputeScoreBonus(GameState &state, NodeEvals &parent_node_evals) {
     if (!param_->first_pass_bonus ||
-            state.GetKoMove() != kNullVertex ||
-            state.IsSeki(vtx)) {
-        score_bouns_ = 0.0f;
+            state.GetKoMove() != kNullVertex) {
+        black_sb_ = 0.0f;
         return;
     }
 
     constexpr float end_bouns = 0.5f;
-    float score_bouns = 0.0f;
+    const auto vtx = GetVertex();
+    const auto color = state.GetToMove();
+    float black_bouns = 0.0f;
     if (state.GetScoringRule() == kArea) {
         // Under the scoring area, simply encourage the passing, so the player try to
         // pass first.
         if (vtx == kPass) {
-            score_bouns += end_bouns;
+            black_bouns += end_bouns;
+        } else if (state.IsSeki(vtx)) {
+            black_bouns += end_bouns;
         } else {
-            score_bouns = 0.0f;
+            black_bouns = 0.0f;
+        }
+        if (color == kWhite) {
+            black_bouns = 0.0f - black_bouns;
         }
     } else if (state.GetScoringRule() == kTerritory) {
         // Under the scoring, slightly encourage dame-filling by discouraging passing, so
@@ -739,23 +764,27 @@ void Node::ComputeScoreBonus(GameState &state,
         // moves in the opponent's territory to prolong the game. So also discourage those
         // moves to.
         if (vtx == kPass) {
-            score_bouns -= (2.f/3.f) * end_bouns;
+            black_bouns -= (2.f/3.f) * end_bouns;
         } else {
-            constexpr float extreme = 0.95f; // ~97.5%
-            constexpr float tail = 1.0f - extreme;
+            constexpr float kRawOwnershipThreshold = 0.8f; // ~90%
+            constexpr float kTail = 1.0f - kRawOwnershipThreshold;
 
             const auto idx = state.VertexToIndex(vtx);
-            const auto owner = parent_ownership[idx];
+            const auto black_owner = parent_node_evals.black_ownership[idx];
             float owner_penalty_factor = 0.0f;
-            if (owner > extreme) {
-                owner_penalty_factor = (owner - extreme) / tail;
-            } else if (owner < extreme) {
-                owner_penalty_factor = (-extreme - owner) / tail;
+
+            if (black_owner > kRawOwnershipThreshold ||
+                    black_owner < -kRawOwnershipThreshold) {
+                owner_penalty_factor = (
+                    std::abs(black_owner) - kRawOwnershipThreshold) / kTail;
             }
-            score_bouns -= owner_penalty_factor * end_bouns;
+            black_bouns -= owner_penalty_factor * end_bouns;
+        }
+        if (color == kWhite) {
+            black_bouns = 0.0f - black_bouns;
         }
     }
-    score_bouns_ = score_bouns;
+    black_sb_ = black_bouns;
 }
 
 std::string Node::GetPathVerboseString(GameState &state, int color,
@@ -821,7 +850,6 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
             << std::setw(space1) << "P(%)"
             << std::setw(space1) << "N(%)"
             << std::setw(space1) << "S"
-            << std::setw(space1) << "B"
             << std::endl;
 
     for (auto &lcb_pair : lcblist) {
@@ -834,7 +862,6 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
         assert(visits != 0);
 
         const auto final_score = child->GetFinalScore(color);
-        const auto score_bouns = child->score_bouns_;
         const auto eval = child->GetWL(color, false);
         const auto draw = child->GetDraw();
 
@@ -850,7 +877,6 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
                 << std::setw(space1) << pobability * 100.f     // move probability
                 << std::setw(space1) << visit_ratio * 100.f    // visits ratio
                 << std::setw(space1) << final_score            // score lead
-                << std::setw(space1) << score_bouns
                 << std::setw(6) << "| PV:" << ' ' << pv_string // principal variation
                 << std::endl;
     }
