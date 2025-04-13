@@ -1273,9 +1273,8 @@ void Search::GatherTrainingBuffer(std::vector<TrainingData> &chunk) {
     // Compute the short, middle and long term average values
     for (int i = 0; i < buf_size; ++i) {
         auto &buf = training_data_buffer_[i];
-        const auto board_size = buf.board_size;
 
-        // Please see here,
+        // Please see here:
         // https://github.com/lightvector/KataGo/blob/master/docs/KataGoMethods.md#short-term-value-and-score-targets
         double short_term_q = 0;
         double middle_term_q = 0;
@@ -1285,49 +1284,42 @@ void Search::GatherTrainingBuffer(std::vector<TrainingData> &chunk) {
         double middle_term_score = 0;
         double long_term_score = 0;
 
-        const int short_time_horizon = 0.4f * board_size;
-        const int middle_time_horizon = 1 * board_size;
-        const int long_time_horizon = 3 * board_size;
+        // Coefficient from here:
+        // https://github.com/lightvector/KataGo/blob/master/cpp/dataio/trainingwrite.cpp
+        const double short_term_lambda = 1.0/(1.0 + num_intersections * 0.18);
+        const double middle_term_lambda = 1.0/(1.0 + num_intersections * 0.06);
+        const double long_term_lambda = 1.0/(1.0 + num_intersections * 0.02);
 
-        const double lambda = 1. - 1./std::max(2, short_time_horizon);
-        double gamma = 1.;
+        double short_term_gamma = 1.;
+        double middle_term_gamma = 1.;
+        double long_term_gamma = 1.;
 
-        for (int h = 0; h < long_time_horizon; ++h) {
-            int buf_idx = std::min(i+h, buf_size-1);
-            auto &curr_buf = training_data_buffer_[buf_idx];
+        for (int h = 0; h < buf_size; ++h) {
+            const auto buf_idx = std::min(i + h, buf_size-1);
+            const auto &curr_buf = training_data_buffer_[buf_idx];
+            double sign = curr_buf.side_to_move == buf.side_to_move ? 1 : -1;
+            const double avg_q = curr_buf.avg_q_value;
+            const double avg_s = curr_buf.avg_score_lead;
 
-            if (curr_buf.side_to_move == buf.side_to_move) {
-                if (h < short_time_horizon) {
-                    short_term_q += (gamma * curr_buf.avg_q_value);
-                    short_term_score += (gamma * curr_buf.avg_score_lead);
-                }
-                if (h < middle_time_horizon) {
-                    middle_term_q += (gamma * curr_buf.avg_q_value);
-                    middle_term_score += (gamma * curr_buf.avg_score_lead);
-                }
-                long_term_q += (gamma * curr_buf.avg_q_value);
-                long_term_score += (gamma * curr_buf.avg_score_lead);
-            } else {
-                if (h < short_time_horizon) {
-                    short_term_q -= (gamma * curr_buf.avg_q_value);
-                    short_term_score -= (gamma * curr_buf.avg_score_lead);
-                }
-                if (h < middle_time_horizon) {
-                    middle_term_q -= (gamma * curr_buf.avg_q_value);
-                    middle_term_score -= (gamma * curr_buf.avg_score_lead);
-                }
-                long_term_q -= (gamma * curr_buf.avg_q_value);
-                long_term_score -= (gamma * curr_buf.avg_score_lead);
-            }
-            gamma *= lambda;
+            short_term_q += (1. - short_term_lambda) * sign * (short_term_gamma * avg_q);
+            short_term_score += (1. - short_term_lambda) * sign * (short_term_gamma * avg_s);
+            short_term_gamma *= short_term_lambda;
+
+            middle_term_q += (1. - middle_term_lambda) * sign * (middle_term_gamma * avg_q);
+            middle_term_score += (1. - middle_term_lambda) * sign * (middle_term_gamma * avg_s);
+            middle_term_gamma *= middle_term_lambda;
+
+            long_term_q += (1. - long_term_lambda) * sign * (long_term_gamma * avg_q);
+            long_term_score += (1. - long_term_lambda) * sign * (long_term_gamma * avg_s);
+            long_term_gamma *= long_term_lambda;
         }
 
-        buf.short_avg_q = short_term_q * (1. - lambda);
-        buf.middle_avg_q = middle_term_q * (1. - lambda);
-        buf.long_avg_q = long_term_q * (1. - lambda);
-        buf.short_avg_score = short_term_score * (1. - lambda);
-        buf.middle_avg_score = middle_term_score * (1. - lambda);
-        buf.long_avg_score = long_term_score * (1. - lambda);
+        buf.short_avg_q = short_term_q;
+        buf.middle_avg_q = middle_term_q;
+        buf.long_avg_q = long_term_q;
+        buf.short_avg_score = short_term_score;
+        buf.middle_avg_score = middle_term_score;
+        buf.long_avg_score = long_term_score;
     }
 
     // Set the auxiliary probablility in the buffer.
