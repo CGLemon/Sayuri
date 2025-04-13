@@ -131,8 +131,8 @@ public:
     // Update the node.
     void Update(const NodeEvals *evals);
 
-    // Update score bouns for children.
-    void UpdateScoreBouns(GameState &state, NodeEvals &node_evals);
+    // Update score bonus for children.
+    void UpdateScoreBonus(GameState &state, NodeEvals &node_evals);
 
     // Get children's LCB with utility values.
     std::vector<std::pair<float, int>> GetSortedLcbUtilityList(const int color);
@@ -179,8 +179,8 @@ public:
     // Get the network final score value.
     float GetNetScore(const int color) const;
 
-    // Get the additional score bouns or penalty.
-    float GetScoreBouns(const int color) const;
+    // Get the additional score bonus or penalty.
+    float GetScoreBonus(const int color) const;
 
     // Get the average final score value.
     float GetFinalScore(const int color) const;
@@ -311,7 +311,7 @@ private:
     // efficiently end the game. It also does not affect the
     // theoretical optimal play. Only add the bonus during search
     // in order to do not affect the training result. Be care that
-    // the bouns is not side to move bouns. It will award any side
+    // the bonus is not side to move bonus. It will award any side
     // score utility.
     float black_sb_{0.f};
 

@@ -63,13 +63,13 @@ bool Node::PrepareRootNode(Network &network,
     // it will help simplify the state.
     KillRootSuperkos(state);
 
-    // Compute the score bouns for children.
-    UpdateScoreBouns(state, node_evals);
+    // Compute the score bonus for children.
+    UpdateScoreBonus(state, node_evals);
 
     return success;
 }
 
-void Node::UpdateScoreBouns(GameState &state, NodeEvals &node_evals) {
+void Node::UpdateScoreBonus(GameState &state, NodeEvals &node_evals) {
     if (!param_->first_pass_bonus) {
         return;
     }
@@ -386,7 +386,7 @@ float Node::GetCpuct(int parentvisits) const {
     return cpuct;
 }
 
-float Node::GetScoreBouns(const int color) const {
+float Node::GetScoreBonus(const int color) const {
     if (color == kBlack) {
         return black_sb_;
     }
@@ -467,7 +467,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
                 // Forced Playouts method. It can help to explore the low priority
                 // child with high noise value. We think 20% is big enough and high
                 // priority child is easy to be explored with PUCT. We don't need to
-                // add any bouns for these kind of children.
+                // add any bonus for these kind of children.
                 const float psa_factor = std::min(0.2f, psa);
                 const float forced_n_factor =
                     std::max(1e-4f, forced_playouts_k * psa_factor * (float)parentvisits);
@@ -684,7 +684,7 @@ std::array<float, kNumIntersections> Node::GetOwnership(int color) {
 float Node::GetScoreEval(const int color, float parent_score) const {
     const auto factor = param_->score_utility_factor;
     const auto div = param_->score_utility_div;
-    const auto score = GetFinalScore(color) + GetScoreBouns(color);
+    const auto score = GetFinalScore(color) + GetScoreBonus(color);
     return factor * std::tanh((score - parent_score)/div);
 }
 
@@ -740,22 +740,22 @@ void Node::ComputeScoreBonus(GameState &state, NodeEvals &parent_node_evals) {
         return;
     }
 
-    constexpr float end_bouns = 0.5f;
+    constexpr float end_bonus = 0.5f;
     const auto vtx = GetVertex();
     const auto color = state.GetToMove();
-    float black_bouns = 0.0f;
+    float black_bonus = 0.0f;
     if (state.GetScoringRule() == kArea) {
         // Under the scoring area, simply encourage the passing, so the player try to
         // pass first.
         if (vtx == kPass) {
-            black_bouns += end_bouns;
+            black_bonus += end_bonus;
         } else if (state.IsSeki(vtx)) {
-            black_bouns += end_bouns;
+            black_bonus += end_bonus;
         } else {
-            black_bouns = 0.0f;
+            black_bonus = 0.0f;
         }
         if (color == kWhite) {
-            black_bouns = 0.0f - black_bouns;
+            black_bonus = 0.0f - black_bonus;
         }
     } else if (state.GetScoringRule() == kTerritory) {
         // Under the scoring, slightly encourage dame-filling by discouraging passing, so
@@ -764,7 +764,7 @@ void Node::ComputeScoreBonus(GameState &state, NodeEvals &parent_node_evals) {
         // moves in the opponent's territory to prolong the game. So also discourage those
         // moves to.
         if (vtx == kPass) {
-            black_bouns -= (2.f/3.f) * end_bouns;
+            black_bonus -= (2.f/3.f) * end_bonus;
         } else {
             constexpr float kRawOwnershipThreshold = 0.8f; // ~90%
             constexpr float kTail = 1.0f - kRawOwnershipThreshold;
@@ -778,13 +778,13 @@ void Node::ComputeScoreBonus(GameState &state, NodeEvals &parent_node_evals) {
                 owner_penalty_factor = (
                     std::abs(black_owner) - kRawOwnershipThreshold) / kTail;
             }
-            black_bouns -= owner_penalty_factor * end_bouns;
+            black_bonus -= owner_penalty_factor * end_bonus;
         }
         if (color == kWhite) {
-            black_bouns = 0.0f - black_bouns;
+            black_bonus = 0.0f - black_bonus;
         }
     }
-    black_sb_ = black_bouns;
+    black_sb_ = black_bonus;
 }
 
 std::string Node::GetPathVerboseString(GameState &state, int color,
