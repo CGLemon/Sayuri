@@ -226,8 +226,6 @@ private:
 
     bool InputPending(Search::OptionTag tag) const;
 
-    void RewriteTargetPolicy(ComputationResult &result, int move, bool forbid_pass);
-
     void GatherComputationResult(ComputationResult &result) const;
 
     void GatherData(const GameState &state,

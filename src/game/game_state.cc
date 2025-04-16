@@ -296,6 +296,7 @@ std::string GameState::GetStateString() const {
     out << ", ";
     out << "Move Number: " << move_number_ << ", ";
     out << "Komi: " << GetKomi() << ", ";
+    out << "Penalty: " << GetPenalty() << ", ";
     out << "Board Size: " << GetBoardSize() << ", ";
     out << "Handicap: " << GetHandicap() << ", ";
     out << "Rule: " << GetRuleString();

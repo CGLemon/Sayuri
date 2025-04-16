@@ -929,49 +929,9 @@ bool ShouldForbidPass(GameState &state,
                 }
             }
         }
-    } else if (state.GetScoringRule() == kTerritory) {
-        // If we find a child is better than pass under the Japanese-like
-        // rules, the game is not completed.
-        const auto pass_visits = result.root_visits[num_intersections];
-        const auto pass_q = result.root_estimated_q[num_intersections];
-        // for-loop skips pass
-        for (int idx = 0; idx < num_intersections; ++idx) {
-            const auto visits = result.root_visits[idx];
-            const auto q = result.root_estimated_q[idx];
-            if (visits >= pass_visits && q >= pass_q) {
-                return true;
-            }
-        }
     }
 
     return false;
-}
-
-void Search::RewriteTargetPolicy(ComputationResult &result, int move, bool forbid_pass) {
-    if (forbid_pass && move != kPass) {
-        // Pass is not reasonable move so we should suppress the target policy
-        // of pass move.
-        const auto num_intersections = root_state_.GetNumIntersections();
-        auto target_dist_buf = result.target_policy_dist;
-
-        // last one is pass move, suppressing it
-        target_dist_buf[num_intersections] = 0.0f;
-        auto accum_target_policy =
-            std::accumulate(std::begin(target_dist_buf),
-                            std::end(target_dist_buf), 0.0f);
-
-        if (accum_target_policy > 1e-4f) {
-            // Normalize the distribution. Be sure the sum is 1.
-            for (int idx = 0; idx < num_intersections+1; ++idx) {
-                target_dist_buf[idx] /= accum_target_policy;
-            }
-            result.target_policy_dist = target_dist_buf;
-
-            // Recompute the KL Divergence
-            result.policy_kld = GetKlDivergence(
-                result.target_policy_dist, root_raw_probabilities_);
-        }
-    }
 }
 
 int Search::GetSelfPlayMove(OptionTag tag) {
@@ -1066,9 +1026,6 @@ int Search::GetSelfPlayMove(OptionTag tag) {
             move = result.random_move;
         }
     }
-
-    // Rewrite the target policy based on some decided information.
-    RewriteTargetPolicy(result, move, forbid_pass);
 
     // If the 'discard_it' is true, we will discard the current training
     // data. It is because that the quality of current data is bad. To

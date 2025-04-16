@@ -740,19 +740,30 @@ void Node::ComputeScoreBonus(GameState &state, NodeEvals &parent_node_evals) {
         return;
     }
 
-    constexpr float end_bonus = 0.5f;
+    constexpr float kRawOwnershipThreshold = 0.8f; // ~90%
+    constexpr float kTail = 1.0f - kRawOwnershipThreshold;
+    constexpr float kEndBonus = 0.5f;
     const auto vtx = GetVertex();
     const auto color = state.GetToMove();
     float black_bonus = 0.0f;
+
     if (state.GetScoringRule() == kArea) {
         // Under the scoring area, simply encourage the passing, so the player try to
         // pass first.
         if (vtx == kPass) {
-            black_bonus += end_bonus;
+            black_bonus += kEndBonus;
         } else if (state.IsSeki(vtx)) {
-            black_bonus += end_bonus;
+            black_bonus += kEndBonus;
         } else {
-            black_bonus = 0.0f;
+            const auto idx = state.VertexToIndex(vtx);
+            const auto black_owner = parent_node_evals.black_ownership[idx];
+
+            if ((black_owner > kRawOwnershipThreshold && color == kBlack) ||
+                    (black_owner < -kRawOwnershipThreshold && color == kWhite)) {
+                if (state.IsNeighborColor(vtx, !color)) {
+                    black_bonus += kEndBonus;
+                }
+            }
         }
         if (color == kWhite) {
             black_bonus = 0.0f - black_bonus;
@@ -764,11 +775,8 @@ void Node::ComputeScoreBonus(GameState &state, NodeEvals &parent_node_evals) {
         // moves in the opponent's territory to prolong the game. So also discourage those
         // moves to.
         if (vtx == kPass) {
-            black_bonus -= (2.f/3.f) * end_bonus;
+            black_bonus -= (2.f/3.f) * kEndBonus;
         } else {
-            constexpr float kRawOwnershipThreshold = 0.8f; // ~90%
-            constexpr float kTail = 1.0f - kRawOwnershipThreshold;
-
             const auto idx = state.VertexToIndex(vtx);
             const auto black_owner = parent_node_evals.black_ownership[idx];
             float owner_penalty_factor = 0.0f;
@@ -778,7 +786,7 @@ void Node::ComputeScoreBonus(GameState &state, NodeEvals &parent_node_evals) {
                 owner_penalty_factor = (
                     std::abs(black_owner) - kRawOwnershipThreshold) / kTail;
             }
-            black_bonus -= owner_penalty_factor * end_bonus;
+            black_bonus -= owner_penalty_factor * kEndBonus;
         }
         if (color == kWhite) {
             black_bonus = 0.0f - black_bonus;

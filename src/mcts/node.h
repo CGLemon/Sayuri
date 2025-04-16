@@ -252,7 +252,7 @@ private:
     float GetScoreVariance(const float default_var, const int visits) const;
     float GetWLVariance(const float default_var, const int visits) const;
 
-    void ComputeScoreBonus(GameState &state, NodeEvals& parent_node_evals);
+    void ComputeScoreBonus(GameState &state, NodeEvals &parent_node_evals);
 
     void Inflate(Edge& child);
     void Release(Edge& child);
