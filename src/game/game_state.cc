@@ -296,7 +296,6 @@ std::string GameState::GetStateString() const {
     out << ", ";
     out << "Move Number: " << move_number_ << ", ";
     out << "Komi: " << GetKomi() << ", ";
-    out << "Penalty: " << GetPenalty() << ", ";
     out << "Board Size: " << GetBoardSize() << ", ";
     out << "Handicap: " << GetHandicap() << ", ";
     out << "Rule: " << GetRuleString();
@@ -687,13 +686,17 @@ float GameState::GetKomiWithPenalty() const {
 }
 
 float GameState::GetPenalty() const {
+    return GetPenalty(scoring_rule_);
+}
+
+float GameState::GetPenalty(int scoring_rule) const {
     float penalty = 0.f;
 
-    if (scoring_rule_ == kTerritory) {
+    if (scoring_rule == kTerritory) {
         penalty += board_.GetPlayedStones(kBlack);
         penalty -= board_.GetPlayedStones(kWhite);
     }
-    if (scoring_rule_ == kArea) {
+    if (scoring_rule == kArea) {
         penalty += handicap_;
     }
     return penalty;

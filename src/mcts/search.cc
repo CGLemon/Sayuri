@@ -64,9 +64,11 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
             while (currstate.GetPasses() >= 1) {
                 currstate.UndoMove();
             }
-            const auto komi_with_penalty = currstate.GetKomiWithPenalty();
+            const auto komi = currstate.GetKomi();
+            const auto penalty = currstate.GetPenalty(kTerritory) -
+                                     currstate.GetPenalty(kArea);
             currstate.SetRule(kArea);
-            currstate.SetKomi(komi_with_penalty);
+            currstate.SetKomi(komi + penalty);
         }
     }
 
@@ -1138,9 +1140,12 @@ void Search::UpdateTerritoryHelper() {
         while (root_state_.GetLastMove() == kPass) {
             root_state_.UndoMove();
         }
-        const auto komi_with_penalty = root_state_.GetKomiWithPenalty();
+
+        const auto komi = root_state_.GetKomi();
+        const auto penalty = root_state_.GetPenalty(kTerritory) -
+                                 root_state_.GetPenalty(kArea);
         root_state_.SetRule(kArea);
-        root_state_.SetKomi(komi_with_penalty);
+        root_state_.SetKomi(komi + penalty);
 
         while (!root_state_.IsGameOver()) {
             auto tag = Search::kNoExploring | Search::kNoBuffer;

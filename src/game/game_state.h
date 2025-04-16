@@ -139,6 +139,7 @@ public:
 
     float GetKomiWithPenalty() const;
     float GetPenalty() const;
+    float GetPenalty(int scoring_rule) const;
     float GetKomi() const;
     int GetWinner() const;
     int GetHandicap() const;
