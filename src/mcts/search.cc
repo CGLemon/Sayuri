@@ -844,6 +844,7 @@ int Search::GetBestMove(int playouts, OptionTag tag) {
     }
     if (param_->capture_all_dead &&
             best_move == kPass &&
+            root_state_.GetScoringRule() == kArea &&
             result.capture_all_dead_move != kNullVertex) {
         // Refuse playing the pass move until all dead stones
         // are removed.
