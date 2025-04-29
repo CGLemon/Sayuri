@@ -145,12 +145,6 @@ void CudaForwardPipe::Reload(int board_size) {
 
     // TODO: Assign different batch size by device computing capability.
     max_batch_per_nn_ = GetOption<int>("batch_size");
-    if (gpus_list.size() >= 2) {
-        // Assign the the batch size for each netork.
-        const int num_gpus = gpus_list.size();
-        max_batch_per_nn_ = (max_batch_per_nn_ / num_gpus) + bool(max_batch_per_nn_ % num_gpus);
-        max_batch_per_nn_ = std::max(max_batch_per_nn_, 1);
-    }
 
     for (auto i = size_t{0}; i < gpus_list.size(); ++i) {
         nngraphs_[i]->BuildGraph(

@@ -146,9 +146,9 @@ void ArgsParser::InitBasicParameters() const {
                              IsGpuAvailable() ?
                                  GetOption<bool>("use_gpu") : false;
     const int num_gpus = !use_gpu ?
-                             0 :
-                             already_set_specific_gpus ?
-                                 GetOptionCount("gpus") : GetGpuCount();
+                             0 : 2;
+                             // already_set_specific_gpus ?
+                             //     GetOptionCount("gpus") : GetGpuCount();
 
     const int cores = std::max((int)std::thread::hardware_concurrency(), 1);
     int select_threads = GetOption<int>("threads");
@@ -198,18 +198,18 @@ void ArgsParser::InitBasicParameters() const {
     // the batch size reaches 32. Maybe we will change this value in the future. Notice
     // priority of this bound is lower than threads bound.
     const int reasonable_batchsize_bound_per_gpu = 32;
-    const int reasonable_batchsize_bound = reasonable_batchsize_bound_per_gpu * num_gpus;
 
     // The performance would be reduced with large number of search threads because
     // single playout may be fail when many threads are on the same path. After testing,
     // the bound should not be greater than 64 even if it runs on the multi-gpu device.
+    // (eg. 4 x RTX 3080Ti)
     const int reasonable_threads_bound = 64;
 
     if (reasonable_threads == 0) {
         // Assume the bound is thinking time. Actually we can't know the thinking time
         // so only selecting the maximum thread count.
         reasonable_threads = use_gpu ?
-            2 * reasonable_batchsize_bound :
+            2 * num_gpus * reasonable_batchsize_bound_per_gpu :
             reasonable_threads_bound;
     }
 
@@ -224,15 +224,16 @@ void ArgsParser::InitBasicParameters() const {
     if (use_gpu) {
         if (select_threads == 0 && select_batchsize == 0) {
             select_threads = reasonable_threads;
-            select_batchsize = select_threads/2;
+            select_batchsize = (select_threads + (2 * num_gpus) - 1)/(2 * num_gpus);
         } else if (select_threads == 0 && select_batchsize != 0) {
-            select_threads = 2 * select_batchsize;
+            select_threads = 2 * num_gpus * select_batchsize;
         } else if (select_threads != 0 && select_batchsize == 0) {
-            select_batchsize = select_threads/2;
+            // No idea why somebody wants to use threads less than the number of GPUs
+            // but should at least prevent hiccup.
+            select_threads = std::max(select_threads, num_gpus);
+
+            select_batchsize = (select_threads + (2 * num_gpus) - 1)/(2 * num_gpus);
         }
-        // No idea why somebody wants to use threads less than the number of GPUs
-        // but should at least prevent hiccup.
-        select_threads = std::max(select_threads, num_gpus);
     } else {
         if (select_threads == 0) {
             select_threads = std::min(reasonable_threads, cores);
