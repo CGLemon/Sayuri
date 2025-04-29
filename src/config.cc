@@ -146,9 +146,9 @@ void ArgsParser::InitBasicParameters() const {
                              IsGpuAvailable() ?
                                  GetOption<bool>("use_gpu") : false;
     const int num_gpus = !use_gpu ?
-                             0 : 2;
-                             // already_set_specific_gpus ?
-                             //     GetOptionCount("gpus") : GetGpuCount();
+                             0 :
+                             already_set_specific_gpus ?
+                                 GetOptionCount("gpus") : GetGpuCount();
 
     const int cores = std::max((int)std::thread::hardware_concurrency(), 1);
     int select_threads = GetOption<int>("threads");
