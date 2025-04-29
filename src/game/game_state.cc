@@ -681,10 +681,6 @@ int GameState::VertexToIndex(int vtx) const {
     return board_.VertexToIndex(vtx);
 }
 
-float GameState::GetKomiWithPenalty() const {
-    return GetKomi() + GetPenalty();
-}
-
 float GameState::GetPenalty() const {
     return GetPenalty(scoring_rule_);
 }
@@ -700,6 +696,26 @@ float GameState::GetPenalty(int scoring_rule) const {
         penalty += handicap_;
     }
     return penalty;
+}
+
+float GameState::GetPenaltyOffset(int new_scoring_rule, int old_scoring_rule) const {
+    // We call the new penalty is P_n, old penalty P_o, penalty offset
+    // is P_s. We want to make 'P_n + P_s = P_o' so we get
+    //
+    // 1.    P_n + P_s = P_o
+    // 2.    P_n + P_s = P_o + P_n - P_n
+    // 3.    P_n + P_s = P_n + (P_o - P_n)
+    // 4.    P_s = P_o - P_n
+
+    if (new_scoring_rule != old_scoring_rule) {
+        return GetPenalty(old_scoring_rule) -
+                   GetPenalty(new_scoring_rule);
+    }
+    return GetPenalty(new_scoring_rule);
+}
+
+float GameState::GetKomiWithPenalty() const {
+    return GetKomi() + GetPenalty();
 }
 
 float GameState::GetKomi() const {

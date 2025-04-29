@@ -171,7 +171,7 @@ void Engine::ParseQueries() {
         std::find(std::begin(scoring_set_), std::end(scoring_set_), kArea);
     if (has_territory && !has_area) {
         LOGGING << "Nonsensical option: Scoring Territory needs Scroing Area. "
-                   "We add Scoring Territory automatically.";
+                   "We add Scoring Territory automatically.\n";
         scoring_set_.emplace_back(kTerritory);
     }
 

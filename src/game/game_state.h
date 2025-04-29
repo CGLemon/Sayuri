@@ -137,9 +137,17 @@ public:
     int IndexToVertex(int idx) const;
     int VertexToIndex(int vtx) const;
 
-    float GetKomiWithPenalty() const;
+    // Return the scoring penalty for black side.
     float GetPenalty() const;
     float GetPenalty(int scoring_rule) const;
+
+    // Return the offset penalty if we want to change the scoring rule in any
+    // time. We hope the final score of new rule is as same as old.
+    float GetPenaltyOffset(int new_scoring_rule, int old_scoring_rule) const;
+
+    // Return komi + black penalty (bonus) points.
+    float GetKomiWithPenalty() const;
+
     float GetKomi() const;
     int GetWinner() const;
     int GetHandicap() const;

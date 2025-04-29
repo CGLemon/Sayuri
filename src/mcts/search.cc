@@ -65,10 +65,10 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
                 currstate.UndoMove();
             }
             const auto komi = currstate.GetKomi();
-            const auto penalty = currstate.GetPenalty(kTerritory) -
-                                     currstate.GetPenalty(kArea);
+            const auto offset = currstate.GetPenaltyOffset(kArea, kTerritory);
+
             currstate.SetRule(kArea);
-            currstate.SetKomi(komi + penalty);
+            currstate.SetKomi(komi + offset);
         }
     }
 
@@ -84,14 +84,14 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
             }
         } else if (last_move != kPass &&
                        currstate.IsSuperko()) {
-            // Prune this superko move.
+            // Prune all superko nodes.
             node->Invalidate();
         } else {
             const bool has_children = node->HasChildren();
 
-            // If we can not expand the node, it means that another thread
-            // is under this node. Skip the simulation stage this time. However,
-            // it still has a chance do PUCT/UCT.
+            // If we cannot expand the node, it means another thread is currently
+            // working on it. In that case, skip the simulation stage for now.
+            // However, the node may still be eligible for PUCT evaluation.
             auto node_evals = NodeEvals{};
             const bool success = node->ExpandChildren(
                 network_, currstate, node_evals, analysis_config_, false);
@@ -872,6 +872,10 @@ bool ShouldForbidPass(GameState &state,
         // Too early to pass.
         return true;
     }
+    if (state.GetScoringRule() == kTerritory) {
+        // Scoring territory accepts for pass in any time.
+        return false;
+    }
 
     if (state.GetScoringRule() == kArea) {
         // We need to capture all dead stones under the Tromp-Taylor rules and
@@ -1143,10 +1147,10 @@ void Search::UpdateTerritoryHelper() {
         }
 
         const auto komi = root_state_.GetKomi();
-        const auto penalty = root_state_.GetPenalty(kTerritory) -
-                                 root_state_.GetPenalty(kArea);
+        const auto offset = root_state_.GetPenaltyOffset(kArea, kTerritory);
+
         root_state_.SetRule(kArea);
-        root_state_.SetKomi(komi + penalty);
+        root_state_.SetKomi(komi + offset);
 
         while (!root_state_.IsGameOver()) {
             auto tag = Search::kNoExploring | Search::kNoBuffer;
