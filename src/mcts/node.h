@@ -232,7 +232,10 @@ public:
     std::string GetPvString(GameState &state);
 
 private:
-    void Recompute(const bool is_root);
+    void RecomputePolicy(Network &network, GameState &state,
+                         NodeEvals &node_evals, const bool is_root);
+    Network::Result GetNetOutput(Network &network, GameState &state, const bool is_root);
+
     float GetDynamicCpuctFactor(Node *node, const int visits, const int parentvisits);
     void ApplyDirichletNoise(const float alpha);
     void ApplyNetOutput(GameState &state,

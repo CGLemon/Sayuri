@@ -49,6 +49,8 @@ public:
     std::string GetName() const;
     size_t GetNumQueries() const;
 
+    PolicyBufferOffset GetDefaultPolicyOffset() const;
+
 private:
     void ActivatePolicy(Network::Result &result, const float temperature) const;
 

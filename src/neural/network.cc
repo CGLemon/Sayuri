@@ -416,6 +416,10 @@ int Network::GetVertexWithPolicy(const GameState &state,
     return select_vtx;
 }
 
+PolicyBufferOffset Network::GetDefaultPolicyOffset() const {
+    return default_policy_offset_;
+}
+
 bool Network::Valid() const {
     if (pipe_) {
         return pipe_->Valid();

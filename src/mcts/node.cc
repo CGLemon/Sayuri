@@ -38,16 +38,9 @@ bool Node::PrepareRootNode(Network &network,
 
     InflateAllChildren();
     if (!success) {
-        // The setting of root policy and children may be different,
-        // like softmax temperature, so we refill the children policy.
-        Recompute(is_root);
-
-        // Fill the evals buffer even if the node is complete. We may
-        // use it later.
-        auto raw_netlist = network.GetOutput(
-            state, Network::kRandom,
-            Network::Query::Get().SetTemperature(param_->root_policy_temp));
-        FillNodeEvalsFromNet(state, raw_netlist, node_evals, state.GetToMove());
+        // Reusing node settings may not reflect what we want, eg. policy temperature,
+        // so we recompute the policy and update it accordingly.
+        RecomputePolicy(network, state, node_evals, is_root);
     }
     if (param_->dirichlet_noise) {
         // Generate the dirichlet noise and gather it.
@@ -86,31 +79,75 @@ void Node::UpdateScoreBonus(GameState &state, NodeEvals &node_evals) {
     }
 }
 
-void Node::Recompute(const bool is_root) {
+void Node::RecomputePolicy(Network &network,
+                           GameState &state,
+                           NodeEvals &node_evals,
+                           const bool is_root) {
     WaitExpanded();
     if (!HasChildren()) {
         return;
     }
 
-    const auto ori_policy_temp = policy_temp_;
-    policy_temp_ = is_root ?
-        param_->root_policy_temp : param_->policy_temp;
-    if (std::abs(ori_policy_temp - policy_temp_) < 1e-4f) {
-        // Temperature is as same as old one.
-        return;
-    }
+    const auto raw_netlist = GetNetOutput(network, state, is_root);
+
+    // Fill the evals buffer even if the node is complete. We may
+    // use it for compute score bonus.
+    FillNodeEvalsFromNet(state, raw_netlist, node_evals, state.GetToMove());
 
     auto buffer = std::vector<float>{};
     for (auto &child : children_) {
-        buffer.emplace_back(child.GetPolicy());
+         const auto vtx = child.GetVertex();
+         if (vtx == kPass) {
+             buffer.emplace_back(raw_netlist.pass_probability);
+         } else {
+             buffer.emplace_back(raw_netlist.probabilities[state.VertexToIndex(vtx)]);
+         }
     }
 
-    buffer = ReSoftmax(buffer, policy_temp_ / ori_policy_temp);
-    int idx = 0;
+    // rescaling policy
+    const auto legal_accumulate =
+        std::accumulate(std::begin(buffer), std::end(buffer), 0.0f);
+    if (legal_accumulate < 1e-8f) {
+        for (auto &p: buffer) {
+            p /= legal_accumulate;
+        }
+    } else {
+        for (auto &p: buffer) {
+            p /= legal_accumulate;
+        }
+    }
+
     // Assume we already inflated all children. Refill the new policy.
+    int idx = 0;
     for (auto &child : children_) {
         child.Get()->SetPolicy(buffer[idx++]);
     }
+}
+
+Network::Result Node::GetNetOutput(Network &network,
+                                   GameState &state,
+                                   const bool is_root) {
+    // Root node policy always normal policy. Therefore, we check whether the current
+    // network is using the default normal policy. If not, certain settings will be
+    // disabled afterward.
+    const auto default_using_normal_policy =
+        network.GetDefaultPolicyOffset() == PolicyBufferOffset::kNormal;
+    const auto policy_offset = is_root ?
+        PolicyBufferOffset::kNormal : PolicyBufferOffset::kDefault;
+
+    // Policy softmax temperature. If 't' is greater than 1, policy
+    // will be broader. If 't' is less than 1, policy will be sharper.
+    policy_temp_ = is_root ?
+        param_->root_policy_temp : param_->policy_temp;
+
+    // The network cache only stores a single policy and does not recognize different
+    // types of policies. Therefore, if the policy used differs from the default one,
+    // the cache should be disabled.
+    const auto query = Network::Query::Get().SetTemperature(policy_temp_).
+                                                 SetCache(!default_using_normal_policy).
+                                                 SetOffset(policy_offset);
+
+    return network.GetOutput(state, Network::kRandom, query);
 }
 
 bool Node::ExpandChildren(Network &network,
@@ -129,13 +166,7 @@ bool Node::ExpandChildren(Network &network,
     color_ = state.GetToMove();
 
     // Get network computation result.
-
-    // Policy softmax temperature. If 't' is greater than 1, policy
-    // will be broader. If 't' is less than 1, policy will be sharper.
-    policy_temp_ = is_root ?
-        param_->root_policy_temp : param_->policy_temp;
-    auto raw_netlist = network.GetOutput(
-        state, Network::kRandom, Network::Query::Get().SetTemperature(policy_temp_));
+    const auto raw_netlist = GetNetOutput(network, state, is_root);
 
     // Store the network reuslt.
     ApplyNetOutput(state, raw_netlist, node_evals, color_);
