@@ -217,7 +217,7 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
     };
 
     use_binary_ = false;
-    version_ = 1;
+    weights_->version = 1;
 
     if (!NotFound(netinfo, "FloatType")) {
         if (netinfo["FloatType"] == "float32bin") {
@@ -226,7 +226,7 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
     }
 
     if (!NotFound(netinfo, "Version")) {
-        version_ = std::stoi(netinfo["Version"]);
+        weights_->version = std::stoi(netinfo["Version"]);
 
         // v1: Base format.
         //
@@ -240,8 +240,25 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
         //     function.
     }
 
-    if (version_ >= 5 || version_ <= 2) {
-        throw "Do not support this version";
+    // if (weights_->version >= 5 || weights_->version <= 2) {
+    //     throw std::runtime_error{"Do not support this version"};
+    // }
+    if (weights_->version >= 5) {
+        throw std::runtime_error{"Do not support this version"};
+    } else if (weights_->version >= 3) {
+        // v4 ~ v3
+        weights_->input_channels = 43;
+        weights_->probabilities_channels = 5;
+        weights_->pass_probability_outputs = 5;
+        weights_->ownership_channels = 1;
+        weights_->value_misc_outputs = 15;
+    } else {
+        // v2 ~ v1
+        weights_->input_channels = 38;
+        weights_->probabilities_channels = 1;
+        weights_->pass_probability_outputs = 1;
+        weights_->ownership_channels = 1;
+        weights_->value_misc_outputs = 1;
     }
 
     if (!NotFound(netinfo, "NNType")) {
@@ -308,7 +325,7 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
 void DNNLoader::DumpInfo() const {
     auto out = std::ostringstream{};
 
-    out << "Network Version: " << version_ << '\n';
+    out << "Network Version: " << weights_->version << '\n';
     out << "Input Channels: " << weights_->input_channels << '\n';
     out << "Residual Blocks: " << weights_->residual_blocks << '\n';
     out << "Residual Channels: " << weights_->residual_channels << '\n';
@@ -541,15 +558,13 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
                             NetStack &netstack,
                             NetStruct &netstruct,
                             std::istream &buffer) const {
-
-    weights_->input_channels = std::stoi(netinfo["InputChannels"]);
     weights_->residual_blocks = std::stoi(netinfo["ResidualBlocks"]);
     weights_->residual_channels = std::stoi(netinfo["ResidualChannels"]);
     weights_->policy_extract_channels = std::stoi(netinfo["PolicyExtract"]);
     weights_->value_extract_channels = std::stoi(netinfo["ValueExtract"]);
 
-    if (weights_->input_channels != kInputChannels) {
-        throw std::runtime_error{"he number of input channels is wrong"};
+    if (weights_->input_channels != std::stoi(netinfo["InputChannels"])) {
+        throw std::runtime_error{"the number of input channels is wrong"};
     }
 
     // There are three types layer. Each layer has
@@ -630,7 +645,7 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
     if (p_ex_conv_shape[2] != 1 || prob_conv_shape[2] != 1) {
         throw std::runtime_error{"the policy convolution kernel size is wrong"};
     }
-    if (prob_conv_shape[1] != kOuputProbabilitiesChannels) {
+    if (prob_conv_shape[1] != weights_->probabilities_channels) {
         throw std::runtime_error{"the number of policy ouput size is wrong"};
     }
     if (p_inter_fc_shape[1] != pass_fc_shape[0] ||
@@ -638,7 +653,7 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
             p_inter_fc_shape[1] != 1 * weights_->policy_extract_channels) {
         throw std::runtime_error{"the number of policy fully connect size is wrong"};
     }
-    if (pass_fc_shape[1] != kOuputPassProbability) {
+    if (pass_fc_shape[1] != weights_->pass_probability_outputs) {
         throw std::runtime_error{"the number of pass ouput size is wrong"};
     }
 
@@ -676,7 +691,7 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
     if (v_ex_conv_shape[2] != 1 || v_os_conv_shape[2] != 1) {
         throw std::runtime_error{"the value convolution kernel size is wrong"};
     }
-    if (v_os_conv_shape[1] != kOuputOwnershipChannels) {
+    if (v_os_conv_shape[1] != weights_->ownership_channels) {
         throw std::runtime_error{"the number of ownership ouput size is wrong"};
     }
     if (v_inter_fc_shape[1] != misc_fc_shape[0] ||
@@ -684,7 +699,7 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
             v_inter_fc_shape[1] != 3 * weights_->value_extract_channels) {
         throw std::runtime_error{"the number of value fully connect size is wrong"};
     }
-    if (misc_fc_shape[1] != kOuputValueMisc) {
+    if (misc_fc_shape[1] != weights_->value_misc_outputs) {
         throw std::runtime_error{"the misc value layer size is wrong."};
     }
 
@@ -835,7 +850,7 @@ void DNNLoader::FillBatchnormLayer(BatchNormLayer &layer,
     layer.LoadMeans(weights);
 
     GetWeightsFromBuffer(weights, buffer);
-    layer.LoadStddevs(weights, version_==1);
+    layer.LoadStddevs(weights, weights_->version==1);
 }
 
 void DNNLoader::FillConvolutionLayer(ConvLayer &layer,

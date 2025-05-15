@@ -420,6 +420,10 @@ PolicyBufferOffset Network::GetDefaultPolicyOffset() const {
     return default_policy_offset_;
 }
 
+int Network::GetVersion() const {
+    return pipe_->GetVersion();
+}
+
 bool Network::Valid() const {
     if (pipe_) {
         return pipe_->Valid();

@@ -55,5 +55,4 @@ private:
                               const int kernel_size) const;
     DNNWeights * weights_;
     bool use_binary_;
-    int version_;
 };

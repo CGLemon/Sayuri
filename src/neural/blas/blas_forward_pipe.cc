@@ -27,7 +27,7 @@ void BlasForwardPipe::InitWinograd() {
     // The input layer.
     weights_->input_conv.GetWeights() =
         WinogradTransformF(weights_->input_conv.GetWeights(),
-                               residual_channels, kInputChannels);
+                               residual_channels, weights_->input_channels);
 
     // The block tower.
     for (auto &block : weights_->tower) {
@@ -272,11 +272,11 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     const auto board_size = inpnts.board_size;
     const auto num_intersections = board_size * board_size;
     const auto residual_channels = weights_->residual_channels;
-    const auto max_channels = std::max({kInputChannels,
+    const auto max_channels = std::max({weights_->input_channels,
                                         tower_peak_channels,
                                         weights_->policy_extract_channels,
                                         weights_->value_extract_channels});
-    const auto plane_size = kInputChannels * num_intersections;
+    const auto plane_size = weights_->input_channels * num_intersections;
     const auto max_intermediates = std::max(weights_->policy_extract_channels,
                                                 weights_->value_extract_channels);
     const auto default_act = weights_->default_act;
@@ -313,21 +313,21 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
                   std::begin(planes));
 
     // Allocate the output buffers.
-    auto output_prob = std::vector<float>(kOuputProbabilitiesChannels * num_intersections);
-    auto output_pass = std::vector<float>(kOuputPassProbability);
-    auto output_ownership = std::vector<float>(kOuputOwnershipChannels * num_intersections);
-    auto output_misc = std::vector<float>(kOuputValueMisc);
+    auto output_prob = std::vector<float>(weights_->probabilities_channels * num_intersections);
+    auto output_pass = std::vector<float>(weights_->pass_probability_outputs);
+    auto output_ownership = std::vector<float>(weights_->ownership_channels * num_intersections);
+    auto output_misc = std::vector<float>(weights_->value_misc_outputs);
 
     // The input Layers.
     if (use_winograd) {
         WinogradConvolution3::Forward(
-            board_size, kInputChannels, residual_channels,
+            board_size, weights_->input_channels, residual_channels,
             planes,
             weights_->input_conv.GetWeights(),
             workspace0, workspace1, conv_out);
     } else {
         Convolution3::Forward(
-            board_size, kInputChannels, residual_channels,
+            board_size, weights_->input_channels, residual_channels,
             planes,
             weights_->input_conv.GetWeights(),
             workspace0, conv_out);
@@ -405,18 +405,18 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
 
     // The policy outs.
     Convolution1::Forward(
-        board_size, policy_extract_channels, kOuputProbabilitiesChannels,
+        board_size, policy_extract_channels, weights_->probabilities_channels,
         policy_conv,
         weights_->prob_conv.GetWeights(),
         workspace0, output_prob);
 
     AddSpatialBiases::Forward(
-        board_size, kOuputProbabilitiesChannels,
+        board_size, weights_->probabilities_channels,
         output_prob,
         weights_->prob_conv.GetBiases(), Activation::kIdentity);
 
     FullyConnect::Forward(
-        policy_extract_channels, kOuputPassProbability,
+        policy_extract_channels, weights_->pass_probability_outputs,
         intermediate,
         weights_->pass_fc.GetWeights(),
         weights_->pass_fc.GetBiases(),
@@ -450,18 +450,18 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
 
     // The value outs.
     Convolution1::Forward(
-        board_size, value_extract_channels, kOuputOwnershipChannels,
+        board_size, value_extract_channels, weights_->ownership_channels,
         value_conv,
         weights_->v_ownership.GetWeights(),
         workspace0, output_ownership);
 
     AddSpatialBiases::Forward(
-        board_size, kOuputOwnershipChannels,
+        board_size, weights_->ownership_channels,
         output_ownership,
         weights_->v_ownership.GetBiases(), Activation::kIdentity);
 
     FullyConnect::Forward(
-        3 * value_extract_channels, kOuputValueMisc,
+        3 * value_extract_channels, weights_->value_misc_outputs,
         intermediate,
         weights_->v_misc.GetWeights(),
         weights_->v_misc.GetBiases(),

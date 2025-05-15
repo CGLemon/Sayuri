@@ -9,10 +9,10 @@
 static constexpr int kInputChannels = 43; // 8 past moves * 3
                                           // 13 binary features
                                           // 6 misc features
-static constexpr int kOuputValueMisc = 15;
-static constexpr int kOuputPassProbability = 5;
-static constexpr int kOuputProbabilitiesChannels = 5;
-static constexpr int kOuputOwnershipChannels = 1;
+// static constexpr int kOuputValueMisc = 15;
+// static constexpr int kOuputPassProbability = 5;
+// static constexpr int kOuputProbabilitiesChannels = 5;
+// static constexpr int kOuputOwnershipChannels = 1;
 
 enum class PolicyBufferOffset : int {
     kNormal = 0,
@@ -116,6 +116,8 @@ public:
     virtual void Destroy() = 0;
 
     inline std::string GetName() const { return weights_ ? weights_->name : "random"; }
+
+    inline int GetVersion() const { return weights_->version; }
 
     std::shared_ptr<DNNWeights> weights_{nullptr};
 };

@@ -50,6 +50,7 @@ public:
     size_t GetNumQueries() const;
 
     PolicyBufferOffset GetDefaultPolicyOffset() const;
+    int GetVersion() const;
 
 private:
     void ActivatePolicy(Network::Result &result, const float temperature) const;

@@ -33,7 +33,7 @@ OutputResult CudaForwardPipe::Forward(const InputData &input) {
     if (should_reorder) {
         // Data board size is not equal to NN board size. We reorder the
         // original inputs data to match the NN input size.
-        for (int c = 0; c < kInputChannels; ++c) {
+        for (int c = 0; c < weights_->input_channels; ++c) {
             int offset_r = c * board_size_ * board_size_; // data order index
             int offset_p = c * planes_bsize * planes_bsize; // NN order index
 
@@ -191,6 +191,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     max_batch_ = max_batch_size;
 
     // Build the graph first.
+    const auto input_channels = weights_->input_channels;
     const auto output_channels = weights_->residual_channels;
     const auto default_act = weights_->default_act;
 
@@ -200,7 +201,7 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         max_batch_,          // max batch size
         board_size_,         // board size
         3,                   // kernel size
-        kInputChannels,      // input channels
+        input_channels,      // input channels
         output_channels,     // output channels
         default_act          // activation
     );
@@ -330,6 +331,8 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
 
     // policy head
     const auto policy_extract_channels = weights_->policy_extract_channels;
+    const auto probabilities_channels = weights_->probabilities_channels;
+    const auto pass_probability_outputs = weights_->pass_probability_outputs;
     graph_->p_ex_conv = cuda::Convolution(
         &handles_,
         max_batch_,              // max batch size
@@ -355,23 +358,25 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     );
     graph_->p_prob = cuda::Convolution(
         &handles_,
-        max_batch_,                  // max batch size
-        board_size_,                 // board size
-        1,                           // kernel size
-        policy_extract_channels,     // input channels
-        kOuputProbabilitiesChannels, // output channels
-        Activation::kIdentity        // activation
+        max_batch_,               // max batch size
+        board_size_,              // board size
+        1,                        // kernel size
+        policy_extract_channels,  // input channels
+        probabilities_channels,   // output channels
+        Activation::kIdentity     // activation
     );
     graph_->p_prob_pass = cuda::FullyConnect(
         &handles_,
         max_batch_,               // max batch size
         policy_extract_channels,  // input sizes
-        kOuputPassProbability,    // outpur size
+        pass_probability_outputs, // outpur size
         Activation::kIdentity     // activation
     );
 
     // value head
     const auto value_extract_channels = weights_->value_extract_channels;
+    const auto ownership_channels = weights_->ownership_channels;
+    const auto value_misc_outputs = weights_->value_misc_outputs;
     graph_->v_ex_conv = cuda::Convolution(
         &handles_,
         max_batch_,               // max batch size
@@ -401,14 +406,14 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
         board_size_,              // board size
         1,                        // kernel size
         value_extract_channels,   // input channels
-        kOuputOwnershipChannels,  // output channels
+        ownership_channels,       // output channels
         Activation::kIdentity     // activation
     );
     graph_->v_misc = cuda::FullyConnect(
         &handles_,
         max_batch_,               // max batch size
         3*value_extract_channels, // input size
-        kOuputValueMisc,          // output size
+        value_misc_outputs,       // output size
         Activation::kIdentity     // relu
     );
 
@@ -511,12 +516,12 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     const size_t factor = max_batch_ * cuda::GetCudaTypeSize(handles_.fp16);
     const size_t num_intersections = board_size_ * board_size_;
 
-    const size_t planes_size = factor * kInputChannels * num_intersections;
+    const size_t planes_size = factor * input_channels * num_intersections;
     const size_t spatia_size = factor * num_intersections;
-    const size_t pol_size = spatia_size * kOuputProbabilitiesChannels;
-    const size_t pass_size = factor * kOuputPassProbability;
-    const size_t val_size = factor * kOuputValueMisc;
-    const size_t ownership_size = spatia_size * kOuputOwnershipChannels;
+    const size_t pol_size = spatia_size * probabilities_channels;
+    const size_t pass_size = factor * pass_probability_outputs;
+    const size_t val_size = factor * value_misc_outputs;
+    const size_t ownership_size = spatia_size * ownership_channels;
 
     const size_t conv_op_size = factor * peak_channels * num_intersections;
 
@@ -651,13 +656,14 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     assert(max_batch_ >= batch_size);
 
     const auto should_apply_mask = ApplyMask(inputs);
+    const auto input_channels = weights_->input_channels;
     const auto num_intersections = board_size_ * board_size_;
-    auto batch_planes = std::vector<float>(batch_size * kInputChannels * num_intersections);
+    auto batch_planes = std::vector<float>(batch_size * input_channels * num_intersections);
 
     for (int b = 0; b < batch_size; ++b) {
         const auto& input = inputs[b];
-        for (int idx = 0; idx < kInputChannels * num_intersections; ++idx) {
-            batch_planes[b * kInputChannels * num_intersections + idx] = input.planes[idx];
+        for (int idx = 0; idx < input_channels * num_intersections; ++idx) {
+            batch_planes[b * input_channels * num_intersections + idx] = input.planes[idx];
         }
     }
 
@@ -839,10 +845,15 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     graph_->v_misc.Forward(
         batch_size, cuda_output_val_, cuda_val_op_[2]);
 
-    auto batch_prob_pass = std::vector<float>(batch_size * kOuputPassProbability);
-    auto batch_prob = std::vector<float>(batch_size * kOuputProbabilitiesChannels * num_intersections);
-    auto batch_ownership = std::vector<float>(batch_size * kOuputOwnershipChannels * num_intersections);
-    auto batch_value_misc = std::vector<float>(batch_size * kOuputValueMisc);
+    const auto probabilities_channels = weights_->probabilities_channels;
+    const auto pass_probability_outputs = weights_->pass_probability_outputs;
+    const auto value_misc_outputs = weights_->value_misc_outputs;
+    const auto ownership_channels = weights_->ownership_channels;
+
+    auto batch_prob_pass = std::vector<float>(batch_size * pass_probability_outputs);
+    auto batch_prob = std::vector<float>(batch_size * probabilities_channels * num_intersections);
+    auto batch_ownership = std::vector<float>(batch_size * ownership_channels * num_intersections);
+    auto batch_value_misc = std::vector<float>(batch_size * value_misc_outputs);
 
     cuda::WaitToFinish(handles_.stream);
 
@@ -871,23 +882,23 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     for (int b = 0; b < batch_size; ++b) {
         auto &output_result = batch_output_result[b];
         const auto &input = inputs[b];
-        int pol_offset = kOuputProbabilitiesChannels * num_intersections;
-        int own_offset = kOuputOwnershipChannels * num_intersections;
+        int pol_offset = probabilities_channels * num_intersections;
+        int own_offset = ownership_channels * num_intersections;
         for (int idx = 0; idx < num_intersections; ++idx) {
             int pol_index = b * pol_offset + (int)input.offset * num_intersections + idx;
             int own_index = b * own_offset + 0 * num_intersections + idx;
             output_result.probabilities[idx] = batch_prob[pol_index];
             output_result.ownership[idx] = batch_ownership[own_index];
         }
-        output_result.pass_probability = batch_prob_pass[b * kOuputPassProbability + 0];
+        output_result.pass_probability = batch_prob_pass[b * pass_probability_outputs + 0];
 
-        output_result.wdl[0] = batch_value_misc[b * kOuputValueMisc + 0];
-        output_result.wdl[1] = batch_value_misc[b * kOuputValueMisc + 1];
-        output_result.wdl[2] = batch_value_misc[b * kOuputValueMisc + 2];
-        output_result.stm_winrate = batch_value_misc[b * kOuputValueMisc + 3];
-        output_result.final_score = batch_value_misc[b * kOuputValueMisc + 8];
-        output_result.q_error = batch_value_misc[b * kOuputValueMisc + 13];
-        output_result.score_error = batch_value_misc[b * kOuputValueMisc + 14];
+        output_result.wdl[0] = batch_value_misc[b * value_misc_outputs + 0];
+        output_result.wdl[1] = batch_value_misc[b * value_misc_outputs + 1];
+        output_result.wdl[2] = batch_value_misc[b * value_misc_outputs + 2];
+        output_result.stm_winrate = batch_value_misc[b * value_misc_outputs + 3];
+        output_result.final_score = batch_value_misc[b * value_misc_outputs + 8];
+        output_result.q_error = batch_value_misc[b * value_misc_outputs + 13];
+        output_result.score_error = batch_value_misc[b * value_misc_outputs + 14];
 
         output_result.offset = input.offset;
         output_result.board_size = input.board_size;

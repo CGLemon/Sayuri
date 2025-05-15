@@ -139,6 +139,8 @@ public:
 class DNNWeights {
 public:
     std::string name;
+    int version{-1};
+
     bool loaded{false};
     bool winograd{false};
     bool winograd_initialized{false};
@@ -149,7 +151,12 @@ public:
     int residual_channels{0};
 
     int policy_extract_channels{0};
+    int probabilities_channels{0};
+    int pass_probability_outputs{0};
+
     int value_extract_channels{0};
+    int ownership_channels{0};
+    int value_misc_outputs{0};
 
     Activation default_act;
 
