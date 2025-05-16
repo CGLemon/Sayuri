@@ -10,14 +10,14 @@ Encoder& Encoder::Get() {
     return encoder;
 }
 
-InputData Encoder::GetInputs(const GameState &state, int symmetry) const {
+InputData Encoder::GetInputs(const GameState &state, const int symmetry, int version) const {
     auto data = InputData{};
 
     data.board_size = state.GetBoardSize();
     data.side_to_move = state.GetToMove();
     data.komi = state.GetKomi();
 
-    auto planes = GetPlanes(state, symmetry);
+    auto planes = GetPlanes(state, symmetry, version);
     auto plane_size = planes.size();
     auto it = std::begin(planes);
 
@@ -27,33 +27,39 @@ InputData Encoder::GetInputs(const GameState &state, int symmetry) const {
     return data;
 }
 
-std::vector<float> Encoder::GetPlanes(const GameState &state, int symmetry) const {
+std::vector<float> Encoder::GetPlanes(const GameState &state, const int symmetry, int version) const {
+    if (version < 0) {
+        // default select last 
+        version = 4;
+    }
+
     auto num_intersections = state.GetNumIntersections();
-    auto plane_size = num_intersections * kPlaneChannels;
+    auto plane_size = num_intersections * GetInputChannels(version);
     auto planes = std::vector<float>(plane_size, 0.f);
     auto it = std::begin(planes);
 
-    EncoderHistoryMove(state, kHistoryMoves, it);
-    it += kHistoryMoves * 3 * num_intersections;
+    EncoderHistoryMove(state, it, version);
+    it += GetHistoryMoves(version) * 3 * num_intersections;
 
-    EncoderFeatures(state, it);
-    it += kNumFeatures * num_intersections;
+    EncoderFeatures(state, it, version);
+    it += GetNumFeatures(version) * num_intersections;
 
     assert(it == std::end(planes));
 
-    SymmetryPlanes(state, planes, symmetry);
+    SymmetryPlanes(state, planes, symmetry, version);
 
     return planes;
 }
 
-std::string Encoder::GetPlanesString(const GameState &state, int symmetry) const {
+std::string Encoder::GetPlanesString(const GameState &state, const int symmetry, int version) const {
     auto out = std::ostringstream{};
-    auto boardsize = state.GetBoardSize();
-    auto num_intersections = state.GetNumIntersections();
+    const auto boardsize = state.GetBoardSize();
+    const auto num_intersections = state.GetNumIntersections();
+    const auto input_channels = GetInputChannels(version);
 
-    auto planes = GetPlanes(state, symmetry);
+    auto planes = GetPlanes(state, symmetry, version);
 
-    for (int p = 0; p < kPlaneChannels; ++p) {
+    for (int p = 0; p < input_channels; ++p) {
         out << "plane: " << (p+1) << std::endl;
         for (int y = 0; y < boardsize; ++y) {
             for (int x = 0; x < boardsize; ++x) {
@@ -71,13 +77,16 @@ std::string Encoder::GetPlanesString(const GameState &state, int symmetry) const
     return out.str();
 }
 
-void Encoder::SymmetryPlanes(const GameState &state, std::vector<float> &planes, int symmetry) const {
-    auto boardsize = state.GetBoardSize();
-    auto num_intersections = state.GetNumIntersections();
+void Encoder::SymmetryPlanes(const GameState &state, std::vector<float> &planes,
+                             const int symmetry, const int version) const {
+    const auto boardsize = state.GetBoardSize();
+    const auto num_intersections = state.GetNumIntersections();
+    const auto input_channels = GetInputChannels(version);
+
     auto buffer = std::vector<float>(num_intersections);
     auto planes_it = std::begin(planes);
 
-    for (int p = 0; p < kPlaneChannels; ++p) {
+    for (int p = 0; p < input_channels; ++p) {
         for (int index = 0; index < num_intersections; ++index) {
             auto symm_index = Symmetry::Get().TransformIndex(boardsize, symmetry, index);
             buffer[index] = planes_it[symm_index];
@@ -124,10 +133,10 @@ void Encoder::FillMove(const Board* board,
 }
 
 void Encoder::EncoderHistoryMove(const GameState &state,
-                                 int counter,
-                                 std::vector<float>::iterator it) const {
+                                 std::vector<float>::iterator it,
+                                 const int version) const {
     auto move_num = state.GetMoveNumber();
-    auto past = std::min(move_num+1, counter);
+    auto past = std::min(move_num+1, GetHistoryMoves(version));
 
     auto num_intersections = state.GetNumIntersections();
 
@@ -167,34 +176,49 @@ void Encoder::FillKoMove(const Board* board,
 void Encoder::FillArea(const Board* board,
                        const int to_move,
                        const int scoring,
-                       std::vector<float>::iterator area_it) const {
-    if (scoring == kTerritory) {
-        return;
-    }
+                       std::vector<float>::iterator area_it,
+                       const int version) const {
+
+
     auto num_intersections = board->GetNumIntersections();
 
-    auto ownership = std::vector<int>(num_intersections, kInvalid);
-    auto safe_area = std::vector<bool>(num_intersections, false);
-    auto virtual_helper = std::vector<int>(num_intersections, kEmpty);
+    if (version == 1 || version == 2) {
+        auto safe_area = std::vector<bool>(num_intersections, false);
+        board->ComputeSafeArea(safe_area, false);
 
-    board->ComputeScoreArea(ownership, kArea, virtual_helper);
-    board->ComputeSafeArea(safe_area, false);
-
-    for (int index = 0; index < num_intersections; ++index) {
-        bool safe = safe_area[index];
-        int owner = ownership[index];
-
-        if (safe) {
-            if (owner == to_move) {
-                area_it[index + 0 * num_intersections] = static_cast<float>(true);
-            } else if (owner == (!to_move)) {
-                area_it[index + 1 * num_intersections] = static_cast<float>(true);
+        for (int index = 0; index < num_intersections; ++index) {
+            if (safe_area[index]) {
+                area_it[index] = static_cast<float>(true);
             }
         }
-        if (owner == to_move) {
-            area_it[index + 2 * num_intersections] = static_cast<float>(true);
-        } else if (owner == (!to_move)) {
-            area_it[index + 3 * num_intersections] = static_cast<float>(true);
+    } else if (version == 3 || version == 4) {
+        if (scoring == kTerritory) {
+            return;
+        }
+
+        auto ownership = std::vector<int>(num_intersections, kInvalid);
+        auto safe_area = std::vector<bool>(num_intersections, false);
+        auto virtual_helper = std::vector<int>(num_intersections, kEmpty);
+
+        board->ComputeScoreArea(ownership, kArea, virtual_helper);
+        board->ComputeSafeArea(safe_area, false);
+
+        for (int index = 0; index < num_intersections; ++index) {
+            bool safe = safe_area[index];
+            int owner = ownership[index];
+
+            if (safe) {
+                if (owner == to_move) {
+                    area_it[index + 0 * num_intersections] = static_cast<float>(true);
+                } else if (owner == (!to_move)) {
+                    area_it[index + 1 * num_intersections] = static_cast<float>(true);
+                }
+            }
+            if (owner == to_move) {
+                area_it[index + 2 * num_intersections] = static_cast<float>(true);
+            } else if (owner == (!to_move)) {
+                area_it[index + 3 * num_intersections] = static_cast<float>(true);
+            }
         }
     }
 }
@@ -246,61 +270,101 @@ void Encoder::FillLadder(const Board* board,
 void Encoder::FillMisc(const Board* board,
                        const int to_move,
                        const int scoring, float wave, float komi,
-                       std::vector<float>::iterator misc_it) const {
+                       std::vector<float>::iterator misc_it,
+                       const int version) const {
     auto num_intersections = board->GetNumIntersections();
 
     if (to_move == kWhite) {
         komi = 0.0f - komi;
     }
+    if (version == 1 || version == 2) {
+        // komi
+        std::fill(misc_it+ 0 * num_intersections,
+                      misc_it+ 1 * num_intersections, komi/20.f);
 
-    // scoring rule
-    float scoring_val = scoring == kArea ? 0.f : 1.f;
-    std::fill(misc_it+ 0 * num_intersections,
-                  misc_it+ 1 * num_intersections, scoring_val);
+        // negative komi
+        std::fill(misc_it+ 1 * num_intersections,
+                      misc_it+ 2 * num_intersections, -komi/20.f);
 
-    // wave
-    std::fill(misc_it+ 1 * num_intersections,
-                  misc_it+ 2 * num_intersections, wave);
+        // number of intersections
+        std::fill(misc_it+ 2 * num_intersections,
+                      misc_it+ 3 * num_intersections, static_cast<float>(num_intersections)/361.f);
 
-    // komi
-    std::fill(misc_it+ 2 * num_intersections,
-                  misc_it+ 3 * num_intersections, komi/20.f);
+        // ones
+        std::fill(misc_it+ 3 * num_intersections,
+                      misc_it+ 4 * num_intersections, static_cast<float>(true));
+    } else if (version == 3 || version == 4) {
+        // scoring rule
+        float scoring_val = scoring == kArea ? 0.f : 1.f;
+        std::fill(misc_it+ 0 * num_intersections,
+                      misc_it+ 1 * num_intersections, scoring_val);
 
-    // negative komi
-    std::fill(misc_it+ 3 * num_intersections,
-                  misc_it+ 4 * num_intersections, -komi/20.f);
+        // wave
+        std::fill(misc_it+ 1 * num_intersections,
+                      misc_it+ 2 * num_intersections, wave);
 
-    // number of intersections
-    std::fill(misc_it+ 4 * num_intersections,
-                  misc_it+ 5 * num_intersections, static_cast<float>(num_intersections)/361.f);
+        // komi
+        std::fill(misc_it+ 2 * num_intersections,
+                      misc_it+ 3 * num_intersections, komi/20.f);
 
-    // ones
-    std::fill(misc_it+ 5 * num_intersections,
-                  misc_it+ 6 * num_intersections, static_cast<float>(true));
+        // negative komi
+        std::fill(misc_it+ 3 * num_intersections,
+                      misc_it+ 4 * num_intersections, -komi/20.f);
+
+        // number of intersections
+        std::fill(misc_it+ 4 * num_intersections,
+                      misc_it+ 5 * num_intersections, static_cast<float>(num_intersections)/361.f);
+
+        // ones
+        std::fill(misc_it+ 5 * num_intersections,
+                      misc_it+ 6 * num_intersections, static_cast<float>(true));
+    }
 }
 
 void Encoder::EncoderFeatures(const GameState &state,
-                              std::vector<float>::iterator it) const {
+                              std::vector<float>::iterator it,
+                              const int version) const {
     auto board = state.GetPastBoard(0);
+    const auto color = state.GetToMove();
+    const auto scoring = state.GetScoringRule();
     const auto shift = board->GetNumIntersections();
 
-    auto ko_it        = it +  0 * shift; // 1p, ko move
-    auto area_it      = it +  1 * shift; // 4p, pass-alive and pass-dead area
-    auto liberties_it = it +  5 * shift; // 4p, strings with 1, 2, 3 and 4 liberties
-    auto ladder_it    = it +  9 * shift; // 4p, ladder features
-    auto misc_it      = it + 13 * shift; // 6p, others
+    if (version == 1 || version == 2) {
+        auto ko_it        = it +  0 * shift; // 1p, ko move
+        auto area_it      = it +  1 * shift; // 1p, pass-alive and pass-dead area
+        auto liberties_it = it +  5 * shift; // 4p, strings with 1, 2, 3 and 4 liberties
+        auto ladder_it    = it +  9 * shift; // 4p, ladder features
+        auto misc_it      = it + 13 * shift; // 4p, others
 
-    auto color = state.GetToMove();
-    auto scoring = state.GetScoringRule();
+        FillKoMove(board.get(), ko_it);
+        FillArea(board.get(), color, scoring, area_it, version);
+        FillLiberties(board.get(), liberties_it);
+        FillLadder(board.get(), ladder_it);
+        FillMisc(board.get(),
+                     color,
+                     scoring,
+                     state.GetWave(),
+                     state.GetKomiWithPenalty(),
+                     misc_it,
+                     version);
 
-    FillKoMove(board.get(), ko_it);
-    FillArea(board.get(), color, scoring, area_it);
-    FillLiberties(board.get(), liberties_it);
-    FillLadder(board.get(), ladder_it);
-    FillMisc(board.get(),
-                 color,
-                 scoring,
-                 state.GetWave(),
-                 state.GetKomiWithPenalty(),
-                 misc_it);
+    } else if (version == 3 || version == 4) {
+        auto ko_it        = it +  0 * shift; // 1p, ko move
+        auto area_it      = it +  1 * shift; // 4p, pass-alive and pass-dead area
+        auto liberties_it = it +  5 * shift; // 4p, strings with 1, 2, 3 and 4 liberties
+        auto ladder_it    = it +  9 * shift; // 4p, ladder features
+        auto misc_it      = it + 13 * shift; // 6p, others
+
+        FillKoMove(board.get(), ko_it);
+        FillArea(board.get(), color, scoring, area_it, version);
+        FillLiberties(board.get(), liberties_it);
+        FillLadder(board.get(), ladder_it);
+        FillMisc(board.get(),
+                     color,
+                     scoring,
+                     state.GetWave(),
+                     state.GetKomiWithPenalty(),
+                     misc_it,
+                     version);
+    }
 }
