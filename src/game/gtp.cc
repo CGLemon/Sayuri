@@ -571,7 +571,9 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         }
 
         if (symmetry <= 8 && symmetry >= 0) {
-            out << GtpSuccess(Encoder::Get().GetPlanesString(agent_->GetState(), symmetry));
+            out << GtpSuccess(
+                Encoder::Get().GetPlanesString(
+                    agent_->GetState(), symmetry, agent_->GetNetwork().GetVersion()));
         } else {
             out << GtpFail("symmetry must be from 0 to 7");
         }

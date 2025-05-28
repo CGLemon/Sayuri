@@ -48,4 +48,11 @@ private:
                            std::vector<float> &residual,
                            std::vector<float> &conv_in,
                            std::vector<float> &conv_out);
+
+    void FillOutputs(const std::vector<float> &output_prob,
+                     const std::vector<float> &output_pass,
+                     const std::vector<float> &output_misc,
+                     const std::vector<float> &output_ownership,
+                     const InputData &inpnts,
+                     OutputResult &output);
 };

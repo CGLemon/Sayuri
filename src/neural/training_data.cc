@@ -27,11 +27,11 @@ void OwnershipStreamOut(std::ostream &out, const std::vector<int> &arr) {
 }
 
 void PlanesStreamOut(std::ostream &out, const std::vector<float> &arr) {
-    const auto planes = Encoder::kPlaneChannels;
+    const auto planes = Encoder::GetInputChannels();
     const auto size = arr.size();
     const auto spatial = size / planes;
     const bool remaining = (spatial % 4 != 0);
-    const auto saved_planes = planes - Encoder::kNumMiscFeatures; // Last 6 channels are not binary features.
+    const auto saved_planes = planes - Encoder::GetNumMiscFeatures(); // Last 6 channels are not binary features.
 
     for (size_t p = 0; p < saved_planes; ++p) {
         for (size_t idx = 0; idx+4 <= spatial; idx+=4) {
@@ -96,7 +96,7 @@ void TrainingData::StreamOut(std::ostream &out) const {
 }
 
 int GetTrainingVersion() {
-    return 2;
+    return Encoder::GetEncoderVersion();
 }
 
 int GetTrainingMode() {

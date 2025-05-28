@@ -6,6 +6,7 @@
 #include "neural/blas/biases.h"
 #include "neural/blas/winograd_convolution3.h"
 #include "neural/winograd_helper.h"
+#include "neural/encoder.h"
 #include "utils/option.h"
 
 #include <algorithm>
@@ -470,31 +471,74 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     // Now copy the result.
     auto result = OutputResult{};
 
-    result.offset = inpnts.offset;
-    result.fp16 = false;
-    result.board_size = board_size;
-    result.komi = inpnts.komi;
-    result.wdl[0] = output_misc[0];
-    result.wdl[1] = output_misc[1];
-    result.wdl[2] = output_misc[2];
-    result.stm_winrate = output_misc[3];
-    result.final_score = output_misc[8];
-    result.q_error = output_misc[13];
-    result.score_error = output_misc[14];
-
-    result.pass_probability = output_pass[0];
-
-    auto pol_it = std::begin(output_prob) +
-                      (int)inpnts.offset * num_intersections;
-    std::copy(
-        pol_it,
-        pol_it + num_intersections,
-        std::begin(result.probabilities));
-    std::copy(std::begin(output_ownership),
-        std::begin(output_ownership) + num_intersections,
-        std::begin(result.ownership));
+    FillOutputs(output_prob,
+                output_pass,
+                output_misc,
+                output_ownership,
+                inpnts, result);
 
     return result;
+}
+
+void BlasForwardPipe::FillOutputs(const std::vector<float> &output_prob,
+                                  const std::vector<float> &output_pass,
+                                  const std::vector<float> &output_misc,
+                                  const std::vector<float> &output_ownership,
+                                  const InputData &inpnts,
+                                  OutputResult &output) {
+    const auto board_size = inpnts.board_size;
+    const auto num_intersections = board_size * board_size;
+    const auto encoder_version = Encoder::GetEncoderVersion(weights_->version); 
+
+    if (encoder_version == 1) {
+        std::copy(
+            std::begin(output_prob),
+            std::begin(output_prob) + num_intersections,
+            std::begin(output.probabilities));
+        output.pass_probability = output_pass[0];
+
+        output.wdl[0]      = output_misc[0];
+        output.wdl[1]      = output_misc[1];
+        output.wdl[2]      = output_misc[2];
+        output.stm_winrate = output_misc[3];
+        output.final_score = output_misc[4];
+        output.q_error     = 0.0f;
+        output.score_error = 0.0f;
+
+        std::copy(std::begin(output_ownership),
+            std::begin(output_ownership) + num_intersections,
+            std::begin(output.ownership));
+
+        output.offset = PolicyBufferOffset::kNormal;
+        output.board_size = board_size;
+        output.komi = inpnts.komi;
+        output.fp16 = false;
+    } else if (encoder_version == 2) {
+        auto pol_it = std::begin(output_prob) +
+                          (int)inpnts.offset * num_intersections;
+        std::copy(
+            pol_it,
+            pol_it + num_intersections,
+            std::begin(output.probabilities));
+        output.pass_probability = output_pass[(int)inpnts.offset];
+
+        output.wdl[0]      = output_misc[0];
+        output.wdl[1]      = output_misc[1];
+        output.wdl[2]      = output_misc[2];
+        output.stm_winrate = output_misc[3];
+        output.final_score = output_misc[8];
+        output.q_error     = output_misc[13];
+        output.score_error = output_misc[14];
+
+        std::copy(std::begin(output_ownership),
+            std::begin(output_ownership) + num_intersections,
+            std::begin(output.ownership));
+
+        output.offset = inpnts.offset;
+        output.board_size = board_size;
+        output.komi = inpnts.komi;
+        output.fp16 = false;
+    }
 }
 
 bool BlasForwardPipe::Valid() {

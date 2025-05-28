@@ -228,7 +228,7 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
     if (!NotFound(netinfo, "Version")) {
         weights_->version = std::stoi(netinfo["Version"]);
 
-        // v1: Base format.
+        // v1: First network structure.
         //
         // v2: Fixed the batch normalize layer weights
         //     format. There are some error in the gammas
@@ -240,9 +240,6 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
         //     function.
     }
 
-    // if (weights_->version >= 5 || weights_->version <= 2) {
-    //     throw std::runtime_error{"Do not support this version"};
-    // }
     if (weights_->version >= 5) {
         throw std::runtime_error{"Do not support this version"};
     } else if (weights_->version >= 3) {
@@ -258,7 +255,7 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
         weights_->probabilities_channels = 1;
         weights_->pass_probability_outputs = 1;
         weights_->ownership_channels = 1;
-        weights_->value_misc_outputs = 1;
+        weights_->value_misc_outputs = 5;
     }
 
     if (!NotFound(netinfo, "NNType")) {

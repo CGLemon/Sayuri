@@ -10,14 +10,16 @@ Encoder& Encoder::Get() {
     return encoder;
 }
 
-InputData Encoder::GetInputs(const GameState &state, const int symmetry, int version) const {
+InputData Encoder::GetInputs(const GameState &state,
+                             const int symmetry,
+                             const int weights_version) const {
     auto data = InputData{};
 
     data.board_size = state.GetBoardSize();
     data.side_to_move = state.GetToMove();
     data.komi = state.GetKomi();
 
-    auto planes = GetPlanes(state, symmetry, version);
+    auto planes = GetPlanes(state, symmetry, weights_version);
     auto plane_size = planes.size();
     auto it = std::begin(planes);
 
@@ -27,38 +29,38 @@ InputData Encoder::GetInputs(const GameState &state, const int symmetry, int ver
     return data;
 }
 
-std::vector<float> Encoder::GetPlanes(const GameState &state, const int symmetry, int version) const {
-    if (version < 0) {
-        // default select last 
-        version = 4;
-    }
+std::vector<float> Encoder::GetPlanes(const GameState &state,
+                                      const int symmetry,
+                                      const int weights_version) const {
 
     auto num_intersections = state.GetNumIntersections();
-    auto plane_size = num_intersections * GetInputChannels(version);
+    auto plane_size = num_intersections * GetInputChannels(weights_version);
     auto planes = std::vector<float>(plane_size, 0.f);
     auto it = std::begin(planes);
 
-    EncoderHistoryMove(state, it, version);
-    it += GetHistoryMoves(version) * 3 * num_intersections;
+    EncoderHistoryMove(state, it, weights_version);
+    it += GetHistoryMoves(weights_version) * 3 * num_intersections;
 
-    EncoderFeatures(state, it, version);
-    it += GetNumFeatures(version) * num_intersections;
+    EncoderFeatures(state, it, weights_version);
+    it += GetNumFeatures(weights_version) * num_intersections;
 
     assert(it == std::end(planes));
 
-    SymmetryPlanes(state, planes, symmetry, version);
+    SymmetryPlanes(state, planes, symmetry, weights_version);
 
     return planes;
 }
 
-std::string Encoder::GetPlanesString(const GameState &state, const int symmetry, int version) const {
+std::string Encoder::GetPlanesString(const GameState &state,
+                                     const int symmetry,
+                                     const int weights_version) const {
     auto out = std::ostringstream{};
     const auto boardsize = state.GetBoardSize();
     const auto num_intersections = state.GetNumIntersections();
-    const auto input_channels = GetInputChannels(version);
+    const auto input_channels = GetInputChannels(weights_version);
 
-    auto planes = GetPlanes(state, symmetry, version);
-
+    auto planes = GetPlanes(state, symmetry, weights_version);
+    out << "encoder version: " << GetEncoderVersion(weights_version) << std::endl;
     for (int p = 0; p < input_channels; ++p) {
         out << "plane: " << (p+1) << std::endl;
         for (int y = 0; y < boardsize; ++y) {
@@ -78,10 +80,10 @@ std::string Encoder::GetPlanesString(const GameState &state, const int symmetry,
 }
 
 void Encoder::SymmetryPlanes(const GameState &state, std::vector<float> &planes,
-                             const int symmetry, const int version) const {
+                             const int symmetry, const int weights_version) const {
     const auto boardsize = state.GetBoardSize();
     const auto num_intersections = state.GetNumIntersections();
-    const auto input_channels = GetInputChannels(version);
+    const auto input_channels = GetInputChannels(weights_version);
 
     auto buffer = std::vector<float>(num_intersections);
     auto planes_it = std::begin(planes);
@@ -116,9 +118,9 @@ void Encoder::FillColorStones(const Board* board,
 
 void Encoder::FillMove(const Board* board,
                        std::vector<float>::iterator move_it) const {
-    auto num_intersections = board->GetNumIntersections();
+    const auto num_intersections = board->GetNumIntersections();
+    const auto last_move = board->GetLastMove();
 
-    auto last_move = board->GetLastMove();
     if (last_move == kNullVertex || last_move == kPass || last_move == kResign) {
         return;
     } else {
@@ -134,9 +136,9 @@ void Encoder::FillMove(const Board* board,
 
 void Encoder::EncoderHistoryMove(const GameState &state,
                                  std::vector<float>::iterator it,
-                                 const int version) const {
+                                 const int weights_version) const {
     auto move_num = state.GetMoveNumber();
-    auto past = std::min(move_num+1, GetHistoryMoves(version));
+    auto past = std::min(move_num+1, GetHistoryMoves(weights_version));
 
     auto num_intersections = state.GetNumIntersections();
 
@@ -177,12 +179,11 @@ void Encoder::FillArea(const Board* board,
                        const int to_move,
                        const int scoring,
                        std::vector<float>::iterator area_it,
-                       const int version) const {
+                       const int weights_version) const {
+    const auto num_intersections = board->GetNumIntersections();
+    const auto encoder_version = GetEncoderVersion(weights_version);
 
-
-    auto num_intersections = board->GetNumIntersections();
-
-    if (version == 1 || version == 2) {
+    if (encoder_version == 1) {
         auto safe_area = std::vector<bool>(num_intersections, false);
         board->ComputeSafeArea(safe_area, false);
 
@@ -191,7 +192,7 @@ void Encoder::FillArea(const Board* board,
                 area_it[index] = static_cast<float>(true);
             }
         }
-    } else if (version == 3 || version == 4) {
+    } else if (encoder_version == 2) {
         if (scoring == kTerritory) {
             return;
         }
@@ -225,7 +226,7 @@ void Encoder::FillArea(const Board* board,
 
 void Encoder::FillLiberties(const Board* board,
                             std::vector<float>::iterator liberties_it) const {
-    auto num_intersections = board->GetNumIntersections();
+    const auto num_intersections = board->GetNumIntersections();
 
     for (int index = 0; index < num_intersections; ++index) {
         auto vtx = board->IndexToVertex(index);
@@ -249,8 +250,8 @@ void Encoder::FillLiberties(const Board* board,
 
 void Encoder::FillLadder(const Board* board,
                          std::vector<float>::iterator ladder_it) const {
-    auto num_intersections = board->GetNumIntersections();
-    auto ladders = board->GetLadderMap();
+    const auto num_intersections = board->GetNumIntersections();
+    const auto ladders = board->GetLadderMap();
 
     for (int index = 0; index < num_intersections; ++index) {
         auto ladder = ladders[index];
@@ -271,13 +272,14 @@ void Encoder::FillMisc(const Board* board,
                        const int to_move,
                        const int scoring, float wave, float komi,
                        std::vector<float>::iterator misc_it,
-                       const int version) const {
-    auto num_intersections = board->GetNumIntersections();
+                       const int weights_version) const {
+    const auto num_intersections = board->GetNumIntersections();
+    const auto encoder_version = GetEncoderVersion(weights_version);
 
     if (to_move == kWhite) {
         komi = 0.0f - komi;
     }
-    if (version == 1 || version == 2) {
+    if (encoder_version == 1) {
         // komi
         std::fill(misc_it+ 0 * num_intersections,
                       misc_it+ 1 * num_intersections, komi/20.f);
@@ -293,7 +295,7 @@ void Encoder::FillMisc(const Board* board,
         // ones
         std::fill(misc_it+ 3 * num_intersections,
                       misc_it+ 4 * num_intersections, static_cast<float>(true));
-    } else if (version == 3 || version == 4) {
+    } else if (encoder_version == 2) {
         // scoring rule
         float scoring_val = scoring == kArea ? 0.f : 1.f;
         std::fill(misc_it+ 0 * num_intersections,
@@ -323,21 +325,22 @@ void Encoder::FillMisc(const Board* board,
 
 void Encoder::EncoderFeatures(const GameState &state,
                               std::vector<float>::iterator it,
-                              const int version) const {
+                              const int weights_version) const {
     auto board = state.GetPastBoard(0);
     const auto color = state.GetToMove();
     const auto scoring = state.GetScoringRule();
     const auto shift = board->GetNumIntersections();
+    const auto encoder_version = GetEncoderVersion(weights_version);
 
-    if (version == 1 || version == 2) {
+    if (encoder_version == 1) {
         auto ko_it        = it +  0 * shift; // 1p, ko move
         auto area_it      = it +  1 * shift; // 1p, pass-alive and pass-dead area
-        auto liberties_it = it +  5 * shift; // 4p, strings with 1, 2, 3 and 4 liberties
-        auto ladder_it    = it +  9 * shift; // 4p, ladder features
-        auto misc_it      = it + 13 * shift; // 4p, others
+        auto liberties_it = it +  2 * shift; // 4p, strings with 1, 2, 3 and 4 liberties
+        auto ladder_it    = it +  6 * shift; // 4p, ladder features
+        auto misc_it      = it + 10 * shift; // 4p, others
 
         FillKoMove(board.get(), ko_it);
-        FillArea(board.get(), color, scoring, area_it, version);
+        FillArea(board.get(), color, scoring, area_it, weights_version);
         FillLiberties(board.get(), liberties_it);
         FillLadder(board.get(), ladder_it);
         FillMisc(board.get(),
@@ -346,9 +349,9 @@ void Encoder::EncoderFeatures(const GameState &state,
                      state.GetWave(),
                      state.GetKomiWithPenalty(),
                      misc_it,
-                     version);
+                     weights_version);
 
-    } else if (version == 3 || version == 4) {
+    } else if (encoder_version == 2) {
         auto ko_it        = it +  0 * shift; // 1p, ko move
         auto area_it      = it +  1 * shift; // 4p, pass-alive and pass-dead area
         auto liberties_it = it +  5 * shift; // 4p, strings with 1, 2, 3 and 4 liberties
@@ -356,7 +359,7 @@ void Encoder::EncoderFeatures(const GameState &state,
         auto misc_it      = it + 13 * shift; // 6p, others
 
         FillKoMove(board.get(), ko_it);
-        FillArea(board.get(), color, scoring, area_it, version);
+        FillArea(board.get(), color, scoring, area_it, weights_version);
         FillLiberties(board.get(), liberties_it);
         FillLadder(board.get(), ladder_it);
         FillMisc(board.get(),
@@ -365,6 +368,6 @@ void Encoder::EncoderFeatures(const GameState &state,
                      state.GetWave(),
                      state.GetKomiWithPenalty(),
                      misc_it,
-                     version);
+                     weights_version);
     }
 }

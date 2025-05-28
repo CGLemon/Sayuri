@@ -86,6 +86,13 @@ private:
 
         bool ApplyMask(const std::vector<InputData> &input);
 
+        void FillOutputs(const std::vector<float> &batch_prob,
+                         const std::vector<float> &batch_prob_pass,
+                         const std::vector<float> &batch_value_misc,
+                         const std::vector<float> &batch_ownership,
+                         const std::vector<InputData> &batch_input,
+                         std::vector<OutputResult> &batch_output_result);
+
         cuda::CudaHandles handles_;
 
         int board_size_{0};

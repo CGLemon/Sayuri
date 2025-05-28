@@ -6,6 +6,7 @@
 #include "config.h"
 #include "neural/cuda/cuda_forward_pipe.h"
 #include "neural/cuda/cuda_kernels.h"
+#include "neural/encoder.h"
 #include "utils/log.h"
 #include "utils/format.h"
 #include "utils/option.h"
@@ -596,8 +597,8 @@ void CudaForwardPipe::NNGraph::SetComputationMode(cuda::CudaHandles *handles) {
     }
 }
 
-bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData> &inputs) {
-    const int batch_size = inputs.size();
+bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData> &batch_input) {
+    const int batch_size = batch_input.size();
     if (batch_size == 0) {
         return false;
     }
@@ -606,7 +607,7 @@ bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData> &inputs) {
     bool should_apply_mask = false;
 
     for (int b = 0; b < batch_size; ++b) {
-        if (board_size_ != inputs[b].board_size) {
+        if (board_size_ != batch_input[b].board_size) {
             should_apply_mask = true;
             break;
         }
@@ -620,7 +621,7 @@ bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData> &inputs) {
         auto sqrt_mask = std::vector<float>(batch_size);
 
         for (int b = 0; b < batch_size; ++b) {
-            const int planes_bsize = inputs[b].board_size;
+            const int planes_bsize = batch_input[b].board_size;
             for (int idx = 0; idx < num_intersections; ++idx) {
                 const int x = idx % board_size_;
                 const int y = idx / board_size_;
@@ -650,18 +651,18 @@ bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData> &inputs) {
     return should_apply_mask;
 }
 
-std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vector<InputData> &inputs) {
-    const auto batch_size = (int)inputs.size();
+std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vector<InputData> &batch_input) {
+    const auto batch_size = (int)batch_input.size();
 
     assert(max_batch_ >= batch_size);
 
-    const auto should_apply_mask = ApplyMask(inputs);
+    const auto should_apply_mask = ApplyMask(batch_input);
     const auto input_channels = weights_->input_channels;
     const auto num_intersections = board_size_ * board_size_;
     auto batch_planes = std::vector<float>(batch_size * input_channels * num_intersections);
 
     for (int b = 0; b < batch_size; ++b) {
-        const auto& input = inputs[b];
+        const auto& input = batch_input[b];
         for (int idx = 0; idx < input_channels * num_intersections; ++idx) {
             batch_planes[b * input_channels * num_intersections + idx] = input.planes[idx];
         }
@@ -850,10 +851,10 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     const auto value_misc_outputs = weights_->value_misc_outputs;
     const auto ownership_channels = weights_->ownership_channels;
 
-    auto batch_prob_pass = std::vector<float>(batch_size * pass_probability_outputs);
     auto batch_prob = std::vector<float>(batch_size * probabilities_channels * num_intersections);
-    auto batch_ownership = std::vector<float>(batch_size * ownership_channels * num_intersections);
+    auto batch_prob_pass = std::vector<float>(batch_size * pass_probability_outputs);
     auto batch_value_misc = std::vector<float>(batch_size * value_misc_outputs);
+    auto batch_ownership = std::vector<float>(batch_size * ownership_channels * num_intersections);
 
     cuda::WaitToFinish(handles_.stream);
 
@@ -879,34 +880,84 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
     auto batch_output_result = std::vector<OutputResult>(batch_size);
 
-    for (int b = 0; b < batch_size; ++b) {
-        auto &output_result = batch_output_result[b];
-        const auto &input = inputs[b];
-        int pol_offset = probabilities_channels * num_intersections;
-        int own_offset = ownership_channels * num_intersections;
-        for (int idx = 0; idx < num_intersections; ++idx) {
-            int pol_index = b * pol_offset + (int)input.offset * num_intersections + idx;
-            int own_index = b * own_offset + 0 * num_intersections + idx;
-            output_result.probabilities[idx] = batch_prob[pol_index];
-            output_result.ownership[idx] = batch_ownership[own_index];
-        }
-        output_result.pass_probability = batch_prob_pass[b * pass_probability_outputs + 0];
-
-        output_result.wdl[0] = batch_value_misc[b * value_misc_outputs + 0];
-        output_result.wdl[1] = batch_value_misc[b * value_misc_outputs + 1];
-        output_result.wdl[2] = batch_value_misc[b * value_misc_outputs + 2];
-        output_result.stm_winrate = batch_value_misc[b * value_misc_outputs + 3];
-        output_result.final_score = batch_value_misc[b * value_misc_outputs + 8];
-        output_result.q_error = batch_value_misc[b * value_misc_outputs + 13];
-        output_result.score_error = batch_value_misc[b * value_misc_outputs + 14];
-
-        output_result.offset = input.offset;
-        output_result.board_size = input.board_size;
-        output_result.komi = input.komi;
-        output_result.fp16 = handles_.fp16;
-    }
-
+    FillOutputs(batch_prob,
+                batch_prob_pass,
+                batch_value_misc,
+                batch_ownership,
+                batch_input,
+                batch_output_result);
     return batch_output_result;
+}
+
+void CudaForwardPipe::NNGraph::FillOutputs(const std::vector<float> &batch_prob,
+                                           const std::vector<float> &batch_prob_pass,
+                                           const std::vector<float> &batch_value_misc,
+                                           const std::vector<float> &batch_ownership,
+                                           const std::vector<InputData> &batch_input,
+                                           std::vector<OutputResult> &batch_output_result) {
+    const int batch_size = batch_output_result.size();
+    const auto num_intersections = board_size_ * board_size_;
+    const auto encoder_version = Encoder::GetEncoderVersion(weights_->version); 
+    const auto probabilities_channels = weights_->probabilities_channels;
+    const auto pass_probability_outputs = weights_->pass_probability_outputs;
+    const auto value_misc_outputs = weights_->value_misc_outputs;
+    const auto ownership_channels = weights_->ownership_channels;
+
+    if (encoder_version == 1) {
+        for (int b = 0; b < batch_size; ++b) {
+            auto &output_result = batch_output_result[b];
+            const auto &input = batch_input[b];
+            const int pol_offset = probabilities_channels * num_intersections;
+            const int own_offset = ownership_channels * num_intersections;
+            for (int idx = 0; idx < num_intersections; ++idx) {
+                int pol_index = b * pol_offset + (int)PolicyBufferOffset::kNormal * num_intersections + idx;
+                int own_index = b * own_offset + 0 * num_intersections + idx;
+                output_result.probabilities[idx] = batch_prob[pol_index];
+                output_result.ownership[idx] = batch_ownership[own_index];
+            }
+            output_result.pass_probability = batch_prob_pass[b * pass_probability_outputs + 0];
+
+            output_result.wdl[0]      = batch_value_misc[b * value_misc_outputs + 0];
+            output_result.wdl[1]      = batch_value_misc[b * value_misc_outputs + 1];
+            output_result.wdl[2]      = batch_value_misc[b * value_misc_outputs + 2];
+            output_result.stm_winrate = batch_value_misc[b * value_misc_outputs + 3];
+            output_result.final_score = batch_value_misc[b * value_misc_outputs + 4];
+            output_result.q_error     = 0.0f;
+            output_result.score_error = 0.0f;
+
+            output_result.offset = PolicyBufferOffset::kNormal;
+            output_result.board_size = input.board_size;
+            output_result.komi = input.komi;
+            output_result.fp16 = handles_.fp16;
+        }
+    } else if (encoder_version == 2) {
+        for (int b = 0; b < batch_size; ++b) {
+            auto &output_result = batch_output_result[b];
+            const auto &input = batch_input[b];
+            const int pol_offset = probabilities_channels * num_intersections;
+            const int own_offset = ownership_channels * num_intersections;
+            for (int idx = 0; idx < num_intersections; ++idx) {
+                int pol_index = b * pol_offset + (int)input.offset * num_intersections + idx;
+                int own_index = b * own_offset + 0 * num_intersections + idx;
+                output_result.probabilities[idx] = batch_prob[pol_index];
+                output_result.ownership[idx] = batch_ownership[own_index];
+            }
+            output_result.pass_probability = batch_prob_pass[b * pass_probability_outputs + 0];
+
+            output_result.wdl[0]      = batch_value_misc[b * value_misc_outputs + 0];
+            output_result.wdl[1]      = batch_value_misc[b * value_misc_outputs + 1];
+            output_result.wdl[2]      = batch_value_misc[b * value_misc_outputs + 2];
+            output_result.stm_winrate = batch_value_misc[b * value_misc_outputs + 3];
+            output_result.final_score = batch_value_misc[b * value_misc_outputs + 8];
+            output_result.q_error     = batch_value_misc[b * value_misc_outputs + 13];
+            output_result.score_error = batch_value_misc[b * value_misc_outputs + 14];
+
+            output_result.offset = input.offset;
+            output_result.board_size = input.board_size;
+            output_result.komi = input.komi;
+            output_result.fp16 = handles_.fp16;
+        }
+    }
 }
 
 void CudaForwardPipe::NNGraph::DestroyGraph() {

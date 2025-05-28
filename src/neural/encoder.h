@@ -9,24 +9,18 @@
 
 class Encoder {
 public:
-    static constexpr int kPlaneChannels = kInputChannels;
-    static constexpr int kHistoryMoves = 8;
-    static constexpr int kNumBinaryFeatures = 13;
-    static constexpr int kNumMiscFeatures = 6;
-    static constexpr int kNumFeatures = kNumBinaryFeatures + kNumMiscFeatures;
-
     static Encoder& Get();
 
     // Get the Network input datas.
     InputData GetInputs(const GameState &state,
                         const int symmetry = Symmetry::kIdentitySymmetry,
-                        int version = -1) const;
+                        const int weights_version = -1) const;
 
     /*
      *
      * Get the Network input planes.
      *
-     * v1~v2:
+     * v1~v2 weights -> v1 encoder:
      * planes 1 -24 : last 8 history moves, for each three planes
      *                    1. current player's stones on board
      *                    2. opponent player's stones on board
@@ -41,7 +35,7 @@ public:
      * plane     38 : fill ones
      *
      *
-     * v3~v4
+     * v3~v4 weights -> v2 encoder:
      * planes 1 -24 : last 8 history moves, for each three planes
      *                    1. current player's stones on board
      *                    2. opponent player's stones on board
@@ -60,39 +54,60 @@ public:
      */
     std::vector<float> GetPlanes(const GameState &state,
                                  const int symmetry = Symmetry::kIdentitySymmetry,
-                                 int version = -1) const;
+                                 const int weights_version = -1) const;
 
     std::string GetPlanesString(const GameState &state,
                                 const int symmetry = Symmetry::kIdentitySymmetry,
-                                int version = -1) const;
+                                const int weights_version = -1) const;
 
-    constexpr static int GetInputChannels(const int version = -1) {
-        if (version == 1 || version == 2) {
-            return 38;
-        }
-        if (version == 3 || version == 4) {
-            return 43;
+    constexpr static int GetEncoderVersion(const int weights_version = -1) {
+        switch (weights_version) {
+            case 1: 
+            case 2: return 1;
+            case 3: 
+            case 4: return 2;
+            default: break;
+        };
+        return 2;
+    }
+    constexpr static int GetHistoryMoves(const int weights_version = - 1) {
+        const int encoder_version = GetEncoderVersion(weights_version);
+        if (encoder_version == 1 || encoder_version == 2) {
+            return 8;
         }
         return 0;
     }
-    constexpr static int GetHistoryMoves(const int version) {
-        (void) version;
-        return 8;
-    }
-    constexpr static int GetNumFeatures(const int version) {
-        if (version == 1 || version == 2) {
-            return 14;
+    constexpr static int GetNumBinaryFeatures(const int weights_version = - 1) {
+        const int encoder_version = GetEncoderVersion(weights_version);
+        if (encoder_version == 1) {
+            return 10;
         }
-        if (version == 3 || version == 4) {
-            return 19;
+        if (encoder_version == 2) {
+            return 13;
         }
         return 0;
+    }
+    constexpr static int GetNumMiscFeatures(const int weights_version = - 1) {
+        const int encoder_version = GetEncoderVersion(weights_version);
+        if (encoder_version == 1) {
+            return 4;
+        }
+        if (encoder_version == 2) {
+            return 6;
+        }
+        return 0;
+    }
+    constexpr static int GetNumFeatures(const int weights_version = - 1) {
+        return GetNumBinaryFeatures(weights_version) + GetNumMiscFeatures(weights_version);
+    }
+    constexpr static int GetInputChannels(const int weights_version = -1) {
+        return 3 * GetHistoryMoves(weights_version) + GetNumFeatures(weights_version);
     }
 
 
 private:
     void SymmetryPlanes(const GameState &state, std::vector<float> &planes,
-                        const int symmetry, const int version) const;
+                        const int symmetry, const int weights_version) const;
 
     void FillColorStones(const Board* board,
                          std::vector<float>::iterator black_it,
@@ -103,7 +118,7 @@ private:
 
     void EncoderHistoryMove(const GameState &state,
                             std::vector<float>::iterator it,
-                            const int version) const;
+                            const int weights_version) const;
 
     void FillKoMove(const Board* board,
                     std::vector<float>::iterator ko_it) const;
@@ -112,7 +127,7 @@ private:
                   const int to_move,
                   const int scoring,
                   std::vector<float>::iterator area_it,
-                  const int version) const;
+                  const int weights_version) const;
 
     void FillLiberties(const Board* board,
                        std::vector<float>::iterator liberties_it) const;
@@ -124,9 +139,9 @@ private:
                   const int to_move,
                   const int scoring, float wave, float komi,
                   std::vector<float>::iterator misc_it,
-                  const int version) const;
+                  const int weights_version) const;
 
     void EncoderFeatures(const GameState &state,
                          std::vector<float>::iterator it,
-                         const int version) const;
+                         const int weights_version) const;
 };

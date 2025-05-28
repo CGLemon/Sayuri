@@ -154,7 +154,7 @@ Network::Result Network::GetOutputInternal(const GameState &state,
                                           const int symmetry,
                                           PolicyBufferOffset offset) {
     // gather input features with symmetry
-    auto inputs = Encoder::Get().GetInputs(state, symmetry);
+    auto inputs = Encoder::Get().GetInputs(state, symmetry, GetVersion());
     if (offset == PolicyBufferOffset::kDefault) {
         inputs.offset = default_policy_offset_;
     } else {
