@@ -36,10 +36,13 @@ private:
 
     class NNGraph {
         struct Block {
+            // TODO: Use list to store all conv.
             cuda::DepthwiseConvolution dw_conv;
             cuda::Convolution pre_btl_conv;
             cuda::Convolution conv1;
             cuda::Convolution conv2;
+            cuda::Convolution conv3;
+            cuda::Convolution conv4;
             cuda::Convolution post_btl_conv;
             cuda::SEUnit se_module;
         };
@@ -52,7 +55,9 @@ private:
             std::vector<NNGraph::Block> tower;
 
             // policy head
-            cuda::Convolution p_ex_conv;
+            cuda::Convolution p_hd_conv;
+            cuda::DepthwiseConvolution p_dw_conv;
+            cuda::Convolution p_pt_conv;
             cuda::GlobalPooling p_pool;
             cuda::FullyConnect p_inter;
 
@@ -60,7 +65,7 @@ private:
             cuda::FullyConnect p_prob_pass;
 
             // value head
-            cuda::Convolution v_ex_conv;
+            cuda::Convolution v_hd_conv;
             cuda::GlobalPooling v_pool;
             cuda::FullyConnect v_inter;
 

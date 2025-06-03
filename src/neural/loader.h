@@ -24,7 +24,7 @@ private:
     void ParseInfo(NetInfo &netinfo, std::istream &buffer) const;
     void ParseStack(NetStack &netstack, std::istream &buffer) const;
     void ParseStruct(NetStruct &netstruct, std::istream &buffer) const;
-    void CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstruct);
+    void CheckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstruct);
     void DumpInfo() const;
 
     void FillWeights(NetInfo &netinfo,

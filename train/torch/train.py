@@ -530,7 +530,7 @@ class TrainingPipe():
 
     def _get_current_info(self, speed, running_loss_dict):
         info = str()
-        info += "[steps: {}, samples: {}. speed: {:.2f}, learning rate: {}, batch size: {}] ->".format(
+        info += "[steps: {}, samples: {}, speed: {:.2f}, learning rate: {}, batch size: {}] ->".format(
                     self.current_steps,
                     self.current_samples,
                     speed,

@@ -117,7 +117,7 @@ void DNNLoader::Parse(std::istream &buffer) {
             // do nothing...
         }
     }
-    CkeckMisc(netinfo, netstack, netstruct);
+    CheckMisc(netinfo, netstack, netstruct);
 
     // Now start to parse the weights.
     FillWeights(netinfo, netstack, netstruct, buffer);
@@ -134,26 +134,6 @@ void DNNLoader::ParseInfo(NetInfo &netinfo, std::istream &buffer) const {
         }
         netinfo.emplace(spt.GetWord(0)->Get<>(),
                             spt.GetWord(1)->Get<>());
-    }
-
-    const auto NotFound = [](NetInfo &netinfo, std::string target) -> bool {
-        return std::end(netinfo) == netinfo.find(target);
-    };
-
-    if (NotFound(netinfo, "InputChannels")) {
-        throw std::runtime_error{"InputChannels must be provided"};
-    }
-    if (NotFound(netinfo, "ResidualBlocks")) {
-        throw std::runtime_error{"ResidualBlocks must be provided"};
-    }
-    if (NotFound(netinfo, "ResidualChannels")) {
-        throw std::runtime_error{"ResidualChannels must be provided"};
-    }
-    if (NotFound(netinfo, "PolicyExtract")) {
-        throw std::runtime_error{"PolicyExtract must be provided"};
-    }
-    if (NotFound(netinfo, "ValueExtract")) {
-        throw std::runtime_error{"ValueExtract must be provided"};
     }
 }
 
@@ -211,7 +191,7 @@ void DNNLoader::ParseStruct(NetStruct &netstruct, std::istream &buffer) const {
     }
 }
 
-void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstruct) {
+void DNNLoader::CheckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstruct) {
     const auto NotFound = [](NetInfo &netinfo, std::string target) -> bool {
         return std::end(netinfo) == netinfo.find(target);
     };
@@ -238,12 +218,14 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
         //
         // v4: Add support for MixerBlock and more activation
         //     function.
+        //
+        // v5: On going...
     }
 
-    if (weights_->version >= 5) {
-        throw std::runtime_error{"Do not support this version"};
+    if (weights_->version >= 6) {
+        throw std::runtime_error{"do not support this version"};
     } else if (weights_->version >= 3) {
-        // v4 ~ v3
+        // v5 ~ v3
         weights_->input_channels = 43;
         weights_->probabilities_channels = 5;
         weights_->pass_probability_outputs = 5;
@@ -260,6 +242,22 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
 
     if (!NotFound(netinfo, "NNType")) {
         // Not used.
+    }
+
+    if (NotFound(netinfo, "PolicyHeadType")) {
+        weights_->policy_head_type = PolicyHeadType::kNormal;
+    } else {
+        auto policy_head_type = netinfo["PolicyHeadType"];
+        for (char &c: policy_head_type) {
+            c = std::tolower(c);
+        }
+        if (policy_head_type == "normal") {
+            weights_->policy_head_type = PolicyHeadType::kNormal;
+        } else if (policy_head_type == "replk") {
+            weights_->policy_head_type = PolicyHeadType::kRepLK;
+        } else {
+            throw std::runtime_error{"unknown policy head type"};
+        }
     }
 
     if (NotFound(netinfo, "ActivationFunction")) {
@@ -295,6 +293,15 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
         }
     }
 
+    const auto supported_components = std::vector<std::string>{
+        "ResidualBlock",
+        "BottleneckBlock",
+        "NestedBottleneckBlock",
+        "MixerBlock",
+        "SE",
+        "FixUp"
+    };
+
     for (auto &block_type : netstack) {
         for (auto &c: block_type) {
             if (c == '-') {
@@ -304,14 +311,11 @@ void DNNLoader::CkeckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
         const auto spt = Splitter(block_type);
         for (int i = 0; i < (int)spt.GetCount(); ++i) {
             const auto component = spt.GetWord(i)->Get<>();
+            const auto it = std::find(
+                std::begin(supported_components),
+                std::end(supported_components), component);
 
-            if (component == "ResidualBlock" ||
-                    component == "BottleneckBlock" ||
-                    component == "MixerBlock" ||
-                    component == "SE" ||
-                    component == "FixUp") {
-                // do nothing...
-            } else {
+            if (it == std::end(supported_components)) {
                 throw std::runtime_error{
                           Format("do not support this block type [%s]", block_type.c_str())};
             }
@@ -335,6 +339,8 @@ void DNNLoader::DumpInfo() const {
             out << "ResidualBlock";
         } else if (tower_ptr->IsBottleneckBlock()) {
             out << "BottleneckBlock";
+        } else if (tower_ptr->IsNestedBottleneckBlock()) {
+            out << "NestedBottleneckBlock";
         } else if (tower_ptr->IsMixerBlock()) {
             out << "MixerBlock";
         } else {
@@ -346,8 +352,8 @@ void DNNLoader::DumpInfo() const {
         out << '\n';
     }
 
-    out << "Policy Head Channels: " << weights_->policy_extract_channels << '\n';
-    out << "Value Head Channels: " << weights_->value_extract_channels << '\n';
+    out << "Policy Head Channels: " << weights_->policy_head_channels << '\n';
+    out << "Value Head Channels: " << weights_->value_head_channels << '\n';
 
     LOGGING << out.str();
 }
@@ -368,10 +374,12 @@ int DNNLoader::FillBlock(int offset,
         weights_->tower.emplace_back(std::make_unique<ResidualBlock>());
     } else if (SplitterFound(block_spt, "BottleneckBlock")) {
         weights_->tower.emplace_back(std::make_unique<BottleneckBlock>());
+    } else if (SplitterFound(block_spt, "NestedBottleneckBlock")) {
+        weights_->tower.emplace_back(std::make_unique<NestedBottleneckBlock>());
     } else if (SplitterFound(block_spt, "MixerBlock")) {
         weights_->tower.emplace_back(std::make_unique<MixerBlock>());
     } else {
-        throw std::runtime_error{"need the ResidualBlock, BottleneckBlock or MixerBlock"};
+        throw std::runtime_error{"need the ResidualBlock, BottleneckBlock, NestedBottleneckBlock or MixerBlock"};
     }
     auto tower_ptr = std::rbegin(weights_->tower)->get();
     tower_ptr->apply_se = SplitterFound(block_spt, "SE");
@@ -388,16 +396,14 @@ int DNNLoader::FillBlock(int offset,
         const auto res_bn1_shape = netstruct[offset++];
         FillConvolutionLayer(tower_ptr->conv1, buffer,
             res_conv1_shape[0], res_conv1_shape[1], res_conv1_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn1, buffer,
-            res_bn1_shape[0]);
+        FillBatchnormLayer(tower_ptr->bn1, buffer, res_bn1_shape[0]);
 
         // 2nd layers.
         const auto res_conv2_shape = netstruct[offset++];
         const auto res_bn2_shape = netstruct[offset++];
         FillConvolutionLayer(tower_ptr->conv2, buffer,
             res_conv2_shape[0], res_conv2_shape[1], res_conv2_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn2, buffer,
-            res_bn2_shape[0]);
+        FillBatchnormLayer(tower_ptr->bn2, buffer, res_bn2_shape[0]);
 
         const auto channels = weights_->residual_channels;
         const auto kernel = 3;
@@ -429,32 +435,28 @@ int DNNLoader::FillBlock(int offset,
         const auto pre_btl_bn_shape = netstruct[offset++];
         FillConvolutionLayer(tower_ptr->pre_btl_conv, buffer,
             pre_btl_conv_shape[0], pre_btl_conv_shape[1], pre_btl_conv_shape[2]);
-        FillBatchnormLayer(tower_ptr->pre_btl_bn, buffer,
-            pre_btl_bn_shape[0]);
+        FillBatchnormLayer(tower_ptr->pre_btl_bn, buffer, pre_btl_bn_shape[0]);
 
         // 1st layers.
         const auto res_conv1_shape = netstruct[offset++];
         const auto res_bn1_shape = netstruct[offset++];
         FillConvolutionLayer(tower_ptr->conv1, buffer,
             res_conv1_shape[0], res_conv1_shape[1], res_conv1_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn1, buffer,
-            res_bn1_shape[0]);
+        FillBatchnormLayer(tower_ptr->bn1, buffer, res_bn1_shape[0]);
 
         // 2nd layers.
         const auto res_conv2_shape = netstruct[offset++];
         const auto res_bn2_shape = netstruct[offset++];
         FillConvolutionLayer(tower_ptr->conv2, buffer,
             res_conv2_shape[0], res_conv2_shape[1], res_conv2_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn2, buffer,
-            res_bn2_shape[0]);
+        FillBatchnormLayer(tower_ptr->bn2, buffer, res_bn2_shape[0]);
 
         // post-bottleneck layers
         const auto post_btl_conv_shape = netstruct[offset++];
         const auto post_btl_bn_shape = netstruct[offset++];
         FillConvolutionLayer(tower_ptr->post_btl_conv, buffer,
                 post_btl_conv_shape[0], post_btl_conv_shape[1], post_btl_conv_shape[2]);
-        FillBatchnormLayer(tower_ptr->post_btl_bn, buffer,
-                post_btl_bn_shape[0]);
+        FillBatchnormLayer(tower_ptr->post_btl_bn, buffer, post_btl_bn_shape[0]);
 
         const auto outer_channels = weights_->residual_channels;
         const auto inner_channels = pre_btl_conv_shape[1];
@@ -480,6 +482,97 @@ int DNNLoader::FillBlock(int offset,
                 1 != post_btl_conv_shape[2]) {
             throw std::runtime_error{"the kernel of bottleneck block is wrong"};
         }
+    } else if (tower_ptr->IsNestedBottleneckBlock()) {
+        // bottleneck block
+        // 1).  Convolution layer with 1x1 kernel
+        // 2).  Batch normalize layer
+        // ---- 1st Residual Block ----
+        //     3).  Convolution layer with 3x3 kernel
+        //     4).  Batch normalize layer
+        //     5).  Convolution layer with 3x3 kernel
+        //     6).  Batch normalize layer
+        // ---- 2nd Residual Block ----
+        //     7).  Convolution layer with 3x3 kernel
+        //     8).  Batch normalize layer
+        //     9).  Convolution layer with 3x3 kernel
+        //     10). Batch normalize layer
+        // 11). Convolution layer with 1x1 kernel
+        // 12). Batch normalize layer
+
+        // pre-bottleneck layers
+        const auto pre_btl_conv_shape = netstruct[offset++];
+        const auto pre_btl_bn_shape = netstruct[offset++];
+        FillConvolutionLayer(tower_ptr->pre_btl_conv, buffer,
+            pre_btl_conv_shape[0], pre_btl_conv_shape[1], pre_btl_conv_shape[2]);
+        FillBatchnormLayer(tower_ptr->pre_btl_bn, buffer, pre_btl_bn_shape[0]);
+
+        // 1st layers.
+        const auto res_conv1_shape = netstruct[offset++];
+        const auto res_bn1_shape = netstruct[offset++];
+        FillConvolutionLayer(tower_ptr->conv1, buffer,
+            res_conv1_shape[0], res_conv1_shape[1], res_conv1_shape[2]);
+        FillBatchnormLayer(tower_ptr->bn1, buffer, res_bn1_shape[0]);
+
+        // 2nd layers.
+        const auto res_conv2_shape = netstruct[offset++];
+        const auto res_bn2_shape = netstruct[offset++];
+        FillConvolutionLayer(tower_ptr->conv2, buffer,
+            res_conv2_shape[0], res_conv2_shape[1], res_conv2_shape[2]);
+        FillBatchnormLayer(tower_ptr->bn2, buffer, res_bn2_shape[0]);
+
+        // 3rd layers.
+        const auto res_conv3_shape = netstruct[offset++];
+        const auto res_bn3_shape = netstruct[offset++];
+        FillConvolutionLayer(tower_ptr->conv3, buffer,
+            res_conv3_shape[0], res_conv3_shape[1], res_conv3_shape[2]);
+        FillBatchnormLayer(tower_ptr->bn3, buffer, res_bn3_shape[0]);
+
+        // 4th layers.
+        const auto res_conv4_shape = netstruct[offset++];
+        const auto res_bn4_shape = netstruct[offset++];
+        FillConvolutionLayer(tower_ptr->conv4, buffer,
+            res_conv4_shape[0], res_conv4_shape[1], res_conv4_shape[2]);
+        FillBatchnormLayer(tower_ptr->bn4, buffer, res_bn4_shape[0]);
+
+        // post-bottleneck layers
+        const auto post_btl_conv_shape = netstruct[offset++];
+        const auto post_btl_bn_shape = netstruct[offset++];
+        FillConvolutionLayer(tower_ptr->post_btl_conv, buffer,
+                post_btl_conv_shape[0], post_btl_conv_shape[1], post_btl_conv_shape[2]);
+        FillBatchnormLayer(tower_ptr->post_btl_bn, buffer, post_btl_bn_shape[0]);
+
+        const auto outer_channels = weights_->residual_channels;
+        const auto inner_channels = pre_btl_conv_shape[1];
+        const auto kernel = 3;
+        tower_ptr->bottleneck_channels = inner_channels;
+        if (outer_channels != pre_btl_conv_shape[0] ||
+                outer_channels != post_btl_conv_shape[1] ||
+                outer_channels != post_btl_bn_shape[0]) {
+            throw std::runtime_error{"the outer channels of nested bottleneck block is wrong"};
+        }
+        if (inner_channels != pre_btl_bn_shape[0] ||
+                inner_channels != res_conv1_shape[0] ||
+                inner_channels != res_conv1_shape[1] ||
+                inner_channels != res_bn1_shape[0] ||
+                inner_channels != res_conv2_shape[0] ||
+                inner_channels != res_conv2_shape[1] ||
+                inner_channels != res_bn2_shape[0] ||
+                inner_channels != res_conv3_shape[0] ||
+                inner_channels != res_conv3_shape[1] ||
+                inner_channels != res_bn3_shape[0] ||
+                inner_channels != res_conv4_shape[0] ||
+                inner_channels != res_conv4_shape[1] ||
+                inner_channels != res_bn4_shape[0]) {
+            throw std::runtime_error{"the inner channels of nested bottleneck block is wrong"};
+        }
+        if (kernel != res_conv1_shape[2] ||
+                kernel != res_conv2_shape[2] ||
+                kernel != res_conv3_shape[2] ||
+                kernel != res_conv4_shape[2] ||
+                1 != pre_btl_conv_shape[2] ||
+                1 != post_btl_conv_shape[2]) {
+            throw std::runtime_error{"the kernel of nested bottleneck block is wrong"};
+        }
     } else if (tower_ptr->IsMixerBlock()) {
         // mixer block
         // 1). Depthwise convolution layer with NxN kernel
@@ -494,24 +587,21 @@ int DNNLoader::FillBlock(int offset,
         const auto dw_bn_shape = netstruct[offset++];
         FillConvolutionLayer(tower_ptr->dw_conv, buffer,
             dw_conv_shape[0], dw_conv_shape[1], dw_conv_shape[2]);
-        FillBatchnormLayer(tower_ptr->dw_bn, buffer,
-            dw_bn_shape[0]);
+        FillBatchnormLayer(tower_ptr->dw_bn, buffer, dw_bn_shape[0]);
 
         // 1st feedforward layers.
         const auto ffn_conv1_shape = netstruct[offset++];
         const auto ffn_bn1_shape = netstruct[offset++];
         FillConvolutionLayer(tower_ptr->conv1, buffer,
             ffn_conv1_shape[0], ffn_conv1_shape[1], ffn_conv1_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn1, buffer,
-            ffn_bn1_shape[0]);
+        FillBatchnormLayer(tower_ptr->bn1, buffer, ffn_bn1_shape[0]);
 
         // 2nd feedforward layers.
         const auto ffn_conv2_shape = netstruct[offset++];
         const auto ffn_bn2_shape = netstruct[offset++];
         FillConvolutionLayer(tower_ptr->conv2, buffer,
             ffn_conv2_shape[0], ffn_conv2_shape[1], ffn_conv2_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn2, buffer,
-            ffn_bn2_shape[0]);
+        FillBatchnormLayer(tower_ptr->bn2, buffer, ffn_bn2_shape[0]);
 
         tower_ptr->feedforward_channels = ffn_conv1_shape[1];
         const auto channels = weights_->residual_channels;
@@ -557,9 +647,13 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
                             std::istream &buffer) const {
     weights_->residual_blocks = std::stoi(netinfo["ResidualBlocks"]);
     weights_->residual_channels = std::stoi(netinfo["ResidualChannels"]);
-    weights_->policy_extract_channels = std::stoi(netinfo["PolicyExtract"]);
-    weights_->value_extract_channels = std::stoi(netinfo["ValueExtract"]);
-
+    if (weights_->version >= 5) {
+        weights_->policy_head_channels = std::stoi(netinfo["PolicyHeadChannels"]);
+        weights_->value_head_channels = std::stoi(netinfo["ValueHeadChannels"]);
+    } else {
+        weights_->policy_head_channels = std::stoi(netinfo["PolicyExtract"]);
+        weights_->value_head_channels = std::stoi(netinfo["ValueExtract"]);
+    }
     if (weights_->input_channels != std::stoi(netinfo["InputChannels"])) {
         throw std::runtime_error{"the number of input channels is wrong"};
     }
@@ -604,50 +698,63 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
         t_offset = FillBlock(t_offset, block_spt, netstruct, buffer);
     }
 
-    const auto h_offset = t_offset;
+    auto h_offset = t_offset;
 
     // policy head
-    const auto p_ex_conv_shape = netstruct[h_offset + 0];
-    FillConvolutionLayer(weights_->p_ex_conv,
+    const auto p_hd_conv_shape = netstruct[h_offset++];
+    FillConvolutionLayer(weights_->p_hd_conv,
                          buffer,
-                         p_ex_conv_shape[0],
-                         p_ex_conv_shape[1],
-                         p_ex_conv_shape[2]);
+                         p_hd_conv_shape[0],
+                         p_hd_conv_shape[1],
+                         p_hd_conv_shape[2]);
 
-    const auto p_ex_bn_shape = netstruct[h_offset + 1];
-    FillBatchnormLayer(weights_->p_ex_bn,
+    const auto p_hd_bn_shape = netstruct[h_offset++];
+    FillBatchnormLayer(weights_->p_hd_bn,
                        buffer,
-                       p_ex_bn_shape[0]);
+                       p_hd_bn_shape[0]);
 
+    if (weights_->policy_head_type == PolicyHeadType::kRepLK) {
+        const auto dw_conv_shape = netstruct[h_offset++];
+        const auto dw_bn_shape = netstruct[h_offset++];
+        FillConvolutionLayer(weights_->p_dw_conv, buffer,
+            dw_conv_shape[0], dw_conv_shape[1], dw_conv_shape[2]);
+        FillBatchnormLayer(weights_->p_dw_bn, buffer, dw_bn_shape[0]);
 
-    const auto p_inter_fc_shape = netstruct[h_offset + 2];
+        const auto pt_conv_shape = netstruct[h_offset++];
+        const auto pt_bn_shape = netstruct[h_offset++];
+        FillConvolutionLayer(weights_->p_pt_conv, buffer,
+            pt_conv_shape[0], pt_conv_shape[1], pt_conv_shape[2]);
+        FillBatchnormLayer(weights_->p_pt_bn, buffer, pt_bn_shape[0]);
+    }
+
+    const auto p_inter_fc_shape = netstruct[h_offset++];
     FillFullyconnectLayer(weights_->p_inter_fc,
                           buffer,
                           p_inter_fc_shape[0],
                           p_inter_fc_shape[1]);
 
-    const auto prob_conv_shape = netstruct[h_offset + 3];
+    const auto prob_conv_shape = netstruct[h_offset++];
     FillConvolutionLayer(weights_->prob_conv,
                          buffer,
                          prob_conv_shape[0],
                          prob_conv_shape[1],
                          prob_conv_shape[2]);
 
-    const auto pass_fc_shape = netstruct[h_offset + 4];
+    const auto pass_fc_shape = netstruct[h_offset++];
     FillFullyconnectLayer(weights_->pass_fc,
                           buffer,
                           pass_fc_shape[0],
                           pass_fc_shape[1]);
 
-    if (p_ex_conv_shape[2] != 1 || prob_conv_shape[2] != 1) {
+    if (p_hd_conv_shape[2] != 1 || prob_conv_shape[2] != 1) {
         throw std::runtime_error{"the policy convolution kernel size is wrong"};
     }
     if (prob_conv_shape[1] != weights_->probabilities_channels) {
         throw std::runtime_error{"the number of policy ouput size is wrong"};
     }
     if (p_inter_fc_shape[1] != pass_fc_shape[0] ||
-            p_inter_fc_shape[0] != 3 * weights_->policy_extract_channels ||
-            p_inter_fc_shape[1] != 1 * weights_->policy_extract_channels) {
+            p_inter_fc_shape[0] != 3 * weights_->policy_head_channels ||
+            p_inter_fc_shape[1] != 1 * weights_->policy_head_channels) {
         throw std::runtime_error{"the number of policy fully connect size is wrong"};
     }
     if (pass_fc_shape[1] != weights_->pass_probability_outputs) {
@@ -655,45 +762,45 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
     }
 
     // value head
-    const auto v_ex_conv_shape = netstruct[h_offset + 5];
-    FillConvolutionLayer(weights_->v_ex_conv,
+    const auto v_hd_conv_shape = netstruct[h_offset++];
+    FillConvolutionLayer(weights_->v_hd_conv,
                          buffer,
-                         v_ex_conv_shape[0],
-                         v_ex_conv_shape[1],
-                         v_ex_conv_shape[2]);
+                         v_hd_conv_shape[0],
+                         v_hd_conv_shape[1],
+                         v_hd_conv_shape[2]);
 
-    const auto v_ex_bn_shape = netstruct[h_offset  + 6];
-    FillBatchnormLayer(weights_->v_ex_bn,
+    const auto v_hd_bn_shape = netstruct[h_offset++];
+    FillBatchnormLayer(weights_->v_hd_bn,
                        buffer,
-                       v_ex_bn_shape[0]);
+                       v_hd_bn_shape[0]);
 
-    const auto v_inter_fc_shape = netstruct[h_offset + 7];
+    const auto v_inter_fc_shape = netstruct[h_offset++];
     FillFullyconnectLayer(weights_->v_inter_fc,
                           buffer,
                           v_inter_fc_shape[0],
                           v_inter_fc_shape[1]);
 
-    const auto v_os_conv_shape = netstruct[h_offset + 8];
+    const auto v_os_conv_shape = netstruct[h_offset++];
     FillConvolutionLayer(weights_->v_ownership,
                          buffer,
                          v_os_conv_shape[0],
                          v_os_conv_shape[1],
                          v_os_conv_shape[2]);
 
-    const auto misc_fc_shape = netstruct[h_offset + 9];
+    const auto misc_fc_shape = netstruct[h_offset++];
     FillFullyconnectLayer(weights_->v_misc,
                           buffer,
                           misc_fc_shape[0],
                           misc_fc_shape[1]);
-    if (v_ex_conv_shape[2] != 1 || v_os_conv_shape[2] != 1) {
+    if (v_hd_conv_shape[2] != 1 || v_os_conv_shape[2] != 1) {
         throw std::runtime_error{"the value convolution kernel size is wrong"};
     }
     if (v_os_conv_shape[1] != weights_->ownership_channels) {
         throw std::runtime_error{"the number of ownership ouput size is wrong"};
     }
     if (v_inter_fc_shape[1] != misc_fc_shape[0] ||
-            v_inter_fc_shape[0] != 3 * weights_->value_extract_channels ||
-            v_inter_fc_shape[1] != 3 * weights_->value_extract_channels) {
+            v_inter_fc_shape[0] != 3 * weights_->value_head_channels ||
+            v_inter_fc_shape[1] != 3 * weights_->value_head_channels) {
         throw std::runtime_error{"the number of value fully connect size is wrong"};
     }
     if (misc_fc_shape[1] != weights_->value_misc_outputs) {
@@ -744,6 +851,13 @@ void DNNLoader::ProcessWeights() const {
             ProcessConvBlock(block->conv1, block->bn1);
             ProcessConvBlock(block->conv2, block->bn2);
             ProcessConvBlock(block->post_btl_conv, block->post_btl_bn);
+        } else if (block->IsNestedBottleneckBlock()) {
+            ProcessConvBlock(block->pre_btl_conv, block->pre_btl_bn);
+            ProcessConvBlock(block->conv1, block->bn1);
+            ProcessConvBlock(block->conv2, block->bn2);
+            ProcessConvBlock(block->conv3, block->bn3);
+            ProcessConvBlock(block->conv4, block->bn4);
+            ProcessConvBlock(block->post_btl_conv, block->post_btl_bn);
         } else if (block->IsMixerBlock()) {
             ProcessConvBlock(block->dw_conv, block->dw_bn);
             ProcessConvBlock(block->conv1, block->bn1);
@@ -752,12 +866,14 @@ void DNNLoader::ProcessWeights() const {
     }
 
     // policy head
-    ProcessConvBlock(
-        weights_->p_ex_conv, weights_->p_ex_bn);
+    ProcessConvBlock(weights_->p_hd_conv, weights_->p_hd_bn);
+    if (weights_->policy_head_type == PolicyHeadType::kRepLK) {
+        ProcessConvBlock(weights_->p_dw_conv, weights_->p_dw_bn);
+        ProcessConvBlock(weights_->p_pt_conv, weights_->p_pt_bn);
+    }
 
     // value head
-    ProcessConvBlock(
-        weights_->v_ex_conv, weights_->v_ex_bn);
+    ProcessConvBlock(weights_->v_hd_conv, weights_->v_hd_bn);
 }
 
 void DNNLoader::GetWeightsFromBuffer(std::vector<float> &weights, std::istream &buffer) const {

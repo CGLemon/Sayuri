@@ -275,11 +275,11 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     const auto residual_channels = weights_->residual_channels;
     const auto max_channels = std::max({weights_->input_channels,
                                         tower_peak_channels,
-                                        weights_->policy_extract_channels,
-                                        weights_->value_extract_channels});
+                                        weights_->policy_head_channels,
+                                        weights_->value_head_channels});
     const auto plane_size = weights_->input_channels * num_intersections;
-    const auto max_intermediates = std::max(weights_->policy_extract_channels,
-                                                weights_->value_extract_channels);
+    const auto max_intermediates = std::max(weights_->policy_head_channels,
+                                                weights_->value_head_channels);
     const auto default_act = weights_->default_act;
 
 
@@ -374,39 +374,39 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
     }
 
     // The policy head.
-    const auto policy_extract_channels = weights_->policy_extract_channels;
-    auto policy_conv = std::vector<float>(policy_extract_channels * num_intersections);
+    const auto policy_head_channels = weights_->policy_head_channels;
+    auto policy_conv = std::vector<float>(policy_head_channels * num_intersections);
 
     Convolution1::Forward(
-        board_size, residual_channels, policy_extract_channels,
+        board_size, residual_channels, policy_head_channels,
         conv_out,
-        weights_->p_ex_conv.GetWeights(),
+        weights_->p_hd_conv.GetWeights(),
         workspace0, policy_conv);
 
     AddSpatialBiases::Forward(
-        board_size, policy_extract_channels,
+        board_size, policy_head_channels,
         policy_conv,
-        weights_->p_ex_conv.GetBiases(), default_act);
+        weights_->p_hd_conv.GetBiases(), default_act);
 
     GlobalPooling<false>::Forward(
-        board_size, policy_extract_channels,
+        board_size, policy_head_channels,
         policy_conv, pooling);
 
     FullyConnect::Forward(
-        3 * policy_extract_channels, policy_extract_channels,
+        3 * policy_head_channels, policy_head_channels,
         pooling,
         weights_->p_inter_fc.GetWeights(),
         weights_->p_inter_fc.GetBiases(),
         intermediate, default_act);
 
     AddSpatialBiases::Forward(
-        board_size, policy_extract_channels,
+        board_size, policy_head_channels,
         policy_conv,
         intermediate, Activation::kIdentity);
 
     // The policy outs.
     Convolution1::Forward(
-        board_size, policy_extract_channels, weights_->probabilities_channels,
+        board_size, policy_head_channels, weights_->probabilities_channels,
         policy_conv,
         weights_->prob_conv.GetWeights(),
         workspace0, output_prob);
@@ -417,33 +417,33 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
         weights_->prob_conv.GetBiases(), Activation::kIdentity);
 
     FullyConnect::Forward(
-        policy_extract_channels, weights_->pass_probability_outputs,
+        policy_head_channels, weights_->pass_probability_outputs,
         intermediate,
         weights_->pass_fc.GetWeights(),
         weights_->pass_fc.GetBiases(),
         output_pass, Activation::kIdentity);
 
     // The value head.
-    const auto value_extract_channels = weights_->value_extract_channels;
-    auto value_conv = std::vector<float>(value_extract_channels * num_intersections);
+    const auto value_head_channels = weights_->value_head_channels;
+    auto value_conv = std::vector<float>(value_head_channels * num_intersections);
 
     Convolution1::Forward(
-        board_size, residual_channels, value_extract_channels,
+        board_size, residual_channels, value_head_channels,
         conv_out,
-        weights_->v_ex_conv.GetWeights(),
+        weights_->v_hd_conv.GetWeights(),
         workspace0, value_conv);
 
     AddSpatialBiases::Forward(
-        board_size, value_extract_channels,
+        board_size, value_head_channels,
         value_conv,
-        weights_->v_ex_conv.GetBiases(), default_act);
+        weights_->v_hd_conv.GetBiases(), default_act);
 
     GlobalPooling<true>::Forward(
-        board_size, value_extract_channels,
+        board_size, value_head_channels,
         value_conv, pooling);
 
     FullyConnect::Forward(
-        3 * value_extract_channels, 3 * value_extract_channels,
+        3 * value_head_channels, 3 * value_head_channels,
         pooling,
         weights_->v_inter_fc.GetWeights(),
         weights_->v_inter_fc.GetBiases(),
@@ -451,7 +451,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
 
     // The value outs.
     Convolution1::Forward(
-        board_size, value_extract_channels, weights_->ownership_channels,
+        board_size, value_head_channels, weights_->ownership_channels,
         value_conv,
         weights_->v_ownership.GetWeights(),
         workspace0, output_ownership);
@@ -462,7 +462,7 @@ OutputResult BlasForwardPipe::Forward(const InputData &inpnts) {
         weights_->v_ownership.GetBiases(), Activation::kIdentity);
 
     FullyConnect::Forward(
-        3 * value_extract_channels, weights_->value_misc_outputs,
+        3 * value_head_channels, weights_->value_misc_outputs,
         intermediate,
         weights_->v_misc.GetWeights(),
         weights_->v_misc.GetBiases(),

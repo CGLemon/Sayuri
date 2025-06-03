@@ -90,20 +90,27 @@ public:
         kUnknown,
         kResidualBlock,
         kBottleneckBlock,
+        kNestedBottleneckBlock,
         kMixerBlock
     };
     BlockBasic() = default;
 
     bool IsResidualBlock() { return type == Type::kResidualBlock; }
     bool IsBottleneckBlock() { return type == Type::kBottleneckBlock; }
+    bool IsNestedBottleneckBlock() { return type == Type::kNestedBottleneckBlock; }
     bool IsMixerBlock() { return type == Type::kMixerBlock; }
 
     Type type{kUnknown};
 
+    // TODO: Use list to store all conv and bn
     ConvLayer conv1;
     BatchNormLayer bn1;
     ConvLayer conv2;
     BatchNormLayer bn2;
+    ConvLayer conv3;
+    BatchNormLayer bn3;
+    ConvLayer conv4;
+    BatchNormLayer bn4;
 
     ConvLayer pre_btl_conv;
     BatchNormLayer pre_btl_bn;
@@ -131,9 +138,19 @@ public:
     BottleneckBlock() { type = Type::kBottleneckBlock; }
 };
 
+class NestedBottleneckBlock : public BlockBasic {
+public:
+    NestedBottleneckBlock() { type = Type::kNestedBottleneckBlock; }
+};
+
 class MixerBlock : public BlockBasic {
 public:
     MixerBlock() { type = Type::kMixerBlock; }
+};
+
+enum class PolicyHeadType {
+    kNormal,
+    kRepLK
 };
 
 class DNNWeights {
@@ -150,11 +167,12 @@ public:
     int residual_blocks{0};
     int residual_channels{0};
 
-    int policy_extract_channels{0};
+    PolicyHeadType policy_head_type{PolicyHeadType::kNormal};
+    int policy_head_channels{0};
     int probabilities_channels{0};
     int pass_probability_outputs{0};
 
-    int value_extract_channels{0};
+    int value_head_channels{0};
     int ownership_channels{0};
     int value_misc_outputs{0};
 
@@ -168,16 +186,21 @@ public:
     std::vector<std::unique_ptr<BlockBasic>> tower;
 
     // policy head
-    ConvLayer p_ex_conv;
-    BatchNormLayer p_ex_bn;
+    ConvLayer p_hd_conv;
+    BatchNormLayer p_hd_bn;
     LinearLayer p_inter_fc;
+
+    ConvLayer p_dw_conv;
+    BatchNormLayer p_dw_bn;
+    ConvLayer p_pt_conv;
+    BatchNormLayer p_pt_bn;
 
     ConvLayer prob_conv;
     LinearLayer pass_fc;
 
     // value head
-    ConvLayer v_ex_conv;
-    BatchNormLayer v_ex_bn;
+    ConvLayer v_hd_conv;
+    BatchNormLayer v_hd_bn;
     LinearLayer v_inter_fc;
 
     ConvLayer v_ownership;

@@ -67,12 +67,19 @@ class Config:
         self.activation = network.get("Activation", "relu")
         self.input_channels = network.get("InputChannels", 43)
         self.residual_channels = network.get("ResidualChannels", None)
-        self.policy_extract = network.get("PolicyExtract", None)
-        self.value_extract = network.get("ValueExtract", None)
+
+        self.policy_head_type = network.get("PolicyHeadType", "normal")
+        self.policy_head_channels = network.get("PolicyExtract", None) # v1 ~ v4 net
+        if self.policy_head_channels is None:
+            self.policy_head_channels = network.get("PolicyHeadChannels", None) # since v5 net
+        self.value_head_channels = network.get("ValueExtract", None) # v1 ~ v4 net
+        if self.value_head_channels is None:
+            self.value_head_channels = network.get("ValueHeadChannels", None) # since v5 net
         self.se_ratio = network.get("SeRatio", 2)
         self.stack = network.get("Stack", [])
 
         assert self.input_channels != None, ""
         assert self.residual_channels != None, ""
-        assert self.policy_extract != None, ""
-        assert self.value_extract != None, ""
+        assert self.policy_head_type in ["normal", "RepLK"], ""
+        assert self.policy_head_channels != None, ""
+        assert self.value_head_channels != None, ""

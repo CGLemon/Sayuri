@@ -638,6 +638,58 @@ class DepthwiseConvBlock(nn.Module):
         x = self.act(x)
         return x
 
+class ResidualBlock(nn.Module):
+    def __init__(self, channels,
+                       *args,
+                       **kwargs):
+        super(ResidualBlock, self).__init__()
+
+        self.activation = kwargs.get("activation", DEFAULT_ACTIVATION)
+        self.renorm_clipping = kwargs.get("renorm_clipping", {"rmax" : 1, "dmax" : 0})
+        self.se_size = kwargs.get("se_size", None)
+        collector = kwargs.get("collector", None)
+
+        self.channels = channels
+        self.use_se = self.se_size is not None
+        self.conv1 = ConvBlock(
+            in_channels=self.channels,
+            out_channels=self.channels,
+            kernel_size=3,
+            use_gamma=False,
+            renorm_clipping=self.renorm_clipping,
+            activation=self.activation,
+            collector=collector
+        )
+        self.conv2 = ConvBlock(
+            in_channels=self.channels,
+            out_channels=self.channels,
+            kernel_size=3,
+            use_gamma=True,
+            renorm_clipping=self.renorm_clipping,
+            activation="identity",
+            collector=collector
+        )
+        if self.use_se:
+            self.se_module = SqueezeAndExcitation(
+                channels=self.channels,
+                se_size=self.se_size,
+                activation=self.activation,
+                collector=collector
+            )
+        self.act = activation_func(self.activation, inplace=True)
+
+    def forward(self, x, mask_buffers):
+        mask, _, _ = mask_buffers
+
+        out = x
+        out = self.conv1(out, mask)
+        out = self.conv2(out, mask)
+        if self.use_se:
+            out = self.se_module(out, mask_buffers)
+        out = out + x
+        out = self.act(out)
+        return out
+
 class BottleneckBlock(nn.Module):
     def __init__(self, channels,
                        *args,
@@ -719,32 +771,53 @@ class BottleneckBlock(nn.Module):
         out = self.act(out)
         return out
 
-class ResidualBlock(nn.Module):
+class NestedBottleneckBlock(nn.Module):
     def __init__(self, channels,
                        *args,
                        **kwargs):
-        super(ResidualBlock, self).__init__()
+        super(NestedBottleneckBlock, self).__init__()
 
         self.activation = kwargs.get("activation", DEFAULT_ACTIVATION)
         self.renorm_clipping = kwargs.get("renorm_clipping", {"rmax" : 1, "dmax" : 0})
+        self.bottleneck_channels = kwargs.get("bottleneck_channels", None)
         self.se_size = kwargs.get("se_size", None)
         collector = kwargs.get("collector", None)
 
-        self.channels = channels
+        assert self.bottleneck_channels is not None, ""
         self.use_se = self.se_size is not None
-        self.conv1 = ConvBlock(
-            in_channels=self.channels,
-            out_channels=self.channels,
-            kernel_size=3,
+
+        # The inner layers channels.
+        self.inner_channels = self.bottleneck_channels
+
+        # The main ResidualBlock channels. We say a 15x192
+        # resnet. The 192 is outer_channel.
+        self.outer_channels = channels
+
+        self.pre_btl_conv = ConvBlock(
+            in_channels=self.outer_channels,
+            out_channels=self.inner_channels,
+            kernel_size=1,
             use_gamma=False,
             renorm_clipping=self.renorm_clipping,
             activation=self.activation,
             collector=collector
         )
-        self.conv2 = ConvBlock(
-            in_channels=self.channels,
-            out_channels=self.channels,
-            kernel_size=3,
+        self.block1 = ResidualBlock(
+            channels=self.inner_channels,
+            renorm_clipping=self.renorm_clipping,
+            activation=self.activation,
+            collector=collector
+        )
+        self.block2 = ResidualBlock(
+            channels=self.inner_channels,
+            renorm_clipping=self.renorm_clipping,
+            activation=self.activation,
+            collector=collector
+        )
+        self.post_btl_conv = ConvBlock(
+            in_channels=self.inner_channels,
+            out_channels=self.outer_channels,
+            kernel_size=1,
             use_gamma=True,
             renorm_clipping=self.renorm_clipping,
             activation="identity",
@@ -752,7 +825,7 @@ class ResidualBlock(nn.Module):
         )
         if self.use_se:
             self.se_module = SqueezeAndExcitation(
-                channels=self.channels,
+                channels=self.outer_channels,
                 se_size=self.se_size,
                 activation=self.activation,
                 collector=collector
@@ -763,8 +836,10 @@ class ResidualBlock(nn.Module):
         mask, _, _ = mask_buffers
 
         out = x
-        out = self.conv1(out, mask)
-        out = self.conv2(out, mask)
+        out = self.pre_btl_conv(out, mask)
+        out = self.block1(out, mask_buffers)
+        out = self.block2(out, mask_buffers)
+        out = self.post_btl_conv(out, mask)
         if self.use_se:
             out = self.se_module(out, mask_buffers)
         out = out + x
@@ -780,24 +855,28 @@ class MixerBlock(nn.Module):
         self.activation = kwargs.get("activation", DEFAULT_ACTIVATION)
         self.renorm_clipping = kwargs.get("renorm_clipping", {"rmax" : 1, "dmax" : 0})
         self.se_size = kwargs.get("se_size", None)
+        self.kernel_size = kwargs.get("kernel_size", 7)
+        self.ffn_expansion_ratio = kwargs.get("ffn_expansion_ratio", 1.5)
+        self.version = kwargs.get("version", 1)
         collector = kwargs.get("collector", None)
 
         self.channels = channels
         self.use_se = self.se_size is not None
+        assert self.version in [1, 2], ""
 
         self.depthwise_conv = DepthwiseConvBlock(
             channels=self.channels,
-            kernel_size=7,
+            kernel_size=self.kernel_size,
             use_gamma=True,
             renorm_clipping=self.renorm_clipping,
             activation=self.activation,
             collector=collector
         )
 
-        ffn_channels = int(1.5 * self.channels)
+        self.ffn_channels = int(self.ffn_expansion_ratio * self.channels)
         self.ffn1 = ConvBlock(
             in_channels=self.channels,
-            out_channels=ffn_channels,
+            out_channels=self.ffn_channels,
             kernel_size=1,
             use_gamma=False,
             renorm_clipping=self.renorm_clipping,
@@ -805,7 +884,7 @@ class MixerBlock(nn.Module):
             collector=collector
         )
         self.ffn2 = ConvBlock(
-            in_channels=ffn_channels,
+            in_channels=self.ffn_channels,
             out_channels=self.channels,
             kernel_size=1,
             use_gamma=True,
@@ -825,15 +904,24 @@ class MixerBlock(nn.Module):
     def forward(self, x, mask_buffers):
         mask, _, _ = mask_buffers
 
-        x = self.depthwise_conv(x, mask) + x
-
-        out = x
-        out = self.ffn1(out, mask)
-        out = self.ffn2(out, mask)
-        if self.use_se:
-            out = self.se_module(out, mask_buffers)
-        out = out + x
-        out = self.act(out)
+        if self.version == 1:
+            x = self.depthwise_conv(x, mask) + x
+            out = x
+            out = self.ffn1(out, mask)
+            out = self.ffn2(out, mask)
+            if self.use_se:
+                out = self.se_module(out, mask_buffers)
+            out = out + x
+            out = self.act(out)
+        elif self.version == 2:
+            out = x
+            out = self.depthwise_conv(out, mask)
+            out = self.ffn1(out, mask)
+            out = self.ffn2(out, mask)
+            if self.use_se:
+                out = self.se_module(out, mask_buffers)
+            out = out + x
+            out = self.act(out)
         return out
 
 class Network(nn.Module):
@@ -849,16 +937,160 @@ class Network(nn.Module):
         self.residual_channels = cfg.residual_channels
         self.xsize = cfg.boardsize
         self.ysize = cfg.boardsize
-        self.policy_extract = cfg.policy_extract
-        self.value_extract = cfg.value_extract
+        self.policy_head_channels = cfg.policy_head_channels
+        self.value_head_channels = cfg.value_head_channels
         self.se_ratio = cfg.se_ratio
+        self.policy_head_type = cfg.policy_head_type
         self.renorm_clipping = {"rmax" : cfg.renorm_max_r, "dmax" : cfg.renorm_max_d}
         self.value_misc = 15
         self.policy_outs = 5
         self.stack = cfg.stack
-        self.version = 4
+        self.version = 5
 
         self.construct_layers()
+
+    def create_policy_head(self):
+        self.policy_conv = ConvBlock(
+            in_channels=self.residual_channels,
+            out_channels=self.policy_head_channels,
+            kernel_size=1,
+            use_gamma=False,
+            renorm_clipping=self.renorm_clipping,
+            activation=self.activation,
+            collector=self.layers_collector
+        )
+        if self.policy_head_type == "RepLK":
+            self.policy_depthwise_conv = DepthwiseConvBlock(
+                channels=self.policy_head_channels,
+                kernel_size=7,
+                use_gamma=False,
+                renorm_clipping=self.renorm_clipping,
+                activation=self.activation,
+                collector=self.layers_collector
+            )
+            self.policy_pointwise_conv = ConvBlock(
+                in_channels=self.policy_head_channels,
+                out_channels=self.policy_head_channels,
+                kernel_size=1,
+                use_gamma=True,
+                renorm_clipping=self.renorm_clipping,
+                activation=self.activation,
+                collector=self.layers_collector
+            )
+        self.policy_intermediate_fc = FullyConnect(
+            in_size=self.policy_head_channels * 3,
+            out_size=self.policy_head_channels,
+            activation=self.activation,
+            collector=self.layers_collector
+        )
+        self.pol_misc = Convolve(
+            in_channels=self.policy_head_channels,
+            out_channels=self.policy_outs,
+            kernel_size=1,
+            activation="identity",
+            collector=self.layers_collector
+        )
+        self.pol_misc_pass_fc = FullyConnect(
+            in_size=self.policy_head_channels,
+            out_size=self.policy_outs,
+            activation="identity",
+            collector=self.layers_collector
+        )
+
+    def create_value_head(self):
+        self.value_conv = ConvBlock(
+            in_channels=self.residual_channels,
+            out_channels=self.value_head_channels,
+            kernel_size=1,
+            use_gamma=False,
+            renorm_clipping=self.renorm_clipping,
+            activation=self.activation,
+            collector=self.layers_collector
+        )
+        self.value_intermediate_fc = FullyConnect(
+            in_size=self.value_head_channels * 3,
+            out_size=self.value_head_channels * 3,
+            activation=self.activation,
+            collector=self.layers_collector
+        )
+        self.ownership_conv = Convolve(
+            in_channels=self.value_head_channels,
+            out_channels=1,
+            kernel_size=1,
+            activation="identity",
+            collector=self.layers_collector
+        )
+        self.value_misc_fc = FullyConnect(
+            in_size=self.value_head_channels * 3,
+            out_size=self.value_misc,
+            activation="identity",
+            collector=self.layers_collector
+        )
+
+    def parse_blocksetting(self, blocksetting, blockargs):
+        components = list()
+        if type(blocksetting) == str:
+            components = blocksetting.strip().split('-')
+            setting_args = dict()
+        else:
+            components = blocksetting["Block"].strip().split('-')
+            setting_args = blocksetting["Args"]
+
+        block = None
+        blockname = None
+        channels = self.residual_channels
+        for component in components:
+            if component == "ResidualBlock":
+                block = ResidualBlock
+            elif component == "BottleneckBlock":
+                blockargs["bottleneck_channels"] = channels // 2
+                assert channels % 2 == 0, ""
+                block = BottleneckBlock
+            elif component == "NestedBottleneckBlock":
+                blockargs["bottleneck_channels"] = channels // 2
+                assert channels % 2 == 0, ""
+                block = NestedBottleneckBlock
+            elif component in ["MixerBlock", "MixerBlockV1"]:
+                block = MixerBlock
+            elif component == "MixerBlockV2":
+                block = MixerBlock
+                blockargs["version"] = 2
+            elif component == "SE":
+                blockargs["se_size"] = channels // self.se_ratio
+                assert channels % self.se_ratio == 0, ""
+            else:
+                raise Exception("Invalid block structure.")
+
+        if block is None:
+            raise Exception("There is no basic block.")
+
+        # overwrite default settings
+        for key, value in setting_args.items():
+            if key == "BottleneckChannels" :
+                blockargs["bottleneck_channels"] = value
+                assert channels % value == 0, ""
+            elif key == "SeRatio" :
+                blockargs["se_size"] = channels // value
+                assert channels % self.se_ratio == 0, ""
+            elif key == "KernelSize":
+                blockargs["kernel_size"] = value
+            elif key == "FfnExpansionRatio":
+                blockargs["ffn_expansion_ratio"] = value
+        return block, channels, blockargs
+
+    def create_residual_tower(self):
+        self.residual_tower = nn.ModuleList()
+
+        for blocksetting in self.stack:
+            blockargs = {
+                "se_size" : None,
+                "bottleneck_channels" : None,
+                "version" : 1,
+                "activation" : self.activation,
+                "collector" : self.layers_collector
+            }
+            block, channels, blockargs = self.parse_blocksetting(blocksetting, blockargs)
+            self.residual_tower.append(block(channels=channels, **blockargs))
 
     def construct_layers(self):
         self.global_pool = GlobalPool(is_value_head=False)
@@ -873,103 +1105,9 @@ class Network(nn.Module):
             activation=self.activation,
             collector=self.layers_collector
         )
-
-        # residual tower
-        main_channels = self.residual_channels
-        self.residual_tower = nn.ModuleList()
-
-        for s in self.stack:
-            block = None
-            se_size = None
-            bottleneck_channels = None
-
-            for component in s.strip().split('-'):
-                if component == "ResidualBlock":
-                    block = ResidualBlock
-                elif component == "BottleneckBlock":
-                    bottleneck_channels = main_channels // 2
-                    assert main_channels % 2 == 0, ""
-                    block = BottleneckBlock
-                elif component == "MixerBlock":
-                    block = MixerBlock
-                elif component == "SE":
-                    se_size = main_channels // self.se_ratio
-                    assert main_channels % self.se_ratio == 0, ""
-                else:
-                    raise Exception("Invalid NN structure.")
-
-            if block is None:
-                raise Exception("There is no basic block.")
-
-            self.residual_tower.append(
-                block(channels=main_channels,
-                      bottleneck_channels=bottleneck_channels,
-                      se_size=se_size,
-                      activation=self.activation,
-                      collector=self.layers_collector))
-
-        if main_channels != self.residual_channels:
-            raise Exception("Invalid block stack.")
-
-        # policy head
-        self.policy_conv = ConvBlock(
-            in_channels=self.residual_channels,
-            out_channels=self.policy_extract,
-            kernel_size=1,
-            use_gamma=False,
-            renorm_clipping=self.renorm_clipping,
-            activation=self.activation,
-            collector=self.layers_collector
-        )
-        self.policy_intermediate_fc = FullyConnect(
-            in_size=self.policy_extract * 3,
-            out_size=self.policy_extract,
-            activation=self.activation,
-            collector=self.layers_collector
-        )
-        self.pol_misc = Convolve(
-            in_channels=self.policy_extract,
-            out_channels=self.policy_outs,
-            kernel_size=1,
-            activation="identity",
-            collector=self.layers_collector
-        )
-        self.pol_misc_pass_fc = FullyConnect(
-            in_size=self.policy_extract,
-            out_size=self.policy_outs,
-            activation="identity",
-            collector=self.layers_collector
-        )
-
-        # value head
-        self.value_conv = ConvBlock(
-            in_channels=self.residual_channels,
-            out_channels=self.value_extract,
-            kernel_size=1,
-            use_gamma=False,
-            renorm_clipping=self.renorm_clipping,
-            activation=self.activation,
-            collector=self.layers_collector
-        )
-        self.value_intermediate_fc = FullyConnect(
-            in_size=self.value_extract * 3,
-            out_size=self.value_extract * 3,
-            activation=self.activation,
-            collector=self.layers_collector
-        )
-        self.ownership_conv = Convolve(
-            in_channels=self.value_extract,
-            out_channels=1,
-            kernel_size=1,
-            activation="identity",
-            collector=self.layers_collector
-        )
-        self.value_misc_fc = FullyConnect(
-            in_size=self.value_extract * 3,
-            out_size=self.value_misc,
-            activation="identity",
-            collector=self.layers_collector
-        )
+        self.create_residual_tower()
+        self.create_policy_head()
+        self.create_value_head()
 
     def forward(self, planes, *args, **kwargs):
         target = kwargs.get("target", None)
@@ -995,6 +1133,9 @@ class Network(nn.Module):
 
         # policy head
         pol = self.policy_conv(x, mask)
+        if self.policy_head_type == "RepLK":
+            pol = self.policy_depthwise_conv(pol, mask)
+            pol = self.policy_pointwise_conv(pol, mask)
         pol_gpool = self.global_pool(pol, mask_buffers)
         pol_inter = self.policy_intermediate_fc(pol_gpool)
 
@@ -1221,12 +1362,13 @@ class Network(nn.Module):
         info += "Input channels: {channels}\n".format(channels=self.input_channels)
         info += "Residual channels: {channels}\n".format(channels=self.residual_channels)
         info += "Residual tower: size -> {s} [\n".format(s=len(self.stack))
-        for s in self.stack:
+        for s in self.get_stack_name(self.stack):
             info += "  {}\n".format(s)
         info += "]\n"
-        info += "Policy extract channels: {policyextract}\n".format(policyextract=self.policy_extract)
-        info += "Value extract channels: {valueextract}\n".format(valueextract=self.value_extract)
+        info += "Policy head channels: {polhead}\n".format(polhead=self.policy_head_channels)
+        info += "Value head channels: {valhead}\n".format(valhead=self.value_head_channels)
         info += "Value misc size: {valuemisc}\n".format(valuemisc=self.value_misc)
+        info += "Policy Head Type: {polheadtype}\n".format(polheadtype=self.policy_head_type)
         info += "Default activation: {act}\n".format(act=self.activation)
         return info
 
@@ -1234,6 +1376,16 @@ class Network(nn.Module):
         blocks = len(self.stack)
         channels = self.residual_channels
         return "sayuri-b{}xc{}".format(blocks, channels)
+
+    def get_stack_name(self, stack):
+        stackname = list()
+        for blocksetting in self.stack:
+            if type(blocksetting) == str:
+                blockname = blocksetting
+            else:
+                blockname = blocksetting["Block"]
+            stackname.append(blockname)
+        return stackname                
 
     def transfer_to_bin(self, filename):
         def write_stack(f, stack):
@@ -1264,13 +1416,14 @@ class Network(nn.Module):
             f.write(str_to_bin("InputChannels {}\n".format(self.input_channels)))
             f.write(str_to_bin("ResidualChannels {}\n".format(self.residual_channels)))
             f.write(str_to_bin("ResidualBlocks {}\n".format(len(self.stack))))
-            f.write(str_to_bin("PolicyExtract {}\n".format(self.policy_extract)))
-            f.write(str_to_bin("ValueExtract {}\n".format(self.value_extract)))
+            f.write(str_to_bin("PolicyHeadChannels {}\n".format(self.policy_head_channels)))
+            f.write(str_to_bin("ValueHeadChannels {}\n".format(self.value_head_channels)))
             f.write(str_to_bin("ValueMisc {}\n".format(self.value_misc)))
+            f.write(str_to_bin("PolicyHeadType {}\n".format(self.policy_head_type)))
             f.write(str_to_bin("ActivationFunction {}\n".format(self.activation)))
             f.write(str_to_bin("end info\n"))
 
-            write_stack(f, self.stack)
+            write_stack(f, self.get_stack_name(self.stack))
             write_struct(f, self.layers_collector)
             write_params(f, self.layers_collector)
 
@@ -1305,13 +1458,14 @@ class Network(nn.Module):
             f.write("InputChannels {}\n".format(self.input_channels))
             f.write("ResidualChannels {}\n".format(self.residual_channels))
             f.write("ResidualBlocks {}\n".format(len(self.stack)))
-            f.write("PolicyExtract {}\n".format(self.policy_extract))
-            f.write("ValueExtract {}\n".format(self.value_extract))
+            f.write("PolicyHeadChannels {}\n".format(self.policy_head_channels))
+            f.write("ValueHeadChannels {}\n".format(self.value_head_channels))
             f.write("ValueMisc {}\n".format(self.value_misc))
+            f.write("PolicyHeadType {}\n".format(self.policy_head_type))
             f.write("ActivationFunction {}\n".format(self.activation))
             f.write("end info\n")
 
-            write_stack(f, self.stack)
+            write_stack(f, self.get_stack_name(self.stack))
             write_struct(f, self.layers_collector)
             write_params(f, self.layers_collector)
 
