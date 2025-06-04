@@ -141,6 +141,7 @@ Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
     for (int idx = 0; idx < 3; ++idx) {
         result.wdl[idx] = dist(rng);
     }
+    result.stm_winrate = 0.f;
 
     for (int idx = 0; idx < num_intersections; ++idx) {
         result.probabilities[idx] = dist(rng);

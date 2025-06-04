@@ -113,7 +113,7 @@ public:
 
     inline std::string GetName() const { return weights_ ? weights_->name : "random"; }
 
-    inline int GetVersion() const { return weights_->version; }
+    inline int GetVersion() const { return weights_ ? weights_->version : -1; }
 
     std::shared_ptr<DNNWeights> weights_{nullptr};
 };

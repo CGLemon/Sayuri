@@ -1068,7 +1068,6 @@ class Network(nn.Module):
         for key, value in setting_args.items():
             if key == "BottleneckChannels" :
                 blockargs["bottleneck_channels"] = value
-                assert channels % value == 0, ""
             elif key == "SeRatio" :
                 blockargs["se_size"] = channels // value
                 assert channels % self.se_ratio == 0, ""
