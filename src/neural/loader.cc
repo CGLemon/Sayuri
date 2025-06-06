@@ -47,7 +47,7 @@ void DNNLoader::FromFile(std::shared_ptr<DNNWeights> weights, std::string filena
     file.close();
 
     try {
-        LOGGING << Format("Load the weights file from %s.", filename.c_str())
+        LOGGING << Format("Load the weights file from: %s.", filename.c_str())
                     << std::endl;
         Parse(buffer);
         LOGGING << Format("Done! Load the weights file in %.2f sec.",
@@ -60,7 +60,6 @@ void DNNLoader::FromFile(std::shared_ptr<DNNWeights> weights, std::string filena
            weights->name = "network";
        }
     } catch (const std::exception& e) {
-        // Should be not happned.
         LOGGING << "Fail to load the network file!" << std::endl
                     << Format("    Cause: %s", e.what()) << std::endl;
     }
@@ -208,7 +207,8 @@ void DNNLoader::CheckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
     if (!NotFound(netinfo, "Version")) {
         weights_->version = std::stoi(netinfo["Version"]);
 
-        // v1: First network structure.
+        // v1: First network structure. Support for ResidualBlock
+        //     and BottleneckBlock.
         //
         // v2: Fixed the batch normalize layer weights
         //     format. There are some error in the gammas
@@ -219,7 +219,8 @@ void DNNLoader::CheckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
         // v4: Add support for MixerBlock and more activation
         //     function.
         //
-        // v5: On going...
+        // v5: Add support for NestedBottleneckBlock and RepLK
+        //     policy head.
     }
 
     if (weights_->version >= 6) {
@@ -266,8 +267,8 @@ void DNNLoader::CheckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
         weights_->default_act = StringToAct(netinfo["ActivationFunction"]);
     }
 
-    // Build the stack if it is not in weights file. It only
-    // supports for residual block with SE.
+    // Construct the stack if it is not in weights file. Under this condition,
+    // it only supports for residual block with SE.
     if (netstack.empty()) {
         const auto residuals = std::stoi(netinfo["ResidualBlocks"]);
 
@@ -293,6 +294,7 @@ void DNNLoader::CheckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
         }
     }
 
+    // Confirm all components is supported.
     const auto supported_components = std::vector<std::string>{
         "ResidualBlock",
         "BottleneckBlock",
@@ -483,7 +485,7 @@ int DNNLoader::FillBlock(int offset,
             throw std::runtime_error{"the kernel of bottleneck block is wrong"};
         }
     } else if (tower_ptr->IsNestedBottleneckBlock()) {
-        // bottleneck block
+        // nested bottleneck block
         // 1).  Convolution layer with 1x1 kernel
         // 2).  Batch normalize layer
         // ---- 1st Residual Block ----
@@ -659,7 +661,7 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
     }
 
     // There are three types layer. Each layer has
-    // two line weights. Here they are.
+    // two line weights. Here they are:
     //
     // a). Fully connect layer
     //   1. weights
@@ -821,7 +823,7 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
 
 void DNNLoader::ProcessWeights() const {
     const auto ProcessConvBlock = [](ConvLayer &conv, BatchNormLayer &bn) {
-        // Merge the BatchNormLayer into ConvLayer.
+        // Fuse the BatchNormLayer into the ConvLayer.
         for (auto idx = size_t{0};
                  idx < conv.GetBiases().size(); ++idx) {
             conv.GetBiases()[idx] -= bn.GetMeans()[idx];
@@ -894,8 +896,9 @@ void DNNLoader::GetWeightsFromBuffer(std::vector<float> &weights, std::istream &
     } else {
         auto line = std::string{};
         if (std::getline(buffer, line)) {
-            // On MacOS, if the numeric is too small, stringstream
-            // can not parse the number to float, but double is ok.
+            // On macOS, stringstream struggles to parse extremely
+            // small numeric values into a float; however, parsing
+            // them as a double works correctly
             double weight;
 
 #ifdef USE_FAST_PARSER

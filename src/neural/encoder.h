@@ -20,22 +20,7 @@ public:
      *
      * Get the Network input planes.
      *
-     * v1~v2 weights -> v1 encoder:
-     * planes 1 -24 : last 8 history moves, for each three planes
-     *                    1. current player's stones on board
-     *                    2. opponent player's stones on board
-     *                    3. last move
-     * plane     25 : ko move
-     * plane     26 : pass-alive and pass-dead area
-     * planes 27-30 : strings with 1, 2, 3 and 4 liberties 
-     * planes 31-34 : ladder features
-     * plane     35 : komi/20
-     * plane     36 : -komi/20
-     * plane     37 : intersections/361
-     * plane     38 : fill ones
-     *
-     *
-     * v3~v4 weights -> v2 encoder:
+     * v5~v3 weights -> v2 encoder:
      * planes 1 -24 : last 8 history moves, for each three planes
      *                    1. current player's stones on board
      *                    2. opponent player's stones on board
@@ -51,6 +36,21 @@ public:
      * plane     42 : intersections/361
      * plane     43 : fill ones
      *
+     *
+     * v2~v1 weights -> v1 encoder:
+     * planes 1 -24 : last 8 history moves, for each three planes
+     *                    1. current player's stones on board
+     *                    2. opponent player's stones on board
+     *                    3. last move
+     * plane     25 : ko move
+     * plane     26 : pass-alive and pass-dead area
+     * planes 27-30 : strings with 1, 2, 3 and 4 liberties 
+     * planes 31-34 : ladder features
+     * plane     35 : komi/20
+     * plane     36 : -komi/20
+     * plane     37 : intersections/361
+     * plane     38 : fill ones
+     *
      */
     std::vector<float> GetPlanes(const GameState &state,
                                  const int symmetry = Symmetry::kIdentitySymmetry,
@@ -62,10 +62,11 @@ public:
 
     constexpr static int GetEncoderVersion(const int weights_version = -1) {
         switch (weights_version) {
-            case 1: 
-            case 2: return 1;
-            case 3: 
-            case 4: return 2;
+            case 5: 
+            case 4:
+            case 3: return 2; 
+            case 2:
+            case 1: return 1;
             default: break;
         };
         return 2;

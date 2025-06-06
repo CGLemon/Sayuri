@@ -32,11 +32,12 @@ OutputResult CudaForwardPipe::Forward(const InputData &input) {
     const bool should_reorder = planes_bsize != board_size_;
 
     if (should_reorder) {
-        // Data board size is not equal to NN board size. We reorder the
-        // original inputs data to match the NN input size.
+        // The input data's board size doesn't match the NN's expected
+        // input size. We are reordering the original input data to conform
+        // to the NN's input dimensions.
         for (int c = 0; c < weights_->input_channels; ++c) {
-            int offset_r = c * board_size_ * board_size_; // data order index
-            int offset_p = c * planes_bsize * planes_bsize; // NN order index
+            int offset_r = c * board_size_ * board_size_; // data's ordering index
+            int offset_p = c * planes_bsize * planes_bsize; // NN's ordering index
 
             for (int idx = 0; idx < board_size_ * board_size_; ++idx) {
                 const int x = idx % board_size_;
@@ -67,7 +68,7 @@ OutputResult CudaForwardPipe::Forward(const InputData &input) {
     OutputResult reordered_ouput = output;
 
     if (should_reorder) {
-        // Reorder the NN outputs data to the correct data format.
+        // Reorder the NN's outputs data to fit the correct data format.
         int offset_r = 0; // data order index
         int offset_p = 0; // NN order index
         for (int idx = 0; idx < board_size_ * board_size_; ++idx) {
@@ -117,6 +118,10 @@ void CudaForwardPipe::Reload(int board_size) {
     }
 
     // Assign the GPUs.
+
+    // Dynamically allocates GPU resources for neural network computation.
+    // It prioritizes user-specified GPUs, validates them, and if none are
+    // specified or valid, it automatically assigns all available CUDA devices.
     const auto cuda_device_cnt = cuda::GetDeviceCount();
     const auto specific_gpus_cnt = GetOptionCount("gpus");
     auto gpus_list = std::vector<int>{};
