@@ -941,6 +941,8 @@ class Network(nn.Module):
         self.value_head_channels = cfg.value_head_channels
         self.se_ratio = cfg.se_ratio
         self.policy_head_type = cfg.policy_head_type
+        if type(self.policy_head_type) == str:
+            self.policy_head_type = { "Type" : self.policy_head_type }
         self.renorm_clipping = {"rmax" : cfg.renorm_max_r, "dmax" : cfg.renorm_max_d}
         self.value_misc = 15
         self.policy_outs = 5
@@ -959,10 +961,13 @@ class Network(nn.Module):
             activation=self.activation,
             collector=self.layers_collector
         )
-        if self.policy_head_type == "RepLK":
+        if self.policy_head_type["Type"] == "normal":
+            pass
+        elif self.policy_head_type["Type"] == "RepLK":
+            dw_kernel_size = max(self.policy_head_type.get("KernelSize", 7), 7)
             self.policy_depthwise_conv = DepthwiseConvBlock(
                 channels=self.policy_head_channels,
-                kernel_size=7,
+                kernel_size=dw_kernel_size,
                 use_gamma=False,
                 renorm_clipping=self.renorm_clipping,
                 activation=self.activation,
@@ -977,6 +982,9 @@ class Network(nn.Module):
                 activation=self.activation,
                 collector=self.layers_collector
             )
+        else:
+            raise Exception("Invalid policy head type.")
+
         self.policy_intermediate_fc = FullyConnect(
             in_size=self.policy_head_channels * 3,
             out_size=self.policy_head_channels,
@@ -1075,6 +1083,8 @@ class Network(nn.Module):
                 blockargs["kernel_size"] = value
             elif key == "FfnExpansionRatio":
                 blockargs["ffn_expansion_ratio"] = value
+            else:
+                raise Exception("Invalid block setting.")
         return block, channels, blockargs
 
     def create_residual_tower(self):
@@ -1132,7 +1142,7 @@ class Network(nn.Module):
 
         # policy head
         pol = self.policy_conv(x, mask)
-        if self.policy_head_type == "RepLK":
+        if self.policy_head_type["Type"] == "RepLK":
             pol = self.policy_depthwise_conv(pol, mask)
             pol = self.policy_pointwise_conv(pol, mask)
         pol_gpool = self.global_pool(pol, mask_buffers)
@@ -1367,7 +1377,7 @@ class Network(nn.Module):
         info += "Policy head channels: {polhead}\n".format(polhead=self.policy_head_channels)
         info += "Value head channels: {valhead}\n".format(valhead=self.value_head_channels)
         info += "Value misc size: {valuemisc}\n".format(valuemisc=self.value_misc)
-        info += "Policy Head Type: {polheadtype}\n".format(polheadtype=self.policy_head_type)
+        info += "Policy Head Type: {polheadtype}\n".format(polheadtype=self.policy_head_type["Type"])
         info += "Default activation: {act}\n".format(act=self.activation)
         return info
 
@@ -1418,7 +1428,7 @@ class Network(nn.Module):
             f.write(str_to_bin("PolicyHeadChannels {}\n".format(self.policy_head_channels)))
             f.write(str_to_bin("ValueHeadChannels {}\n".format(self.value_head_channels)))
             f.write(str_to_bin("ValueMisc {}\n".format(self.value_misc)))
-            f.write(str_to_bin("PolicyHeadType {}\n".format(self.policy_head_type)))
+            f.write(str_to_bin("PolicyHeadType {}\n".format(self.policy_head_type["Type"])))
             f.write(str_to_bin("ActivationFunction {}\n".format(self.activation)))
             f.write(str_to_bin("end info\n"))
 
@@ -1460,7 +1470,7 @@ class Network(nn.Module):
             f.write("PolicyHeadChannels {}\n".format(self.policy_head_channels))
             f.write("ValueHeadChannels {}\n".format(self.value_head_channels))
             f.write("ValueMisc {}\n".format(self.value_misc))
-            f.write("PolicyHeadType {}\n".format(self.policy_head_type))
+            f.write("PolicyHeadType {}\n".format(self.policy_head_type["Type"]))
             f.write("ActivationFunction {}\n".format(self.activation))
             f.write("end info\n")
 
