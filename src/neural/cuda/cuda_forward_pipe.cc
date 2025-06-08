@@ -647,7 +647,8 @@ void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
     const size_t conv_op_size = factor * peak_channels * num_intersections;
 
     const size_t pol_op1_size = factor * policy_head_channels * num_intersections;
-    const size_t pol_op2_size = factor * policy_head_channels * 3;
+    // pol_op2 may be for RepLK head
+    const size_t pol_op2_size = factor * policy_head_channels * num_intersections;
     const size_t pol_op3_size = factor * policy_head_channels;
 
     const size_t val_op1_size = factor * value_head_channels * num_intersections;
