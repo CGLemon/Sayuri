@@ -354,6 +354,11 @@ void DNNLoader::DumpInfo() const {
         out << '\n';
     }
 
+    auto pol_head_type = std::string{"Normal"};
+    if (weights_->policy_head_type == PolicyHeadType::kRepLK) {
+        pol_head_type = "RepLK";
+    }
+    out << "Policy Head Type: " << pol_head_type << '\n';
     out << "Policy Head Channels: " << weights_->policy_head_channels << '\n';
     out << "Value Head Channels: " << weights_->value_head_channels << '\n';
 
