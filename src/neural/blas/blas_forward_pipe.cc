@@ -11,8 +11,7 @@
 #include <algorithm>
 
 void BlasForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
-    Load(weights);
-    InitWinograd();
+    Construct(ForwardPipeParameters::Get(), weights);
 }
 
 void BlasForwardPipe::InitWinograd() {
@@ -56,10 +55,6 @@ void BlasForwardPipe::InitWinograd() {
         }
     }
     weights_->winograd_initialized = true;
-}
-
-void BlasForwardPipe::Load(std::shared_ptr<DNNWeights> weights) {
-    weights_ = weights;
 }
 
 void BlasForwardPipe::Convolution3Forward(const int board_size,
@@ -654,7 +649,7 @@ void BlasForwardPipe::FillOutputs(const std::vector<float> &output_prob,
     }
 }
 
-bool BlasForwardPipe::Valid() {
+bool BlasForwardPipe::Valid() const {
     return weights_ != nullptr;
 }
 
@@ -662,4 +657,10 @@ void BlasForwardPipe::Release() {}
 
 void BlasForwardPipe::Destroy() {}
 
-void BlasForwardPipe::Reload(int) {}
+void BlasForwardPipe::Construct(ForwardPipeParameters /* param */,
+                                std::shared_ptr<DNNWeights> weights) {
+    if (weights) {
+        weights_ = weights;
+        InitWinograd();
+    }
+}

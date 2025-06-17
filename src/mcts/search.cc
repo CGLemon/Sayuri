@@ -316,7 +316,8 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
 
     if (param_->analysis_verbose) {
         LOGGING << Format("Reuse %d nodes\n", root_node_->GetVisits()-1);
-        LOGGING << Format("Use %d threads for search\n", param_->threads);
+        LOGGING << Format("Using %d threads for search, and %d as the network's batch size\n",
+                              computation_result.threads, computation_result.batch_size);
         LOGGING << Format("Max thinking time: %.2f(sec)\n", thinking_time);
         LOGGING << Format("Max playouts number: %d\n", playouts);
     }

@@ -438,8 +438,8 @@ void Network::Destroy() {
     }
 }
 
-void Network::Reload(int board_size) {
+void Network::Reconstruct(Network::Parameters param) {
     if (pipe_) {
-        pipe_->Reload(board_size);
+        pipe_->Construct(param, nullptr);
     }
 }

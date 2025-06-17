@@ -22,11 +22,10 @@ public:
 
     virtual OutputResult Forward(const InputData &input);
 
-    virtual bool Valid();
+    virtual bool Valid() const;
 
-    virtual void Load(std::shared_ptr<DNNWeights> weights);
-
-    virtual void Reload(int board_size);
+    virtual void Construct(ForwardPipeParameters param,
+                           std::shared_ptr<DNNWeights> weights);
 
     virtual void Release();
 
@@ -76,11 +75,11 @@ private:
     public:
         NNGraph(std::mutex &mtx) : io_mutex_(mtx) {}
         ~NNGraph();
-        void BuildGraph(bool dump_gpu_info,
-                        const int gpu,
-                        const int max_batch_size,
-                        const int board_size,
-                        std::shared_ptr<DNNWeights> weights);
+        void ConstructGraph(bool dump_gpu_info,
+                            const int gpu,
+                            const int max_batch_size,
+                            const int board_size,
+                            std::shared_ptr<DNNWeights> weights);
 
         std::vector<OutputResult> BatchForward(const std::vector<InputData> &input);
 

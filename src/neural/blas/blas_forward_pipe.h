@@ -12,15 +12,14 @@ public:
 
     virtual OutputResult Forward(const InputData &inpnt);
 
-    virtual bool Valid();
-
-    virtual void Load(std::shared_ptr<DNNWeights> weights);
-
-    virtual void Reload(int);
+    virtual void Construct(ForwardPipeParameters param,
+                           std::shared_ptr<DNNWeights> weights);
 
     virtual void Release();
 
     virtual void Destroy();
+
+    virtual bool Valid() const;
 
 private:
     void InitWinograd();

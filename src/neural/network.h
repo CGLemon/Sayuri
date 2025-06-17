@@ -21,6 +21,7 @@ public:
     using Inputs = InputData;
     using Result = OutputResult;
     using Query = ForwardQuery;
+    using Parameters = ForwardPipeParameters;
     using Cache = HashKeyCache<Result>;
     using PolicyVertexPair = std::pair<float, int>;
 
@@ -40,7 +41,7 @@ public:
                                 const Ensemble ensemble,
                                 Network::Query = {});
 
-    void Reload(int board_size);
+    void Reconstruct(const Network::Parameters);
 
     size_t SetCacheSize(size_t MiB);
     size_t GetCacheMib() const;

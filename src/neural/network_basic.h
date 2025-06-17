@@ -95,25 +95,47 @@ struct ForwardQuery {
     PolicyBufferOffset offset{PolicyBufferOffset::kDefault};
 };
 
+struct ForwardPipeParameters {
+    ForwardPipeParameters() = default;
+
+    static ForwardPipeParameters Get() {
+        ForwardPipeParameters param;
+        return param;
+    }
+
+    ForwardPipeParameters SetBoardSize(int size) {
+        board_size = size;
+        return *this;
+    }
+    ForwardPipeParameters SetBatchSize(int size) {
+        batch_size = size;
+        return *this;
+    }
+
+    bool IsValidBoardSize() const { return board_size > 0; }
+    bool IsValidBatchSize() const { return batch_size > 0; }
+
+    int board_size{-1};
+    int batch_size{-1};
+};
+
 class NetworkForwardPipe {
 public:
     virtual void Initialize(std::shared_ptr<DNNWeights> weights) = 0;
 
     virtual OutputResult Forward(const InputData &inpnt) = 0;
 
-    virtual bool Valid() = 0;
-
-    virtual void Load(std::shared_ptr<DNNWeights> weights) = 0;
-
-    virtual void Reload(int) = 0;
+    virtual void Construct(ForwardPipeParameters param, std::shared_ptr<DNNWeights> weights) = 0;
 
     virtual void Release() = 0;
 
     virtual void Destroy() = 0;
 
-    inline std::string GetName() const { return weights_ ? weights_->name : "random"; }
+    virtual bool Valid() const = 0;
 
-    inline int GetVersion() const { return weights_ ? weights_->version : -1; }
+    inline std::string GetName() const { return Valid() ? weights_->name : "random"; }
+
+    inline int GetVersion() const { return Valid() ? weights_->version : -1; }
 
     std::shared_ptr<DNNWeights> weights_{nullptr};
 };

@@ -94,7 +94,8 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
                 bsize <= kMaxGTPBoardSize &&
                 bsize >= kMinGTPBoardSize) {
             agent_->GetState().SetBoardSize(bsize);
-            agent_->GetNetwork().Reload(bsize);
+            agent_->GetNetwork().Reconstruct(
+                Network::Parameters::Get().SetBoardSize(bsize));
             out << GtpSuccess("");
         } else {
             out << GtpFail("invalid board size");
@@ -625,8 +626,9 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         Timer timer;
         timer.Clock();
 
-        const auto threads = GetOption<int>("threads");
-        const auto batch_size = GetOption<int>("batch_size");
+        Parameters * param = agent_->GetSearch().GetParams();
+        const auto threads = param->threads;
+        const auto batch_size = param->batch_size;
         for (int i = 0; i < threads; ++i) {
             group.AddTask(Worker);
         }
@@ -1406,6 +1408,13 @@ bool GtpLoop::ParseOption(Splitter &spt, std::string &rep) {
                 rep = "invalid rule";
                 return false;
             }
+        } else if (name == "threads") {
+            param->threads = std::stoi(value);
+            ThreadPool::Get("search", param->threads);
+        } else if (name == "batch size") {
+            param->batch_size = std::stoi(value);
+            agent_->GetNetwork().Reconstruct(
+                Network::Parameters::Get().SetBatchSize(param->batch_size));
         } else {
             rep = "invalid option name";
             return false;

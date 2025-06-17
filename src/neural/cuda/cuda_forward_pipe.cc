@@ -18,7 +18,10 @@ void CudaForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
 
     group_ = std::make_unique<ThreadGroup<void>>(&ThreadPool::Get());
 
-    Load(weights); // Will select max batch size.
+    auto param = ForwardPipeParameters::Get().
+                     SetBoardSize(GetOption<int>("defualt_boardsize")).
+                     SetBatchSize(GetOption<int>("batch_size"));
+    Construct(param, weights);
 
     AssignWorkers(); // Run the batch forwarding worker.
 }
@@ -88,36 +91,37 @@ OutputResult CudaForwardPipe::Forward(const InputData &input) {
     return reordered_ouput;
 }
 
-bool CudaForwardPipe::Valid() {
+bool CudaForwardPipe::Valid() const {
     return weights_ != nullptr;
 }
 
-void CudaForwardPipe::Load(std::shared_ptr<DNNWeights> weights) {
-    weights_ = weights;
-    Reload(GetOption<int>("defualt_boardsize"));
-}
-
-void CudaForwardPipe::Reload(int board_size) {
-    if (board_size_ == board_size) {
-        return;
+void CudaForwardPipe::Construct(ForwardPipeParameters param,
+                                std::shared_ptr<DNNWeights> weights) {
+    // Construct the network with parameters (e.g., board_size) and weights.
+    // If the current parameters are the same as the new ones, exit the function 
+    // immediately.
+    if (weights) {
+        weights_ = weights;
+    }
+    if (weights_ == nullptr) {
+        throw std::runtime_error("No valid weights!");
     }
 
+    int board_size = param.IsValidBoardSize() ?
+                         param.board_size : board_size_;
+    int batch_size = param.IsValidBatchSize() ?
+                         param.batch_size : max_batch_per_nn_;
+    // Select the matched board size.
+    board_size = std::max(board_size, GetOption<int>("fixed_nn_boardsize"));
+
+    if (board_size_ == board_size &&
+            batch_size == max_batch_per_nn_) {
+        return;
+    }
     Release();
 
-    if (weights_ == nullptr) {
-        return;
-    }
-
-    // Select the matched board size.
-    const int fixed_nn_boardsize =
-                  std::max(board_size, GetOption<int>("fixed_nn_boardsize"));
-    if (fixed_nn_boardsize > 0) {
-        board_size_ = fixed_nn_boardsize;
-    } else {
-        board_size_ = board_size;
-    }
-
-    // Assign the GPUs.
+    board_size_ = board_size;
+    max_batch_per_nn_ = batch_size;
 
     // Dynamically allocates GPU resources for neural network computation.
     // It prioritizes user-specified GPUs, validates them, and if none are
@@ -149,11 +153,11 @@ void CudaForwardPipe::Reload(int board_size) {
         nngraphs_.emplace_back(std::make_unique<NNGraph>(io_mutex_));
     }
 
-    // TODO: Assign different batch size by device computing capability.
-    max_batch_per_nn_ = GetOption<int>("batch_size");
+    max_batch_per_nn_ = batch_size;
 
+    // Construct network graph for each valid GPU.
     for (auto i = size_t{0}; i < gpus_list.size(); ++i) {
-        nngraphs_[i]->BuildGraph(
+        nngraphs_[i]->ConstructGraph(
             dump_gpu_info_, gpus_list[i], max_batch_per_nn_, board_size_, weights_);
     }
 
@@ -172,11 +176,11 @@ void CudaForwardPipe::Destroy() {
     QuitWorkers();
 }
 
-void CudaForwardPipe::NNGraph::BuildGraph(bool dump_gpu_info,
-                                          const int gpu,
-                                          const int max_batch_size,
-                                          const int board_size,
-                                          std::shared_ptr<DNNWeights> weights) {
+void CudaForwardPipe::NNGraph::ConstructGraph(bool dump_gpu_info,
+                                              const int gpu,
+                                              const int max_batch_size,
+                                              const int board_size,
+                                              std::shared_ptr<DNNWeights> weights) {
     if (graph_ != nullptr) {
         return;
     }

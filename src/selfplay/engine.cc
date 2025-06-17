@@ -180,7 +180,8 @@ void Engine::ParseQueries() {
                        std::end(scoring_set_));
 
     // Adjust the matched NN size.
-    network_->Reload(max_bsize);
+    network_->Reconstruct(
+        Network::Parameters::Get().SetBoardSize(max_bsize));
 }
 
 void Engine::GatherSgfString(std::string &sgf, int g) {
