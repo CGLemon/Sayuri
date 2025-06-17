@@ -6,6 +6,7 @@
         "PolicyExtract" : 24,
         "ValueExtract" : 24,
         "SeRatio" : 4,
+        "PolicyHeadType" : "RepLK",
         "Activation" : "mish",
 
         "Stack" : [
@@ -14,7 +15,7 @@
             "ResidualBlock-SE",
             "ResidualBlock",
             "ResidualBlock",
-            "MixerBlock-SE"
+            "ResidualBlock-SE"
         ]
     },
 

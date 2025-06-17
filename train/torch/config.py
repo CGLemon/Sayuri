@@ -68,7 +68,7 @@ class Config:
         self.input_channels = network.get("InputChannels", 43)
         self.residual_channels = network.get("ResidualChannels", None)
 
-        self.policy_head_type = network.get("PolicyHeadType", { "Type" : "normal" })
+        self.policy_head_type = network.get("PolicyHeadType", { "Type" : "Normal" })
         self.policy_head_channels = network.get("PolicyExtract", None) # v1 ~ v4 net
         if self.policy_head_channels is None:
             self.policy_head_channels = network.get("PolicyHeadChannels", None) # since v5 net

@@ -961,7 +961,7 @@ class Network(nn.Module):
             activation=self.activation,
             collector=self.layers_collector
         )
-        if self.policy_head_type["Type"] == "normal":
+        if self.policy_head_type["Type"] == "Normal":
             pass
         elif self.policy_head_type["Type"] == "RepLK":
             dw_kernel_size = max(self.policy_head_type.get("KernelSize", 7), 7)
