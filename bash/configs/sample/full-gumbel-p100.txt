@@ -47,7 +47,6 @@
 --resign-discard-prob 0.9
 
 --parallel-games 128
---batch-size 64
 --cache-memory-mib 400
 --early-symm-cache
 --first-pass-bonus

@@ -19,9 +19,6 @@ void SelfPlayPipe::Initialize() {
     // Close search verbose.
     SetOption("analysis_verbose", false);
 
-    // For each game has only one thread.
-    SetOption("threads", 1);
-
     // Disable time management.
     SetOption("timemanage", (int)TimeControl::TimeManagement::kOff);
 
@@ -340,11 +337,12 @@ void SelfPlayPipe::Loop() {
     CreateWorkspace();
 
     // Dump some infomations.
-    LOGGING << "============================================" << std::endl;
-    LOGGING << "Hash value: " << filename_hash_ << std::endl;
-    LOGGING << "Target self-play games: " << max_games_ << std::endl;
-    LOGGING << "Directory for saving: " << target_directory_  << std::endl;
-    LOGGING << "Starting time is: " << CurrentDateTime()  << std::endl;
+    LOGGING << "============================================" << std::endl
+                << "Hash value: " << filename_hash_ << std::endl
+                << "Number of parallel games: " << engine_.GetParallelGames() << std::endl
+                << "Target self-play games: " << max_games_ << std::endl
+                << "Directory for saving: " << target_directory_  << std::endl
+                << "Starting time is: " << CurrentDateTime()  << std::endl;
 
     AssignDataWorker();
     AssignSelfplayWorkers();

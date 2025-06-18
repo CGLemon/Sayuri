@@ -104,7 +104,8 @@ void CudaForwardPipe::Construct(ForwardPipeParameters param,
         weights_ = weights;
     }
     if (weights_ == nullptr) {
-        throw std::runtime_error("No valid weights!");
+        // use dummy backend
+        return;
     }
 
     int board_size = param.IsValidBoardSize() ?
