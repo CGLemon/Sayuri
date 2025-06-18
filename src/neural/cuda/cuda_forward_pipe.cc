@@ -62,7 +62,7 @@ OutputResult CudaForwardPipe::Forward(const InputData &input) {
         entry_queue_.emplace_back(entry);
     }
 
-    if (static_cast<int>(entry_queue_.size()) >= max_batch_per_nn_) {
+    if (static_cast<int>(entry_queue_.size()) >= forwarding_batch_per_nn_) {
         cv_.notify_one(); // Wake up one worker if there are enough batch size.
     }
     entry->cv.wait(lock); // Wait for batch forwarding worker.
@@ -114,8 +114,14 @@ void CudaForwardPipe::Construct(ForwardPipeParameters param,
     // Select the matched board size.
     board_size = std::max(board_size, GetOption<int>("fixed_nn_boardsize"));
 
+    if (board_size == 0 || batch_size == 0) {
+        LOGGING << "NN board size/batch size should be larger than zero.\n";
+        return;
+    }
+
+    forwarding_batch_per_nn_ = batch_size;
     if (board_size_ == board_size &&
-            batch_size == max_batch_per_nn_) {
+            batch_size <= max_batch_per_nn_) {
         return;
     }
     Release();
@@ -1220,7 +1226,7 @@ void CudaForwardPipe::Worker(int gpu) {
                 if (!worker_running_.load(std::memory_order_relaxed)) {
                     return entries;
                 }
-                if (static_cast<int>(entry_queue_.size()) >= max_batch_per_nn_) {
+                if (static_cast<int>(entry_queue_.size()) >= forwarding_batch_per_nn_) {
                     break;
                 }
 
@@ -1231,7 +1237,7 @@ void CudaForwardPipe::Worker(int gpu) {
                         lock, std::chrono::milliseconds(waittime_.load(std::memory_order_relaxed)),
                         [this]() {
                             return !worker_running_.load(std::memory_order_relaxed) ||
-                                       static_cast<int>(entry_queue_.size()) >= max_batch_per_nn_; });
+                                       static_cast<int>(entry_queue_.size()) >= forwarding_batch_per_nn_; });
                 }
 
                 if (entry_queue_.empty()) {
@@ -1255,7 +1261,7 @@ void CudaForwardPipe::Worker(int gpu) {
         // Gather the entries and return.
         {
             std::unique_lock<std::mutex> lock(queue_mutex_);
-            auto count = std::min(static_cast<int>(entry_queue_.size()), max_batch_per_nn_);
+            auto count = std::min(static_cast<int>(entry_queue_.size()), forwarding_batch_per_nn_);
             auto end = std::begin(entry_queue_);
             std::advance(end, count);
             std::move(std::begin(entry_queue_), end, std::back_inserter(entries));

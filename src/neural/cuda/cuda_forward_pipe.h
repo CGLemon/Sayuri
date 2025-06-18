@@ -156,7 +156,8 @@ private:
     std::unique_ptr<ThreadGroup<void>> group_;
 
     bool dump_gpu_info_;
-    int max_batch_per_nn_;
+    int max_batch_per_nn_{0};
+    int forwarding_batch_per_nn_{0};
     int board_size_{0};
 
     void AssignWorkers();
