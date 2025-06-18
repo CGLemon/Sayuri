@@ -2,14 +2,19 @@
 
 ## Supervised Learning
 
-You should prepare the training data and config json file. Then rewriting the ```TrainDirectory``` as your training data path. You may ask how to find out the data? The only way is you need to generate the data by yourself via RL script. Please go to the bash to see the detail. After you run RL loop, the generated data should be at the ```selfplay/tdata```. Then type the following script
+
+To begin training, first prepare your training data and a configuration JSON file. You will need to update the ```TrainDirectory``` entry in your configuration file to point to your training data path. You may ask how to find out the data?  The training data must be generated through the Reinforcement Learning (RL) script. For detailed instructions on data generation, please refer to the relevant section in the [bash](../bash/README.md) directory. After running the RL loop, the generated data will be located in selfplay/tdata. 
+
+Once your data is ready, execute the training script
 
     $ python3 torch/train.py -j sl-setting.json
 
 
 ## Python Engine
 
-PySayuri is independent GTP engine without any CPP source code. PySayuri provides a wrapper to excute network for developer. All functions are written in ```Agent``` class. You could be more easy to import code into your project. The checkpoint models are released after 4th main run in the [page](../docs/MODEL.md), so you don't need to run RL loop again. For quick start, please type
+PySayuri is an independent GTP (Go Text Protocol) engine, implemented entirely in Python without any C++ source code. It offers a convenient wrapper for developers to execute its neural network. All core functionalities are encapsulated within the ```Agent``` class, making it easy to integrate PySayuri's code directly into your projects. Checkpoint models are released starting from the 4th Run and can be found on this [page](../docs/MODEL.md). This means you do not need to perform the Reinforcement Learning (RL) loop yourself.
+
+To get started quickly, simply type
 
     $ python3 torch/pysayuri.py -c model.pt -p 100 --use-swa
 
@@ -23,14 +28,13 @@ More arguments descript are here.
     - ```--use-gpu```: Will use the GPU if GPU is valid.
     - ```--scoring-rule```: Should be one of area/territory. The area is Chinese-like Rules. The territory is Japanese-like Rules.
 
-
 ## Visualization Tool
 
-It is experimental code and based on PySayuri. The visualization tool can print feature map of policy/value head. Please download the checkpoint model first. Then type the following script. The result pictures will be saved in the ```result```
+This experimental tool, built upon PySayuri, allows you to visualize the feature maps of the policy and value heads. First, please download the desired checkpoint model. Then, execute the following script. The result pictures will be saved in the ```result```
+
 
     $ python3 torch/visualize.py -c model.pt -r result
 
-
-If you want to select a specific SGF file, please add the argument ```--sgf```.
+To process a specific SGF file, include the ```----sgf```-- argument. Please type
 
     $ python3 torch/visualize.py -c model.pt -r result --sgf sgf-file

@@ -8,6 +8,7 @@
         "SeRatio" : 4,
         "PolicyHeadType" : "RepLK",
         "Activation" : "mish",
+        "NamePostfix" : "",
 
         "Stack" : [
             "ResidualBlock",

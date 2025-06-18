@@ -77,6 +77,7 @@ class Config:
             self.value_head_channels = network.get("ValueHeadChannels", None) # since v5 net
         self.se_ratio = network.get("SeRatio", 2)
         self.stack = network.get("Stack", [])
+        self.netname_postfix = network.get("NamePostfix", "")
 
         assert self.input_channels != None, ""
         assert self.residual_channels != None, ""

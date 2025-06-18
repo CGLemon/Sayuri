@@ -7,24 +7,29 @@
 
 ## Let's ROCK!
 
-Sayuri is a GTP-compliant go engine based on Deep Convolutional Neural Network and Monte Carlo Tree Search. Learning the game of Go without strategic knowledge from human with AlphaZero-based algorithm. She is strongly inspired by Leela Zero and KataGo. The board data structure, search algorithm and network format are borrowed from Leela Zero in the beginning. Current version follows the KataGo research, the engine supports variable rules, komi and board size now. Some methods or reports you may see my articles (some are Chinese).
+**Sayuri** is a GTP-compliant Go engine built on Deep Convolutional Neural Networks and Monte Carlo Tree Search. It learns to play Go from scratch using an AlphaZero-style algorithm, without any handcrafted human strategies. Inspired heavily by **Leela Zero** and **KataGo**, Sayuri initially borrowed its board data structures, search algorithms, and network format from Leela Zero. In later versions, the engine follows KataGo's research and now supports variable rulesets, komi settings, and board sizes.
 
-* [開發日誌](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/BJgfay0Yc)
-* [The performance report before UEC15 (v0.6)](https://drive.google.com/file/d/1ATd_u-E-OnviczsDH8wVL0c3Q1NzUCKW/view?usp=share_link)
+For development insights and reports, see:
+* [Development Log (in Chinese)](https://hackmd.io/@yrHb-fKBRoyrKDEKdPSDWg/BJgfay0Yc)
+* [Performance Report before UEC15 (v0.6)](https://drive.google.com/file/d/1ATd_u-E-OnviczsDH8wVL0c3Q1NzUCKW/view?usp=share_link)
+
 
 ## Quick Start via Terminal
 
-First, a executable weights is necessary. You could get the released weights from this [page](./docs/MODEL.md). If you want to load the older network, please use the v0.5 engine at the ```save-last-v050``` branch. Then start the program with GTP mode via the terminal/PowerShell, using 1 thread and 400 visits per move with optimistic policy, please type
+To run the engine, you need a executable weights first. The released weights can be got from this [page](./docs/MODEL.md). Then launching the engine with GTP mode via the terminal/PowerShell, using 1 thread and 400 visits per move with optimistic policy. Please type
 
     $ ./sayuri -w <weights file> -t 1 -p 400 --use-optimistic-policy
 
-You will see the diagnostic verbose. If the verbose includes ```Network Version``` information, it means you success to execute the program with GPT mode. But the GTP mode is not designed for human. You need a GUI application. Please see Graphical Interface part. For more arguments, please give the ```--help``` option.
+
+After executing the command, you'll see diagnostic output. If this output includes ```Network Version```, it indicates that the engine is successfully running in GPT mode. However, since GPT mode isn't designed for human interaction, you should use the graphical interface (GUI) instead. Please refer to the **Graphical Interface** section for more details.
+
+For a list of additional command-line arguments, use the --help option. Please type
 
     $ ./sayuri --help
 
-The default engine is Chinese-like rule. The engine will keep to remove non-pass-alive stones even though the area is clear. To avoid the stupid pass move, please add ```--friendly-pass``` option under the Chinese-like rule or select Japnese-like rule by adding ```--scoring-rule territory``` option.
+The default engine uses a Chinese-like rule, which has a tendency to keep playing to remove some dead stones, even when their ownership of an area is clear. This can lead to unwanted capturing moves. To prevent these unnecessary moves, you have two options. First, while using the Chinese-like rule, add the ```--friendly-pass``` option. Second, switch to a Japanese-like rule by using the ```--scoring-rule territory``` option.
 
-You may execute pure Python engine with checkpoint model except for CPP engine since 4th run. The released checkpoint models could be found from this [page](./docs/MODEL.md). Thought the Python engine is very weak, you could run the raw model quickly. More detail you may see [here](./train/README.md).
+You can utilize the pure Python engine with a checkpoint model. The released checkpoint models could be found from this [page](./docs/MODEL.md). Although the Python engine is significantly weaker than the C++ engine, it makes running the raw model much easier. More detail you may see [here](./train/README.md).
 
     $ python3 train/torch/pysayuri.py -c model.pt --use-swa
 
@@ -42,21 +47,15 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 
 ## Build From Source
 
-Please see this [section](./docs/COMPILE.md). If you are Windows platform, you may download the executable file from [release page](https://github.com/CGLemon/Sayuri/releases).
+Please see this [section](./docs/COMPILE.md). For those on the Windows platform, an executable file can be downloaded directly from the [release page](https://github.com/CGLemon/Sayuri/releases).
 
 ## Reinforcement Learning
 
-Sayuri is a fairly fast self-play learning system for the game of Go. The pictute shows the estimated computation of v0.7 engine (purple line) versus KataGo and LeelaZero. Compare sayuri with ELF OpenGo, achieving a around 250x reduction in computation. In detail, spending 3 months on a single RTX4080 device. The result is apparently better than KataGo g104 which claims 50x reduction in computation.
+Sayuri is a high-efficiency self-play learning system for the game of Go. The accompanying figure illustrates the estimated computational cost of the v0.7 engine (purple line) in comparison to KataGo and LeelaZero. Notably, Sayuri achieves approximately a 250x reduction in computational requirements compared to ELF OpenGo. This was demonstrated by a full training run completed in just three months on a single RTX 4080 GPU. This efficiency significantly surpasses the 50x computational reduction claimed by KataGo g104.
 
 [Here](./bash/README.md) will describe how to run the self-play loop.
 
 ![sayuri-vs-kata](./img/sayurivskata-v7.png)
-
-## Todo
-
-* Support NHWC format.
-* Support distributed computation.
-* Support KataGo analysis mode.
 
 ## Other Resources
 

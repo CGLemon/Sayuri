@@ -287,6 +287,7 @@ class TrainingPipe():
         self.scaler = torch.amp.GradScaler("cuda") if self.use_fp16 else None
         self.net = Network(cfg)
         self.net.train()
+        self.netname_postfix = cfg.netname_postfix
 
         # The Store root directory.
         self.store_path = cfg.store_path
@@ -405,7 +406,8 @@ class TrainingPipe():
 
     def _save_current_status(self):
         self._validate_the_last_model()
-        status = "{}-s{}-c{}".format(self.module.get_name(), self.current_steps, self.num_all_chunks)
+        netname = "{}{}".format(self.module.get_name(), self.netname_postfix)
+        status = "{}-s{}-c{}".format(netname, self.current_steps, self.num_all_chunks)
         if not self.num_chunks is None:
             status += "-w{}".format(self.num_chunks)
 
