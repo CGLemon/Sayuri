@@ -92,6 +92,7 @@ private:
 
     AnalysisConfig ParseAnalysisConfig(Splitter &spt, int &color);
     bool ParseOption(Splitter &spt, std::string &rep);
+    void NetworkBenchmark(Splitter &spt);
 
     std::string Execute(Splitter &spt, bool &try_ponder);
 

@@ -604,42 +604,99 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         } else {
             out << GtpFail(rep);
         }
-    } else if (const auto res = spt.Find("benchmark", 0)) {
-        int eval_cnt = 3200;
+    } else if (const auto res = spt.Find("netbench", 0)) {
+        Parameters * param = agent_->GetSearch().GetParams();
+        const auto orig_batch = param->batch_size;
+        auto batchsize_list = std::vector<int>{};
+        auto rep = std::string{};
+        float timelimit = 10.0f;
 
-        if (const auto e = spt.GetWord(1)) {
-            eval_cnt = std::max(e->Get<int>(), 1);
+        int curr_idx = 1;
+        while (true) {
+            auto token = spt.GetWord(curr_idx++);
+            if (!token) {
+                break;
+            }
+            if (token->Lower() == "timelimit") {
+               if (auto time_token = spt.GetWord(curr_idx)) {
+                    timelimit = time_token->Get<float>();
+                    curr_idx += 1;
+                }
+                continue;
+            }
+            if (token->Lower() == "batchsize") {
+                while (auto bs_token = spt.GetWord(curr_idx)) {
+                    if (!bs_token) {
+                        break;
+                    }
+                    if (!bs_token->IsDigit()) {
+                        break;
+                    }
+                    batchsize_list.emplace_back(bs_token->Get<int>());
+                    curr_idx += 1;
+                }
+                continue;
+            }
         }
 
-        agent_->GetNetwork().ClearCache();
-        auto group = ThreadGroup<void>(&ThreadPool::Get());
+        if (batchsize_list.empty()) {
+            batchsize_list.emplace_back(orig_batch);
+        }
+        std::sort(std::begin(batchsize_list), std::end(batchsize_list));
+        batchsize_list.erase(
+            std::unique(std::begin(batchsize_list), std::end(batchsize_list) ),
+            std::end(batchsize_list));
 
+        std::atomic<bool> running{false};
         std::atomic<int> count{0};
-        const auto Worker = [&, this, eval_cnt]() -> void {
-            while (count.load(std::memory_order_relaxed) < eval_cnt) {
+        const auto Worker = [&, this]() -> void {
+            while (running.load(std::memory_order_relaxed)) {
                 count.fetch_add(1, std::memory_order_relaxed);
                 agent_->GetNetwork().GetOutput(
-                    agent_->GetState(), Network::kRandom, Network::Query::Get().SetCache(false));
+                    agent_->GetState(), Network::kRandom,
+                    Network::Query::Get().SetCache(false));
             }
         };
 
-        Timer timer;
-        timer.Clock();
+        for (int batch_size: batchsize_list) {
+            const int threads = batch_size * 2;
 
-        Parameters * param = agent_->GetSearch().GetParams();
-        const auto threads = param->threads;
-        const auto batch_size = param->batch_size;
-        for (int i = 0; i < threads; ++i) {
-            group.AddTask(Worker);
+            auto optstr = Format(
+                "sayuri-setoption name batch size value %d", batch_size);
+            auto spt = Splitter(optstr);
+            ParseOption(spt, rep);
+
+            Timer timer;
+            timer.Clock();
+
+            auto group = ThreadGroup<void>(&ThreadPool::Get("search", threads));
+            running.store(true, std::memory_order_relaxed);
+            count.store(0, std::memory_order_relaxed);
+
+            for (int i = 0; i < threads; ++i) {
+                group.AddTask(Worker);
+            }
+            while (timer.GetDuration() < timelimit) {
+                std::this_thread::yield();
+            }
+            running.store(false, std::memory_order_relaxed);
+            group.WaitToJoin();
+            const auto elapsed = timer.GetDuration();
+
+            LOGGING <<
+                Format("Eval Stats - Total: %d evals | Rate: %.2f evals/s | Batch Size: %d\n",
+                    count.load(std::memory_order_relaxed),
+                    count.load(std::memory_order_relaxed)/elapsed,
+                    batch_size);
         }
-        group.WaitToJoin();
 
-        const auto elapsed = timer.GetDuration();
-        out << GtpSuccess(
-            Format("%d -> %.2f(eval/s), threads=%d, batchsize=%d",
-                count.load(),
-                count.load()/elapsed,
-                threads, batch_size));
+        {
+            auto optstr = Format(
+                "sayuri-setoption name batch size value %d", orig_batch);
+            auto spt = Splitter(optstr);
+            ParseOption(spt, rep);
+        }
+        out << GtpSuccess("");
     } else if (const auto res = spt.Find("genbook", 0)) {
         auto sgf_file = std::string{};
         auto data_file = std::string{};

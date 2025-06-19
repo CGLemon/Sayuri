@@ -100,7 +100,7 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "kgs-time_settings",
 
-    "benchmark",
+    "netbench",
 
     "genbook",
 
