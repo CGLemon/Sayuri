@@ -438,8 +438,8 @@ void Network::Destroy() {
     }
 }
 
-void Network::Reconstruct(Network::Parameters param) {
+void Network::Reconstruct(Network::Option option) {
     if (pipe_) {
-        pipe_->Construct(param, nullptr);
+        pipe_->Construct(option, nullptr);
     }
 }

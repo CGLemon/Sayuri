@@ -18,10 +18,10 @@ void CudaForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
 
     group_ = std::make_unique<ThreadGroup<void>>(&ThreadPool::Get());
 
-    auto param = ForwardPipeParameters::Get().
-                     SetBoardSize(GetOption<int>("defualt_boardsize")).
-                     SetBatchSize(GetOption<int>("batch_size"));
-    Construct(param, weights);
+    auto option = ForwardPipeOption::Get().
+                      SetBoardSize(GetOption<int>("defualt_boardsize")).
+                      SetBatchSize(GetOption<int>("batch_size"));
+    Construct(option, weights);
 
     AssignWorkers(); // Run the batch forwarding worker.
 }
@@ -95,7 +95,7 @@ bool CudaForwardPipe::Valid() const {
     return weights_ != nullptr;
 }
 
-void CudaForwardPipe::Construct(ForwardPipeParameters param,
+void CudaForwardPipe::Construct(ForwardPipeOption option,
                                 std::shared_ptr<DNNWeights> weights) {
     // Construct the network with parameters (e.g., board_size) and weights.
     // If the current parameters are the same as the new ones, exit the function 
@@ -108,10 +108,10 @@ void CudaForwardPipe::Construct(ForwardPipeParameters param,
         return;
     }
 
-    int board_size = param.IsValidBoardSize() ?
-                         param.board_size : board_size_;
-    int batch_size = param.IsValidBatchSize() ?
-                         param.batch_size : max_batch_per_nn_;
+    int board_size = option.IsValidBoardSize() ?
+                         option.board_size : board_size_;
+    int batch_size = option.IsValidBatchSize() ?
+                         option.batch_size : max_batch_per_nn_;
     // Select the matched board size.
     board_size = std::max(board_size, GetOption<int>("fixed_nn_boardsize"));
 

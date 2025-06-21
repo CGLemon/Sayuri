@@ -53,13 +53,13 @@ public:
         void SetBoardSize(int board_size) {
             main_state_.SetBoardSize(board_size);
             network_.Reconstruct(
-                Network::Parameters::Get().SetBoardSize(board_size));
+                Network::Option::Get().SetBoardSize(board_size));
         }
         void SetBatchSize(int batch_size) {
             Parameters * param = search_->GetParams();
             param->batch_size = batch_size;
             network_.Reconstruct(
-                Network::Parameters::Get().SetBatchSize(param->batch_size));
+                Network::Option::Get().SetBatchSize(param->batch_size));
         }
         void SetThreads(int threads) {
             Parameters * param = search_->GetParams();

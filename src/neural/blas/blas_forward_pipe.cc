@@ -11,7 +11,7 @@
 #include <algorithm>
 
 void BlasForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
-    Construct(ForwardPipeParameters::Get(), weights);
+    Construct(ForwardPipeOption::Get(), weights);
 }
 
 void BlasForwardPipe::InitWinograd() {
@@ -657,7 +657,7 @@ void BlasForwardPipe::Release() {}
 
 void BlasForwardPipe::Destroy() {}
 
-void BlasForwardPipe::Construct(ForwardPipeParameters /* param */,
+void BlasForwardPipe::Construct(ForwardPipeOption /* option */,
                                 std::shared_ptr<DNNWeights> weights) {
     if (weights) {
         weights_ = weights;

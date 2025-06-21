@@ -24,7 +24,7 @@ public:
 
     virtual bool Valid() const;
 
-    virtual void Construct(ForwardPipeParameters param,
+    virtual void Construct(ForwardPipeOption option,
                            std::shared_ptr<DNNWeights> weights);
 
     virtual void Release();

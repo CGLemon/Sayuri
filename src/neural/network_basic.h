@@ -95,19 +95,19 @@ struct ForwardQuery {
     PolicyBufferOffset offset{PolicyBufferOffset::kDefault};
 };
 
-struct ForwardPipeParameters {
-    ForwardPipeParameters() = default;
+struct ForwardPipeOption {
+    ForwardPipeOption() = default;
 
-    static ForwardPipeParameters Get() {
-        ForwardPipeParameters param;
-        return param;
+    static ForwardPipeOption Get() {
+        ForwardPipeOption o;
+        return o;
     }
 
-    ForwardPipeParameters SetBoardSize(int size) {
+    ForwardPipeOption SetBoardSize(int size) {
         board_size = size;
         return *this;
     }
-    ForwardPipeParameters SetBatchSize(int size) {
+    ForwardPipeOption SetBatchSize(int size) {
         batch_size = size;
         return *this;
     }
@@ -125,7 +125,7 @@ public:
 
     virtual OutputResult Forward(const InputData &inpnt) = 0;
 
-    virtual void Construct(ForwardPipeParameters param, std::shared_ptr<DNNWeights> weights) = 0;
+    virtual void Construct(ForwardPipeOption option, std::shared_ptr<DNNWeights> weights) = 0;
 
     virtual void Release() = 0;
 

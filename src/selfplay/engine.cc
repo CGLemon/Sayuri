@@ -4,6 +4,7 @@
 #include "utils/komi.h"
 #include "utils/filesystem.h"
 #include "utils/log.h"
+#include "utils/splitter.h"
 #include "game/sgf.h"
 #include "config.h"
 
@@ -88,56 +89,53 @@ bool Engine::ShouldHalt() const {
 }
 
 void Engine::ParseQueries() {
-    auto queries = GetOption<std::string>("selfplay_query");
-    std::istringstream iss{queries};
-    std::string query;
-
+    const auto query_cnt = IsOptionDefault("selfplay_query") ?
+                               0 : GetOptionCount("selfplay_query");
     float bq_acc_prob = 0.f;
 
-    while (iss >> query) {
+     for (int idx = 0; idx < query_cnt; ++idx) {
+        auto query = GetOption<std::string>("selfplay_query", idx);
+
+        if (query.empty()) {
+            break;
+        }
         for (char &c : query) {
             if (c == ':') {
                 c = ' ';
             }
         }
+        auto spt = Splitter(query);
+        auto maintoken = spt.GetWord(0);
 
-        std::istringstream tiss{query};
-        std::string token;
-        std::vector<std::string> tokens;
-
-        while (tiss >> token) {
-            tokens.emplace_back(token);
-        }
-
-        if (tokens[0] == "bkp" && tokens.size() == 4) {
+        if (maintoken->Get<>() == "bkp" && spt.GetCount() == 4) {
             // boardsize-komi-probabilities
             // "bkp:19:7.5:0.2"
 
             // Assume the query is valid.
             BoardQuery q;
-            q.board_size = std::stoi(tokens[1]);
-            q.komi       = std::stof(tokens[2]);
-            q.prob       = std::stof(tokens[3]);
+            q.board_size = spt.GetWord(1)->Get<int>();
+            q.komi       = spt.GetWord(2)->Get<float>();
+            q.prob       = spt.GetWord(3)->Get<float>();
             board_queries_.emplace_back(q);
             bq_acc_prob += q.prob;
-        } else if (tokens[0] == "bhp" && tokens.size() == 4) {
+        } else if (maintoken->Get<>() == "bhp" && spt.GetCount() == 4) {
             // boardsize-handicaps-probabilities
             // "bhp:9:2:0.1"
 
             HandicapQuery q;
-            q.board_size    = std::stoi(tokens[1]);
-            q.handicaps     = std::stoi(tokens[2]);
-            q.probabilities = std::stof(tokens[3]);
+            q.board_size    = spt.GetWord(1)->Get<int>();
+            q.handicaps     = spt.GetWord(2)->Get<int>();
+            q.probabilities = spt.GetWord(3)->Get<float>();
             if (q.handicaps >= 2) {
                 handicap_queries_.emplace_back(q);
             }
-        } else if (tokens[0] == "srs") {
+        } else if (maintoken->Get<>() == "srs") {
             // scoring rule set
-            for (int i = 1; i < (int)tokens.size(); ++i) {
+            for (int i = 1; i < (int)spt.GetCount(); ++i) {
                 auto scoring = kArea; // default
-                if (tokens[i] == "area") {
+                if (spt.GetWord(i)->Get<>() == "area") {
                     scoring = kArea;
-                } else if (tokens[i] == "territory") {
+                } else if (spt.GetWord(i)->Get<>() == "territory") {
                     scoring = kTerritory;
                 }
                 scoring_set_.emplace_back(scoring);
@@ -181,7 +179,7 @@ void Engine::ParseQueries() {
 
     // Adjust the matched NN size.
     network_->Reconstruct(
-        Network::Parameters::Get().SetBoardSize(max_bsize));
+        Network::Option::Get().SetBoardSize(max_bsize));
 }
 
 void Engine::GatherSgfString(std::string &sgf, int g) {

@@ -967,9 +967,8 @@ void ArgsParser::Parse(Splitter &spt) {
 
     while (const auto res = spt.FindNext("--selfplay-query")) {
         if (IsParameter(res->Get<>())) {
-            auto query = GetOption<std::string>("selfplay_query");
-            query += (res->Get<>() + " ");
-            SetOption("selfplay_query", query);
+            SetOption("selfplay_query", res->Get<>());
+            UniqueOption("selfplay_query");
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
