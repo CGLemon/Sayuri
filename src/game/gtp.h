@@ -32,7 +32,14 @@ public:
             return *search_;
         }
 
-        void ApplySearch() {
+        void Apply() {
+            if (search_) {
+                return;
+            }
+            main_state_.Reset(GetOption<int>("defualt_boardsize"),
+                                 GetOption<float>("defualt_komi"),
+                                 GetOption<int>("scoring_rule"));
+            network_.Initialize(GetOption<std::string>("weights_file"));
             search_ = std::make_unique<Search>(main_state_, network_);
         }
 
@@ -43,20 +50,32 @@ public:
             }
         }
 
-    private:
-        std::unique_ptr<Search> search_;
+        void SetBoardSize(int board_size) {
+            main_state_.SetBoardSize(board_size);
+            network_.Reconstruct(
+                Network::Parameters::Get().SetBoardSize(board_size));
+        }
+        void SetBatchSize(int batch_size) {
+            Parameters * param = search_->GetParams();
+            param->batch_size = batch_size;
+            network_.Reconstruct(
+                Network::Parameters::Get().SetBatchSize(param->batch_size));
+        }
+        void SetThreads(int threads) {
+            Parameters * param = search_->GetParams();
+            param->threads = threads;
+            ThreadPool::Get("search", param->threads);
+        }
 
+    private:
+        std::unique_ptr<Search> search_{nullptr};
         GameState main_state_;
         Network network_;
     };
 
     GtpLoop() {
         agent_ = std::make_unique<Agent>();
-        agent_->GetState().Reset(GetOption<int>("defualt_boardsize"),
-                                     GetOption<float>("defualt_komi"),
-                                     GetOption<int>("scoring_rule"));
-        agent_->GetNetwork().Initialize(GetOption<std::string>("weights_file"));
-        agent_->ApplySearch();
+        agent_->Apply();
 
         ThreadPool::Get("search", GetOption<int>("threads"));
 
@@ -92,7 +111,7 @@ private:
 
     AnalysisConfig ParseAnalysisConfig(Splitter &spt, int &color);
     bool ParseOption(Splitter &spt, std::string &rep);
-    void NetworkBenchmark(Splitter &spt);
+    bool NetBench(Splitter &spt, std::string &rep);
 
     std::string Execute(Splitter &spt, bool &try_ponder);
 

@@ -51,6 +51,7 @@ endif()
 
 # Set up the root.
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
+set(BENCHMARK_SOURCES_DIR ${SOURCE_DIR}/benchmark)
 set(GAME_SOURCES_DIR ${SOURCE_DIR}/game)
 set(NEURAL_SOURCES_DIR ${SOURCE_DIR}/neural)
 set(PATTERN_SOURCES_DIR ${SOURCE_DIR}/pattern)
@@ -66,6 +67,10 @@ set(BASIC_SOURCES
     ${SOURCE_DIR}/main.cc
     ${SOURCE_DIR}/config.cc
     ${SOURCE_DIR}/version.cc
+    )
+
+set(BENCHMARK_SOURCES
+    ${BENCHMARK_SOURCES_DIR}/benchmark.cc
     )
 
 set(GAME_SOURCES
@@ -340,6 +345,7 @@ endif()
 
 add_executable(sayuri
     ${BASIC_SOURCES}
+    ${BENCHMARK_SOURCES}
     ${GAME_SOURCES}
     ${PATTERN_SOURCES}
     ${MCTS_SOURCES}

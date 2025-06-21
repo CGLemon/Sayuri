@@ -93,9 +93,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         if (bsize <= kBoardSize &&
                 bsize <= kMaxGTPBoardSize &&
                 bsize >= kMinGTPBoardSize) {
-            agent_->GetState().SetBoardSize(bsize);
-            agent_->GetNetwork().Reconstruct(
-                Network::Parameters::Get().SetBoardSize(bsize));
+            agent_->SetBoardSize(bsize);
             out << GtpSuccess("");
         } else {
             out << GtpFail("invalid board size");
@@ -605,98 +603,13 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             out << GtpFail(rep);
         }
     } else if (const auto res = spt.Find("netbench", 0)) {
-        Parameters * param = agent_->GetSearch().GetParams();
-        const auto orig_batch = param->batch_size;
-        auto batchsize_list = std::vector<int>{};
-        auto rep = std::string{};
-        float timelimit = 10.0f;
-
-        int curr_idx = 1;
-        while (true) {
-            auto token = spt.GetWord(curr_idx++);
-            if (!token) {
-                break;
-            }
-            if (token->Lower() == "timelimit") {
-               if (auto time_token = spt.GetWord(curr_idx)) {
-                    timelimit = time_token->Get<float>();
-                    curr_idx += 1;
-                }
-                continue;
-            }
-            if (token->Lower() == "batchsize") {
-                while (auto bs_token = spt.GetWord(curr_idx)) {
-                    if (!bs_token) {
-                        break;
-                    }
-                    if (!bs_token->IsDigit()) {
-                        break;
-                    }
-                    batchsize_list.emplace_back(bs_token->Get<int>());
-                    curr_idx += 1;
-                }
-                continue;
-            }
+        std::string rep;
+        bool success = NetBench(spt, rep);
+        if (success) {
+            out << GtpSuccess("");
+        } else {
+            out << GtpFail(rep);
         }
-
-        if (batchsize_list.empty()) {
-            batchsize_list.emplace_back(orig_batch);
-        }
-        std::sort(std::begin(batchsize_list), std::end(batchsize_list));
-        batchsize_list.erase(
-            std::unique(std::begin(batchsize_list), std::end(batchsize_list) ),
-            std::end(batchsize_list));
-
-        std::atomic<bool> running{false};
-        std::atomic<int> count{0};
-        const auto Worker = [&, this]() -> void {
-            while (running.load(std::memory_order_relaxed)) {
-                count.fetch_add(1, std::memory_order_relaxed);
-                agent_->GetNetwork().GetOutput(
-                    agent_->GetState(), Network::kRandom,
-                    Network::Query::Get().SetCache(false));
-            }
-        };
-
-        for (int batch_size: batchsize_list) {
-            const int threads = batch_size * 2;
-
-            auto optstr = Format(
-                "sayuri-setoption name batch size value %d", batch_size);
-            auto spt = Splitter(optstr);
-            ParseOption(spt, rep);
-
-            Timer timer;
-            timer.Clock();
-
-            auto group = ThreadGroup<void>(&ThreadPool::Get("search", threads));
-            running.store(true, std::memory_order_relaxed);
-            count.store(0, std::memory_order_relaxed);
-
-            for (int i = 0; i < threads; ++i) {
-                group.AddTask(Worker);
-            }
-            while (timer.GetDuration() < timelimit) {
-                std::this_thread::yield();
-            }
-            running.store(false, std::memory_order_relaxed);
-            group.WaitToJoin();
-            const auto elapsed = timer.GetDuration();
-
-            LOGGING <<
-                Format("Eval Stats - Total: %d evals | Rate: %.2f evals/s | Batch Size: %d\n",
-                    count.load(std::memory_order_relaxed),
-                    count.load(std::memory_order_relaxed)/elapsed,
-                    batch_size);
-        }
-
-        {
-            auto optstr = Format(
-                "sayuri-setoption name batch size value %d", orig_batch);
-            auto spt = Splitter(optstr);
-            ParseOption(spt, rep);
-        }
-        out << GtpSuccess("");
     } else if (const auto res = spt.Find("genbook", 0)) {
         auto sgf_file = std::string{};
         auto data_file = std::string{};
@@ -1465,13 +1378,11 @@ bool GtpLoop::ParseOption(Splitter &spt, std::string &rep) {
                 rep = "invalid rule";
                 return false;
             }
-        } else if (name == "threads") {
-            param->threads = std::stoi(value);
-            ThreadPool::Get("search", param->threads);
+        }  else if (name == "threads") {
+            agent_->SetThreads(std::stoi(value));
         } else if (name == "batch size") {
-            param->batch_size = std::stoi(value);
-            agent_->GetNetwork().Reconstruct(
-                Network::Parameters::Get().SetBatchSize(param->batch_size));
+            agent_->SetBatchSize(std::stoi(value));
+        }  else if (name == "batch size") {
         } else {
             rep = "invalid option name";
             return false;
@@ -1479,6 +1390,104 @@ bool GtpLoop::ParseOption(Splitter &spt, std::string &rep) {
     } catch (const std::exception& e) {
         rep = "invalid option value: " + std::string{e.what()};
         return false;
+    }
+    return true;
+}
+
+bool GtpLoop::NetBench(Splitter &spt, std::string &rep) {
+    Parameters * param = agent_->GetSearch().GetParams();
+    const auto orig_batch = param->batch_size;
+    auto optrep = std::string{};
+    auto batchsize_list = std::vector<int>{};
+    float timelimit = 10.0f;
+
+    int curr_idx = 1;
+    while (true) {
+        auto token = spt.GetWord(curr_idx++);
+        if (!token) {
+            break;
+        }
+        if (token->Lower() == "timelimit") {
+           if (auto time_token = spt.GetWord(curr_idx)) {
+                timelimit = time_token->Get<float>();
+                curr_idx += 1;
+            }
+            continue;
+        }
+        if (token->Lower() == "batchsize") {
+            while (auto bs_token = spt.GetWord(curr_idx)) {
+                if (!bs_token) {
+                    break;
+                }
+                if (!bs_token->IsDigit()) {
+                    break;
+                }
+                batchsize_list.emplace_back(bs_token->Get<int>());
+                curr_idx += 1;
+            }
+            continue;
+        }
+        
+    }
+
+    if (batchsize_list.empty()) {
+        batchsize_list.emplace_back(orig_batch);
+    }
+    std::sort(std::begin(batchsize_list), std::end(batchsize_list));
+    batchsize_list.erase(
+        std::unique(std::begin(batchsize_list), std::end(batchsize_list)),
+        std::end(batchsize_list));
+
+    if (batchsize_list.empty()) {
+        rep = "invalid batch size";
+        return false;
+    }
+    if (timelimit <= 0.0f) {
+        rep = "time limit should be greater than 0";
+        return false;
+    }
+
+    std::atomic<bool> running{false};
+    std::atomic<int> count{0};
+    const auto Worker = [&, this]() -> void {
+        while (running.load(std::memory_order_relaxed)) {
+            count.fetch_add(1, std::memory_order_relaxed);
+            agent_->GetNetwork().GetOutput(
+                agent_->GetState(), Network::kRandom,
+                Network::Query::Get().SetCache(false));
+        }
+    };
+
+    for (int batch_size: batchsize_list) {
+        const int threads = batch_size * 2;
+        agent_->SetBatchSize(batch_size);
+
+        Timer timer;
+        timer.Clock();
+
+        auto group = ThreadGroup<void>(&ThreadPool::Get("search", threads));
+        running.store(true, std::memory_order_relaxed);
+        count.store(0, std::memory_order_relaxed);
+
+        for (int i = 0; i < threads; ++i) {
+            group.AddTask(Worker);
+        }
+        while (timer.GetDuration() < timelimit) {
+            std::this_thread::yield();
+        }
+        running.store(false, std::memory_order_relaxed);
+        group.WaitToJoin();
+        const auto elapsed = timer.GetDuration();
+
+        LOGGING <<
+            Format("Eval Stats - Total: %d evals | Rate: %.2f evals/s | Batch Size: %d\n",
+                count.load(std::memory_order_relaxed),
+                count.load(std::memory_order_relaxed)/elapsed,
+                batch_size);
+    }
+
+    if (orig_batch != param->batch_size) {
+        agent_->SetBatchSize(orig_batch);
     }
     return true;
 }

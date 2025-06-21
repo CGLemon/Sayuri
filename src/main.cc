@@ -33,6 +33,15 @@ void StartSelfplayLoop() {
     }
 }
 
+void StartBenchmarkLoop() {
+    try {
+        auto loop = std::make_unique<Benchmark>();
+    } catch (const std::exception& e) {
+        LOGGING << Format(
+            "Get the exception during the benchmark loop. Exception: %s.\n", e.what());
+    }
+}
+
 int main(int argc, char **argv) {
     ArgsParser(argc, argv);
 
@@ -44,6 +53,8 @@ int main(int argc, char **argv) {
         StartGtpLoop();
     } else if (GetOption<std::string>("mode") == "selfplay") {
         StartSelfplayLoop();
+    } else if (GetOption<std::string>("mode") == "benchmark") {
+        StartBenchmarkLoop();
     }
     return 0;
 }

@@ -117,6 +117,9 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["komi_big_stddev_prob"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["handicap_fair_komi_prob"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["target_directory"] << Option::SetOption(std::string{});
+
+    // benchmark options
+    kOptionsMap["benchmark_query"] << Option::SetOption(std::string{});
 }
 
 void ArgsParser::InitBasicParameters() const {
@@ -155,7 +158,7 @@ void ArgsParser::InitBasicParameters() const {
     int select_batchsize = GetOption<int>("batch_size");
 
     const auto mode = GetOption<std::string>("mode");
-    if (mode == "gtp") {
+    if (mode == "gtp" || mode == "benchmark") {
         // GPU case:
         // case 1. if number of threads are 0, use thread count of reasonable number
         // case 2. number of threads and batches are given
@@ -412,7 +415,7 @@ void ArgsParser::Parse(Splitter &spt) {
 
     if (const auto res = spt.FindNext({"--mode", "-m"})) {
         if (IsParameter(res->Get<>()) &&
-                AcceptSet(res->Get<>(), {"gtp", "selfplay"})) {
+                AcceptSet(res->Get<>(), {"gtp", "selfplay", "benchmark"})) {
             SetOption("mode", res->Get<>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
@@ -967,6 +970,14 @@ void ArgsParser::Parse(Splitter &spt) {
             auto query = GetOption<std::string>("selfplay_query");
             query += (res->Get<>() + " ");
             SetOption("selfplay_query", query);
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    while (const auto res = spt.FindNext("--benchmark-query")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("benchmark_query", res->Get<>());
+            UniqueOption("benchmark_query");
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
