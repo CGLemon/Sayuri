@@ -117,7 +117,7 @@ struct ComputationResult {
     float root_eval_stddev;
 
     std::vector<float> root_ownership;
-    std::vector<int> root_visits;
+    std::vector<int> root_searched_visits;
     std::vector<float> root_estimated_q;
     std::vector<float> root_visits_dist;
     std::vector<float> target_policy_dist;
@@ -126,10 +126,11 @@ struct ComputationResult {
     std::vector<std::vector<int>> dead_strings;
 
     int movenum;
+    int visits;
     int playouts;
     int threads;
     int batch_size;
-    float seconds;
+    float elapsed;
 
     float policy_kld;
     bool side_resign;

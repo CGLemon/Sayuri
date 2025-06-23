@@ -450,7 +450,7 @@ std::vector<std::string> SgfParser::ChopAll(std::string filename,
 }
 
 std::vector<std::string> SgfParser::ChopAll(std::string filename) const {
-    return ChopAll(filename,  std::numeric_limits<size_t>::max());
+    return ChopAll(filename, std::numeric_limits<size_t>::max());
 }
 
 // Scan the file and extract the game with number index.
@@ -470,9 +470,12 @@ std::unique_ptr<SgfNode> SgfParser::ParseFromFile(std::string filename, size_t i
     return node;
 }
 
-std::unique_ptr<SgfNode> SgfParser::ParseFromString(std::string sgfstring) const {
+std::unique_ptr<SgfNode> SgfParser::ParseFromString(std::string sgfstring, size_t index) const {
+    std::istringstream ins(sgfstring);
+    auto result = ChopStream(ins, std::numeric_limits<size_t>::max());
+
     auto rootnode = std::make_unique<SgfNode>();
-    auto gamebuff = std::istringstream{sgfstring};
+    auto gamebuff = std::istringstream{result[index]};
     Parse(gamebuff, rootnode.get());
     rootnode->StartPopulateState();
     return rootnode;

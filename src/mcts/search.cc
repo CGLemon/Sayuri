@@ -252,8 +252,9 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     computation_result.board_size = board_size;
     computation_result.komi = root_state_.GetKomi();
     computation_result.movenum = root_state_.GetMoveNumber();
+    computation_result.visits = root_node_ ? root_node_->GetVisits() : 0;
     computation_result.playouts = 0;
-    computation_result.seconds = 0.f;
+    computation_result.elapsed = 0.f;
     computation_result.threads = param_->threads;
     computation_result.batch_size = param_->batch_size;
 
@@ -421,7 +422,8 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     }
 
     // Record perfomance infomation.
-    computation_result.seconds = timer.GetDuration();
+    computation_result.elapsed = timer.GetDuration();
+    computation_result.visits = root_node_->GetVisits();
     computation_result.playouts = played_playouts;
 
     // Gather computation information and training data.
@@ -491,7 +493,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
 
     // Here we gather the part of training target data.
     result.root_ownership.resize(num_intersections, 0);
-    result.root_visits.resize(num_intersections+1, 0);
+    result.root_searched_visits.resize(num_intersections+1, 0);
     result.root_estimated_q.resize(num_intersections+1, 0);
     result.root_visits_dist.resize(num_intersections+1, 0);
     result.target_policy_dist.resize(num_intersections+1, 0);
@@ -526,7 +528,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         const auto index = vertex == kPass ?
                                num_intersections :
                                root_state_.VertexToIndex(vertex);
-        result.root_visits[index] = visits;
+        result.root_searched_visits[index] = visits;
 
         // Fill estimated Q value for each child. If the child is
         // unvisited, set the FPU value.
@@ -548,7 +550,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         // Normalize the distribution. Be sure the sum is 1.
         for (int idx = 0; idx < num_intersections+1; ++idx) {
             result.root_visits_dist[idx] =
-                (float)(result.root_visits[idx]) / parentvisits;
+                (float)(result.root_searched_visits[idx]) / parentvisits;
         }
     }
 

@@ -48,6 +48,7 @@ public:
     void ClearCache();
 
     std::string GetName() const;
+    void ResetNumQueries(size_t q=0);
     size_t GetNumQueries() const;
 
     PolicyBufferOffset GetDefaultPolicyOffset() const;

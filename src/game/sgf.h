@@ -40,7 +40,7 @@ public:
     static SgfParser& Get();
 
     std::unique_ptr<SgfNode> ParseFromFile(std::string filename, size_t index=0) const;
-    std::unique_ptr<SgfNode> ParseFromString(std::string sgfstring) const;
+    std::unique_ptr<SgfNode> ParseFromString(std::string sgfstring, size_t index=0) const;
 
     std::vector<std::string> ChopAll(std::string filename) const;
 

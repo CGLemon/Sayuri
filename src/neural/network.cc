@@ -84,7 +84,7 @@ void Network::Initialize(const std::string &weightsfile) {
     pipe_->Initialize(dnn_weights);
     SetCacheSize(GetOption<int>("cache_memory_mib"));
 
-    num_queries_.store(0, std::memory_order_relaxed);
+    ResetNumQueries();
 }
 
 size_t Network::SetCacheSize(size_t MiB) {
@@ -122,6 +122,10 @@ void Network::ClearCache() {
 
 std::string Network::GetName() const {
     return pipe_->GetName();
+}
+
+void Network::ResetNumQueries(size_t q) {
+    num_queries_.store(q, std::memory_order_relaxed);
 }
 
 size_t Network::GetNumQueries() const {

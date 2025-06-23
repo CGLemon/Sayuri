@@ -20,14 +20,15 @@ public:
 
 private:
     void Initialize();
+    std::vector<std::string> GenerateTestSet(int num_games);
     void Run();
 
     struct Query {
-        int batch_size;
         int threads;
-        float timelimit;
+        int batch_size;
+        int games;
     };
 
-    std::vector<Query> quries_list_;
+    std::vector<Query> queries_list_;
     std::unique_ptr<Benchmark::Agent> agent_;
 };

@@ -1448,10 +1448,8 @@ bool GtpLoop::NetBench(Splitter &spt, std::string &rep) {
     }
 
     std::atomic<bool> running{false};
-    std::atomic<int> count{0};
     const auto Worker = [&, this]() -> void {
         while (running.load(std::memory_order_relaxed)) {
-            count.fetch_add(1, std::memory_order_relaxed);
             agent_->GetNetwork().GetOutput(
                 agent_->GetState(), Network::kRandom,
                 Network::Query::Get().SetCache(false));
@@ -1461,13 +1459,13 @@ bool GtpLoop::NetBench(Splitter &spt, std::string &rep) {
     for (int batch_size: batchsize_list) {
         const int threads = batch_size * 2;
         agent_->SetBatchSize(batch_size);
+        agent_->GetNetwork().ResetNumQueries();
 
         Timer timer;
         timer.Clock();
 
         auto group = ThreadGroup<void>(&ThreadPool::Get("search", threads));
         running.store(true, std::memory_order_relaxed);
-        count.store(0, std::memory_order_relaxed);
 
         for (int i = 0; i < threads; ++i) {
             group.AddTask(Worker);
@@ -1478,12 +1476,13 @@ bool GtpLoop::NetBench(Splitter &spt, std::string &rep) {
         running.store(false, std::memory_order_relaxed);
         group.WaitToJoin();
         const auto elapsed = timer.GetDuration();
+        const auto num_nn_queries = agent_->GetNetwork().GetNumQueries();
 
-        LOGGING <<
-            Format("Eval Stats - Total: %d evals | Rate: %.2f evals/s | Batch Size: %d\n",
-                count.load(std::memory_order_relaxed),
-                count.load(std::memory_order_relaxed)/elapsed,
-                batch_size);
+        LOGGING << Format(
+                       "batch size= %d -> %d evals | %.2f evals/s\n",
+                       batch_size,
+                       num_nn_queries,
+                       num_nn_queries/elapsed);
     }
 
     if (orig_batch != param->batch_size) {
