@@ -30,7 +30,11 @@ void GtpLoop::Loop() {
             // check the command id here
             if (const auto token = spt.GetWord(0)) {
                 if (token->IsDigit()) {
-                    curr_id_ = token->Get<int>();
+                    bool error;
+                    curr_id_ = token->Get<int>(curr_id_, error);
+                    if (error) {
+                        LOGGING << "error: GTP ID must be INT\n";
+                    }
                     spt.RemoveWord(token->Index());
                 }
             }
@@ -87,7 +91,11 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
     } else if (const auto res = spt.Find("boardsize", 0)){
         int bsize = -1;
         if (const auto input = spt.GetWord(1)) {
-            bsize = input->Get<int>();
+            bool error;
+            bsize = input->Get<int>(bsize, error);
+            if (error) {
+                LOGGING << "error: board size must be INT\n";
+            }
         }
 
         if (bsize <= kBoardSize &&
@@ -105,13 +113,20 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         out << GtpSuccess("");
     } else if (const auto res = spt.Find("komi", 0)) {
         auto komi = agent_->GetState().GetKomi();
+        bool success = true;
+        bool error;
+
         if (const auto input = spt.GetWord(1)) {
-            komi = input->Get<float>();
+            komi = input->Get<float>(komi, error);
+        } else {
+            success = false;
+        }
+        if (success && !error) {
+            agent_->GetState().SetKomi(komi);
             out << GtpSuccess("");
         } else {
             out << GtpFail("invalid komi");
         }
-        agent_->GetState().SetKomi(komi);
     } else if (const auto res = spt.Find("play", 0)) {
         const auto end = spt.GetCount() < 3 ? spt.GetCount() : 3;
         auto cmd = std::string{};
@@ -125,12 +140,16 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             out << GtpFail("invalid play");
         }
     } else if (const auto res = spt.Find("fixed_handicap", 0)) {
-        auto handicap = -1;
+        auto handicaps = -1;
         if (const auto input = spt.GetWord(1)) {
-            handicap = input->Get<int>();
+            bool error;
+            handicaps = input->Get<int>(handicaps, error);
+            if (error) {
+                LOGGING << "error: handicaps must be <INT>\n";
+            }
         }
-        if (handicap >= 1 &&
-                agent_->GetState().SetFixdHandicap(handicap)) {
+        if (handicaps >= 1 &&
+                agent_->GetState().SetFixdHandicap(handicaps)) {
             out << GtpSuccess("");
         } else {
             out << GtpFail("invalid handicap");
@@ -138,7 +157,11 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
     } else if (const auto res = spt.Find("place_free_handicap", 0)) {
         auto handicaps = -1;
         if (const auto input = spt.GetWord(1)) {
-            handicaps = input->Get<int>();
+            bool error;
+            handicaps = input->Get<int>(handicaps, error);
+            if (error) {
+                LOGGING << "error: handicaps must be <INT>\n";
+            }
         }
         bool network_valid = agent_->GetNetwork().Valid();
         int max_handicaps = network_valid ?
@@ -189,7 +212,11 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             filename = input->Get<>();
         }
         if (const auto input = spt.GetWord(2)) {
-            movenum = input->Get<int>();
+            bool error;
+            movenum = input->Get<int>(movenum, error);
+            if (error) {
+                LOGGING << "error: movenum must be <INT>\n";
+            }
         }
         try {
             agent_->GetState() = Sgf::Get().FromFile(filename, movenum);
@@ -405,24 +432,25 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         // none, absolute, byoyomi, or canadian
         int main_time = 0, byo_yomi_time = 0, byo_yomi_stones = 0, byo_yomi_periods = 0;
         bool success = true;
+        bool error;
 
         if (const auto res = spt.Find("none", 1)) {
             // infinite time
             main_time = byo_yomi_time = byo_yomi_stones = byo_yomi_periods;
         } else if (const auto res = spt.Find("absolute", 1)) {
-            main_time = spt.GetWord(2)->Get<int>();
+            main_time = spt.GetWord(2)->Get<int>(main_time, error);
         } else if (const auto res = spt.Find("canadian", 1)) {
-            main_time = spt.GetWord(2)->Get<int>();
-            byo_yomi_time = spt.GetWord(3)->Get<int>();
-            byo_yomi_stones = spt.GetWord(4)->Get<int>();
+            main_time = spt.GetWord(2)->Get<int>(main_time, error);
+            byo_yomi_time = spt.GetWord(3)->Get<int>(byo_yomi_time, error);
+            byo_yomi_stones = spt.GetWord(4)->Get<int>(byo_yomi_stones, error);
         } else if (const auto res = spt.Find("byoyomi", 1)) {
-            main_time = spt.GetWord(2)->Get<int>();
-            byo_yomi_time = spt.GetWord(3)->Get<int>();
-            byo_yomi_periods = spt.GetWord(4)->Get<int>();
+            main_time = spt.GetWord(2)->Get<int>(main_time, error);
+            byo_yomi_time = spt.GetWord(3)->Get<int>(byo_yomi_time, error);
+            byo_yomi_periods = spt.GetWord(4)->Get<int>(byo_yomi_periods, error);
         } else {
             success = false;
         }
-        if (success) {
+        if (success && !error) {
             agent_->GetSearch().TimeSettings(main_time, byo_yomi_time,
                                                  byo_yomi_stones, byo_yomi_periods);
             out << GtpSuccess("");
@@ -433,13 +461,13 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         int main_time = -1, byo_yomi_time = -1, byo_yomi_stones = -1;
 
         if (const auto input = spt.GetWord(1)) {
-            main_time = input->Get<int>();
+            main_time = input->Get<int>(main_time);
         }
         if (const auto input = spt.GetWord(2)) {
-            byo_yomi_time = input->Get<int>();
+            byo_yomi_time = input->Get<int>(byo_yomi_time);
         }
         if (const auto input = spt.GetWord(3)) {
-            byo_yomi_stones = input->Get<int>();
+            byo_yomi_stones = input->Get<int>(byo_yomi_stones);
         }
 
         if (main_time == -1 || byo_yomi_time == -1 || byo_yomi_stones == -1) {
@@ -458,10 +486,10 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             }
         }
         if (const auto input = spt.GetWord(2)) {
-            time = input->Get<int>();
+            time = input->Get<int>(time);
         }
         if (const auto input = spt.GetWord(3)) {
-            stones = input->Get<int>();
+            stones = input->Get<int>(stones);
         }
 
         if (color == kInvalid || time == -1 || stones == -1) {
@@ -566,7 +594,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         int symmetry = Symmetry::kIdentitySymmetry;
 
         if (const auto symm = spt.GetWord(1)) {
-            symmetry = symm->Get<int>();
+            symmetry = symm->Get<int>(-1);
         }
 
         if (symmetry <= 8 && symmetry >= 0) {
@@ -584,7 +612,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             if (symm->Get<>() == "avg" || symm->Get<>() == "average") {
                 use_avg = true;
             } else {
-                symmetry = symm->Get<int>();
+                symmetry = symm->Get<int>(-1);
             }
         }
         if (symmetry <= 8 && symmetry >= 0) {
@@ -592,7 +620,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             out << GtpSuccess(agent_->GetNetwork().GetOutputString(
                        agent_->GetState(), ensemble, Network::Query::Get().SetSymmetry(symmetry)));
         } else {
-            out << GtpFail("symmetry must be from 0 to 7");
+            out << GtpFail("symmetry must be from 0 to 7, or avg");
         }
     } else if (const auto res = spt.Find("sayuri-setoption", 0)) {
         std::string rep;
@@ -604,7 +632,13 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         }
     } else if (const auto res = spt.Find("netbench", 0)) {
         std::string rep;
-        bool success = NetBench(spt, rep);
+        bool success = true;
+        try {
+            success = NetBench(spt, rep);
+        } catch (const std::exception& e) {
+            success = false;
+            rep = Format("error: %s", e.what());
+        }
         if (success) {
             out << GtpSuccess("");
         } else {
@@ -639,7 +673,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             data_file = data->Get<>();
         }
         if (const auto mcount = spt.GetWord(3)) {
-            min_count = mcount->Get<int>();
+            min_count = mcount->Get<int>(min_count);
         }
 
         if (!sgf_file.empty() && !data_file.empty()) {
@@ -658,10 +692,10 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             save_dir = dir->Get<>();
         }
         if (const auto num = spt.GetWord(2)) {
-            num_sgfs = num->Get<int>();
+            num_sgfs = num->Get<int>(num_sgfs);
         }
         if (const auto num = spt.GetWord(3)) {
-            opening_moves = num->Get<int>();
+            opening_moves = num->Get<int>(opening_moves);
         }
 
         if (!save_dir.empty()) {
@@ -716,7 +750,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         int playouts = -1;
 
         if (const auto p = spt.GetWord(1)) {
-            playouts = std::max(p->Get<int>(), 1);
+            playouts = std::max(p->Get<int>(playouts), 1);
         }
 
         if (playouts > 0) {
@@ -896,7 +930,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
     } else if (const auto res = spt.Find("gogui-ownership_heatmap", 0)) {
         int playouts = 0;
         if (const auto p = spt.GetWord(1)) {
-            playouts = p->Get<int>();
+            playouts = p->Get<int>(playouts);
         }
 
         agent_->GetSearch().ReleaseTree();
@@ -928,7 +962,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
     } else if (const auto res = spt.Find("gogui-ownership_influence", 0)) {
         int playouts = 0;
         if (const auto p = spt.GetWord(1)) {
-            playouts = p->Get<int>();
+            playouts = p->Get<int>(playouts);
         }
 
         agent_->GetSearch().ReleaseTree();

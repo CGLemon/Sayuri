@@ -5,6 +5,7 @@
 #include <vector>
 #include <algorithm>
 #include <sstream>
+#include <stdexcept>
 
 class Splitter {
 public:
@@ -21,6 +22,20 @@ public:
         bool IsDigit() const;
 
         template<typename T=std::string> T Get() const;
+        template<typename T=std::string> T Get(T default_val, bool &error) const {
+            error = false;
+            try {
+                return Get<T>();
+            } catch (const std::exception& e) {
+                error = true;
+            }
+            return default_val;
+        }
+        template<typename T=std::string> T Get(T default_val) const {
+            bool error;
+            return Get<T>(default_val, error);
+        }
+
         int Index() const;
 
     private:
