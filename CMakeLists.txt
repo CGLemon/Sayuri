@@ -1,36 +1,36 @@
-set(_USE_CUDNN False)
-set(_USE_CUDA False)
-set(_USE_BLAS False)
-set(_USE_EIGEN False)
-set(_USE_BUILD_IN False)
+function(generate_cuda_flags_from_archs)
+    if(NOT DEFINED CUDA_ARCHITECTURES)
+        message(FATAL_ERROR "CUDA_ARCHITECTURES is not defined")
+    endif()
 
-function(ResetAll)
-    set(_USE_CUDNN False)
-    set(_USE_CUDA False)
-    set(_USE_BLAS False)
-    set(_USE_EIGEN False)
-    set(_USE_BUILD_IN False)
+    if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.18.2")
+        set(CMAKE_CUDA_ARCHITECTURES "${CUDA_ARCHITECTURES}" PARENT_SCOPE)
+    else()
+        set(GENCODE_FLAGS "")
+        foreach(arch IN LISTS CUDA_ARCHITECTURES)
+            string(STRIP "${arch}" arch)
+            set(sm "sm_${arch}")
+            set(compute "compute_${arch}")
+
+            string(APPEND GENCODE_FLAGS
+                " -gencode arch=${compute},code=${sm}"
+                " -gencode arch=${compute},code=${compute}"
+            )
+        endforeach()
+        set(CMAKE_CUDA_FLAGS "${GENCODE_FLAGS} ${CMAKE_CUDA_FLAGS}" PARENT_SCOPE)
+    endif()
 endfunction()
 
-if(BLAS_BACKEND STREQUAL "EIGEN")
-    ResetAll()
-    set(_USE_EIGEN True)
-elseif(BLAS_BACKEND STREQUAL "OPENBLAS")
-    ResetAll()
-    set(_USE_BLAS True)
-elseif(BLAS_BACKEND STREQUAL "CUDA")
-    ResetAll()
-    set(_USE_CUDA True)
-elseif(BLAS_BACKEND STREQUAL "CUDNN")
-    ResetAll()
-    set(_USE_CUDA True)
-    set(_USE_CUDNN True)
-else()
-    ResetAll()
-    set(_USE_BUILD_IN True)
+if(NOT DEFINED BLAS_BACKEND)
+    set(BLAS_BACKEND "BUILT_IN")
+elseif(NOT BLAS_BACKEND STREQUAL "EIGEN"
+       AND NOT BLAS_BACKEND STREQUAL "OPENBLAS"
+       AND NOT BLAS_BACKEND STREQUAL "CUDA"
+       AND NOT BLAS_BACKEND STREQUAL "CUDNN")
+    set(BLAS_BACKEND "BUILT_IN")
 endif()
 
-if (_USE_CUDA)
+if(BLAS_BACKEND STREQUAL "CUDA" OR BLAS_BACKEND STREQUAL "CUDNN")
     project(sayuri LANGUAGES CXX CUDA)
     cmake_minimum_required(VERSION 3.15)
 else()
@@ -38,18 +38,30 @@ else()
     cmake_minimum_required(VERSION 3.10)
 endif()
 
-if (BOARD_SIZE)
-     message("Use the specific ${BOARD_SIZE} x ${BOARD_SIZE} board size.")
-     add_definitions(-DMAX_BOARD_SIZE=${BOARD_SIZE})
+if(NOT WIN32)
+    string(ASCII 27 Esc)
+    set(ColorReset   "${Esc}[m")
+    set(ColorBold    "${Esc}[1m")
+    set(ColorRed     "${Esc}[31m")
+    set(ColorBoldRed "${ColorRed}${ColorBold}")
 endif()
 
-if (DISABLE_FP16)
-    message("Disable the CUDA FP16.")
+# Custom board size
+if (BOARD_SIZE)
+    message(STATUS "Using the specific board size of ${BOARD_SIZE} x ${BOARD_SIZE}.")
+    add_definitions(-DMAX_BOARD_SIZE=${BOARD_SIZE})
+endif()
+
+
+# FP16 support
+if(DISABLE_FP16)
+    message(STATUS "CUDA FP16 support is disabled.")
 else()
+    message(STATUS "CUDA FP16 support is enabled.")
     add_definitions(-DENABLE_FP16)
 endif()
 
-# Set up the root.
+# Gather all source files
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(BENCHMARK_SOURCES_DIR ${SOURCE_DIR}/benchmark)
 set(GAME_SOURCES_DIR ${SOURCE_DIR}/game)
@@ -62,114 +74,45 @@ set(UTILS_SOURCES_DIR ${SOURCE_DIR}/utils)
 set(IncludePath "${CMAKE_CURRENT_SOURCE_DIR}/src")
 include_directories(${IncludePath})
 
-# Set all source file.
-set(BASIC_SOURCES
-    ${SOURCE_DIR}/main.cc
-    ${SOURCE_DIR}/config.cc
-    ${SOURCE_DIR}/version.cc
-    )
+file(GLOB BASIC_SOURCES        ${SOURCE_DIR}/*.cc)
+file(GLOB BENCHMARK_SOURCES    ${BENCHMARK_SOURCES_DIR}/*.cc)
+file(GLOB GAME_SOURCES         ${GAME_SOURCES_DIR}/*.cc)
+file(GLOB NEURAL_SOURCES       ${NEURAL_SOURCES_DIR}/*.cc ${NEURAL_SOURCES_DIR}/blas/*.cc)
+file(GLOB PATTERN_SOURCES      ${PATTERN_SOURCES_DIR}/*.cc)
+file(GLOB MCTS_SOURCES         ${MCTS_SOURCES_DIR}/*.cc)
+file(GLOB SELFPLAY_SOURCES     ${SELFPLAY_SOURCES_DIR}/*.cc)
+file(GLOB UTILS_SOURCES        ${UTILS_SOURCES_DIR}/*.cc)
 
-set(BENCHMARK_SOURCES
-    ${BENCHMARK_SOURCES_DIR}/benchmark.cc
-    )
-
-set(GAME_SOURCES
-    ${GAME_SOURCES_DIR}/board.cc
-    ${GAME_SOURCES_DIR}/pattern_board.cc
-    ${GAME_SOURCES_DIR}/book.cc
-    ${GAME_SOURCES_DIR}/game_state.cc
-    ${GAME_SOURCES_DIR}/strings.cc
-    ${GAME_SOURCES_DIR}/sgf.cc
-    ${GAME_SOURCES_DIR}/zobrist.cc
-    ${GAME_SOURCES_DIR}/symmetry.cc
-    ${GAME_SOURCES_DIR}/gtp.cc
-    ${GAME_SOURCES_DIR}/iterator.cc
-    )
-
-set(NEURAL_SOURCES
-    ${NEURAL_SOURCES_DIR}/loader.cc
-    ${NEURAL_SOURCES_DIR}/description.cc
-    ${NEURAL_SOURCES_DIR}/encoder.cc
-    ${NEURAL_SOURCES_DIR}/network.cc
-    ${NEURAL_SOURCES_DIR}/training_data.cc
-    ${NEURAL_SOURCES_DIR}/winograd_helper.cc
-    ${NEURAL_SOURCES_DIR}/blas/sgemm.cc
-    ${NEURAL_SOURCES_DIR}/blas/blas.cc
-    ${NEURAL_SOURCES_DIR}/blas/convolution.cc
-    ${NEURAL_SOURCES_DIR}/blas/winograd_convolution3.cc
-    ${NEURAL_SOURCES_DIR}/blas/fullyconnect.cc
-    ${NEURAL_SOURCES_DIR}/blas/batchnorm.cc
-    ${NEURAL_SOURCES_DIR}/blas/biases.cc
-    ${NEURAL_SOURCES_DIR}/blas/se_unit.cc
-    ${NEURAL_SOURCES_DIR}/blas/blas_forward_pipe.cc
-    )
-
-set(PATTERN_SOURCES
-    ${PATTERN_SOURCES_DIR}/mm.cc
-    ${PATTERN_SOURCES_DIR}/mm_trainer.cc
-    ${PATTERN_SOURCES_DIR}/pattern.cc
-    ${PATTERN_SOURCES_DIR}/gammas_dict.cc
-    )
-
-set(MCTS_SOURCES
-    ${MCTS_SOURCES_DIR}/time_control.cc
-    ${MCTS_SOURCES_DIR}/node.cc
-    ${MCTS_SOURCES_DIR}/search.cc
-    )
-
-set(SELFPLAY_SOURCES
-    ${SELFPLAY_SOURCES_DIR}/pipe.cc
-    ${SELFPLAY_SOURCES_DIR}/engine.cc
-    )
-
-set(UTILS_SOURCES
-    ${UTILS_SOURCES_DIR}/log.cc
-    ${UTILS_SOURCES_DIR}/parse_float.cc
-    ${UTILS_SOURCES_DIR}/splitter.cc
-    ${UTILS_SOURCES_DIR}/random.cc
-    ${UTILS_SOURCES_DIR}/time.cc
-    ${UTILS_SOURCES_DIR}/filesystem.cc
-    ${UTILS_SOURCES_DIR}/option.cc
-    ${UTILS_SOURCES_DIR}/komi.cc
-    ${UTILS_SOURCES_DIR}/gogui_helper.cc
-    ${UTILS_SOURCES_DIR}/gzip_helper.cc
-    )
-
-if(DEBUG_MODE)
-   message(STATUS "Set Debug Mode")
-   set(CMAKE_BUILD_TYPE DEBUG)
-else()
-   set(CMAKE_BUILD_TYPE RELEASE)
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE RELEASE)
 endif()
 
+# Fast parser option
 if(USE_FAST_PARSER)
-    message(STATUS "Use fast parser library.")
+    message(STATUS "Fast parser library enabled.")
     add_definitions(-DUSE_FAST_PARSER)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/fast_float/include/fast_float)
 endif()
 
-if (USE_AVX)
-    message(STATUS "Use the AVX instructions")
-    set(CMAKE_CXX_FLAGS "-mavx -mfma ${CMAKE_CXX_FLAGS}")
+# AVX instruction set
+if(USE_AVX)
+    message(STATUS "AVX instructions enabled.")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx -mfma")
 endif()
 
-if (USE_ZLIB)
+# zlib support
+if(USE_ZLIB)
+    message(STATUS "zlib support enabled.")
     add_definitions(-DUSE_ZLIB)
     find_package(ZLIB REQUIRED)
     include_directories(${ZLIB_INCLUDE_DIRS})
-    message(STATUS "Use the zlib library")
 endif()
 
-# Define the neural network default backend.
-if(_USE_CUDA)
-    if(_USE_CUDNN)
-        message(STATUS "Backend is cuDNN.")
-        message(" The CUDA-only backend is another choice. Please add the flag -DBLAS_BACKEND=CUDA")
-        message(" to disable cuDNN.")
+if(BLAS_BACKEND STREQUAL "CUDA" OR BLAS_BACKEND STREQUAL "CUDNN")
+    if(BLAS_BACKEND STREQUAL "CUDNN")
+        message(STATUS "Backend is set to cuDNN.")
     else()
-        message(STATUS "Backend is CUDA-only.")
-        message(" The cuDNN backend is another choice. Please add the flag -DBLAS_BACKEND=CUDNN")
-        message(" to enable it. The cuDNN library is required.")
+        message(STATUS "Backend is set to CUDA-only.")
     endif()
 
     add_definitions(-DUSE_CUDA)
@@ -177,134 +120,52 @@ if(_USE_CUDA)
     aux_source_directory(${NEURAL_SOURCES_DIR}/cuda CUDA_SOURCES)
 
     set(CUDA_STANDARD 14)
-    if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.0)
-        set(CMAKE_CUDA_FLAGS
-            " \
-            -gencode arch=compute_50,code=sm_50       \
-            -gencode arch=compute_50,code=compute_50  \
-            -gencode arch=compute_53,code=sm_53       \
-            -gencode arch=compute_53,code=compute_53  \
-            -gencode arch=compute_60,code=sm_60       \
-            -gencode arch=compute_60,code=compute_60  \
-            -gencode arch=compute_61,code=sm_61       \
-            -gencode arch=compute_61,code=compute_61  \
-            -gencode arch=compute_62,code=sm_62       \
-            -gencode arch=compute_62,code=compute_62  \
-            -gencode arch=compute_70,code=sm_70       \
-            -gencode arch=compute_70,code=compute_70  \
-            -gencode arch=compute_72,code=sm_72       \
-            -gencode arch=compute_72,code=compute_72  \
-            -gencode arch=compute_75,code=sm_75       \
-            -gencode arch=compute_75,code=compute_75  \
-            -gencode arch=compute_80,code=sm_80       \
-            -gencode arch=compute_80,code=compute_80  \
-            -gencode arch=compute_86,code=sm_86       \
-            -gencode arch=compute_86,code=compute_86  \
-            -gencode arch=compute_89,code=sm_89       \
-            -gencode arch=compute_89,code=compute_89  \
-            -gencode arch=compute_90,code=sm_90       \
-            -gencode arch=compute_90,code=compute_90  \
-            -Wno-deprecated-gpu-targets \
-            "
-            )
-    elseif (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 11.0)
-        set(CMAKE_CUDA_FLAGS
-            " \
-            -gencode arch=compute_35,code=sm_35       \
-            -gencode arch=compute_35,code=compute_35  \
-            -gencode arch=compute_37,code=sm_37       \
-            -gencode arch=compute_37,code=compute_37  \
-            -gencode arch=compute_50,code=sm_50       \
-            -gencode arch=compute_50,code=compute_50  \
-            -gencode arch=compute_53,code=sm_53       \
-            -gencode arch=compute_53,code=compute_53  \
-            -gencode arch=compute_60,code=sm_60       \
-            -gencode arch=compute_60,code=compute_60  \
-            -gencode arch=compute_61,code=sm_61       \
-            -gencode arch=compute_61,code=compute_61  \
-            -gencode arch=compute_62,code=sm_62       \
-            -gencode arch=compute_62,code=compute_62  \
-            -gencode arch=compute_70,code=sm_70       \
-            -gencode arch=compute_70,code=compute_70  \
-            -gencode arch=compute_72,code=sm_72       \
-            -gencode arch=compute_72,code=compute_72  \
-            -gencode arch=compute_75,code=sm_75       \
-            -gencode arch=compute_75,code=compute_75  \
-            -gencode arch=compute_80,code=sm_80       \
-            -gencode arch=compute_80,code=compute_80  \
-            -Wno-deprecated-gpu-targets \
-            "
-            )
+
+    if(${CMAKE_VERSION} VERSION_LESS "3.18.2")
+        message(WARNING "We recommend using CMake version 3.18.2 or higher to support the CMAKE_CUDA_ARCHITECTURES feature.")
+    endif()
+
+    if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.0)
+        set(CUDA_ARCHITECTURES 50 52 53 60 61 62 70 72 75 80 86 87 90)
+        set(CMAKE_CUDA_FLAGS "-Wno-deprecated-gpu-targets ${CMAKE_CUDA_FLAGS}")
+    elseif(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 11.8)
+        set(CUDA_ARCHITECTURES 35 37 50 52 53 60 61 62 70 72 75 80 86 87 90)
+        set(CMAKE_CUDA_FLAGS "-Wno-deprecated-gpu-targets ${CMAKE_CUDA_FLAGS}")
+    elseif(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 11.5)
+        set(CUDA_ARCHITECTURES 35 37 50 52 53 60 61 62 70 72 75 80 86 87)
+        set(CMAKE_CUDA_FLAGS "-Wno-deprecated-gpu-targets ${CMAKE_CUDA_FLAGS}")
+    elseif(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 11.1)
+        set(CUDA_ARCHITECTURES 35 37 50 52 53 60 61 62 70 72 75 80 86)
+        set(CMAKE_CUDA_FLAGS "-Wno-deprecated-gpu-targets ${CMAKE_CUDA_FLAGS}")
+    elseif(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 11.0)
+        set(CUDA_ARCHITECTURES 35 37 50 52 53 60 61 62 70 72 75 80)
+        set(CMAKE_CUDA_FLAGS "-Wno-deprecated-gpu-targets ${CMAKE_CUDA_FLAGS}")
     elseif (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 10.2)
-        set(CMAKE_CUDA_FLAGS
-            " \
-            -gencode arch=compute_30,code=sm_30       \
-            -gencode arch=compute_30,code=compute_30  \
-            -gencode arch=compute_35,code=sm_35       \
-            -gencode arch=compute_35,code=compute_35  \
-            -gencode arch=compute_37,code=sm_37       \
-            -gencode arch=compute_37,code=compute_37  \
-            -gencode arch=compute_50,code=sm_50       \
-            -gencode arch=compute_50,code=compute_50  \
-            -gencode arch=compute_53,code=sm_53       \
-            -gencode arch=compute_53,code=compute_53  \
-            -gencode arch=compute_60,code=sm_60       \
-            -gencode arch=compute_60,code=compute_60  \
-            -gencode arch=compute_61,code=sm_61       \
-            -gencode arch=compute_61,code=compute_61  \
-            -gencode arch=compute_62,code=sm_62       \
-            -gencode arch=compute_62,code=compute_62  \
-            -gencode arch=compute_70,code=sm_70       \
-            -gencode arch=compute_70,code=compute_70  \
-            -gencode arch=compute_72,code=sm_72       \
-            -gencode arch=compute_72,code=compute_72  \
-            -gencode arch=compute_75,code=sm_75       \
-            -gencode arch=compute_75,code=compute_75  \
-            -Wno-deprecated-gpu-targets \
-            "
-            )
+        set(CUDA_ARCHITECTURES 30 35 37 50 52 53 60 61 62 70 72 75)
+        set(CMAKE_CUDA_FLAGS "-Wno-deprecated-gpu-targets ${CMAKE_CUDA_FLAGS}")
     else()
         message(WARNING "CUDA 10.2 or greater is recommended, but attempting to build anyways")
-        set(CMAKE_CUDA_FLAGS
-            " \
-            -gencode arch=compute_30,code=sm_30 \
-            -gencode arch=compute_30,code=compute_30 \
-            -gencode arch=compute_37,code=sm_37 \
-            -gencode arch=compute_53,code=sm_53 \
-            -gencode arch=compute_53,code=compute_53 \
-            -gencode arch=compute_70,code=sm_70 \
-            -gencode arch=compute_70,code=compute_70 \
-            "
-            )
+        set(CUDA_ARCHITECTURES 30 37 53 70)
     endif()
+    generate_cuda_flags_from_archs()
     set(CMAKE_CUDA_FLAGS "-Xptxas -O3 -Xcompiler -fPIC ${CMAKE_CUDA_FLAGS}")
 
-    # Use the shared library.
     if(CMAKE_CUDA_FLAGS)
         list(REMOVE_ITEM CMAKE_CUDA_FLAGS "-cudart static")
     endif()
     string(APPEND CMAKE_CUDA_FLAGS "-cudart shared")
     set(CMAKE_CUDA_RUNTIME_LIBRARY SHARED)
 else()
-    if(_USE_EIGEN)
-        message(STATUS "Backend is Eigen")
-    elseif(_USE_BLAS)
+    if(BLAS_BACKEND STREQUAL "EIGEN")
+        message(STATUS "Backend is set to Eigen")
+    elseif(BLAS_BACKEND STREQUAL "OPENBLAS")
         message(STATUS "Backend is OpenBlas")
-    elseif(_USE_BUILD_IN)
+    elseif(BLAS_BACKEND STREQUAL "BUILT_IN")
         message(STATUS "Backend is built-in matrix.")
-        message(" Built-in matrix is very slow. Open Blas and Eigen are the better choice.")
-        message(" If you want to use Eigen, please add flag -DBLAS_BACKEND=EIGEN. And you need")
-        message(" to put the Eigen library to third_party directory. If you want to use OpenBlas,")
-        message(" please add flag -DBLAS_BACKEND=OPENBLAS. OpenBlas library is required.\n")
     endif()
-    message(" The GPU backend is much faster than CPU backend. If you want to speed up with")
-    message(" GPUs, please add flag -DBLAS_BACKEND=CUDA or -DBLAS_BACKEND=CUDNN. CUDA library")
-    message(" and Nvida GPU are both required.\n")
 endif()
 
-# Find all required packages.
 find_package(Threads REQUIRED)
-
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED on)
 
@@ -315,12 +176,12 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -Og ${CMAKE_CXX_FLAGS}")
 set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -DNDEBUG ${CMAKE_CXX_FLAGS}")
 set(CMAKE_EXE_LINKER_FLAGS "-flto -g")
 
-if(_USE_EIGEN)
+if(BLAS_BACKEND STREQUAL "EIGEN")
     message(STATUS "Include Eigen blas library")
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/Eigen)
     add_definitions(-DUSE_EIGEN)
     add_definitions(-DUSE_BLAS)
-elseif(_USE_BLAS)
+elseif(BLAS_BACKEND STREQUAL "OPENBLAS")
     message(STATUS "Include Open BLAS library")
     message(" Looking for system BLAS/OpenBLAS library...")
     find_package(BLAS REQUIRED)
@@ -357,24 +218,21 @@ add_executable(sayuri
 
 target_link_libraries(sayuri Threads::Threads)
 target_link_libraries(sayuri ${BLAS_LIBRARIES})
-if (USE_ZLIB)
+if(USE_ZLIB)
     target_link_libraries(sayuri ${ZLIB_LIBRARIES})
 endif()
 
-if(_USE_CUDA)
+if(BLAS_BACKEND STREQUAL "CUDA" OR BLAS_BACKEND STREQUAL "CUDNN")
     target_compile_definitions(sayuri PRIVATE USE_CUDA_BACKEND)
     find_package(CUDA REQUIRED)
-    if(_USE_CUDNN)
-        message(STATUS "Include CuDNN library")
-        message(" Looking for cuDNN library...")
+    if(BLAS_BACKEND STREQUAL "CUDNN")
         find_path(CUDNN_INCLUDE_DIR cudnn.h HINTS ${CUDNN_ROOT_DIR} ${CUDA_TOOLKIT_ROOT_DIR} PATH_SUFFIXES cuda/include include)
-        if((NOT CUDNN_INCLUDE_DIR))
-            message(ERROR "${ColorBoldRed} cudnn.h was NOT found, specify CUDNN_INCLUDE_DIR to indicate where it is.")
+        if(NOT CUDNN_INCLUDE_DIR)
+            message(FATAL_ERROR "${ColorBoldRed} cudnn.h was NOT found, specify CUDNN_INCLUDE_DIR to indicate where it is.")
         endif()
         add_definitions(-DUSE_CUDNN)
         find_library(CUDNN_LIBRARY libcudnn.so PATHS /usr/local/cuda/lib64 /opt/cuda/lib64)
         include_directories(SYSTEM ${CUDNN_INCLUDE_DIR})
-        message(" The cuDNN library be found.\n")
     endif()
     include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})
     target_link_libraries(sayuri ${CUDNN_LIBRARY} ${CUDA_CUBLAS_LIBRARIES} ${CUDA_LIBRARIES})
