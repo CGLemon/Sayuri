@@ -21,49 +21,66 @@ Document for building the program from source.
     $ cmake ..
     $ make -j
 
-## Cmake Option
+## Linux/MacOS
 
-Accelerate the network forwarding pipe by CPU. OpenBLAS are required. Eigen library is included in the ```third_party``` directory. OpenBLAS and Eigen are significantly faster than built-in blas.
+We offer CMake for compilation on platforms like Linux and macOS, with support for the following options:
+
+### Accelerate with CPU
+
+You can accelerate the network forwarding pipeline using your CPU. OpenBLAS and Eigen are required for this. Both libraries are significantly faster than built-in BLAS implementations. The Eigen library should be included in the ```third_party``` directory.
+
+To use OpenBLAS:
 
     $ cmake .. -DBLAS_BACKEND=OPENBLAS
 
-or
+To use Eigen:
 
     $ cmake .. -DBLAS_BACKEND=EIGEN
 
-Accelerate the network forwarding pipe by GPUs. CUDA is required. This backend is fastest in most case.
+
+### Accelerate with GPUs
+
+To accelerate the network forwarding pipeline using GPUs, CUDA is required. This backend is typically the fastest option.
 
     $ cmake .. -DBLAS_BACKEND=CUDA
 
-Accelerate the network forwarding pipe by GPUs. CUDA and cuDNN are both required. This backend is more steady than CUDA-only backend.
+For a more stable experience with GPU acceleration, both CUDA and cuDNN are required.
 
     $ cmake .. -DBLAS_BACKEND=CUDNN
 
-Compile a bigger board size version. Set it as 0 to disable this option. Only support for below 25x25 size.
+### Compile with a Larger Board Size
 
-    $ cmake .. -DBOARD_SIZE=25
+You can compile a version that supports a larger board size. Set this option to 0 to disable it. This feature currently only supports board sizes up to 25x25.
 
-Disable the FP16 supported if your CUDA version doesn't support for it.
+    $ cmake .. -DSPECIFIC_BOARD_SIZE=25
+
+### Disable FP16 Support
+
+If your CUDA version does not support FP16, you can disable it during compilation.
 
     $ cmake .. -DDISABLE_FP16=1
 
-Compress the training data file. It can save memory usage during the self-play process.
+### Compress Training Data
+
+To save memory usage during the self-play process, you can compress training data files.
 
     $ cmake .. -DUSE_ZLIB=1
 
-## Windows Version (Experimental)
+## Windows
 
-Only support for compiling the executable file via command line now. Assume you already donwload the source code and Eigen. Then, you need to download the Visual Studio 2022/2019 and install depending C++ library.  Here are two different compilers. Note that we must use ```x64 Native Tools Command Prompt for VS XXX``` environment or power shell.
+To compile the executable, we provide a ```.bat``` file that supports both CPU and GPU versions. For the CPU version, we default to using Eigen as the backend. For the GPU version, CUDA is used as the backen
 
-* Via [MinGW](https://github.com/mstorsjo/llvm-mingw),  CPU-only version
+Before you begin, you must first download and install Visual Studio 2022/2019 along with the necessary C++ libraries. After installation, execute the following commands. It's crucial to run these commands from the ```x64 Native Tools Command Prompt for VS XXX``` environment or PowerShell.
 
-        $ g++ -std=c++14 -ffast-math -I . -lpthread *.cc utils/*.cc game/*.cc mcts/*.cc neural/*.cc neural/blas/*.cc neural/cuda/*.cc pattern/*.cc selfplay/*.cc -o sayuri -O3 -DNDEBUG -DWIN32 -I ../third_party/Eigen -DUSE_BLAS -DUSE_EIGEN -static
+### CPU Version
 
-* Via NVCC, CPU-only and GPU version
+This version requires the GCC compiler. You can use MinGW for this. To compile the CPU version, enter:
 
-        // CPU-only version
-        $ nvcc main.cc config.cc version.cc game/board.cc game/book.cc game/game_state.cc game/gtp.cc game/iterator.cc game/pattern_board.cc game/sgf.cc game/strings.cc game/symmetry.cc game/zobrist.cc mcts/node.cc mcts/search.cc mcts/time_control.cc neural/description.cc neural/encoder.cc neural/loader.cc neural/network.cc neural/training_data.cc neural/winograd_helper.cc neural/blas/batchnorm.cc neural/blas/biases.cc neural/blas/blas.cc neural/blas/blas_forward_pipe.cc neural/blas/convolution.cc neural/blas/fullyconnect.cc neural/blas/se_unit.cc neural/blas/sgemm.cc neural/blas/winograd_convolution3.cc neural/cuda/cuda_common.cc neural/cuda/cuda_forward_pipe.cc neural/cuda/cuda_layers.cc neural/cuda/cuda_kernels.cu pattern/gammas_dict.cc pattern/mm.cc pattern/mm_trainer.cc pattern/pattern.cc selfplay/engine.cc selfplay/pipe.cc utils/filesystem.cc utils/gogui_helper.cc utils/gzip_helper.cc utils/komi.cc utils/log.cc utils/option.cc utils/parse_float.cc utils/random.cc utils/splitter.cc utils/time.cc -o sayuri  -I . -DNDEBUG -DWIN32 -DNOMINMAX  -I ../third_party/Eigen -DUSE_BLAS -DUSE_EIGEN -O3 -Xcompiler /O2 -Xcompiler /std:c++14
-        
-        // GPU version
-        $ nvcc main.cc config.cc version.cc game/board.cc game/book.cc game/game_state.cc game/gtp.cc game/iterator.cc game/pattern_board.cc game/sgf.cc game/strings.cc game/symmetry.cc game/zobrist.cc mcts/node.cc mcts/search.cc mcts/time_control.cc neural/description.cc neural/encoder.cc neural/loader.cc neural/network.cc neural/training_data.cc neural/winograd_helper.cc neural/blas/batchnorm.cc neural/blas/biases.cc neural/blas/blas.cc neural/blas/blas_forward_pipe.cc neural/blas/convolution.cc neural/blas/fullyconnect.cc neural/blas/se_unit.cc neural/blas/sgemm.cc neural/blas/winograd_convolution3.cc neural/cuda/cuda_common.cc neural/cuda/cuda_forward_pipe.cc neural/cuda/cuda_layers.cc neural/cuda/cuda_kernels.cu pattern/gammas_dict.cc pattern/mm.cc pattern/mm_trainer.cc pattern/pattern.cc selfplay/engine.cc selfplay/pipe.cc utils/filesystem.cc utils/gogui_helper.cc utils/gzip_helper.cc utils/komi.cc utils/log.cc utils/option.cc utils/parse_float.cc utils/random.cc utils/splitter.cc utils/time.cc -o sayuri  -I . -DNDEBUG -DWIN32 -DNOMINMAX -DUSE_CUDA -lcudart -lcublas -O3 -Xcompiler /O2 -Xcompiler /std:c++14
+    .\build.bat gcc
 
+
+### GPU Version
+
+This version requires the NVCC compiler. To compile the GPU version, enter:
+
+    .\build.bat nvcc

@@ -47,11 +47,10 @@ if(NOT WIN32)
 endif()
 
 # Custom board size
-if (BOARD_SIZE)
+if(SPECIFIC_BOARD_SIZE)
     message(STATUS "Using the specific board size of ${BOARD_SIZE} x ${BOARD_SIZE}.")
     add_definitions(-DMAX_BOARD_SIZE=${BOARD_SIZE})
 endif()
-
 
 # FP16 support
 if(DISABLE_FP16)
@@ -125,7 +124,11 @@ if(BLAS_BACKEND STREQUAL "CUDA" OR BLAS_BACKEND STREQUAL "CUDNN")
         message(WARNING "We recommend using CMake version 3.18.2 or higher to support the CMAKE_CUDA_ARCHITECTURES feature.")
     endif()
 
-    if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.0)
+    # https://en.wikipedia.org/wiki/CUDA#GPUs_supported
+    if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8)
+        set(CUDA_ARCHITECTURES 50 52 53 60 61 62 70 72 75 80 86 87 90 120)
+        set(CMAKE_CUDA_FLAGS "-Wno-deprecated-gpu-targets ${CMAKE_CUDA_FLAGS}")
+    elseif(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.0)
         set(CUDA_ARCHITECTURES 50 52 53 60 61 62 70 72 75 80 86 87 90)
         set(CMAKE_CUDA_FLAGS "-Wno-deprecated-gpu-targets ${CMAKE_CUDA_FLAGS}")
     elseif(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 11.8)
@@ -169,12 +172,23 @@ find_package(Threads REQUIRED)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED on)
 
-set(GCC_COMPILE_FLAGS "-Wall -Wextra -ffast-math -march=native -flto")
-set(GCC_DISABLED_WARNING_COMPILE_FLAGS "-Wno-ignored-attributes -Wno-maybe-uninitialized -Wno-mismatched-tags")
-set(CMAKE_CXX_FLAGS "${GCC_COMPILE_FLAGS} ${GCC_DISABLED_WARNING_COMPILE_FLAGS} ${CMAKE_CXX_FLAGS}")
-set(CMAKE_CXX_FLAGS_DEBUG "-g -Og ${CMAKE_CXX_FLAGS}")
-set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -DNDEBUG ${CMAKE_CXX_FLAGS}")
-set(CMAKE_EXE_LINKER_FLAGS "-flto -g")
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
+    set(GCC_COMPILE_FLAGS "-Wall -Wextra -ffast-math -march=native -flto")
+    set(GCC_DISABLED_WARNING_COMPILE_FLAGS "-Wno-ignored-attributes -Wno-uninitialized -Wno-mismatched-tags")
+    set(CMAKE_CXX_FLAGS "${GCC_COMPILE_FLAGS} ${GCC_DISABLED_WARNING_COMPILE_FLAGS} ${CMAKE_CXX_FLAGS}")
+    set(CMAKE_CXX_FLAGS_DEBUG "-g -Og ${CMAKE_CXX_FLAGS}")
+    set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -DNDEBUG ${CMAKE_CXX_FLAGS}")
+    set(CMAKE_EXE_LINKER_FLAGS "-flto -g")
+elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    set(GCC_COMPILE_FLAGS "-Wall -Wextra -ffast-math -march=native -flto")
+    set(GCC_DISABLED_WARNING_COMPILE_FLAGS "-Wno-ignored-attributes -Wno-maybe-uninitialized -Wno-mismatched-tags")
+    set(CMAKE_CXX_FLAGS "${GCC_COMPILE_FLAGS} ${GCC_DISABLED_WARNING_COMPILE_FLAGS} ${CMAKE_CXX_FLAGS}")
+    set(CMAKE_CXX_FLAGS_DEBUG "-g -Og ${CMAKE_CXX_FLAGS}")
+    set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -DNDEBUG ${CMAKE_CXX_FLAGS}")
+    set(CMAKE_EXE_LINKER_FLAGS "-flto -g")
+elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+    # pass  
+endif()
 
 if(BLAS_BACKEND STREQUAL "EIGEN")
     message(STATUS "Include Eigen blas library")
@@ -183,7 +197,6 @@ if(BLAS_BACKEND STREQUAL "EIGEN")
     add_definitions(-DUSE_BLAS)
 elseif(BLAS_BACKEND STREQUAL "OPENBLAS")
     message(STATUS "Include Open BLAS library")
-    message(" Looking for system BLAS/OpenBLAS library...")
     find_package(BLAS REQUIRED)
     find_path(
         BLAS_INCLUDE_DIRS openblas_config.h
@@ -201,7 +214,6 @@ elseif(BLAS_BACKEND STREQUAL "OPENBLAS")
     if(APPLE)
         include_directories("/System/Library/Frameworks/Accelerate.framework/Versions/Current/Headers")
     endif()
-    message(" BLAS/OpenBLAS library be found.\n")
 endif()
 
 add_executable(sayuri
