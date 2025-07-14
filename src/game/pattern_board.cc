@@ -628,6 +628,9 @@ bool Board::GetAtariLevel(const int vtx, const int color, std::uint64_t &hash) c
 
     int level = 0;
     assert(num_atari_stones >= 1);
+#ifdef NDEBUG
+    (void) num_atari_stones;
+#endif
 
     if (ko_move_ != kNullVertex) {
         // atari when there is a ko

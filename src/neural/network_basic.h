@@ -121,6 +121,8 @@ struct ForwardPipeOption {
 
 class NetworkForwardPipe {
 public:
+    virtual ~NetworkForwardPipe() = default;
+
     virtual void Initialize(std::shared_ptr<DNNWeights> weights) = 0;
 
     virtual OutputResult Forward(const InputData &inpnt) = 0;
