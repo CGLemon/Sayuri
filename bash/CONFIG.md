@@ -2,135 +2,137 @@
 
 ## The Training Setting
 
-The ```selfplay-setting.json``` controls the training process. Here are the parameters.
+The selfplay-setting.json file defines the key parameters for the neural network structure and training process. It includes settings for the neural network architecture, such as the number of residual blocks, channel sizes, and activation functions, as well as training configurations like batch size, learning rate schedule, and data buffer size. These settings allow flexible adjustment of training behavior and resource usage, making it possible to balance training efficiency and model performance according to the available hardware.
 
 ```
 {
-    "NeuralNetwork" : {
-        "NNType" : "Residual",
-        "MaxBoardSize" : 19,          # The max size in the self-play game. It is
-                                      # OK if this value greater than training games,
-                                      # but will hurt the performance.
+    "NeuralNetwork": {
+        "NNType": "Residual",
+        "MaxBoardSize": 19,          # The maximum board size for self-play games.
+                                     # It is acceptable to set this value larger than
+                                     # the training board size, but it may hurt performance.
 
+        "ResidualChannels": 128,     # The number of channels in the residual blocks.
+        "PolicyHeadChannels": 24,    # The number of channels in the policy head.
+        "ValueHeadChannels": 24,     # The number of channels in the value head.
 
-        "ResidualChannels" : 128,     # Channel size of residual.
-        "PolicyExtract" : 24,         # Channel size of policy head.
-        "ValueExtract" : 24,          # Channel size of value head.
+        "SeRatio": 4,                # Squeeze ratio of the SE (Squeeze-and-Excitation) module.
+        "PolicyHeadType": "Normal",  # Should be one of [Normal, RepLK].
+        "Activation": "mish",        # Should be one of [relu, swish, mish].
 
-        "SeRatio" : 4,                # squeeze ration of SE module
-        "Activation" : "mish",        # should be one of relu/mish
+        "Stack": [                    # Each block should be one of [
+                                      # ResidualBlock, BottleneckBlock,
+                                      # NestedBottleneckBlock, MixerBlock ]
 
-        "Stack" : [
-            "ResidualBlock",           # The 1st residual block. It is normal block.
-            "ResidualBlock",           # The 2nd residual block. It is normal block.
-            "ResidualBlock-SE",        # The 3rd residual block. It is block with SE module.
-            "ResidualBlock",           # The 4th residual block.
-            "ResidualBlock",           # The 5th residual block.
-            "ResidualBlock-SE"         # The 6th residual block.
+            "ResidualBlock",          # The first residual block (standard).
+            "ResidualBlock",          # The second residual block (standard).
+            "ResidualBlock-SE",       # The third residual block with an SE module.
+            "ResidualBlock",          # The fourth residual block (standard).
+            "ResidualBlock",          # The fifth residual block (standard).
+            "ResidualBlock-SE"        # The sixth residual block with an SE module.
         ]
     },
 
-    "Train" : {
-        "UseGPU" : null,
-        "Optimizer" : "SGD",
-        "StepsPerEpoch" : 4000,         # Save the weight evey this steps.
-        "ValidationSteps" : 100,
-        "VerboseSteps" : 1000,
-        "MaxStepsPerRunning" : 4000,    # Will stop the training after this steps.
-        "Workers" : 4,                  # Number of data loader workers.
-        "BatchSize" : 256,
-        "BufferSize" : 524288,          # Bigger is better but it will use more memory. If your
-                                        # compute is only 32GB, you can set it as around 256000.
+    "Train": {
+        "UseGPU": null,              # Set to null for automatic GPU selection.
+        "Optimizer": "SGD",
+        "StepsPerEpoch": 4000,       # Save weights every this many steps.
+        "ValidationSteps": 100,
+        "VerboseSteps": 1000,
+        "MaxStepsPerRunning": 4000,  # Stop training after this many steps.
+        "Workers": 4,                # Number of data loader workers.
+        "BatchSize": 256,
+        "BufferSize": 524288,        # Larger values are better but consume more memory.
+                                     # For systems with 32GB RAM, around 256000 is recommended.
 
-        "DownSampleRate" : 16,          # Bigger is better but may be slow down.
-        "MacroFactor" : 1,
-        "WeightDecay" : 1e-4,
+        "DownSampleRate": 16,        # Larger values improve data freshness but may slow down training.
+        "MacroFactor": 1,
+        "WeightDecay": 1e-4,
 
-        "ChunksIncreasingC" : 5000,     # Slowly increase the replay buffer size when probing at least
-                                        # chunks. Will load "NumberChunks" chunks if we don't give
-                                        # any value (or null).
-        "NumberChunks" : 20000,         # Will load last X chunks at most. Each chunk has only one game
-                                        # by default.
+        "ChunksIncreasingC": 5000,   # Gradually increase the replay buffer size after at least
+                                     # this many chunks. If set to null, will load "NumberChunks".
 
-        "PolicySurpriseFactor" : 0.5,   # One factor of sample rate
+        "NumberChunks": 20000,       # Maximum number of recent chunks to load.
+                                     # By default, each chunk contains one game.
 
-        "LearningRateSchedule" : [
-            [0,       1e-2]             # The format is [X, lr]. Will use the lr rate
-                                        # after X stpes. You only need to change the lr
-                                        # part in the reinforcement learning.
-         ],
+        "PolicySurpriseFactor": 0.5, # A factor affecting sample selection rates.
 
-        "TrainDirectory" : "selfplay/data",
-        "StorePath" : "workspace"
+        "LearningRateSchedule": [
+            [0, 1e-2]                # Format: [step, learning rate]. Learning rate changes after
+                                     # reaching the specified step. Only modify the learning rate
+                                     # for reinforcement learning.
+        ],
+
+        "TrainDirectory": "selfplay/data",
+        "StorePath": "workspace"
     }
 }
 ```
 
 ## The Self-play Engine Configuration File
 
-The ```selfplay-config.txt``` controls the self-play process. Here are the parameters.
+The selfplay-config.txt file controls the behavior of the self-play engine, which is responsible for generating training data through automated games. It configures options for the Monte Carlo Tree Search (MCTS), game rules (such as komi and board size), randomness in play styles, playout counts, and resignation behavior. This setup ensures diverse and efficient data generation, enabling the model to learn from a wide range of game scenarios while optimizing computational costs through techniques like reduced playouts and parallel self-play.
 
 ```
---dirichlet-noise              # Enable Dirichlet noise in MCTS.
+--dirichlet-noise               # Enable Dirichlet noise in MCTS.
 
---random-moves-factor 0.08     # Do the random move if the move number is
-                               # below the (X * intersections).
+--random-moves-factor 0.08      # Play a random move if the move number is
+                                # less than (factor × number of intersections).
 
---random-opening-prob 0.75     # Play opening with high temperature policy in
-                               # this probability.
+--random-opening-prob 0.75      # Probability of using a high-temperature policy
+                                # during the opening phase.
 
---random-fastsearch-prob 0.75  # Play random move for reduce-playouts in this
-                               # probability.
+--random-fastsearch-prob 0.75   # Probability of playing a random move during
+                                # reduced-playout searches.
 
---komi-stddev 2.5              # Apply the random komi in the self-play
-                               # games.
+--komi-stddev 2.5               # Standard deviation for random komi in self-play games.
 
 --cpuct-init 0.5
 --lcb-reduction 0
 --score-utility-factor 0.05
 
---selfplay-query bkp:9:7:0.9   # The format is boardsize-komi-prob.
-                               # It means 90% games are 9x9 with komi 7.
+--selfplay-query bkp:9:7:0.9    # Format: boardsize-komi-probability. 90% of games are 9×9 with komi 7.
 
---selfplay-query bhp:9:2:0.1   # The format is boardsize-handicap-prob.
-                               # It means 10% 9x9 games is handicap. The
-                               # max handicap size is 2.
+--selfplay-query bkp:7:9:0.1    # Format: boardsize-komi-probability. 10% of games are 7×7 with komi 9.
 
---selfplay-query srs:area      # The self-play game will use area scoring (chinese-like) and
---selfplay-query srs:territory # territory scoring (japanese-like).
+--selfplay-query bhp:9:2:0.1    # Format: boardsize-handicap-probability. 10% of 9×9 games use handicap, up to 2 stones.
 
---selfplay-query bkp:7:9:0.1   # It means 10% games are 7x7 with komi 9.
+--selfplay-query srs:area       # Self-play games use area scoring (Chinese rules).
 
---playouts 150                 # The main playouts.
+--selfplay-query srs:territory  # Self-play games use territory scoring (Japanese rules).
 
---gumbel                       # Enable Sequential Halving with Gumbel.
+--playouts 150                  # Main number of playouts per move.
 
---gumbel-playouts-threshold 50 # Do the Gumbel search if the current playouts
-                               # below this value.
+--gumbel                        # Enable Sequential Halving with Gumbel search.
+
+--gumbel-playouts-threshold 50  # Use Gumbel search when current playouts
+                                # are below this threshold.
 
 --always-completed-q-policy
 
---reduce-playouts 50           # 75% uses 50 playouts. Will disable any noise
-                               # do not record the training data.
+--reduce-playouts 50            # In 75% of games, use 50 playouts without noise
+                                # and do not save training data.
 
---reduce-playouts-prob 0.75    # 75% uses reduce-playouts.
+--reduce-playouts-prob 0.75     # Probability of using reduced playouts.
 
---resign-playouts 75           # Use this playout if someone's winrate below
-                               # threshold.
+--resign-playouts 75            # Use this number of playouts if a player's win rate
+                                # falls below the resign threshold.
 
---resign-threshold 0.05        # If someone's winrate is below this value,
-                               # will use the resign-playouts.
+--resign-threshold 0.05         # Resign if a player's win rate falls below this threshold.
 
---resign-discard-prob 0.8      # Discard the training data in 80% when someome
-                               # has already won the game.
+--resign-discard-prob 0.8       # Discard 80% of training data when the game
+                                # has a clear winner.
 
---parallel-games 128           # Parallel games at the same time.
---batch-size 64                # Network evalutaion batch size.
---cache-memory-mib 400
+--parallel-games 128            # Number of self-play games to run in parallel.
+
+--batch-size 64                 # Batch size for neural network inference.
+
+--cache-memory-mib 400          # Cache memory size in MiB.
+
 --early-symm-cache
 --first-pass-bonus
 
---root-policy-temp 1.1         # The policy softmax temperature of root node.
+--root-policy-temp 1.1          # Temperature for the root node policy softmax.
 
---num-games 5000               # Self-play games per epoch.
+--num-games 5000                # Number of self-play games per epoch.
 ```

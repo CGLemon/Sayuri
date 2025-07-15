@@ -156,6 +156,6 @@ void Benchmark::Run() {
         char sign = elodiff >= 0.0 ? '+' : '-';
         LOGGING << Format(
             "   - final result -> %.2f p/s (elo %.1f, elo diff %c%.1f)\n",
-            playouts_per_second, elo_list[i], sign, elodiff);
+            playouts_per_second, elo_list[i], sign, std::abs(elodiff));
     }
 }

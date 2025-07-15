@@ -47,13 +47,13 @@ Sayuri is not complete engine. You need a graphical interface for playing with h
 
 ## Build From Source
 
-Please see this [section](./docs/COMPILE.md). For those on the Windows platform, an executable file can be downloaded directly from the [release page](https://github.com/CGLemon/Sayuri/releases).
+For instructions on building from source, please refer to this [section](./docs/COMPILE.md). If you are using Windows, you can download a precompiled executable directly from the release page.
 
 ## Reinforcement Learning
 
-Sayuri is a high-efficiency self-play learning system for the game of Go. The accompanying figure illustrates the estimated computational cost of the v0.7 engine (purple line) in comparison to KataGo and LeelaZero. Notably, Sayuri achieves approximately a 250x reduction in computational requirements compared to ELF OpenGo. This was demonstrated by a full training run completed in just three months on a single RTX 4080 GPU. This efficiency significantly surpasses the 50x computational reduction claimed by KataGo g104.
+Sayuri is a highly efficient self-play learning system for the game of Go that focuses on computational efficiency. In her v0.7 release, Sayuri’s training cost (represented by the purple line) is notably lower than that of both KataGo and Leela Zero. Compared to ELF OpenGo, Sayuri requires approximately 250× less computation. The complete training run was conducted in three months using a single RTX 4080 GPU. By comparison, KataGo’s g104 version reports a reduction of around 50×, making Sayuri’s efficiency improvement considerably larger.
 
-[Here](./bash/README.md) will describe how to run the self-play loop.
+For details on how to run the self-play loop, please refer to this [guide](./bash/README.md).
 
 ![sayuri-vs-kata](./img/sayurivskata-v7.png)
 

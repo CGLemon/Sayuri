@@ -21,7 +21,7 @@ Document for building the program from source.
     $ cmake ..
     $ make -j
 
-## Linux/MacOS
+## CMake Options
 
 We offer CMake for compilation on platforms like Linux and macOS, with support for the following options:
 
