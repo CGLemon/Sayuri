@@ -43,6 +43,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["const_time"] << Option::SetOption(0);
     kOptionsMap["batch_size"] << Option::SetOption(0);
     kOptionsMap["threads"] << Option::SetOption(0);
+    kOptionsMap["virtual_loss_count"] << Option::SetOption(1);
 
     kOptionsMap["kgs_hint"] << Option::SetOption(std::string{});
     kOptionsMap["weights_file"] << Option::SetOption(std::string{});
@@ -715,6 +716,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--const-time")) {
         if (IsParameter(res->Get<>())) {
             SetOption("const_time", res->Get<int>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--virtual-loss-count")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("virtual_loss_count", res->Get<int>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

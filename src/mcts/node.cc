@@ -16,8 +16,6 @@
 #include <stack>
 #include <numeric>
 
-#define VIRTUAL_LOSS_COUNT (3)
-
 Node::Node(Parameters *param, std::int16_t vertex, float policy) {
     param_ = param;
     vertex_ = vertex;
@@ -1194,7 +1192,7 @@ const std::vector<Node::Edge> &Node::GetChildren() const {
 }
 
 int Node::GetVirtualLoss() const {
-    return VIRTUAL_LOSS_COUNT *
+    return param_->virtual_loss_count *
                running_threads_.load(std::memory_order_relaxed);
 }
 
@@ -1241,8 +1239,9 @@ float Node::GetWL(const int color, const bool use_virtual_loss) const {
     auto virtual_loss = 0;
 
     if (use_virtual_loss) {
-        // Punish the node if there are some threads under this
-        // sub-tree.
+        // When we visit a node, add this amount of virtual losses
+        // to it to encourage other CPUs to explore other parts of the
+        // search tree.
         virtual_loss = GetVirtualLoss();
     }
 

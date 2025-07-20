@@ -18,6 +18,7 @@ public:
         playouts = GetOption<int>("playouts");
         ponder_factor = GetOption<int>("ponder_factor");
         const_time = GetOption<int>("const_time");
+        virtual_loss_count = GetOption<int>("virtual_loss_count");
 
         resign_threshold = GetOption<float>("resign_threshold");
         lcb_reduction = GetOption<float>("lcb_reduction");
@@ -80,6 +81,8 @@ public:
     int ponder_factor;
     int const_time;
     int random_min_visits;
+    int virtual_loss_count;
+
     float random_min_ratio;
     float random_moves_factor;
     float random_moves_temp;
