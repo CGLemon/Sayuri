@@ -234,9 +234,11 @@ bool Node::ExpandChildren(Network &network,
         legal_accumulate += policy;
     }
 
-    // The pass is always legal.
-    nodelist.emplace_back(raw_netlist.pass_probability, kPass);
-    legal_accumulate += raw_netlist.pass_probability;
+    const auto letf_threshold = std::max(1, num_intersections - num_intersections / 6);
+    if (!(param_->suppress_early_pass && (int)nodelist.size() >= letf_threshold)) {
+        nodelist.emplace_back(raw_netlist.pass_probability, kPass);
+        legal_accumulate += raw_netlist.pass_probability;
+    }
 
     if (legal_accumulate < 1e-8f) {
         // It will be happened if the policy focuses on the illegal moves.

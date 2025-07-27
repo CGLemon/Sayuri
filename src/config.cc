@@ -30,6 +30,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["winograd"] << Option::SetOption(true);
     kOptionsMap["fp16"] << Option::SetOption(true);
     kOptionsMap["capture_all_dead"] << Option::SetOption(false);
+    kOptionsMap["suppress_early_pass"] << Option::SetOption(false);
 
     kOptionsMap["timemanage"] << Option::SetOption(static_cast<int>(TimeControl::TimeManagement::kOff));
 
@@ -523,6 +524,11 @@ void ArgsParser::Parse(Splitter &spt) {
 
     if (const auto res = spt.Find("--capture-all-dead")) {
         SetOption("capture_all_dead", true);
+        spt.RemoveWord(res->Index());
+    }
+
+    if (const auto res = spt.Find("--suppress-early-pass")) {
+        SetOption("suppress_early_pass", true);
         spt.RemoveWord(res->Index());
     }
 
