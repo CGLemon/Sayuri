@@ -833,24 +833,27 @@ int Search::GetBestMove(int playouts, OptionTag tag) {
         return kResign;
     }
 
+    // In early game, apply some randomness to improve exploration.
     int best_move = result.best_move;
     const int random_moves_cnt = param_->random_moves_factor *
                                      root_state_.GetNumIntersections();
     if (root_state_.GetMoveNumber() < random_moves_cnt) {
-        // TODO: It is possible the pass move. Should we prune it?
         best_move = result.random_move;
     }
+    // If we are clearly winning, consider passing early.
     if (ShouldPass(root_state_, result, param_.get())) {
-        // Quickly play the move if we have already won the
-        // game.
+         // If the current win rate is high enough, play a pass move
+         // to finish the game.
         best_move = kPass;
     }
+
+    // Under area scoring rules, if we’re passing but there are still
+    // capturable dead stones, play a move to capture them before passing.
     if (param_->capture_all_dead &&
             best_move == kPass &&
             root_state_.GetScoringRule() == kArea &&
             result.capture_all_dead_move != kNullVertex) {
-        // Refuse playing the pass move until all dead stones
-        // are removed.
+        // Avoid passing if there are still dead stones to capture.
         best_move = result.capture_all_dead_move;
     }
     return best_move;

@@ -188,12 +188,12 @@ bool Node::ExpandChildren(Network &network,
         symm_base_hash[symm] = state.ComputeSymmetryHash(symm);
     }
 
-    // Prune the illegal moves or some bad move.
     for (int idx = 0; idx < num_intersections; ++idx) {
         const auto vtx = state.IndexToVertex(idx);
         const auto policy = raw_netlist.probabilities[idx];
 
-        // Prune the illegal, unwise and forbidden move.
+        // Discard moves that are illegal, forbidden by configuration,
+        // or otherwise undesirable.
         int movenum = state.GetMoveNumber();
         if (!state.IsLegalMove(vtx, color_,
                 [movenum, &config](int vtx, int color){
@@ -203,7 +203,9 @@ bool Node::ExpandChildren(Network &network,
             continue;
         }
 
-        // Prune the symmetry moves. May reduce some perfomance.
+        // Prune symmetric moves to eliminate redundant computations.
+        // This may slightly hurt performance due to excluding certain
+        // moves.
         if (apply_symm_pruning) {
             bool hash_found = false;
             for (int symm = Symmetry::kIdentitySymmetry+1;
@@ -216,15 +218,16 @@ bool Node::ExpandChildren(Network &network,
             }
 
             if (!hash_found) {
-                // Get next game state hash. Is is not always correct
-                // if move is capture. It is ok because we only need
-                // move hash in the opening stage. The capture move is
-                // unusual in the opening stage.
+                // Compute the hash of the next game state. 
+                // This hash may be inaccurate for capture moves,
+                // but since it's only used during the opening stage,
+                // and captures are rare in that phase, the inaccuracy 
+                // is acceptable.
                 moves_hash.emplace_back(
                     state.GetHash() ^ state.GetMoveHash(vtx, color_));
             } else {
-                // The pruned node is a legal move. We need accumulate
-                // the all legal moves policy.
+                // This pruned node represents a legal move, so its policy
+                // value should be accumulated into the total for all legal moves.
                 legal_accumulate += policy;
                 continue;
             }
@@ -234,20 +237,27 @@ bool Node::ExpandChildren(Network &network,
         legal_accumulate += policy;
     }
 
-    const auto letf_threshold = std::max(1, num_intersections - num_intersections / 6);
-    if (!(param_->suppress_early_pass && (int)nodelist.size() >= letf_threshold)) {
+    // In the early stages, pass is usually not an option that should be
+    // considered, so we remove it directly."
+    const auto left_threshold = std::max(
+        0, static_cast<int>((1.0f - param_->suppress_pass_factor) * num_intersections));
+    const bool should_suppress_pass =
+        !nodelist.empty() && static_cast<int>(nodelist.size()) > left_threshold;
+    if (!should_suppress_pass) {
         nodelist.emplace_back(raw_netlist.pass_probability, kPass);
         legal_accumulate += raw_netlist.pass_probability;
     }
 
     if (legal_accumulate < 1e-8f) {
-        // It will be happened if the policy focuses on the illegal moves.
+        // This can occur if the policy assigns most of its probability
+        // mass to illegal moves. In that case, fall back to a uniform
+        // distribution over all nodes.
         for (auto &node : nodelist) {
             node.first = 1.f/nodelist.size();
         }
     } else {
+        // Normalize the policy values over legal moves.
         for (auto &node : nodelist) {
-            // Adjust the policy.
             node.first /= legal_accumulate;
         }
     }

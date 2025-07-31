@@ -30,7 +30,6 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["winograd"] << Option::SetOption(true);
     kOptionsMap["fp16"] << Option::SetOption(true);
     kOptionsMap["capture_all_dead"] << Option::SetOption(false);
-    kOptionsMap["suppress_early_pass"] << Option::SetOption(false);
 
     kOptionsMap["timemanage"] << Option::SetOption(static_cast<int>(TimeControl::TimeManagement::kOff));
 
@@ -71,6 +70,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["score_utility_factor"] << Option::SetOption(0.1f);
     kOptionsMap["score_utility_div"] << Option::SetOption(20.f);
     kOptionsMap["forced_playouts_k"] << Option::SetOption(0.f);
+    kOptionsMap["suppress_pass_factor"] << Option::SetOption(0.1667f, 1.f, 0.f);
 
     kOptionsMap["root_policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
     kOptionsMap["policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
@@ -527,11 +527,6 @@ void ArgsParser::Parse(Splitter &spt) {
         spt.RemoveWord(res->Index());
     }
 
-    if (const auto res = spt.Find("--suppress-early-pass")) {
-        SetOption("suppress_early_pass", true);
-        spt.RemoveWord(res->Index());
-    }
-
     if (const auto res = spt.FindNext({"--resign-threshold", "-r"})) {
         if (IsParameter(res->Get<>())) {
             SetOption("resign_threshold", res->Get<float>());
@@ -814,6 +809,13 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--forced-playouts-k")) {
         if (IsParameter(res->Get<>())) {
             SetOption("forced_playouts_k", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--suppress-pass-factor")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("suppress_pass_factor", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
