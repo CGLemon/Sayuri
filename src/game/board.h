@@ -96,10 +96,10 @@ public:
     // Get the index board.
     int GetIndex(const int x, const int y) const;
 
-    // Tranfer index to vertex except for pass move.
+    // Transfer index to vertex except for pass move.
     int IndexToVertex(int idx) const;
 
-    // Tranfer vertex to index except for pass move.
+    // Transfer vertex to index except for pass move.
     int VertexToIndex(int vtx) const;
 
     // Reture true if the move is legal.

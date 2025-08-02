@@ -107,6 +107,7 @@ struct ComputationResult {
     int gumbel_move{kNullVertex};
     int gumbel_no_pass_move{kNullVertex};
     int capture_all_dead_move{kNullVertex};
+    int high_priority_move{kNullVertex};
 
     VertexType to_move;
     float komi;

@@ -21,14 +21,16 @@ Book &Book::Get() {
 void Book::GenerateBook(std::string sgf_name, std::string filename) const {
 
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
-    BookMap<VertexFrequencyList> book_data;
+    BookMap<VertexFrequencyList> book_data_freq;
 
     std::shuffle(std::begin(sgfs),
         std::end(sgfs), Random<kXoroShiro128Plus>::Get());
 
     int games = 0;
     for (const auto &sgf: sgfs) {
-        BookDataProcess(sgf, book_data);
+        if (!BookDataProcess(sgf, book_data_freq)) {
+            continue;
+        }
         if (++games % 1000 == 0) {
             LOGGING << Format("Parsed %d games\n", games);
         }
@@ -39,7 +41,6 @@ void Book::GenerateBook(std::string sgf_name, std::string filename) const {
     }
 
     auto file = std::ofstream{};
-
     file.open(filename);
     if (!file.is_open()) {
         LOGGING << "Fail to create the file: " << filename << '!' << std::endl;
@@ -48,29 +49,47 @@ void Book::GenerateBook(std::string sgf_name, std::string filename) const {
 
     int idx = 0;
 
-    for (const auto &it: book_data) {
-        VertexProbabilityList filtered_vprob_list;
-        VertexFrequencyList filtered_vfreq_list;
+    for (const auto &it: book_data_freq) {
+        auto filtered_vfreq_list = VertexFrequencyList{};
+        auto filtered_vprob_list = VertexProbabilityList{};
 
-        int accm = 0;
-        auto &vfreq_list = it.second;
+        const auto hash = it.first;
+        const auto &vfreq_list = it.second;
 
         for (const auto &vfreq: vfreq_list) {
-            if (vfreq.second > kFilterThreshold) {
+            if (vfreq.second >= kFilterFreqThreshold) {
                 filtered_vfreq_list.emplace_back(vfreq);
-                accm += vfreq.second;
+            }
+        }
+        if (!filtered_vfreq_list.empty()) {
+            const int accum_freq = std::accumulate(
+                std::begin(filtered_vfreq_list),
+                std::end(filtered_vfreq_list),
+                0,
+                [](int sum, const auto &vfreq) { return sum + vfreq.second; }
+            );
+            float accum_prob = 0.0f;
+            for (const auto &vfreq: filtered_vfreq_list) {
+                float prob = static_cast<float>(vfreq.second)/accum_freq;
+                if (prob >= kFilterProbThreshold) {
+                    filtered_vprob_list.emplace_back(vfreq.first, prob);
+                    accum_prob += prob;
+                }
+            }
+            for (auto &vprob: filtered_vprob_list) {
+                vprob.second /= accum_prob;
             }
         }
 
-        if (accm != 0) {
+        if (!filtered_vprob_list.empty()) {
             if (idx++ != 0) {
                 file << '\n';
             }
-            file << it.first;
+            file << hash;
 
-            for (const auto &vfreq: filtered_vfreq_list) {
-                int vertex = vfreq.first;
-                float prob = (float)vfreq.second / accm;
+            for (const auto &vprob: filtered_vprob_list) {
+                int vertex = vprob.first;
+                float prob = vprob.second;
                 file << ' ' <<  vertex << ' ' << prob;
             }
         }
@@ -79,20 +98,26 @@ void Book::GenerateBook(std::string sgf_name, std::string filename) const {
     file.close();
 }
 
-void Book::BookDataProcess(std::string sgfstring,
+bool Book::BookDataProcess(std::string sgfstring,
                            Book::BookMap<VertexFrequencyList> &book_data) const {
-
     GameState state;
     try {
         state = Sgf::Get().FromString(sgfstring, kMaxBookMoves);
     } catch (const std::exception& e) {
         LOGGING << "Fail to load the SGF file! Discard it." << std::endl
                     << Format("\tCause: %s.", e.what()) << std::endl;
-        return;
+        return false;
     }
 
     if (state.GetBoardSize() != kBookBoardSize) {
-        return;
+        LOGGING << "Rejected: Board size (" << state.GetBoardSize()
+                << ") does not match expected size (" << kBookBoardSize << ")." << std::endl;
+        return false;
+    }
+    if (state.GetHandicap() != 0) {
+        LOGGING << "Rejected: Handicap (" << state.GetHandicap()
+                << ") is not supported." << std::endl;
+        return false;
     }
 
     auto game_ite = GameStateIterator(state);
@@ -137,41 +162,45 @@ void Book::BookDataProcess(std::string sgfstring,
             }
         }
     } while (game_ite.Next());
+    return true;
 }
 
 void Book::LoadBook(std::string book_name) {
     if (book_name.empty()) return;
 
-    std::ifstream file;
-    file.open(book_name);
-    if (!file.is_open()) {
-        LOGGING << "Fail to load the file: " << book_name << '!' << std::endl;
-        return;
-    }
-
-    data_.clear();
-
-    auto line = std::string{};
-    while(std::getline(file, line)) {
-        if (line.empty()) break;
-
-        std::istringstream iss{line};
-
-        std::uint64_t hash;
-        int vertex;
-        float prob;
-        VertexProbabilityList vprob;
-
-        iss >> hash;
-        while (iss >> vertex) {
-            iss >> prob;
-            vprob.emplace_back(vertex, prob);
+    try {
+        std::ifstream file;
+        file.open(book_name);
+        if (!file.is_open()) {
+            throw std::runtime_error{"Cann't open the file."};
         }
 
-        data_.insert({hash, vprob});
+        data_.clear();
+
+        auto line = std::string{};
+        while(std::getline(file, line)) {
+            if (line.empty()) break;
+
+            std::istringstream iss{line};
+
+            std::uint64_t hash;
+            int vertex;
+            float prob;
+            VertexProbabilityList vprob;
+
+            iss >> hash;
+            while (iss >> vertex) {
+                iss >> prob;
+                vprob.emplace_back(vertex, prob);
+            }
+
+            data_.insert({hash, vprob});
+        }
+        file.close();
+        LOGGING << GetVerbose();
+    } catch (const std::exception& e) {
+        LOGGING << "Fail to load the opening file: " << book_name << '!' << std::endl;
     }
-    file.close();
-    LOGGING << GetVerbose();
 }
 
 bool Book::Probe(const GameState &state, int &book_move) const {
@@ -181,35 +210,25 @@ bool Book::Probe(const GameState &state, int &book_move) const {
         return false;
     }
 
-    auto accm_score = 0;
-    auto candidate_moves = std::vector<std::pair<int, int>>{};
-
-    auto hash = state.GetKoHash();
-    auto it = data_.find(hash);
-
-    if (it != std::end(data_)) {
-        auto &vprob_list = it->second;
-
-        for (auto &vprob : vprob_list) {
-            int vtx = vprob.first;
-            int score = (int)(vprob.second * 10000);
-
-            candidate_moves.emplace_back(score, vtx);
-            accm_score += score;
-        }
+    auto candidate_moves = GetCandidateMoves(state);
+    if (candidate_moves.empty()) {
+        return false;
     }
 
-    if (candidate_moves.empty()) return false;
+    auto accum_score = std::accumulate(
+        std::begin(candidate_moves), std::end(candidate_moves), 0.0f,
+        [](float sum, const auto &candidate) { return sum + candidate.first; }
+    );
 
-    std::sort(std::rbegin(candidate_moves), std::rend(candidate_moves));
-
-    const auto rand = Random<kXoroShiro128Plus>::Get().Generate() % accm_score;
+    const unsigned N_base = 1000000;
+    const auto rand = Random<kXoroShiro128Plus>::Get().Generate() %
+                          static_cast<unsigned>(N_base * accum_score);
     int choice = 0;
-    accm_score = 0;
+    accum_score = 0.0f;
 
     for (int i = 0; i < (int)candidate_moves.size(); ++i) {
-        accm_score +=  candidate_moves[i].first;
-        if (rand < (unsigned)accm_score) {
+        accum_score +=  candidate_moves[i].first;
+        if (rand < static_cast<unsigned>(N_base * accum_score)) {
             choice = i;
             break;
         }
@@ -230,7 +249,9 @@ std::vector<std::pair<float, int>> Book::GetCandidateMoves(const GameState &stat
         for (auto &vprob : vprob_list) {
             int vtx = vprob.first;
             float score = vprob.second;
-
+            if (!state.IsLegalMove(vtx)) {
+                continue;
+            }
             candidate_moves.emplace_back(score, vtx);
         }
     }

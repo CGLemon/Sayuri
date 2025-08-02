@@ -373,7 +373,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
     } else if (const auto res = spt.Find("clear_training_buffer", 0)) {
         agent_->GetSearch().ClearTrainingBuffer();
         out << GtpSuccess("");
-    }else if (const auto res = spt.Find("kgs-game_over", 0)) {
+    } else if (const auto res = spt.Find("kgs-game_over", 0)) {
         agent_->GetNetwork().ClearCache();
         out << GtpSuccess("");
     } else if (const auto res = spt.Find("kgs-chat", 0)) {

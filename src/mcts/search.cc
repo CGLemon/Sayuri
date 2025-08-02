@@ -260,7 +260,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
 
     if (root_state_.IsGameOver()) {
         // Always reture pass move if the passese number is greater than two.
-        computation_result.best_move = kPass;
+        computation_result.high_priority_move = kPass;
         return computation_result;
     }
 
@@ -268,7 +268,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         auto book_move = kNullVertex;
         if (Book::Get().Probe(root_state_, book_move)) {
             // Current game state is found in book.
-            computation_result.best_move = book_move;
+            computation_result.high_priority_move = book_move;
             return computation_result;
         }
     }
@@ -831,6 +831,9 @@ int Search::GetBestMove(int playouts, OptionTag tag) {
 
     if (ShouldResign(root_state_, result, param_.get())) {
         return kResign;
+    }
+    if (result.high_priority_move != kNullVertex) {
+        return result.high_priority_move;
     }
 
     // In early game, apply some randomness to improve exploration.
