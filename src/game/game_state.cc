@@ -677,6 +677,10 @@ int GameState::IndexToVertex(int idx) const {
     return board_.IndexToVertex(idx);
 }
 
+int GameState::IndexToRowMajorIndex(int idx) const {
+    return board_.IndexToRowMajorIndex(idx);
+} 
+
 int GameState::VertexToIndex(int vtx) const {
     return board_.VertexToIndex(vtx);
 }

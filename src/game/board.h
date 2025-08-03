@@ -99,6 +99,9 @@ public:
     // Transfer index to vertex except for pass move.
     int IndexToVertex(int idx) const;
 
+    // Transfer index to row-major order index except for pass move.
+    int IndexToRowMajorIndex(int idx) const;
+
     // Transfer vertex to index except for pass move.
     int VertexToIndex(int vtx) const;
 
@@ -478,6 +481,15 @@ inline int Board::IndexToVertex(int idx) const {
     assert(x >= 0 || x < board_size_);
     assert(y >= 0 || y < board_size_);
     return GetVertex(x, y);
+}
+
+inline int Board::IndexToRowMajorIndex(int idx) const {
+    int x = idx % board_size_;
+    int y = idx / board_size_;
+
+    assert(x >= 0 || x < board_size_);
+    assert(y >= 0 || y < board_size_);
+    return GetIndex(x, board_size_ - y - 1);
 }
 
 inline int Board::VertexToIndex(int vtx) const {

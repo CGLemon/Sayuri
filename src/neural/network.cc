@@ -331,7 +331,8 @@ std::string Network::GetOutputString(const GameState &state,
     query.read_cache = false;
     query.write_cache = false;
     const auto result = GetOutput(state, ensemble, query);
-    const auto bsize = result.board_size;
+    const auto board_size = result.board_size;
+    const auto num_intersections = state.GetNumIntersections();
 
     auto out = std::ostringstream{};
 
@@ -345,20 +346,20 @@ std::string Network::GetOutputString(const GameState &state,
     out << "score error: " << result.score_error << std::endl;
 
     out << "probabilities: " << std::endl;
-    for (int y = bsize - 1; y >= 0; --y) {
-        for (int x = 0; x < bsize; ++x) {
-            out << Format("%10.6f", result.probabilities[state.GetIndex(x,y)]);
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        out << Format("%10.6f", result.probabilities[state.IndexToRowMajorIndex(idx)]);
+        if ((idx+1) % board_size == 0) {
+            out << std::endl;
         }
-        out << std::endl;
     }
     out << Format("pass probabilities: %.6f\n", result.pass_probability);
 
     out << "ownership: " << std::endl;
-    for (int y = bsize - 1; y >= 0; --y) {
-        for (int x = 0; x < bsize; ++x) {
-            out << Format("%10.6f", result.ownership[state.GetIndex(x,y)]);
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        out << Format("%10.6f", result.ownership[state.IndexToRowMajorIndex(idx)]);
+        if ((idx+1) % board_size == 0) {
+            out << std::endl;
         }
-        out << std::endl;
     }
     out << std::endl;
 
@@ -366,8 +367,8 @@ std::string Network::GetOutputString(const GameState &state,
 }
 
 void Network::ActivatePolicy(Result &result, const float temperature) const {
-    const auto boardsize = result.board_size;
-    const auto num_intersections = boardsize * boardsize;
+    const auto board_size = result.board_size;
+    const auto num_intersections = board_size * board_size;
 
     auto probabilities_buffer = std::vector<float>(num_intersections+1);
 

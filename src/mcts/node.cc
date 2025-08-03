@@ -959,17 +959,12 @@ std::string Node::ToAnalysisString(GameState &state,
                                       std::string name,
                                       Node *node) -> std::string {
         auto out = std::ostringstream{};
-        const auto board_size = state.GetBoardSize();
-
+        const auto num_intersections = state.GetNumIntersections();
         auto ownership = node->GetOwnership(color);
 
-        // TODO: A wrapper for row major iterator staring
-        //       from A19.
         out << name << ' ';
-        for (int y = board_size-1; y >= 0; --y) {
-            for (int x = 0; x < board_size; ++x) {
-                out << Format("%.6f ", ownership[state.GetIndex(x,y)]);
-            }
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            out << Format("%.6f ", ownership[state.IndexToRowMajorIndex(idx)]);
         }
         return out.str();
     };
