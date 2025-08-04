@@ -272,10 +272,10 @@ bool Network::ProbeCache(const GameState &state,
 Network::Result Network::GetOutput(const GameState &state,
                                    const Ensemble ensemble,
                                    Network::Query query) {
-    if (ensemble == kNone) {
-        query.symmetry = Symmetry::kIdentitySymmetry;
-    } else if (ensemble == kDirect) {
-        assert(query.symmetry >= 0 && query.symmetry < Symmetry::kNumSymmetris);
+    if (ensemble == kDirect) {
+        if (query.symmetry < 0 || query.symmetry >= Symmetry::kNumSymmetris) {
+            query.symmetry = Symmetry::kIdentitySymmetry;
+        }
     } else if (ensemble == kRandom) {
         query.symmetry = Random<>::Get().RandFix<Symmetry::kNumSymmetris>();
     }

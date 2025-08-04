@@ -15,7 +15,7 @@
 class Network {
 public:
     enum Ensemble {
-        kNone, kDirect, kRandom, kAverage
+        kDirect, kRandom, kAverage
     };
 
     using Inputs = InputData;

@@ -775,7 +775,11 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
 
         gogui_cmds << "gfx/Win-Draw-Loss Rating/gogui-wdl_rating";
         gogui_cmds << "\ngfx/Policy Heatmap/gogui-policy_heatmap";
-        gogui_cmds << "\ngfx/Policy Rating/gogui-policy_rating";
+        gogui_cmds << "\ngfx/Normal Policy Rating/gogui-policy_rating normal";
+        gogui_cmds << "\ngfx/Opponent Policy Rating/gogui-policy_rating opponent";
+        gogui_cmds << "\ngfx/Soft Policy Rating/gogui-policy_rating soft";
+        gogui_cmds << "\ngfx/Soft Opponent Policy Rating/gogui-policy_rating softopponent";
+        gogui_cmds << "\ngfx/Optimistic Policy Rating/gogui-policy_rating optimistic";
         gogui_cmds << "\ngfx/Target Policy Rating/gogui-target_policy_rating";
         gogui_cmds << "\ngfx/Ownership Heatmap/gogui-ownership_heatmap 0";
         gogui_cmds << "\ngfx/Ownership Influence/gogui-ownership_influence 0";
@@ -787,24 +791,21 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
 
         out << GtpSuccess(gogui_cmds.str());
     } else if (const auto res = spt.Find("gogui-wdl_rating", 0)) {
-        const auto result = agent_->GetNetwork().GetOutput(agent_->GetState(), Network::kNone);
+        const auto result = agent_->GetNetwork().GetOutput(agent_->GetState(), Network::kDirect);
         const auto board_size = result.board_size;
         const auto num_intersections = board_size * board_size;
-        const auto ave_pol = 1.f / (float)num_intersections;
+        const auto ave_pol = 1.f / num_intersections;
 
         auto first = true;
         auto wdl_rating = std::ostringstream{};
 
         for (int idx = 0; idx < num_intersections; ++idx) {
-            const auto x = idx % board_size;
-            const auto y = idx / board_size;
-            const auto vtx = agent_->GetState().GetVertex(x,y);
-
+            const auto vtx = agent_->GetState().IndexToVertex(idx);
             auto prob = result.probabilities[idx];
             if (prob > ave_pol) {
                 if (agent_->GetState().PlayMove(vtx)) {
                     const auto next_result = agent_->GetNetwork().GetOutput(
-                                                 agent_->GetState(), Network::kNone);
+                                                 agent_->GetState(), Network::kDirect);
 
                     const float wdl = next_result.wdl_winrate;
                     if (!first) {
@@ -820,7 +821,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
 
         out << GtpSuccess(wdl_rating.str());
     } else if (const auto res = spt.Find("gogui-policy_heatmap", 0)) {
-        const auto result = agent_->GetNetwork().GetOutput(agent_->GetState(), Network::kNone);
+        const auto result = agent_->GetNetwork().GetOutput(agent_->GetState(), Network::kDirect);
         const auto board_size = result.board_size;
         const auto num_intersections = board_size * board_size;
 
@@ -831,10 +832,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
                 policy_map << '\n';
             }
 
-            const auto x = idx % board_size;
-            const auto y = idx / board_size;
-            const auto vtx = agent_->GetState().GetVertex(x,y);
-
+            const auto vtx = agent_->GetState().IndexToVertex(idx);
             auto prob = result.probabilities[idx];
             if (prob > 0.0001f) {
                 // highlight the probability
@@ -846,44 +844,57 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
 
         out << GtpSuccess(policy_map.str());
     } else if (const auto res = spt.Find("gogui-policy_rating", 0)) {
-        const auto result = agent_->GetNetwork().GetOutput(agent_->GetState(), Network::kNone);
+        int side_to_move = agent_->GetState().GetToMove();
+        auto offset = PolicyBufferOffset::kDefault;
+        if (const auto o = spt.GetWord(1)) {
+            if (o->Get<>() == "normal") {
+                offset = PolicyBufferOffset::kNormal;
+            } else if (o->Get<>() == "opponent") {
+                side_to_move = !side_to_move;
+                offset = PolicyBufferOffset::kOpponent;
+            } else if (o->Get<>() == "soft") {
+                offset = PolicyBufferOffset::kSoft;
+            } else if (o->Get<>() == "softopponent") {
+                side_to_move = !side_to_move;
+                offset = PolicyBufferOffset::kSoftOpponent;
+            } else if (o->Get<>() == "optimistic") {
+                offset = PolicyBufferOffset::kOptimistic;
+            }
+        }
+        const auto result = agent_->GetNetwork().GetOutput(
+            agent_->GetState(),
+            Network::kDirect,
+            Network::Query::Get().SetOffset(offset));
         const auto board_size = result.board_size;
         const auto num_intersections = board_size * board_size;
-        const auto ave_pol = 1.f / (float)num_intersections;
+        const auto ave_pol = 1.f / num_intersections;
 
         auto policy_rating = std::ostringstream{};
         int max_idx = -1;
 
         for (int idx = 0; idx < num_intersections; ++idx) {
-            const auto x = idx % board_size;
-            const auto y = idx / board_size;
-            const auto vtx = agent_->GetState().GetVertex(x,y);
-
+            const auto vtx = agent_->GetState().IndexToVertex(idx);
             auto prob = result.probabilities[idx];
             if (prob > ave_pol) {
                 if (max_idx < 0 ||
                         result.probabilities[max_idx] < prob) {
                     max_idx = idx;
                 }
-
                 policy_rating << '\n';
                 policy_rating << GoguiLable(prob, agent_->GetState().VertexToText(vtx));
             }
         }
+        policy_rating << Format("\nTEXT pass %3.2f%%", 100.0f * result.pass_probability);
 
         auto policy_rating_var = std::ostringstream{};
+        const auto max_vtx = agent_->GetState().IndexToVertex(max_idx);
 
-        const auto x = max_idx % board_size;
-        const auto y = max_idx / board_size;
-        const auto max_vtx = agent_->GetState().GetVertex(x,y);
-
-        if (agent_->GetState().GetToMove() == kBlack) {
+        if (side_to_move == kBlack) {
             policy_rating_var << Format("VAR b %s", agent_->GetState().VertexToText(max_vtx).c_str());
         } else {
             policy_rating_var << Format("VAR w %s", agent_->GetState().VertexToText(max_vtx).c_str());
         }
         policy_rating_var << policy_rating.str();
-
         out << GtpSuccess(policy_rating_var.str());
     } else if (const auto res = spt.Find("gogui-target_policy_rating", 0)) {
         agent_->GetSearch().ReleaseTree();
@@ -891,33 +902,26 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         auto result = agent_->GetSearch().Computation(GetOption<int>("playouts"), Search::kNullTag);
         const auto board_size = result.board_size;
         const auto num_intersections = board_size * board_size;
-        const auto ave_pol = 1.f / (float)num_intersections;
+        const auto ave_pol = 1.f / num_intersections;
 
         auto policy_rating = std::ostringstream{};
         int max_idx = -1;
 
         for (int idx = 0; idx < num_intersections; ++idx) {
-            const auto x = idx % board_size;
-            const auto y = idx / board_size;
-            const auto vtx = agent_->GetState().GetVertex(x,y);
-
+            const auto vtx = agent_->GetState().IndexToVertex(idx);
             auto prob = result.target_policy_dist[idx];
             if (prob > ave_pol) {
                 if (max_idx < 0 ||
                         result.target_policy_dist[max_idx] < prob) {
                     max_idx = idx;
                 }
-
                 policy_rating << '\n';
                 policy_rating << GoguiLable(prob, agent_->GetState().VertexToText(vtx));
             }
         }
-
+        policy_rating << Format("\nTEXT pass %3.2f%%", 100.0f * result.target_policy_dist[num_intersections]);
         auto policy_rating_var = std::ostringstream{};
-
-        const auto x = max_idx % board_size;
-        const auto y = max_idx / board_size;
-        const auto max_vtx = agent_->GetState().GetVertex(x,y);
+        const auto max_vtx = agent_->GetState().IndexToVertex(max_idx);
 
         if (agent_->GetState().GetToMove() == kBlack) {
             policy_rating_var << Format("VAR b %s", agent_->GetState().VertexToText(max_vtx).c_str());
@@ -925,7 +929,6 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             policy_rating_var << Format("VAR w %s", agent_->GetState().VertexToText(max_vtx).c_str());
         }
         policy_rating_var << policy_rating.str();
-
         out << GtpSuccess(policy_rating_var.str());
     } else if (const auto res = spt.Find("gogui-ownership_heatmap", 0)) {
         int playouts = 0;
@@ -947,11 +950,9 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
                 owner_map << '\n';
             }
 
-            const auto x = idx % board_size;
-            const auto y = idx / board_size;
-            const auto vtx = agent_->GetState().GetVertex(x,y);
+            const auto vtx = agent_->GetState().IndexToVertex(idx);
 
-            // map [-1 ~ 1] to [0 ~ 1]
+            // map [-1, 1] to [0, 1]
             const auto owner_val = (result.root_ownership[idx] + 1.f) / 2.f;
 
             owner_map << GoguiGray(owner_val,
@@ -976,10 +977,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         owner_map << "INFLUENCE";
 
         for (int idx = 0; idx < num_intersections; ++idx) {
-            const auto x = idx % board_size;
-            const auto y = idx / board_size;
-            const auto vtx = agent_->GetState().GetVertex(x,y);
-
+            const auto vtx = agent_->GetState().IndexToVertex(idx);
             auto owner_val = result.root_ownership[idx];
             if (color == kWhite) {
                 owner_val = -owner_val;
@@ -1026,9 +1024,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
                 gammas_map << '\n';
             }
 
-            const auto x = idx % board_size;
-            const auto y = idx / board_size;
-            const auto vtx = agent_->GetState().GetVertex(x,y);
+            const auto vtx = agent_->GetState().IndexToVertex(idx);
             auto gnval = gammas[idx];
 
             if (gnval > 0.0001f) {
@@ -1050,10 +1046,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
                 ladder_map << '\n';
             }
 
-            const auto x = idx % board_size;
-            const auto y = idx / board_size;
-            const auto vtx = agent_->GetState().GetVertex(x,y);
-
+            const auto vtx = agent_->GetState().IndexToVertex(idx);
             float map_color = 0.f;
 
             if (result[idx] == LadderType::kLadderAtari) {
