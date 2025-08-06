@@ -1005,25 +1005,25 @@ void ArgsParser::Parse(Splitter &spt) {
 void ArgsParser::DumpHelper() const {
     LOGGING << "Arguments:" << std::endl
                 << "\t--quiet, -q\n"
-                << "\t\tDisable all diagnostic verbose.\n\n"
+                << "\t\tDisable all diagnostic output.\n\n"
 
                 << "\t--analysis-verbose, -a\n"
-                << "\t\tDump the search verbose.\n\n"
+                << "\t\tPrint detailed search information.\n\n"
 
                 << "\t--ponder\n"
-                << "\t\tThinking on opponent's time.\n\n"
+                << "\t\tEnable thinking on opponent's time.\n\n"
 
                 << "\t--reuse-tree\n"
-                << "\t\tReuse the sub-tree per move.\n\n"
+                << "\t\tReuse part of the previous search tree for the next move.\n\n"
 
                 << "\t--early-symm-cache\n"
                 << "\t\tAccelerate the search on the opening stage.\n\n"
 
                 << "\t--friendly-pass\n"
-                << "\t\tDo pass move if the engine wins the game.\n\n"
+                << "\t\tPass when the engine believes it is winning.\n\n"
 
                 << "\t--capture-all-dead\n"
-                << "\t\tTry to remove all dead strings before pass. May be not safe for game.\n\n"
+                << "\t\tTry to remove all dead strings before pass. Only effective with area scoring.\n\n"
 
                 << "\t--use-optimistic-policy\n"
                 << "\t\tUse the optimistic policy insteal of normal policy.\n\n"
@@ -1050,10 +1050,10 @@ void ArgsParser::DumpHelper() const {
                 << "\t\tSafety margin for time usage in seconds.\n\n"
 
                 << "\t--cpuct-init <float>\n"
-                << "\t\tThe cPUCT term of MCTS.\n\n"
+                << "\t\tcPUCT value for MCTS exploration.\n\n"
 
                 << "\t--score-utility-factor <float>\n"
-                << "\t\tScore utility heuristic term of MCTS.\n\n"
+                << "\t\tScore-based utility factor for MCTS.\n\n"
 
                 << "\t--lcb-reduction <float>\n"
                 << "\t\tReduce the LCB weights. Select 1 to let the most visits node as the best move in MCTS.\n\n"
@@ -1079,4 +1079,10 @@ void ArgsParser::DumpHelper() const {
     exit(0);
 }
 
-void ArgsParser::DumpWarning() const {}
+void ArgsParser::DumpWarning() const {
+    const auto friendly_pass = GetOption<bool>("friendly_pass");
+    const auto capture_all_dead = GetOption<bool>("capture_all_dead");
+    if (friendly_pass && capture_all_dead) {
+        LOGGING << "Nonsensical options: The --capture-all-dead option may suppress the effect of --friendly-pass.\n";
+    }
+}

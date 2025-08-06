@@ -673,52 +673,54 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     result.alive_strings = alive;
     result.dead_strings = dead;
 
-    // Select the capture all dead move.
-    auto fill_moves = std::vector<int>{};
-    auto raw_ownership = root_state_.GetRawOwnership();
+    if (param_->capture_all_dead) {
+        // Generate the capture all dead move.
+        auto fill_moves = std::vector<int>{};
+        auto raw_ownership = root_state_.GetRawOwnership();
 
-    for (int idx = 0; idx < num_intersections; ++idx) {
-        const auto vtx = root_state_.IndexToVertex(idx);
-        const auto raw_owner = raw_ownership[idx];
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            const auto vtx = root_state_.IndexToVertex(idx);
+            const auto raw_owner = raw_ownership[idx];
 
-        // owner value, 1 is mine, -1 is opp's.
-        const auto owner = safe_area[idx] == true ?
-                               2 * (float)(safe_ownership[idx] == color) - 1 :
-                               result.root_ownership[idx];
-        if (owner > kOwnershipThreshold &&
-                root_state_.IsLegalMove(vtx, color)) {
-            if (raw_owner == kEmpty && root_state_.IsNeighborColor(vtx, color)) {
-                // adjacent my string
-                fill_moves.emplace_back(vtx);
-            }
-            if (raw_owner == (!color)) {
-                // in the opp's eye
-                fill_moves.emplace_back(vtx);
+            // owner value, 1 is mine, -1 is opp's.
+            const auto owner = safe_area[idx] == true ?
+                                2 * (float)(safe_ownership[idx] == color) - 1 :
+                                result.root_ownership[idx];
+            if (owner > kOwnershipThreshold &&
+                    root_state_.IsLegalMove(vtx, color)) {
+                if (raw_owner == kEmpty && root_state_.IsNeighborColor(vtx, color)) {
+                    // adjacent my string
+                    fill_moves.emplace_back(vtx);
+                }
+                if (raw_owner == (!color)) {
+                    // in the opp's eye
+                    fill_moves.emplace_back(vtx);
+                }
             }
         }
-    }
-    if (!fill_moves.empty()) {
-        // Randomize the remove the dead move list.
-        std::shuffle(std::begin(fill_moves),
-                         std::end(fill_moves),
-                         Random<>::Get());
+        if (!fill_moves.empty()) {
+            // Randomize the remove the dead move list.
+            std::shuffle(std::begin(fill_moves),
+                            std::end(fill_moves),
+                            Random<>::Get());
 
-        // The capture move will be the first move.
-        std::sort(std::begin(fill_moves), std::end(fill_moves),
-                      [this, color](const int &v0, const int &v1) {
-                          int v0_cap = root_state_.board_.IsCaptureMove(v0, color);
-                          int v1_cap = root_state_.board_.IsCaptureMove(v1, color);
-                          return v0_cap > v1_cap;
-                      });
+            // The capture move will be the first move.
+            std::sort(std::begin(fill_moves), std::end(fill_moves),
+                        [this, color](const int &v0, const int &v1) {
+                            int v0_cap = root_state_.board_.IsCaptureMove(v0, color);
+                            int v1_cap = root_state_.board_.IsCaptureMove(v1, color);
+                            return v0_cap > v1_cap;
+                        });
 
-        for (int move : fill_moves) {
-           auto fork_state = root_state_;
-           fork_state.PlayMove(move, color);
-           if (!fork_state.IsSuperko()) {
-               // Find the first non-superko move.
-               result.capture_all_dead_move = move;
-               break;
-           }
+            for (int move : fill_moves) {
+            auto fork_state = root_state_;
+            fork_state.PlayMove(move, color);
+            if (!fork_state.IsSuperko()) {
+                // Find the first non-superko move.
+                result.capture_all_dead_move = move;
+                break;
+            }
+            }
         }
     }
 }
@@ -803,12 +805,12 @@ bool ShouldPass(GameState &state, ComputationResult &result, Parameters *param) 
         const auto vtx = fork_state.IndexToVertex(idx);
         if (fork_state.GetState(vtx) != kEmpty &&
                 fork_state.GetLiberties(vtx) == 1) {
-            // At least one string in atari, the game
+            // At least one live string in atari, the game
             // is not over yet.
             return false;
         } else if (fork_state.GetState(vtx) == kEmpty) {
             // This empty point does not belong to any
-            // side. It is the dame.
+            // side. It should be the dame.
             num_dame += 1;
         }
     }
@@ -818,7 +820,7 @@ bool ShouldPass(GameState &state, ComputationResult &result, Parameters *param) 
     const auto score = fork_state.GetFinalScore(state.GetToMove());
 
     if (score > 0.1f) {
-        // We already win the game. We will play the pass move.
+        // We already won the game. We will play the pass move.
         return true;
     }
 
