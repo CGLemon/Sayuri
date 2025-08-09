@@ -114,6 +114,8 @@ public:
                          NodeEvals& node_evals,
                          AnalysisConfig &config);
 
+    Node *DescentSelectChild(const int color, const bool is_root);
+
     // Select the best policy node.
     Node *ProbSelectChild(bool allow_pass);
 
@@ -121,12 +123,12 @@ public:
     Node *PuctSelectChild(const int color, const bool is_root);
 
     // Randomly select one child by visits.
-    int RandomMoveProportionally(float temp,
-                                 float min_ratio,
-                                 int min_visits);
+    int GetRandomMoveProportionally(float temp,
+                                    float min_ratio,
+                                    int min_visits);
 
     // Randomly select one child by visits and Q value.
-    int RandomMoveWithLogitsQ(GameState &state, float temp);
+    int GetRandomMoveWithLogitsQ(GameState &state, float temp);
 
     // Update the node.
     void Update(const NodeEvals *evals);
@@ -199,7 +201,11 @@ public:
                  const float total_visited_policy,
                  const bool is_root) const;
 
-    float GetCpuct(int parentvisits) const;
+    float GetCpuct(const int parentvisits) const;
+
+    int GetForcedVisits(const float policy,
+                        const int parentvisits,
+                        const bool is_root) const;
 
     // Get the average ownership value.
     std::array<float, kNumIntersections> GetOwnership(int color);
@@ -250,8 +256,8 @@ private:
 
     void LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist);
 
-    int GetValidVisits() const;
-    float GetSearchPolicy(Edge& child, bool noise);
+    int GetParentVisits() const;
+    float GetSearchPolicy(Edge& child, const bool is_root);
     float GetScoreVariance(const float default_var, const int visits) const;
     float GetWLVariance(const float default_var, const int visits) const;
 
@@ -310,7 +316,7 @@ private:
 
     Parameters *param_{nullptr};
 
-    // According to KataGo, to add a tiny bonus for pass move can
+    // According to KataGo, adding a tiny bonus for pass move can
     // efficiently end the game. It also does not affect the
     // theoretical optimal play. Only add the bonus during search
     // in order to do not affect the training result. Be care that

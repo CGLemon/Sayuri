@@ -96,14 +96,16 @@ public:
     // Get the index board.
     int GetIndex(const int x, const int y) const;
 
-    // Transfer index to vertex except for pass move.
+    // Transfer index to vertex.
     int IndexToVertex(int idx) const;
+    int IndexToVertexIncludingPass(int idx) const;
 
     // Transfer index to row-major order index except for pass move.
     int IndexToRowMajorIndex(int idx) const;
 
-    // Transfer vertex to index except for pass move.
+    // Transfer vertex to index.
     int VertexToIndex(int vtx) const;
+    int VertexToIndexIncludingPass(int vtx) const;
 
     // Reture true if the move is legal.
     bool IsLegalMove(const int vertex, const int color) const;
@@ -483,6 +485,13 @@ inline int Board::IndexToVertex(int idx) const {
     return GetVertex(x, y);
 }
 
+inline int Board::IndexToVertexIncludingPass(int idx) const {
+    if (idx == num_intersections_) {
+        return kPass;
+    }
+    return IndexToVertex(idx);
+}
+
 inline int Board::IndexToRowMajorIndex(int idx) const {
     int x = idx % board_size_;
     int y = idx / board_size_;
@@ -496,6 +505,13 @@ inline int Board::VertexToIndex(int vtx) const {
     int x = GetX(vtx);
     int y = GetY(vtx);
     return GetIndex(x, y);
+}
+
+inline int Board::VertexToIndexIncludingPass(int vtx) const {
+    if (vtx == kPass) {
+        return num_intersections_;
+    }
+    return VertexToIndex(vtx);
 }
 
 inline void Board::UpdateZobrist(const int vtx,

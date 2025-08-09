@@ -677,12 +677,20 @@ int GameState::IndexToVertex(int idx) const {
     return board_.IndexToVertex(idx);
 }
 
+int GameState::IndexToVertexIncludingPass(int idx) const {
+    return board_.IndexToVertexIncludingPass(idx);
+}
+
 int GameState::IndexToRowMajorIndex(int idx) const {
     return board_.IndexToRowMajorIndex(idx);
 } 
 
 int GameState::VertexToIndex(int vtx) const {
     return board_.VertexToIndex(vtx);
+}
+
+int GameState::VertexToIndexIncludingPass(int vtx) const {
+    return board_.VertexToIndexIncludingPass(vtx);
 }
 
 float GameState::GetPenalty() const {

@@ -107,13 +107,11 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
         auto color = currstate.GetToMove();
         Node *next = nullptr;
 
-        // Go to the next node by PUCT algoritim.
-        next = node->PuctSelectChild(color, depth == 0);
+        // Go to the next node.
+        next = node->DescentSelectChild(color, depth == 0);
+        currstate.PlayMove(next->GetVertex(), color);
 
-        auto vtx = next->GetVertex();
-        currstate.PlayMove(vtx, color);
-
-        // Recursive calls.
+        // Recursive calls function.
         PlaySimulation(currstate, next, depth+1, search_result);
     }
 
@@ -462,14 +460,14 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         // sharp probability may reduce the randomization. It helps
         // the to optimize the the strengh and improve some diversity.
         result.random_move = root_node_->
-                                 RandomMoveWithLogitsQ(
+                                 GetRandomMoveWithLogitsQ(
                                      root_state_, 1.f);
     } else {
         // According to "On Strength Adjustment for MCTS-Based Programs",
         // pruning the low visits moves. It can help to avoid to play the
         // blunder move. The Elo range should be between around 0 ~ 1000.
         result.random_move = root_node_->
-                                 RandomMoveProportionally(
+                                 GetRandomMoveProportionally(
                                      param_->random_moves_temp,
                                      param_->random_min_ratio,
                                      param_->random_min_visits);
@@ -509,7 +507,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     auto total_visited_policy = 0.0f;
     const auto &children = root_node_->GetChildren();
     for (const auto &child : children) {
-        const auto node = child.Get();
+        const auto node = child.GetPointer();
         const auto visits = node->GetVisits();
 
         parentvisits += visits;
@@ -520,14 +518,12 @@ void Search::GatherComputationResult(ComputationResult &result) const {
 
     // Fill root visits and estimated Q.
     for (const auto &child : children) {
-        const auto node = child.Get();
+        const auto node = child.GetPointer();
         const auto visits = node->GetVisits();
         const auto vertex = node->GetVertex();
 
         // Fill root visits for each child.
-        const auto index = vertex == kPass ?
-                               num_intersections :
-                               root_state_.VertexToIndex(vertex);
+        const auto index = root_state_.VertexToIndexIncludingPass(vertex);
         result.root_searched_visits[index] = visits;
 
         // Fill estimated Q value for each child. If the child is
@@ -1438,7 +1434,7 @@ bool Search::HaveAlternateMoves(const float elapsed, const float limit,
     int topvisits = 0;
     float toplcb = 0.0f;
     for (const auto &child : children) {
-        const auto node = child.Get();
+        const auto node = child.GetPointer();
 
         if (!node->IsActive()) {
             continue;
@@ -1473,7 +1469,7 @@ bool Search::HaveAlternateMoves(const float elapsed, const float limit,
 
     size_t bad_cnt = 0;
     for (const auto &child : children) {
-        const auto node = child.Get();
+        const auto node = child.GetPointer();
         const auto visits = node->GetVisits();
 
         if (!node->IsActive()) {
@@ -1493,18 +1489,16 @@ bool Search::HaveAlternateMoves(const float elapsed, const float limit,
     }
 
     if (param_->timemanage == TimeControl::TimeManagement::kOn) {
-        // Case "on": Will save up the current thinking time for next
-        //            move if next move phase doesn't reset the thinking
-        //            time.
+        // Mode "on": Will save up the current thinking time for next
+        //            move if time controller doesn't reset the thinking
+        //            time every move.
         if (param_->const_time > 0 || !time_control_.CanAccumulateTime(color)) {
             return true;
         }
     } else if (param_->timemanage == TimeControl::TimeManagement::kFast) {
-        // Case "fast": Always save up the current thinking time. Play
-        //              the move as fast as possible and be sure that
-        //              we can pick up one reasonable move.
+        // Mode "fast": Always save up the current thinking time. 
     } else if (param_->timemanage == TimeControl::TimeManagement::kKeep) {
-        // Case "keep": Only save up the current thinking time in byo
+        // Mode "keep": Only save up the current thinking time in byo
         //              phase.
         if (param_->const_time > 0 || !time_control_.InByo(color)) {
             return true;

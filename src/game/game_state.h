@@ -135,8 +135,10 @@ public:
     int GetX(const int vtx) const;
     int GetY(const int vtx) const;
     int IndexToVertex(int idx) const;
+    int IndexToVertexIncludingPass(int idx) const;
     int IndexToRowMajorIndex(int idx) const;
     int VertexToIndex(int vtx) const;
+    int VertexToIndexIncludingPass(int vtx) const;
 
     // Return the scoring penalty for black side.
     float GetPenalty() const;

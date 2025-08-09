@@ -35,7 +35,7 @@ public:
     bool IsInflating() const;
     bool IsUninflated() const;
 
-    NodeType *Get() const;
+    NodeType * GetPointer() const;
 
     bool Inflate(Parameters *param);
     bool Release();
@@ -47,7 +47,7 @@ public:
 private:
     std::atomic<std::uint64_t> pointer_{kUninflated};
 
-    NodeType *ReadPointer(uint64_t v) const;
+    NodeType * ReadPointer(uint64_t v) const;
     int ReadVertex(std::uint64_t v) const;
     float ReadPolicy(std::uint64_t v) const;
 
@@ -128,7 +128,7 @@ inline NodeType *NodePointer<NodeType>::ReadPointer(uint64_t v) const {
 }
 
 template<typename NodeType>
-inline NodeType *NodePointer<NodeType>::Get() const {
+inline NodeType *NodePointer<NodeType>::GetPointer() const {
     auto v = pointer_.load(std::memory_order_relaxed);
     if (IsPointer(v))
         return ReadPointer(v);
@@ -175,8 +175,7 @@ inflate_loop: // Try to allocate new memory for the pointer.
 
 template<typename NodeType>
 inline bool NodePointer<NodeType>::Release() {
-    // Becare that only one thread can release the memory. Two
-    // or above may release same memory many times.
+    // Besure that only one thread can release the memory.
     auto v = pointer_.load(std::memory_order_relaxed);
 
     if (IsPointer(v)) {
