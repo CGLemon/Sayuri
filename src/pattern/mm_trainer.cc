@@ -3,6 +3,7 @@
 #include "game/iterator.h"
 #include "utils/format.h"
 #include "utils/log.h"
+#include "utils/random.h"
 
 #include <algorithm>
 #include <functional>
@@ -19,6 +20,9 @@ MmTrainer& MmTrainer::Get() {
 void MmTrainer::Run(std::string sgf_name, std::string out_name, int min_count) {
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
 
+    std::shuffle(std::begin(sgfs),
+        std::end(sgfs), Random<kXoroShiro128Plus>::Get());
+
     num_patterns_ = 0;
     const int num_features = kMmMaxPatternDist + Board::GetMaxFeatures() + 1;
 
@@ -28,8 +32,15 @@ void MmTrainer::Run(std::string sgf_name, std::string out_name, int min_count) {
     feature_counters_.resize(num_features);
 
     // Gather the mm patterns.
+    int games = 0;
     for (const auto &sgf_string : sgfs) {
-        FillPatterns(sgf_string);
+        if (games >= kMaxSgfGames) {
+            LOGGING << "Too many games. Cut off remaining games.\n";
+            break;
+        }
+        if (FillPatterns(sgf_string)) {
+            games += 1;
+        }
     }
 
     if (num_patterns_ == 0) {
@@ -186,7 +197,7 @@ bool MmTrainer::PatternMatch(const Board& board,
     return matched;
 }
 
-void MmTrainer::FillPatterns(std::string sgfstring) {
+bool MmTrainer::FillPatterns(std::string sgfstring) {
     GameState state;
 
     try {
@@ -194,13 +205,13 @@ void MmTrainer::FillPatterns(std::string sgfstring) {
     } catch (const std::exception& e) {
         LOGGING << "Fail to load the SGF file! Discard it." << std::endl
                     << Format("\tCause: %s.", e.what()) << std::endl;
-        return;
+        return false;
     }
 
     auto game_ite = GameStateIterator(state);
 
     if (game_ite.MaxMoveNumber() == 0) {
-        return;
+        return false;
     }
 
     // Remove the double pass moves in the middle.
@@ -276,6 +287,8 @@ void MmTrainer::FillPatterns(std::string sgfstring) {
             ProcessWrapper(board, i, vtx, color, offset+i);
         }
     } while (game_ite.Next());
+
+    return true;
 }
 
 void MmTrainer::FillMmParticipant(std::string sgfstring) {

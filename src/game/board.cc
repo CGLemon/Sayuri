@@ -229,7 +229,7 @@ bool Board::IsLegalMove(const int vtx, const int color,
         return false;
     }
 
-    if (vtx == ko_move_) {
+    if (IsKoMove(vtx, color)) {
         return false;
     }
 
@@ -1089,6 +1089,11 @@ bool Board::IsNeighborColor(const int vtx, const int color) const {
         if (state_[vtx + directions_[k]] == color) return true;
     }
     return false;
+}
+
+bool Board::IsKoMove(const int vtx, const int color) const {
+    (void) color;
+    return vtx == ko_move_;
 }
 
 bool Board::IsKillableSekiEyeShape(const int vtx,

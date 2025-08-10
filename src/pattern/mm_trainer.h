@@ -26,7 +26,7 @@ private:
                       int feature, int dist,
                       int vertex, int color, std::uint64_t &mhash) const;
 
-    void FillPatterns(std::string sgfstring);
+    bool FillPatterns(std::string sgfstring);
     void FillMmParticipant(std::string sgfstring);
     void InitMm();
     void FilterPatterns(int min_count);
@@ -43,4 +43,5 @@ private:
 
     static constexpr int kMmMaxPatternDist = kMaxPatternDist;
     static constexpr int kMmMinPatternDist = 3;
+    static constexpr int kMaxSgfGames = 2000;
 };

@@ -4,15 +4,16 @@
 #include <string>
 #include <cstdint>
 
-
 class GammasDict {
 public:
     static GammasDict& Get();
 
-    void Initialize(std::string filename);
+    void LoadPatterns(std::string filename);
 
     bool ProbePattern(std::uint64_t hash, float &val) const;
     bool ProbeFeature(std::uint64_t hash, float &val) const;
+    std::string GetInformation() const;
+    bool Valid() const;
 
 private:
     bool InsertPattern(std::uint64_t hash, float val);

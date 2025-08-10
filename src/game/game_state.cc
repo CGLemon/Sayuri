@@ -600,7 +600,8 @@ void GameState::PlayRandomMove() {
 }
 
 float GameState::GetGammaValue(const int vtx, const int color) const {
-    if (board_.GetState(vtx) != kEmpty) {
+    if (board_.GetState(vtx) != kEmpty ||
+            !board_.IsLegalMove(vtx, color)) {
         return 0.f;
     }
 
@@ -628,13 +629,29 @@ float GameState::GetGammaValue(const int vtx, const int color) const {
     return val;
 }
 
-std::vector<float> GameState::GetGammasPolicy(const int color) const {
+std::vector<float> GameState::GetGammasPolicy(const int color, const float * ownership) const {
     auto num_intersections = GetNumIntersections();
     auto policy = std::vector<float>(num_intersections, 0);
 
+    // imported from Pachi
+    constexpr float kMcOwnerGammas[] = {
+        0.130817f,
+        0.67241f,
+        1.0993f,
+        1.22413f,
+        1.18569f,
+        1.05496f,
+        0.800636f,
+        0.406365f
+    };
     for (int idx = 0; idx < num_intersections; ++idx) {
-        const auto vtx = IndexToVertex(idx);
-        const auto gval = GetGammaValue(vtx, color);
+        auto gval = GetGammaValue(IndexToVertex(idx), color);
+        if (ownership) {
+            float owner = (ownership[idx] + 1.f) / 2.f;
+            int owner_level = std::min(7, static_cast<int>(owner * 8));
+            gval *= kMcOwnerGammas[owner_level];
+        }
+        LOGGING << "idx= " << idx << " -> " << gval << "\n";
         policy[idx] = std::log(gval);
     }
 

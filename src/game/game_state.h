@@ -180,7 +180,7 @@ public:
 
     void PlayRandomMove();
     float GetGammaValue(const int vtx, const int color) const;
-    std::vector<float> GetGammasPolicy(const int color) const;
+    std::vector<float> GetGammasPolicy(const int color, const float * ownership=nullptr) const;
 
     // Reture the zobrist hash value only for this move.
     std::uint64_t GetMoveHash(const int vtx, const int color) const;

@@ -28,15 +28,15 @@ void Book::GenerateBook(std::string sgf_name, std::string filename) const {
 
     int games = 0;
     for (const auto &sgf: sgfs) {
+        if (games >= kMaxSgfGames) {
+            LOGGING << "Too many games. Cut off remaining games.\n";
+            break;
+        }
         if (!BookDataProcess(sgf, book_data_freq)) {
             continue;
         }
         if (++games % 1000 == 0) {
             LOGGING << Format("Parsed %d games\n", games);
-        }
-        if (games > kMaxSgfGames) {
-            LOGGING << "Too many games. Cut off remaining games.\n";
-            break;
         }
     }
 
@@ -197,7 +197,7 @@ void Book::LoadBook(std::string book_name) {
             data_.insert({hash, vprob});
         }
         file.close();
-        LOGGING << GetVerbose();
+        LOGGING << GetInformation();
     } catch (const std::exception& e) {
         LOGGING << "Fail to load the opening file: " << book_name << '!' << std::endl;
     }
@@ -260,7 +260,7 @@ std::vector<std::pair<float, int>> Book::GetCandidateMoves(const GameState &stat
     return candidate_moves;
 }
 
-std::string Book::GetVerbose() const {
+std::string Book::GetInformation() const {
     auto oss = std::ostringstream();
 
     int positions = 0;
@@ -269,6 +269,6 @@ std::string Book::GetVerbose() const {
         positions += 1;
         moves += it.second.size();
     }
-    oss << Format("The Book contains %d positions and %d candidate moves\n", positions, moves);
+    oss << Format("The Book contains %d positions and %d candidate moves.\n", positions, moves);
     return oss.str();
 }

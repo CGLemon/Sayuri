@@ -471,7 +471,6 @@ bool Board::GetBorderLevel(const int vtx, const int /* color */, std::uint64_t &
     }
 
     hash = 0ULL << 32 | (std::uint64_t)dist;
-
     return true;
 }
 
@@ -497,7 +496,6 @@ bool Board::GetDistLevel(const int vtx, const int /* color */, std::uint64_t &ha
     }
 
     hash = 1ULL << 32 | (std::uint64_t)dist;
-
     return true;
 }
 
@@ -523,7 +521,6 @@ bool Board::GetDistLevel2(const int vtx, const int /* color */, std::uint64_t &h
     }
 
     hash = 2ULL << 32 | (std::uint64_t)dist;
-
     return true;
 }
 
@@ -575,9 +572,17 @@ bool Board::GetCapureLevel(const int vtx, const int color, std::uint64_t &hash) 
         level = 2;
     } else {
         // string not in a ladder
-        if (num_cap_stones <= 6) {
+        if (num_cap_stones == 1 && IsSelfAtariMove(vtx, color)) {
+            // may make a ko move
+            level = 5;
+        } else if (num_cap_stones <= 1) {
+            // capture only one stone
+            level = 6;
+        } else if (num_cap_stones <= 6) {
+            // capture small group
             level = 3;
         } else {
+            // capture large group
             level = 4;
         }
     }

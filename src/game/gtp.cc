@@ -774,7 +774,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         auto gogui_cmds = std::ostringstream{};
 
         gogui_cmds << "gfx/Win-Draw-Loss Rating/gogui-wdl_rating";
-        gogui_cmds << "\ngfx/Policy Heatmap/gogui-policy_heatmap";
+        gogui_cmds << "\ngfx/Normal Policy Heatmap/gogui-policy_heatmap normal";
         gogui_cmds << "\ngfx/Normal Policy Rating/gogui-policy_rating normal";
         gogui_cmds << "\ngfx/Opponent Policy Rating/gogui-policy_rating opponent";
         gogui_cmds << "\ngfx/Soft Policy Rating/gogui-policy_rating soft";
@@ -787,6 +787,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         gogui_cmds << "\ngfx/MCTS Ownership Influence/gogui-ownership_influence 400";
         gogui_cmds << "\ngfx/Book Rating/gogui-book_rating";
         gogui_cmds << "\ngfx/Gammas Heatmap/gogui-gammas_heatmap";
+        gogui_cmds << "\ngfx/Gammas Rating/gogui-gammas_rating";
         gogui_cmds << "\ngfx/Ladder Map/gogui-ladder_map";
 
         out << GtpSuccess(gogui_cmds.str());
@@ -821,7 +822,27 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
 
         out << GtpSuccess(wdl_rating.str());
     } else if (const auto res = spt.Find("gogui-policy_heatmap", 0)) {
-        const auto result = agent_->GetNetwork().GetOutput(agent_->GetState(), Network::kDirect);
+        int side_to_move = agent_->GetState().GetToMove();
+        auto offset = PolicyBufferOffset::kDefault;
+        if (const auto o = spt.GetWord(1)) {
+            if (o->Get<>() == "normal") {
+                offset = PolicyBufferOffset::kNormal;
+            } else if (o->Get<>() == "opponent") {
+                side_to_move = !side_to_move;
+                offset = PolicyBufferOffset::kOpponent;
+            } else if (o->Get<>() == "soft") {
+                offset = PolicyBufferOffset::kSoft;
+            } else if (o->Get<>() == "softopponent") {
+                side_to_move = !side_to_move;
+                offset = PolicyBufferOffset::kSoftOpponent;
+            } else if (o->Get<>() == "optimistic") {
+                offset = PolicyBufferOffset::kOptimistic;
+            }
+        }
+        const auto result = agent_->GetNetwork().GetOutput(
+            agent_->GetState(),
+            Network::kDirect,
+            Network::Query::Get().SetOffset(offset));
         const auto board_size = result.board_size;
         const auto num_intersections = board_size * board_size;
 
@@ -1034,6 +1055,39 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             gammas_map << GoguiColor(gnval, agent_->GetState().VertexToText(vtx));
         }
         out << GtpSuccess(gammas_map.str());
+    }  else if (const auto res = spt.Find("gogui-gammas_rating", 0)) {
+        const auto board_size = agent_->GetState().GetBoardSize();
+        const auto num_intersections = board_size * board_size;
+        const auto color = agent_->GetState().GetToMove();
+        const auto ave_pol = 1.f / num_intersections;
+
+        std::vector<float> gammas = agent_->GetState().GetGammasPolicy(color);
+
+        auto gammas_rating = std::ostringstream{};
+        int max_idx = -1;
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            const auto vtx = agent_->GetState().IndexToVertex(idx);
+            auto gnval = gammas[idx];
+
+            if (gnval > ave_pol) {
+                if (max_idx < 0 ||
+                        gammas[max_idx] < gnval) {
+                    max_idx = idx;
+                }
+                gammas_rating << '\n';
+                gammas_rating << GoguiLable(gnval, agent_->GetState().VertexToText(vtx));
+            }
+        }
+        auto gammas_rating_var = std::ostringstream{};
+        const auto max_vtx = agent_->GetState().IndexToVertex(max_idx);
+
+        if (agent_->GetState().GetToMove() == kBlack) {
+            gammas_rating_var << Format("VAR b %s", agent_->GetState().VertexToText(max_vtx).c_str());
+        } else {
+            gammas_rating_var << Format("VAR w %s", agent_->GetState().VertexToText(max_vtx).c_str());
+        }
+        gammas_rating_var << gammas_rating.str();
+        out << GtpSuccess(gammas_rating_var.str());
     } else if (const auto res = spt.Find("gogui-ladder_map", 0)) {
         const auto result = agent_->GetState().board_.GetLadderMap();
         const auto board_size = agent_->GetState().GetBoardSize();

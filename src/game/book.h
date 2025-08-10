@@ -25,7 +25,7 @@ public:
     std::vector<std::pair<float, int>> GetCandidateMoves(const GameState &state) const;
 
     // Get a human-readable description of the current book state.
-    std::string GetVerbose() const;
+    std::string GetInformation() const;
 
 private:
     using VertexFrequencyList = std::vector<std::pair<int ,int>>;

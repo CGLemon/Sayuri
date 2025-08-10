@@ -80,7 +80,7 @@ public:
         ThreadPool::Get("search", GetOption<int>("threads"));
 
         Book::Get().LoadBook(GetOption<std::string>("book_file"));
-        GammasDict::Get().Initialize(GetOption<std::string>("patterns_file"));
+        GammasDict::Get().LoadPatterns(GetOption<std::string>("patterns_file"));
 
         auto kgs_hint = GetOption<std::string>("kgs_hint");
         if (kgs_hint.empty()) {

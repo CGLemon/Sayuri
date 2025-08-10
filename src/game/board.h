@@ -147,6 +147,9 @@ public:
     // Reture true if the specified color is adjacent to this vertex.
     bool IsNeighborColor(const int vtx, const int color) const;
 
+    // Return true if the move is ko move.
+    bool IsKoMove(const int vtx, const int color) const;
+
     // Play the move assume the move is legal.
     void PlayMoveAssumeLegal(const int vtx, const int color);
 
