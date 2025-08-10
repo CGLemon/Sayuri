@@ -32,6 +32,7 @@ public:
         cpuct_dynamic_k_base = GetOption<float>("cpuct_dynamic_k_base");
         forced_playouts_k = GetOption<float>("forced_playouts_k");
         suppress_pass_factor = GetOption<float>("suppress_pass_factor");
+        gammas_policy_factor = GetOption<float>("gammas_policy_factor");
 
         random_min_visits = GetOption<int>("random_min_visits");
         random_min_ratio = GetOption<float>("random_min_ratio");
@@ -100,6 +101,7 @@ public:
     float cpuct_dynamic_k_base;
     float forced_playouts_k;
     float suppress_pass_factor;
+    float gammas_policy_factor;
 
     float gumbel_c_visit;
     float gumbel_c_scale;

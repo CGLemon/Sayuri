@@ -7,6 +7,7 @@
 #include "utils/logits.h"
 #include "utils/kldivergence.h"
 #include "game/symmetry.h"
+#include "pattern/gammas_dict.h"
 
 #include <cassert>
 #include <algorithm>
@@ -121,7 +122,7 @@ void Node::RecomputePolicy(Network &network,
         child.GetPointer()->SetPolicy(buffer[idx++]);
     }
 }
-
+#include <iostream>
 Network::Result Node::GetNetOutput(Network &network,
                                    GameState &state,
                                    const bool is_root) {
@@ -144,8 +145,23 @@ Network::Result Node::GetNetOutput(Network &network,
     const auto query = Network::Query::Get().SetTemperature(policy_temp_).
                                                  SetCache(!default_using_normal_policy).
                                                  SetOffset(policy_offset);
+    auto result = network.GetOutput(state, Network::kRandom, query);
 
-    return network.GetOutput(state, Network::kRandom, query);
+    // TODO: We are curious whether using a weaker policy can significantly and reasonably
+    //       reduce the playing strength. If feasible, I can train a neural network with multiple
+    //       strength levels to replace it.
+    if (param_->gammas_policy_factor > 0.f && GammasDict::Get().Valid()) {
+        auto gammas_policy = state.GetGammasPolicy(
+                                 state.GetToMove(), result.ownership.data());
+        const float reduction = (1.0f - result.pass_probability);
+        const float factor = param_->gammas_policy_factor;
+        int num_intersections = state.GetNumIntersections();
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            result.probabilities[idx] = (1.0f - factor) * result.probabilities[idx] +
+                                            factor * reduction * gammas_policy[idx];
+        }
+    }
+    return result;
 }
 
 bool Node::ExpandChildren(Network &network,

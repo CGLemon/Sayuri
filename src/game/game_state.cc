@@ -644,15 +644,16 @@ std::vector<float> GameState::GetGammasPolicy(const int color, const float * own
         0.800636f,
         0.406365f
     };
-    for (int idx = 0; idx < num_intersections; ++idx) {
-        auto gval = GetGammaValue(IndexToVertex(idx), color);
-        if (ownership) {
-            float owner = (ownership[idx] + 1.f) / 2.f;
-            int owner_level = std::min(7, static_cast<int>(owner * 8));
-            gval *= kMcOwnerGammas[owner_level];
+    if (GammasDict::Get().Valid()) {
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            auto gval = GetGammaValue(IndexToVertex(idx), color);
+            if (ownership) {
+                float owner = (ownership[idx] + 1.f) / 2.f;
+                int owner_level = std::min(7, static_cast<int>(owner * 8));
+                gval *= kMcOwnerGammas[owner_level];
+            }
+            policy[idx] = std::log(gval);
         }
-        LOGGING << "idx= " << idx << " -> " << gval << "\n";
-        policy[idx] = std::log(gval);
     }
 
     return Softmax(policy, 1.f);
