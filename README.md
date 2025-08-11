@@ -23,7 +23,7 @@ To run the engine, you need a executable weights first. The released weights can
 
 After executing the command, you'll see diagnostic output. If this output includes ```Network Version```, it indicates that the engine is successfully running in GPT mode. However, since GPT mode isn't designed for human interaction, you should use the graphical interface (GUI) instead. Please refer to the **Graphical Interface** section for more details.
 
-For a list of additional command-line arguments, use the --help option. Please type
+For a list of additional command-line arguments, use the --help option. Please type:
 
     $ ./sayuri --help
 

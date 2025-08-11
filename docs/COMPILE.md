@@ -68,13 +68,13 @@ To save memory usage during the self-play process, you can compress training dat
 
 ## Windows
 
-To compile the executable, we provide a ```.bat``` file that supports both CPU and GPU versions. For the CPU version, we default to using Eigen as the backend. For the GPU version, CUDA is used as the backen
+To compile the executable file, we provide a ```build.bat``` file that supports both CPU and GPU versions. For the CPU version, we default to using Eigen as the backend. For the GPU version, CUDA is used as the backend.
 
-Before you begin, you must first download and install Visual Studio 2022/2019 along with the necessary C++ libraries. After installation, execute the following commands. It's crucial to run these commands from the ```x64 Native Tools Command Prompt for VS XXX``` environment or PowerShell.
+Before you begin, you must first download and install Visual Studio 2022/2019 along with the necessary C++ libraries. Once installed, run the commands below from the ```x64 Native Tools Command Prompt for VS XXX``` environment or PowerShell.
 
 ### CPU Version
 
-This version requires the GCC compiler. You can use MinGW for this. To compile the CPU version, enter:
+This version requires the GCC compiler. You can use MinGW for this purpose. To compile the CPU version, enter:
 
     .\build.bat gcc
 

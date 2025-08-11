@@ -1534,11 +1534,7 @@ std::vector<float> Node::GetProbLogitsCompletedQ(GameState &state) {
 
     for (auto & child : children_) {
         const auto vtx = child.GetVertex();
-        int idx = num_intersections; // pass move
-        if (vtx != kPass) {
-            idx = state.GetIndex(
-                      state.GetX(vtx), state.GetY(vtx));
-        }
+        const auto idx = state.VertexToIndexIncludingPass(vtx);
         acc += child.GetPolicy();
         prob[idx] = child.GetPolicy();
     }
@@ -1622,11 +1618,7 @@ void Node::MixLogitsCompletedQ(GameState &state,
     int completed_q_idx = 0;
     for (auto & child : children_) {
         const auto vtx = child.GetVertex();
-        int idx = num_intersections; // pass move
-        if (vtx != kPass) {
-            idx = state.GetIndex(
-                      state.GetX(vtx), state.GetY(vtx));
-        }
+        const auto idx = state.VertexToIndexIncludingPass(vtx);
 
         const float logits = SafeLog(prob[idx]);
         const float completed_q = completed_q_list[completed_q_idx++];
