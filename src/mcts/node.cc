@@ -122,7 +122,7 @@ void Node::RecomputePolicy(Network &network,
         child.GetPointer()->SetPolicy(buffer[idx++]);
     }
 }
-#include <iostream>
+
 Network::Result Node::GetNetOutput(Network &network,
                                    GameState &state,
                                    const bool is_root) {
