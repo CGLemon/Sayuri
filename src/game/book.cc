@@ -3,6 +3,7 @@
 #include <sstream>
 #include <utility>
 #include <stdexcept>
+#include <numeric>
 
 #include "utils/log.h"
 #include "utils/random.h"
