@@ -49,7 +49,7 @@
          ],
 
         "TrainDirectory" : "selfplay/tdata",
-        "ValidationDirectory" : "selfplay/vdata",
+        "ValidationDirectory" : null,
         "StorePath" : "workspace"
     }
 }

@@ -31,6 +31,12 @@ To use multiple specific GPUs:
 
     $ bash simple.sh -g 1 -g 2    # run it on the 2nd and 3rd GPU
 
+## Notes on Policy Surprise Weighting
+
+The value of ```PolicySurpriseFactor``` in the ```configs/selfplay-setting.json``` file may need to be adjusted depending on your training scenario. When training board sizes ranging from 7x7 to 19x19 simultaneously, a value of ```0.5``` is generally a good choice. However, if you are only training on 9x9 boards, setting PolicySurpriseFactor to ```0``` yields better results.
+
+The specific reason for this behavior is currently unknown. For more technical documentation on this method, please refer to the official [Policy Surprise Weighting page](https://github.com/lightvector/KataGo/blob/master/docs/KataGoMethods.md#policy-surprise-weighting).
+
 ## Sample Configuration File
 
 The sample directory includes several example self-play engine configuration files:

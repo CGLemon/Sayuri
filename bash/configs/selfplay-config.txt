@@ -48,7 +48,7 @@
 --reduce-playouts 50
 --reduce-playouts-prob 0.75
 
---resign-playouts 75
+--resign-playouts 32
 --resign-threshold 0.05
 --resign-discard-prob 0.9
 
