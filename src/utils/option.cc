@@ -1,7 +1,6 @@
 #include "utils/option.h"
 
 #include <set>
-#include <sstream>
 
 void Option::Adjust() {
     HandleInvalid();
@@ -24,12 +23,40 @@ void Option::Adjust() {
                 fval = std::max(fval, std::stof(min_));
             }
             sval = std::to_string(fval);
+        } else if (type_ == Type::kDouble) {
+            auto dval = std::stod(sval);
+            if (use_max_) {
+                dval = std::min(dval, std::stod(max_));
+            }
+            if (use_min_) {
+                dval = std::max(dval, std::stod(min_));
+            }
+            sval = std::to_string(dval);
         }
     }
 }
 
 std::string Option::GetCurrentVal() const {
     return *std::rbegin(val_list_);
+}
+
+std::string Option::TypeToString(Type type) const {
+    if (type == Type::kString) {
+        return "kString";
+    }
+    if (type == Type::kBoolean) {
+        return "kBoolean";
+    }
+    if (type == Type::kInteger) {
+        return "kInteger";
+    }
+    if (type == Type::kFloating) {
+        return "kFloating";
+    }
+    if (type == Type::kDouble) {
+        return "kDouble";
+    }
+    return "kInvalid";
 }
 
 void Option::HandleInvalid() const {
@@ -63,6 +90,19 @@ void Option::Unique() {
         check_set.emplace(val);
     }
     std::swap(val_list_, dest_list);
+}
+
+std::string Option::ToString() const {
+    auto out = std::ostringstream{};
+    out << GetCurrentVal();
+    if (use_max_) {
+        out << ", Max: " << max_;
+    }
+    if (use_min_) {
+        out << ", Min: " << min_;
+    }
+    out << ", " << TypeToString(type_);
+    return out.str();
 }
 
 std::unordered_map<std::string, Option> kOptionsMap;
