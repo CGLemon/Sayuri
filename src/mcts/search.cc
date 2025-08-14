@@ -155,6 +155,9 @@ void Search::PrepareRootNode(Search::OptionTag tag) {
                   std::begin(netlist.probabilities) + num_intersections,
                   std::begin(root_raw_probabilities_));
     root_raw_probabilities_[num_intersections] = netlist.pass_probability;
+
+    // for KLD gain
+    prev_root_visits_dist_ = GetRootVisitsDistribution(prev_kld_checkpoint_);
 }
 
 void Search::ReleaseTree() {
@@ -364,6 +367,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         keep_running &= HaveAlternateMoves(elapsed, thinking_time, playouts, tag);
         keep_running &= !AchieveCap(playouts, tag);
         keep_running &= running_.load(std::memory_order_relaxed);
+        keep_running &= StoppedByKldGain();
     };
 
     running_.store(false, std::memory_order_release);
@@ -1547,6 +1551,53 @@ int Search::GetPonderPlayouts() const {
     const int ponder_playouts =  ponder_playouts_base * div_factor;
 
     return ponder_playouts;
+}
+
+bool Search::StoppedByKldGain() {
+    int curr_parentvisits;
+    auto curr_dist = GetRootVisitsDistribution(curr_parentvisits);
+    auto visits_diff = curr_parentvisits - prev_kld_checkpoint_;
+
+    if (param_->kld_interval <= 0 ||
+            visits_diff < param_->kld_interval) {
+        return false;
+    }
+
+    auto kld_gain = GetKlDivergence(prev_root_visits_dist_, curr_dist);
+    bool should_stop = kld_gain / visits_diff < param_->kld_gain;
+
+    prev_root_visits_dist_ = curr_dist;
+    prev_kld_checkpoint_ = curr_parentvisits;
+    return should_stop;
+}
+
+std::vector<double> Search::GetRootVisitsDistribution(int &parentvisits) const {
+    const auto num_intersections = root_state_.GetNumIntersections();
+    auto root_visits_dist = std::vector<double>(num_intersections+1, 0.0f);
+    parentvisits = 0;
+
+    if (root_node_) {
+        const auto &children = root_node_->GetChildren();
+        for (auto &child: children) {
+            const auto node = child.GetPointer();
+            const auto idx = root_state_.VertexToIndexIncludingPass(node->GetVertex());
+            const auto visits = node->GetVisits();
+            if (visits > 0 && node->IsActive()) {
+                root_visits_dist[idx] = visits;
+                parentvisits += visits;
+            }
+        }
+    }
+    if (parentvisits != 0) {
+        std::fill(std::begin(root_visits_dist),
+                      std::end(root_visits_dist),
+                      1.0f/(num_intersections+1));
+    } else {
+        for (int idx = 0; idx < num_intersections+1; ++idx) {
+            root_visits_dist[idx] /= parentvisits;
+        }
+    }
+    return root_visits_dist;
 }
 
 std::string Search::GetDebugMoves(std::vector<int> moves) {

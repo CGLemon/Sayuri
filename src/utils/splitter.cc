@@ -224,6 +224,11 @@ float Splitter::Reuslt::Get<float>() const{
 }
 
 template<>
+double Splitter::Reuslt::Get<double>() const{
+    return std::stod(str_);
+}
+
+template<>
 char Splitter::Reuslt::Get<char>() const{
     return str_[0];
 }

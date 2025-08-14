@@ -93,6 +93,9 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["random_opening_prob"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["random_opening_temp"] << Option::SetOption(1.f, 100.f, 0.f);
 
+    kOptionsMap["kld_gain"] << Option::SetOption(0.0, 100.0, 0.0);
+    kOptionsMap["kld_interval"] << Option::SetOption(-1);
+
     kOptionsMap["gumbel_c_visit"] << Option::SetOption(50.f);
     kOptionsMap["gumbel_c_scale"] << Option::SetOption(1.f);
     kOptionsMap["gumbel_prom_visits"] << Option::SetOption(1);
@@ -619,6 +622,20 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--dirichlet-factor")) {
         if (IsParameter(res->Get<>())) {
             SetOption("dirichlet_factor", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--kld-gain")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("kld_gain", res->Get<double>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--kld-interval")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("kld_interval", res->Get<int>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }

@@ -34,6 +34,9 @@ public:
         suppress_pass_factor = GetOption<float>("suppress_pass_factor");
         gammas_policy_factor = GetOption<float>("gammas_policy_factor");
 
+        kld_gain = GetOption<double>("kld_gain");
+        kld_interval = GetOption<int>("kld_interval");
+
         random_min_visits = GetOption<int>("random_min_visits");
         random_min_ratio = GetOption<float>("random_min_ratio");
         random_moves_factor = GetOption<float>("random_moves_factor");
@@ -102,6 +105,9 @@ public:
     float forced_playouts_k;
     float suppress_pass_factor;
     float gammas_policy_factor;
+
+    double kld_gain;
+    int kld_interval;
 
     float gumbel_c_visit;
     float gumbel_c_scale;
