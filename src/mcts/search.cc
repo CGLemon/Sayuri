@@ -1556,11 +1556,6 @@ int Search::GetPonderPlayouts() const {
 }
 
 bool Search::StoppedByKldGain(const int cap, Search::OptionTag tag) {
-    const auto played_playouts = std::max(cap - GetPlayoutsLeft(cap, tag), 0);
-    if (param_->fastsearch_playouts > played_playouts) {
-        return false;
-    }
-
     int curr_children_visits;
     auto curr_dist = GetRootVisitsDistribution(curr_children_visits);
     auto visits_diff = curr_children_visits - prev_kld_children_visits_;
@@ -1572,9 +1567,13 @@ bool Search::StoppedByKldGain(const int cap, Search::OptionTag tag) {
 
     auto kld_gain = GetKlDivergence(prev_root_visits_dist_, curr_dist);
     bool should_stop = kld_gain / visits_diff < param_->kld_gain;
-
     prev_root_visits_dist_ = curr_dist;
     prev_kld_children_visits_ = curr_children_visits;
+
+    const auto played_playouts = std::max(cap - GetPlayoutsLeft(cap, tag), 0);
+    if (param_->fastsearch_playouts > played_playouts) {
+        return false;
+    }
     return should_stop;
 }
 
