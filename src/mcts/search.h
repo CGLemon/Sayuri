@@ -226,9 +226,9 @@ private:
 
     int GetPlayoutsLeft(const int cap, Search::OptionTag tag);
 
-    bool StoppedByKldGain();
+    bool StoppedByKldGain(const int cap, Search::OptionTag tag);
 
-    std::vector<double> GetRootVisitsDistribution(int &parentvisits) const;
+    std::vector<double> GetRootVisitsDistribution(int &children_visits) const;
 
     bool InputPending(Search::OptionTag tag) const;
 
@@ -283,5 +283,5 @@ private:
     std::vector<float> root_raw_probabilities_;
 
     std::vector<double> prev_root_visits_dist_;
-    int prev_kld_checkpoint_;
+    int prev_kld_children_visits_;
 };

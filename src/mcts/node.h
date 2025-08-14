@@ -139,7 +139,7 @@ public:
     // Get children's LCB with utility values.
     std::vector<std::pair<float, int>> GetSortedLcbUtilityList(const int color);
     std::vector<std::pair<float, int>> GetSortedLcbUtilityList(const int color,
-                                                               const int parentvisits);
+                                                               const int children_visits);
 
     // Get LCB value.
     float GetLcb(const int color) const;
@@ -201,10 +201,10 @@ public:
                  const float total_visited_policy,
                  const bool is_root) const;
 
-    float GetCpuct(const int parentvisits) const;
+    float GetCpuct(const int children_visits) const;
 
     int GetForcedVisits(const float policy,
-                        const int parentvisits,
+                        const int children_visits,
                         const bool is_root) const;
 
     // Get the average ownership value.
@@ -242,7 +242,7 @@ private:
                          NodeEvals &node_evals, const bool is_root);
     Network::Result GetNetOutput(Network &network, GameState &state, const bool is_root);
 
-    float GetDynamicCpuctFactor(Node *node, const int visits, const int parentvisits);
+    float GetDynamicCpuctFactor(Node *node, const int visits, const int children_visits);
     void ApplyDirichletNoise(const float alpha);
     void ApplyNetOutput(GameState &state,
                         const Network::Result &raw_netlist,
@@ -256,7 +256,7 @@ private:
 
     void LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist);
 
-    int GetParentVisits() const;
+    int GetChildrenVisits() const;
     float GetSearchPolicy(Edge& child, const bool is_root);
     float GetScoreVariance(const float default_var, const int visits) const;
     float GetWLVariance(const float default_var, const int visits) const;

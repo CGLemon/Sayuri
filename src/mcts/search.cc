@@ -38,6 +38,8 @@ void Search::Initialize() {
     no_exploring_param_->dirichlet_noise = false;
     no_exploring_param_->root_policy_temp = 1.f;
     no_exploring_param_->forced_playouts_k = 0.f;
+    no_exploring_param_->kld_gain = 0.0;
+    no_exploring_param_->kld_interval = -1;
     no_exploring_param_->no_exploring_phase = true;
 
     analysis_config_.Clear();
@@ -157,7 +159,7 @@ void Search::PrepareRootNode(Search::OptionTag tag) {
     root_raw_probabilities_[num_intersections] = netlist.pass_probability;
 
     // for KLD gain
-    prev_root_visits_dist_ = GetRootVisitsDistribution(prev_kld_checkpoint_);
+    prev_root_visits_dist_ = GetRootVisitsDistribution(prev_kld_children_visits_);
 }
 
 void Search::ReleaseTree() {
@@ -366,8 +368,8 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         }
         keep_running &= HaveAlternateMoves(elapsed, thinking_time, playouts, tag);
         keep_running &= !AchieveCap(playouts, tag);
+        keep_running &= !StoppedByKldGain(playouts, tag);
         keep_running &= running_.load(std::memory_order_relaxed);
-        keep_running &= StoppedByKldGain();
     };
 
     running_.store(false, std::memory_order_release);
@@ -507,14 +509,14 @@ void Search::GatherComputationResult(ComputationResult &result) const {
                   std::begin(result.root_ownership));
 
     // First loop we gather some root's information.
-    auto parentvisits = 0;
+    auto children_visits = 0;
     auto total_visited_policy = 0.0f;
     const auto &children = root_node_->GetChildren();
     for (const auto &child : children) {
         const auto node = child.GetPointer();
         const auto visits = node->GetVisits();
 
-        parentvisits += visits;
+        children_visits += visits;
         if (visits > 0) {
             total_visited_policy += node->GetPolicy();
         }
@@ -541,7 +543,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     }
 
     // Fill raw visits distribution.
-    if (parentvisits == 0) {
+    if (children_visits == 0) {
         // uniform distribution
         for (int idx = 0; idx < num_intersections+1; ++idx) {
             result.root_visits_dist[idx] = 1.f/(num_intersections+1);
@@ -550,7 +552,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         // Normalize the distribution. Be sure the sum is 1.
         for (int idx = 0; idx < num_intersections+1; ++idx) {
             result.root_visits_dist[idx] =
-                (float)(result.root_searched_visits[idx]) / parentvisits;
+                (float)(result.root_searched_visits[idx]) / children_visits;
         }
     }
 
@@ -559,7 +561,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     auto prob_with_completed_q =
         root_node_->GetProbLogitsCompletedQ(root_state_);
 
-    if (parentvisits == 0) {
+    if (children_visits == 0) {
         // No useful distribution. Apply uniform distribution.
         result.target_policy_dist = result.root_visits_dist;
     } else if (root_node_->ShouldApplyGumbel() ||
@@ -571,7 +573,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         auto damping = 800.f;
         auto target_dist_buf = result.root_visits_dist;
         for (int idx = 0; idx < num_intersections+1; ++idx) {
-            float factor = std::min(std::min(parentvisits, (int)damping) / damping, 1.0f);
+            float factor = std::min(std::min(children_visits, (int)damping) / damping, 1.0f);
             target_dist_buf[idx] = factor * target_dist_buf[idx] + (1.0f - factor) * prob_with_completed_q[idx];
         }
 
@@ -586,7 +588,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         // Prune the noise visits based one "Policy Target Pruning". We think
         // normal PUCT search distribution should be optimal solution. The redundant
         // visits is noise. Please see here for detail, https://arxiv.org/abs/1902.10565v2
-        const int virtual_visits = std::max(3200, parentvisits);
+        const int virtual_visits = std::max(3200, children_visits);
         float cpuct = root_node_->GetCpuct(virtual_visits);
         float accum_target_policy = 0.0f;
         for (int idx = 0; idx < num_intersections+1; ++idx) {
@@ -975,7 +977,7 @@ int Search::GetSelfPlayMove(OptionTag tag) {
     // playouts. May use the lower playouts instead of it.
     int playouts = param_->playouts;
 
-    float fast_search_prob = param_->reduce_playouts_prob;
+    float fast_search_prob = param_->fastsearch_playouts_prob;
     if (already_lost) {
         // Someone already won the game. Do not record this kind
         // of positions too much to avoid introducing pathological
@@ -984,14 +986,14 @@ int Search::GetSelfPlayMove(OptionTag tag) {
         fast_search_prob = 1.0f - record_prob;
     }
 
-    if (param_->reduce_playouts > 0 &&
-            param_->reduce_playouts < param_->playouts &&
+    if (param_->fastsearch_playouts > 0 &&
+            param_->fastsearch_playouts < param_->playouts &&
             Random<>::Get().Roulette<10000>(fast_search_prob)) {
 
-        // The reduce playouts must be smaller than default
+        // The fast search playouts must be smaller than default
         // playouts. It is fast search phase so we also disable
         // all exploring settings.
-        playouts = std::min(playouts, param_->reduce_playouts);
+        playouts = std::min(playouts, param_->fastsearch_playouts);
 
         if (already_lost) {
             // If someone already won the game, the Q value was not very effective
@@ -1553,10 +1555,15 @@ int Search::GetPonderPlayouts() const {
     return ponder_playouts;
 }
 
-bool Search::StoppedByKldGain() {
-    int curr_parentvisits;
-    auto curr_dist = GetRootVisitsDistribution(curr_parentvisits);
-    auto visits_diff = curr_parentvisits - prev_kld_checkpoint_;
+bool Search::StoppedByKldGain(const int cap, Search::OptionTag tag) {
+    const auto played_playouts = std::max(cap - GetPlayoutsLeft(cap, tag), 0);
+    if (param_->fastsearch_playouts > played_playouts) {
+        return false;
+    }
+
+    int curr_children_visits;
+    auto curr_dist = GetRootVisitsDistribution(curr_children_visits);
+    auto visits_diff = curr_children_visits - prev_kld_children_visits_;
 
     if (param_->kld_interval <= 0 ||
             visits_diff < param_->kld_interval) {
@@ -1567,14 +1574,14 @@ bool Search::StoppedByKldGain() {
     bool should_stop = kld_gain / visits_diff < param_->kld_gain;
 
     prev_root_visits_dist_ = curr_dist;
-    prev_kld_checkpoint_ = curr_parentvisits;
+    prev_kld_children_visits_ = curr_children_visits;
     return should_stop;
 }
 
-std::vector<double> Search::GetRootVisitsDistribution(int &parentvisits) const {
+std::vector<double> Search::GetRootVisitsDistribution(int &children_visits) const {
     const auto num_intersections = root_state_.GetNumIntersections();
     auto root_visits_dist = std::vector<double>(num_intersections+1, 0.0f);
-    parentvisits = 0;
+    children_visits = 0;
 
     if (root_node_) {
         const auto &children = root_node_->GetChildren();
@@ -1584,17 +1591,17 @@ std::vector<double> Search::GetRootVisitsDistribution(int &parentvisits) const {
             const auto visits = node->GetVisits();
             if (visits > 0 && node->IsActive()) {
                 root_visits_dist[idx] = visits;
-                parentvisits += visits;
+                children_visits += visits;
             }
         }
     }
-    if (parentvisits != 0) {
+    if (children_visits != 0) {
         std::fill(std::begin(root_visits_dist),
                       std::end(root_visits_dist),
                       1.0f/(num_intersections+1));
     } else {
         for (int idx = 0; idx < num_intersections+1; ++idx) {
-            root_visits_dist[idx] /= parentvisits;
+            root_visits_dist[idx] /= children_visits;
         }
     }
     return root_visits_dist;
