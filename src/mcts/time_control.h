@@ -40,6 +40,7 @@ public:
 
     bool IsInfiniteTime(int color) const;
     float GetInfiniteTime() const;
+    float GetDuration() const;
 
 private:
     void Reset();

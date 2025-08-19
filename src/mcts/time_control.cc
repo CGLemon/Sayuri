@@ -310,6 +310,10 @@ float TimeControl::GetInfiniteTime() const {
     return 31 * 24 * 60 * 60;
 }
 
+float TimeControl::GetDuration() const {
+    return timer_.GetDuration();
+}
+
 int TimeControl::EstimateMovesExpected(int boardsize, int move_num) const {
     const int num_intersections = boardsize * boardsize;
     const int side_move_num = move_num/2;

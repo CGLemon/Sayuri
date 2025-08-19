@@ -6,6 +6,7 @@
 #include <stack>
 #include <random>
 #include <cmath>
+#include <chrono>
 
 #include "mcts/search.h"
 #include "neural/encoder.h"
@@ -47,6 +48,15 @@ void Search::Initialize() {
     group_ = std::make_unique<ThreadGroup<void>>(&ThreadPool::Get());
     playouts_.store(0, std::memory_order_relaxed);
     ThreadPool::Get("tree-destruction", 1);
+}
+
+void Search::PlaySinglePlayout() {
+    auto currstate = std::make_unique<GameState>(root_state_);
+    auto result = SearchResult{};
+    PlaySimulation(*currstate, root_node_.get(), 0, result);
+    if (result.IsValid()) {
+        playouts_.fetch_add(1, std::memory_order_relaxed);
+    }
 }
 
 void Search::PlaySimulation(GameState &currstate, Node *const node,
@@ -144,9 +154,9 @@ void Search::PrepareRootNode(Search::OptionTag tag) {
         root_node_->Update(&root_evals_);
     }
 
-    // We should get this root policy from the NN cache. The softmax
-    // temperature of 'root_evals_' may be not 1.0 so we need to
-    // compute it again.
+    // We should retrieve the root policy from the NN cache. Since the
+    // softmax temperature of 'root_evals_' may not be 1.0, we need to
+    // recompute it.
     auto netlist = network_.GetOutput(root_state_, Network::kRandom);
     auto num_intersections = root_state_.GetNumIntersections();
     root_raw_probabilities_.resize(num_intersections+1);
@@ -226,13 +236,13 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
 
     // Remove all pass moves if we don't want to stop
     // the search.
-    int num_passes = 0;
+    int num_removed_passes = 0;
     if (tag & kForced) {
         while (root_state_.GetPasses() >= 2) {
             // Remove double pass move.
             root_state_.UndoMove();
             root_state_.UndoMove();
-            num_passes+=2;
+            num_removed_passes += 2;
         }
     }
 
@@ -271,29 +281,14 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         }
     }
 
-    // The SMP workers run on every threads except for the main thread.
-    const auto Worker = [this]() -> void {
-        while(running_.load(std::memory_order_relaxed)) {
-            auto currstate = std::make_unique<GameState>(root_state_);
-            auto result = SearchResult{};
-            PlaySimulation(*currstate, root_node_.get(), 0, result);
-            if (result.IsValid()) {
-                playouts_.fetch_add(1, std::memory_order_relaxed);
-            }
-        };
-    };
-
-    Timer timer; // main timer
-    Timer analysis_timer; // for analysis
+    Timer analysis_timer, verbose_timer;
+    analysis_timer.Clock();
+    verbose_timer.Clock();
 
     // Set the time control.
     time_control_.Clock();
     time_control_.SetLagBuffer(
         std::max(param_->lag_buffer, time_control_.GetLagBuffer()));
-
-    // Clean the timer.
-    timer.Clock();
-    analysis_timer.Clock();
 
     // Compute the max thinking time. The bound time is
     // max const time if we already set it.
@@ -307,45 +302,43 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
                                         time_control_.GetThinkingTime(
                                             color, board_size, move_num));
 
-    // Will be zero if time mananger is invalid.
+    // The buffer_effect means how much thinking time is actually
+    // added when a lag buffer is applied.
     const float buffer_effect = time_control_.GetBufferEffect(
                                     color, board_size, move_num);
 
     PrepareRootNode(tag);
 
     if (param_->analysis_verbose) {
-        LOGGING << Format("Reuse %d nodes\n", root_node_->GetVisits()-1);
-        LOGGING << Format("Using %d threads for search, and %d as the network's batch size\n",
+        LOGGING << Format("Reuse %d nodes.\n", root_node_->GetVisits()-1);
+        LOGGING << Format("Using %d threads for search, and %d as the network's batch size.\n",
                               computation_result.threads, computation_result.batch_size);
-        LOGGING << Format("Max thinking time: %.2f(sec)\n", thinking_time);
-        LOGGING << Format("Max playouts number: %d\n", playouts);
+        LOGGING << Format("Thinking at most %.2f seconds.\n", thinking_time);
+        LOGGING << Format("Remaining %d playouts left.\n", GetPlayoutsLeft(playouts, tag));
     }
 
-    if (thinking_time < timer.GetDuration() || AchieveCap(playouts, tag)) {
+    if (thinking_time < time_control_.GetDuration() || AchieveCap(playouts, tag)) {
         // Prepare the root node spent little time. Disable the
         // tree search if the time is up.
         running_.store(false, std::memory_order_relaxed);
     }
 
-    for (int t = 1; t < param_->threads; ++t) {
-        // SMP thread is running.
-        group_->AddTask(Worker);
+    for (int t = 0; t < param_->threads; ++t) {
+        group_->AddTask(
+            [this, playouts, tag]() -> void {
+                while (running_.load(std::memory_order_relaxed)) {
+                    PlaySinglePlayout();
+                    if (AchieveCap(playouts, tag)) {
+                        running_.store(false, std::memory_order_release);
+                    }
+                }
+            }
+        );
     }
-
-    // Main thread is running.
+    
     auto keep_running = running_.load(std::memory_order_relaxed);
-
     while (!InputPending(tag) && keep_running) {
-        auto currstate = std::make_unique<GameState>(root_state_);
-        auto result = SearchResult{};
-
-        PlaySimulation(*currstate, root_node_.get(), 0, result);
-        if (result.IsValid()) {
-            playouts_.fetch_add(1, std::memory_order_relaxed);
-        }
-
-        const auto root_visits = root_node_->GetVisits();
-        const auto elapsed = timer.GetDuration();
+        UpdateComputationResult(computation_result);
 
         if ((tag & kAnalysis) &&
                 analysis_config_.interval > 0 &&
@@ -353,51 +346,42 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
                     analysis_timer.GetDurationMilliseconds()) {
             // Output the analysis string for GTP interface, like sabaki...
             analysis_timer.Clock();
-            if (root_visits > 1) {
+            if (computation_result.visits > 1) {
                 DUMPING << root_node_->ToAnalysisString(
                                            root_state_, color, analysis_config_);
             }
         }
-        if (tag & kThinking) {
-            keep_running &= (elapsed < thinking_time);
+        if (param_->analysis_verbose &&
+                verbose_timer.GetDuration() > 2.5f) {
+            if (computation_result.visits > 1) {
+                LOGGING << Format("Playouts: %d, Win: %5.2f%%, PV: %s\n",
+                                    computation_result.playouts,
+                                    root_node_->GetWL(color) * 100.0f,
+                                    root_node_->GetPvString(root_state_).c_str());
+            }
+            verbose_timer.Clock();
         }
-        keep_running &= HaveAlternateMoves(elapsed, thinking_time, playouts, tag);
+
+        if (tag & kThinking) {
+            keep_running &= (computation_result.elapsed < thinking_time);
+        }
+        keep_running &= HaveAlternateMoves(computation_result.elapsed, thinking_time, playouts, tag);
         keep_running &= !AchieveCap(playouts, tag);
         keep_running &= running_.load(std::memory_order_relaxed);
+        if (!keep_running) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
     };
 
+    // Stop the search.
     running_.store(false, std::memory_order_release);
 
     // Wait for all threads to join the main thread.
     group_->WaitToJoin();
 
-    const auto played_playouts =
-                   playouts_.load(std::memory_order_relaxed);
-
     if (tag & kThinking) {
         time_control_.TookTime(color);
-
-        // Try to adjust the lag buffer. Avoid to be time-out for
-        // the last move.
-        float curr_lag_buf = time_control_.GetLagBuffer();
-        const auto elapsed = timer.GetDuration();
-
-        // Compute a conservative thinking time with lag buffer.
-        const auto thinking_time_with_lag =
-                       thinking_time + std::max(
-                                           0.75f * buffer_effect,
-                                           buffer_effect - 1.0f);
-
-        if (elapsed > thinking_time_with_lag) {
-            const auto diff = elapsed - thinking_time_with_lag;
-
-            // Give it a more conservative time buffer.
-            curr_lag_buf = curr_lag_buf + std::min(
-                                              1.5f * diff,
-                                              1.0f + diff);
-            time_control_.SetLagBuffer(
-                std::max(param_->lag_buffer, curr_lag_buf));
-        }
+        UpdateLagBuffer(thinking_time, buffer_effect);
     }
     if (tag & kAnalysis) {
         // Output the last analysis verbose because the MCTS may
@@ -409,30 +393,28 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         }
     }
 
+    // Make sure the least one is correct.
+    UpdateComputationResult(computation_result);
+
     if (param_->analysis_verbose) {
-        LOGGING << root_node_->ToVerboseString(root_state_, color);
-        LOGGING << " * Time Status:\n";
-        LOGGING << "  " << time_control_.ToString();
-        LOGGING << "  spent: " << timer.GetDuration() << "(sec)\n";
-        LOGGING << "  speed: " << (float)played_playouts /
-                                      timer.GetDuration() << "(p/sec)\n";
-        LOGGING << "  playouts: " << played_playouts << "\n";
+        const auto space = 14;
+        LOGGING << root_node_->ToVerboseString(root_state_, color)
+                    << " * Time Status:\n"
+                    << "   " << time_control_.ToString()
+                    << std::setw(space) << "elapsed:" << ' ' << computation_result.elapsed << " (sec)\n"
+                    << std::setw(space) << "speed:" << ' ' << (float)computation_result.playouts /
+                                               std::max(1e-4f, computation_result.elapsed) << " (p/sec)\n"
+                    << std::setw(space) << "playouts:" << ' ' << computation_result.playouts << "\n"
+                    << std::setw(space) << "visits:" << ' ' << computation_result.visits << "\n";
+
     }
-
-    // Record perfomance infomation.
-    computation_result.elapsed = timer.GetDuration();
-    computation_result.visits = root_node_->GetVisits();
-    computation_result.playouts = played_playouts;
-
-    // Gather computation information and training data.
-    GatherComputationResult(computation_result);
 
     // Save the last game state.
     last_state_ = root_state_;
 
     // Recover the search status.
     if (tag & kForced) {
-        for (int i = 0; i < num_passes; ++i) {
+        for (int i = 0; i < num_removed_passes; ++i) {
             root_state_.PlayMove(kPass);
         }
     }
@@ -443,9 +425,38 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     return computation_result;
 }
 
-void Search::GatherComputationResult(ComputationResult &result) const {
+void Search::UpdateLagBuffer(float thinking_time, float buffer_effect) {
+    // Try to adjust the lag buffer. Avoid to be time-out for
+    // the last move.
+    float curr_lag_buf = time_control_.GetLagBuffer();
+    const auto elapsed = time_control_.GetDuration();
+
+    // Compute a conservative thinking time with lag buffer.
+    const auto thinking_time_with_lag =
+                    thinking_time + std::max(
+                                        0.75f * buffer_effect,
+                                        buffer_effect - 1.0f);
+
+    if (elapsed > thinking_time_with_lag) {
+        const auto diff = elapsed - thinking_time_with_lag;
+
+        // Give it a more conservative time buffer.
+        curr_lag_buf = curr_lag_buf + std::min(
+                                            1.5f * diff,
+                                            1.0f + diff);
+        time_control_.SetLagBuffer(
+            std::max(param_->lag_buffer, curr_lag_buf));
+    }
+}
+
+void Search::UpdateComputationResult(ComputationResult &result) const {
     const auto color = root_state_.GetToMove();
     const auto num_intersections = root_state_.GetNumIntersections();
+
+    // Record perfomance infomation.
+    result.elapsed = time_control_.GetDuration();
+    result.visits = root_node_->GetVisits();
+    result.playouts = playouts_.load(std::memory_order_relaxed);
 
     // Fill best moves, root eval and score.
     result.best_move = root_node_->GetBestMove(true);
@@ -503,14 +514,14 @@ void Search::GatherComputationResult(ComputationResult &result) const {
                   std::begin(result.root_ownership));
 
     // First loop we gather some root's information.
-    auto parentvisits = 0;
+    auto children_visits = 0;
     auto total_visited_policy = 0.0f;
     const auto &children = root_node_->GetChildren();
     for (const auto &child : children) {
         const auto node = child.GetPointer();
         const auto visits = node->GetVisits();
 
-        parentvisits += visits;
+        children_visits += visits;
         if (visits > 0) {
             total_visited_policy += node->GetPolicy();
         }
@@ -537,7 +548,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     }
 
     // Fill raw visits distribution.
-    if (parentvisits == 0) {
+    if (children_visits == 0) {
         // uniform distribution
         for (int idx = 0; idx < num_intersections+1; ++idx) {
             result.root_visits_dist[idx] = 1.f/(num_intersections+1);
@@ -546,7 +557,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         // Normalize the distribution. Be sure the sum is 1.
         for (int idx = 0; idx < num_intersections+1; ++idx) {
             result.root_visits_dist[idx] =
-                (float)(result.root_searched_visits[idx]) / parentvisits;
+                (float)(result.root_searched_visits[idx]) / children_visits;
         }
     }
 
@@ -555,7 +566,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
     auto prob_with_completed_q =
         root_node_->GetProbLogitsCompletedQ(root_state_);
 
-    if (parentvisits == 0) {
+    if (children_visits == 0) {
         // No useful distribution. Apply uniform distribution.
         result.target_policy_dist = result.root_visits_dist;
     } else if (root_node_->ShouldApplyGumbel() ||
@@ -567,7 +578,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         auto damping = 800.f;
         auto target_dist_buf = result.root_visits_dist;
         for (int idx = 0; idx < num_intersections+1; ++idx) {
-            float factor = std::min(std::min(parentvisits, (int)damping) / damping, 1.0f);
+            float factor = std::min(std::min(children_visits, (int)damping) / damping, 1.0f);
             target_dist_buf[idx] = factor * target_dist_buf[idx] + (1.0f - factor) * prob_with_completed_q[idx];
         }
 
@@ -582,7 +593,7 @@ void Search::GatherComputationResult(ComputationResult &result) const {
         // Prune the noise visits based one "Policy Target Pruning". We think
         // normal PUCT search distribution should be optimal solution. The redundant
         // visits is noise. Please see here for detail, https://arxiv.org/abs/1902.10565v2
-        const int virtual_visits = std::max(3200, parentvisits);
+        const int virtual_visits = std::max(3200, children_visits);
         float cpuct = root_node_->GetCpuct(virtual_visits);
         float accum_target_policy = 0.0f;
         for (int idx = 0; idx < num_intersections+1; ++idx) {
@@ -709,13 +720,13 @@ void Search::GatherComputationResult(ComputationResult &result) const {
                         });
 
             for (int move : fill_moves) {
-            auto fork_state = root_state_;
-            fork_state.PlayMove(move, color);
-            if (!fork_state.IsSuperko()) {
-                // Find the first non-superko move.
-                result.capture_all_dead_move = move;
-                break;
-            }
+                auto fork_state = root_state_;
+                fork_state.PlayMove(move, color);
+                if (!fork_state.IsSuperko()) {
+                    // Find the first non-superko move.
+                    result.capture_all_dead_move = move;
+                    break;
+                }
             }
         }
     }
@@ -1058,12 +1069,11 @@ int Search::GetSelfPlayMove(OptionTag tag) {
 
     const float record_kld = result.policy_kld;
     const char discard_char = discard_it ? 'F' : 'T';
-    const int root_visits = root_node_->GetVisits();
 
     // Save the evaluation information comment in the SGF file.
     root_state_.SetComment(
         Format("%d, %d, %.2f, %.2f, %.2f, %c",
-            result.playouts, root_visits,
+            result.playouts, result.visits,
             root_eval, root_score, record_kld, discard_char));
 
     // Push the data to buffer.

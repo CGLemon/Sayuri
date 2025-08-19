@@ -226,19 +226,23 @@ private:
 
     int GetPlayoutsLeft(const int cap, Search::OptionTag tag);
 
+    int GetPonderPlayouts() const;
+
     bool InputPending(Search::OptionTag tag) const;
 
-    void GatherComputationResult(ComputationResult &result) const;
+    void UpdateComputationResult(ComputationResult &result) const;
 
     void GatherData(const GameState &state,
                     ComputationResult &result,
                     bool discard);
 
+    void UpdateLagBuffer(float thinking_time, float buffer_effect);
+
+    void PlaySinglePlayout();
     void PlaySimulation(GameState &currstate, Node *const node,
                         const int depth, SearchResult &search_result);
 
     void PrepareRootNode(Search::OptionTag tag);
-    int GetPonderPlayouts() const;
 
     AnalysisConfig analysis_config_;
 

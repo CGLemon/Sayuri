@@ -439,7 +439,7 @@ float Node::GetFpu(const int color,
     return fpu_value - fpu_reduction;
 }
 
-float Node::GetDynamicCpuctFactor(Node *node, const int visits, const int parentvisits) {
+float Node::GetDynamicCpuctFactor(Node *node, const int visits, const int children_visits) {
     // Imported form http://www.yss-aya.com/bbs/patio.cgi?read=33&ukey=0
 
     bool cpuct_dynamic = param_->cpuct_dynamic;
@@ -459,23 +459,23 @@ float Node::GetDynamicCpuctFactor(Node *node, const int visits, const int parent
     k = std::max(0.5, k);
     k = std::min(1.4, k);
 
-    double alpha = 1.0 / (1.0 + std::sqrt(parentvisits/cpuct_dynamic_k_base));
+    double alpha = 1.0 / (1.0 + std::sqrt(children_visits/cpuct_dynamic_k_base));
     k = alpha*k + (1.0-alpha) * 1.0;
     return k;
 }
 
-float Node::GetCpuct(const int parentvisits) const {
+float Node::GetCpuct(const int children_visits) const {
     const auto cpuct_init = param_->cpuct_init;
     const auto cpuct_base_factor = param_->cpuct_base_factor;
     const auto cpuct_base = param_->cpuct_base;
 
     const auto cpuct = cpuct_init + cpuct_base_factor *
-                           std::log((float(parentvisits) + cpuct_base + 1) / cpuct_base);
+                           std::log((float(children_visits) + cpuct_base + 1) / cpuct_base);
     return cpuct;
 }
 
 int Node::GetForcedVisits(const float policy,
-                          const int parentvisits,
+                          const int children_visits,
                           const bool is_root) const {
     const auto forced_playouts_k = is_root ? param_->forced_playouts_k : 0.f;
 
@@ -486,7 +486,7 @@ int Node::GetForcedVisits(const float policy,
     const float forced_n_factor =
         std::max(1e-4f, forced_playouts_k *
         std::min(0.2f, policy) *
-        static_cast<float>(parentvisits));
+        static_cast<float>(children_visits));
     const int forced_n = std::sqrt(forced_n_factor);
     return forced_n;
 }
@@ -511,7 +511,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     // assert(color == color_);
 
     // Gather all parent's visits.
-    int parentvisits = 0;
+    int children_visits = 0;
     float total_visited_policy = 0.0f;
     for (auto &child : children_) {
         const auto node = child.GetPointer();
@@ -520,15 +520,15 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
         if (is_pointer && node->IsValid()) {
             // The node status is pruned or active.
             const auto visits = node->GetVisits();
-            parentvisits += visits;
+            children_visits += visits;
             if (visits > 0) {
                 total_visited_policy += child.GetPolicy();
             }
         }
     }
 
-    const float raw_cpuct     = GetCpuct(parentvisits);
-    const float numerator     = std::sqrt(float(parentvisits));
+    const float raw_cpuct     = GetCpuct(children_visits);
+    const float numerator     = std::sqrt(float(children_visits));
     const float fpu_value     = GetFpu(color, total_visited_policy, is_root);
     const float parent_score  = GetFinalScore(color);
 
@@ -562,12 +562,12 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
                 q_value = node->GetWL(color, true) +
                               node->GetScoreEval(color, parent_score);
                 // Apply forced playouts.
-                const int forced_n = GetForcedVisits(psa, parentvisits, is_root);
+                const int forced_n = GetForcedVisits(psa, children_visits, is_root);
                 if (forced_n - visits > 0) {
                     q_value += (forced_n - visits) * 1e6;
                 }
             }
-            cpuct *= GetDynamicCpuctFactor(node, visits, parentvisits);
+            cpuct *= GetDynamicCpuctFactor(node, visits, children_visits);
             denom += visits;
         }
 
@@ -938,8 +938,8 @@ std::string Node::GetPathVerboseString(GameState &state, int color,
 
 std::string Node::ToVerboseString(GameState &state, const int color) {
     auto out = std::ostringstream{};
-    const auto parentvisits = GetParentVisits();
-    const auto lcblist = GetSortedLcbUtilityList(color, parentvisits);
+    const auto children_visits = GetChildrenVisits();
+    const auto lcblist = GetSortedLcbUtilityList(color, children_visits);
 
     if (lcblist.empty()) {
         out << " * Search List: N/A" << std::endl;
@@ -973,7 +973,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
 
         const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
 
-        const auto visit_ratio = static_cast<float>(visits) / (parentvisits);
+        const auto visit_ratio = static_cast<float>(visits) / children_visits;
         out << std::fixed << std::setprecision(2)
                 << std::setw(6) << state.VertexToText(vertex)  // move
                 << std::setw(10) << visits                     // visits
@@ -998,7 +998,7 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     const auto mem_used = static_cast<double>(
         nodes * node_mem + edges * edge_mem) / (1024.f * 1024.f);
 
-    const auto space2 = 10;
+    const auto space2 = 14;
     out << " * Tree Status:" << std::endl
             << std::fixed << std::setprecision(4)
             << std::setw(space2) << "nodes:"   << ' ' << nodes    << std::endl
@@ -1163,7 +1163,7 @@ Node *Node::PopChild(const int vertex) {
     return node;
 }
 
-int Node::GetParentVisits() const {
+int Node::GetChildrenVisits() const {
     // Returns the total number of visits across all active child
     // nodes. Only counts visits from children that are marked active.
     int validvisits = 0;
@@ -1179,11 +1179,11 @@ int Node::GetParentVisits() const {
 }
 
 std::vector<std::pair<float, int>> Node::GetSortedLcbUtilityList(const int color) {
-    return GetSortedLcbUtilityList(color, GetParentVisits());
+    return GetSortedLcbUtilityList(color, GetChildrenVisits());
 }
 
 std::vector<std::pair<float, int>> Node::GetSortedLcbUtilityList(const int color,
-                                                                 const int parentvisits) {
+                                                                 const int children_visits) {
     WaitExpanded();
     assert(HasChildren());
 
@@ -1215,7 +1215,7 @@ std::vector<std::pair<float, int>> Node::GetSortedLcbUtilityList(const int color
             // than a node with 1,000,000 visits and 89% LCB. This adjustment
             // favors more stable nodes with higher visit counts.
             const auto rlcb = mixed_lcb * (1.0f - lcb_reduction) +
-                                  lcb_reduction * ((float)visits/parentvisits);
+                                  lcb_reduction * ((float)visits/children_visits);
             lcblist.emplace_back(rlcb, node->GetVertex());
         }
     }
@@ -1562,7 +1562,7 @@ void Node::MixLogitsCompletedQ(GameState &state,
     auto logits_q = GetZeroLogits<float>(num_intersections+1);
 
     int max_visits = 0;
-    int parentvisits = 0;;
+    int children_visits = 0;;
     float weighted_q = 0.f;
     float weighted_pi = 0.f;
 
@@ -1575,7 +1575,7 @@ void Node::MixLogitsCompletedQ(GameState &state,
         if (is_pointer && node->IsActive()) {
             visits = node->GetVisits();
         }
-        parentvisits += visits;
+        children_visits += visits;
         max_visits = std::max(max_visits, visits);
 
         if (visits > 0) {
@@ -1589,11 +1589,11 @@ void Node::MixLogitsCompletedQ(GameState &state,
     auto completed_q_list = std::vector<float>{};
 
     // Mix the raw value and approximate Q value. It may help
-    // to improve the performance when the parentvisits is very
+    // to improve the performance when the children_visits is very
     // low (<= 4).
     const float raw_value = GetNetWL(color);
-    const float approximate_q = (raw_value + (parentvisits/weighted_pi) *
-                                    weighted_q) / (1 + parentvisits);
+    const float approximate_q = (raw_value + (children_visits/weighted_pi) *
+                                    weighted_q) / (1 + children_visits);
     for (auto & child : children_) {
         const auto node = child.GetPointer();
         const bool is_pointer = node != nullptr;
@@ -1648,11 +1648,8 @@ void Node::MixLogitsCompletedQ(GameState &state,
 }
 
 bool Node::ShouldApplyGumbel() const {
-    // We simply think the parent's visits is current
-    // visits. Include the pruned and invalid nodes.
-    const int visits = GetVisits() - 1;
     return param_->gumbel &&
-               param_->gumbel_playouts_threshold > visits;
+               param_->gumbel_playouts_threshold > GetChildrenVisits();
 }
 
 bool Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
@@ -1870,7 +1867,11 @@ int Node::GetGumbelMove(bool allow_pass) {
         allow_pass = true;
     }
 
-    return GumbelSelectChild(color_, true, allow_pass)->GetVertex();
+    auto node = GumbelSelectChild(color_, true, allow_pass);
+    if (!node) {
+        return GetBestMove(allow_pass);
+    }
+    return node->GetVertex();
 }
 
 void Node::KillRootSuperkos(GameState &state) {
