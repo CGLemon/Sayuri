@@ -971,7 +971,7 @@ int Search::GetSelfPlayMove(OptionTag tag) {
     // playouts. May use the lower playouts instead of it.
     int playouts = param_->playouts;
 
-    float fast_search_prob = param_->reduce_playouts_prob;
+    float fast_search_prob = param_->fastsearch_playouts_prob;
     if (already_lost) {
         // Someone already won the game. Do not record this kind
         // of positions too much to avoid introducing pathological
@@ -980,14 +980,14 @@ int Search::GetSelfPlayMove(OptionTag tag) {
         fast_search_prob = 1.0f - record_prob;
     }
 
-    if (param_->reduce_playouts > 0 &&
-            param_->reduce_playouts < param_->playouts &&
+    if (param_->fastsearch_playouts > 0 &&
+            param_->fastsearch_playouts < param_->playouts &&
             Random<>::Get().Roulette<10000>(fast_search_prob)) {
 
         // The reduce playouts must be smaller than default
         // playouts. It is fast search phase so we also disable
         // all exploring settings.
-        playouts = std::min(playouts, param_->reduce_playouts);
+        playouts = std::min(playouts, param_->fastsearch_playouts);
 
         if (already_lost) {
             // If someone already won the game, the Q value was not very effective

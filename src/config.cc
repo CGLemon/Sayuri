@@ -107,8 +107,8 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["dirichlet_factor"] << Option::SetOption(361.f);
 
     kOptionsMap["resign_playouts"] << Option::SetOption(0);
-    kOptionsMap["reduce_playouts"] << Option::SetOption(0);
-    kOptionsMap["reduce_playouts_prob"] << Option::SetOption(0.f, 1.f, 0.f);
+    kOptionsMap["fastsearch_playouts"] << Option::SetOption(0);
+    kOptionsMap["fastsearch_playouts_prob"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["random_fastsearch_prob"] << Option::SetOption(0.f, 1.f, 0.f);
     kOptionsMap["first_pass_bonus"] << Option::SetOption(false);
     kOptionsMap["resign_discard_prob"] << Option::SetOption(0.f, 1.f, 0.f);
@@ -912,16 +912,16 @@ void ArgsParser::Parse(Splitter &spt) {
         }
     }
 
-    if (const auto res = spt.FindNext("--reduce-playouts")) {
+    if (const auto res = spt.FindNext({"--reduce-playouts", "--fastsearch-playouts"})) {
         if (IsParameter(res->Get<>())) {
-            SetOption("reduce_playouts", res->Get<int>());
+            SetOption("fastsearch_playouts", res->Get<int>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
 
-    if (const auto res = spt.FindNext("--reduce-playouts-prob")) {
+    if (const auto res = spt.FindNext({"--reduce-playouts-prob", "--fastsearch-playouts-prob"})) {
         if (IsParameter(res->Get<>())) {
-            SetOption("reduce_playouts_prob", res->Get<float>());
+            SetOption("fastsearch_playouts_prob", res->Get<float>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
