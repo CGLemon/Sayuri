@@ -224,12 +224,15 @@ private:
     // cap.
     bool AchieveCap(const int cap, Search::OptionTag tag);
 
+    bool StoppedByKldGain(ComputationResult &result, Search::OptionTag tag);
+
     int GetPlayoutsLeft(const int cap, Search::OptionTag tag);
 
     int GetPonderPlayouts() const;
 
     bool InputPending(Search::OptionTag tag) const;
 
+    void UpdateComputationResultFast(ComputationResult &result) const;
     void UpdateComputationResult(ComputationResult &result) const;
 
     void GatherData(const GameState &state,
@@ -242,7 +245,7 @@ private:
     void PlaySimulation(GameState &currstate, Node *const node,
                         const int depth, SearchResult &search_result);
 
-    void PrepareRootNode(Search::OptionTag tag);
+    void PrepareRootNode(ComputationResult &result, Search::OptionTag tag);
 
     AnalysisConfig analysis_config_;
 
@@ -279,6 +282,9 @@ private:
 
     // The tree search threads.
     std::unique_ptr<ThreadGroup<void>> group_;
+
+    int prev_kldgain_visits;
+    std::vector<double> prev_kldgain_target_policy_;
 
     std::vector<float> root_raw_probabilities_;
 };

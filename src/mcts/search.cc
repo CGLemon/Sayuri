@@ -40,6 +40,8 @@ void Search::Initialize() {
     no_exploring_param_->root_policy_temp = 1.f;
     no_exploring_param_->forced_playouts_k = 0.f;
     no_exploring_param_->no_exploring_phase = true;
+    no_exploring_param_->kldgain_per_node = 0.0;
+    no_exploring_param_->kldgain_interval = 0;
 
     analysis_config_.Clear();
     last_state_ = root_state_;
@@ -132,7 +134,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
     node->DecrementThreads();
 }
 
-void Search::PrepareRootNode(Search::OptionTag tag) {
+void Search::PrepareRootNode(ComputationResult &result, Search::OptionTag tag) {
     bool reused = AdvanceToNewRootState(tag);
 
     if (!reused) {
@@ -165,6 +167,13 @@ void Search::PrepareRootNode(Search::OptionTag tag) {
                   std::begin(netlist.probabilities) + num_intersections,
                   std::begin(root_raw_probabilities_));
     root_raw_probabilities_[num_intersections] = netlist.pass_probability;
+
+    UpdateComputationResult(result);
+    prev_kldgain_visits = result.visits;
+    prev_kldgain_target_policy_.resize(num_intersections+1);
+    std::copy(std::begin(result.target_policy_dist),
+                  std::begin(result.target_policy_dist) + (num_intersections+1),
+                  std::begin(prev_kldgain_target_policy_));
 }
 
 void Search::ReleaseTree() {
@@ -307,7 +316,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     const float buffer_effect = time_control_.GetBufferEffect(
                                     color, board_size, move_num);
 
-    PrepareRootNode(tag);
+    PrepareRootNode(computation_result, tag);
 
     if (param_->analysis_verbose) {
         LOGGING << Format("Reuse %d nodes.\n", root_node_->GetVisits()-1);
@@ -338,7 +347,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
     
     auto keep_running = running_.load(std::memory_order_relaxed);
     while (!InputPending(tag) && keep_running) {
-        UpdateComputationResult(computation_result);
+        UpdateComputationResultFast(computation_result);
 
         if ((tag & kAnalysis) &&
                 analysis_config_.interval > 0 &&
@@ -367,6 +376,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         }
         keep_running &= HaveAlternateMoves(computation_result.elapsed, thinking_time, playouts, tag);
         keep_running &= !AchieveCap(playouts, tag);
+        keep_running &= !StoppedByKldGain(computation_result, tag);
         keep_running &= running_.load(std::memory_order_relaxed);
         if (!keep_running) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -449,14 +459,17 @@ void Search::UpdateLagBuffer(float thinking_time, float buffer_effect) {
     }
 }
 
+void Search::UpdateComputationResultFast(ComputationResult &result) const {
+    result.elapsed = time_control_.GetDuration();
+    result.visits = root_node_->GetVisits();
+    result.playouts = playouts_.load(std::memory_order_relaxed);
+}
+
 void Search::UpdateComputationResult(ComputationResult &result) const {
     const auto color = root_state_.GetToMove();
     const auto num_intersections = root_state_.GetNumIntersections();
 
-    // Record perfomance infomation.
-    result.elapsed = time_control_.GetDuration();
-    result.visits = root_node_->GetVisits();
-    result.playouts = playouts_.load(std::memory_order_relaxed);
+    UpdateComputationResultFast(result);
 
     // Fill best moves, root eval and score.
     result.best_move = root_node_->GetBestMove(true);
@@ -506,6 +519,12 @@ void Search::UpdateComputationResult(ComputationResult &result) const {
     result.root_estimated_q.resize(num_intersections+1, 0);
     result.root_visits_dist.resize(num_intersections+1, 0);
     result.target_policy_dist.resize(num_intersections+1, 0);
+
+    std::fill(std::begin(result.root_ownership), std::end(result.root_ownership), 0);
+    std::fill(std::begin(result.root_searched_visits), std::end(result.root_searched_visits), 0);
+    std::fill(std::begin(result.root_estimated_q), std::end(result.root_estimated_q), 0);
+    std::fill(std::begin(result.root_visits_dist), std::end(result.root_visits_dist), 0);
+    std::fill(std::begin(result.target_policy_dist), std::end(result.target_policy_dist), 0);
 
     // Fill ownership.
     auto ownership = root_node_->GetOwnership(color);
@@ -1544,6 +1563,34 @@ int Search::GetPlayoutsLeft(const int cap, Search::OptionTag tag) {
     const auto remaining = std::max(cap - accumulation, 0);
 
     return remaining;
+}
+
+bool Search::StoppedByKldGain(ComputationResult &result, Search::OptionTag tag) {
+    int visits_diff = result.visits - prev_kldgain_visits;
+    if (param_->kldgain_interval <= 0 ||
+            visits_diff < param_->kldgain_interval) {
+        return false;
+    }
+    UpdateComputationResult(result);
+
+    const auto num_intersections = root_state_.GetNumIntersections();
+    auto curr_target_policy = std::vector<double>(num_intersections+1);
+    std::copy(std::begin(result.target_policy_dist),
+                  std::begin(result.target_policy_dist) + (num_intersections+1),
+                  std::begin(curr_target_policy));
+
+    const auto kldgain = GetKlDivergence(curr_target_policy, prev_kldgain_target_policy_);
+    bool should_stop = kldgain / visits_diff < param_->kldgain_per_node;
+
+    prev_kldgain_visits = result.visits;
+    prev_kldgain_target_policy_ = curr_target_policy;
+
+    if (param_->fastsearch_playouts > 0 &&
+            param_->fastsearch_playouts_prob > 0.0 &&
+            !AchieveCap(param_->fastsearch_playouts, tag)) {
+        should_stop = false;
+    }
+    return should_stop;
 }
 
 int Search::GetPonderPlayouts() const {

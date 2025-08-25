@@ -52,6 +52,9 @@ public:
         dirichlet_factor = GetOption<float>("dirichlet_factor");
         dirichlet_init = GetOption<float>("dirichlet_init");
 
+        kldgain_per_node = GetOption<double>("kldgain_per_node");
+        kldgain_interval = GetOption<int>("kldgain_interval");
+
         score_utility_factor = GetOption<float>("score_utility_factor");
         score_utility_div = GetOption<float>("score_utility_div");
         resign_playouts = GetOption<int>("resign_playouts");
@@ -114,6 +117,9 @@ public:
     float dirichlet_epsilon;
     float dirichlet_factor;
     float dirichlet_init;
+
+    double kldgain_per_node;
+    int kldgain_interval;
 
     float score_utility_factor;
     float score_utility_div;

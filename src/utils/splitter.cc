@@ -219,17 +219,22 @@ int Splitter::Reuslt::Get<int>() const {
 }
 
 template<>
-float Splitter::Reuslt::Get<float>() const{
+float Splitter::Reuslt::Get<float>() const {
     return std::stof(str_);
 }
 
 template<>
-char Splitter::Reuslt::Get<char>() const{
+double Splitter::Reuslt::Get<double>() const {
+    return std::stod(str_);
+}
+
+template<>
+char Splitter::Reuslt::Get<char>() const {
     return str_[0];
 }
 
 template<>
-const char* Splitter::Reuslt::Get<const char*>() const{
+const char* Splitter::Reuslt::Get<const char*>() const {
     return str_.c_str();
 }
 

@@ -106,6 +106,9 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["dirichlet_init"] << Option::SetOption(0.03f);
     kOptionsMap["dirichlet_factor"] << Option::SetOption(361.f);
 
+    kOptionsMap["kldgain_per_node"] << Option::SetOption(0.0, 100.0, 0.0);
+    kOptionsMap["kldgain_interval"] << Option::SetOption(0);
+
     kOptionsMap["resign_playouts"] << Option::SetOption(0);
     kOptionsMap["fastsearch_playouts"] << Option::SetOption(0);
     kOptionsMap["fastsearch_playouts_prob"] << Option::SetOption(0.f, 1.f, 0.f);
@@ -619,6 +622,20 @@ void ArgsParser::Parse(Splitter &spt) {
     if (const auto res = spt.FindNext("--dirichlet-factor")) {
         if (IsParameter(res->Get<>())) {
             SetOption("dirichlet_factor", res->Get<float>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--kldgain-per-node")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("kldgain_per_node", res->Get<double>());
+            spt.RemoveSlice(res->Index()-1, res->Index()+1);
+        }
+    }
+
+    if (const auto res = spt.FindNext("--kldgain-interval")) {
+        if (IsParameter(res->Get<>())) {
+            SetOption("kldgain_interval", res->Get<int>());
             spt.RemoveSlice(res->Index()-1, res->Index()+1);
         }
     }
