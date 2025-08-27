@@ -283,7 +283,8 @@ private:
     // The tree search threads.
     std::unique_ptr<ThreadGroup<void>> group_;
 
-    int prev_kldgain_visits;
+    // KLD gain
+    int prev_kldgain_visits_;
     std::vector<double> prev_kldgain_target_policy_;
 
     std::vector<float> root_raw_probabilities_;

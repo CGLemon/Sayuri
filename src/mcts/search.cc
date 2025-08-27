@@ -169,7 +169,7 @@ void Search::PrepareRootNode(ComputationResult &result, Search::OptionTag tag) {
     root_raw_probabilities_[num_intersections] = netlist.pass_probability;
 
     UpdateComputationResult(result);
-    prev_kldgain_visits = result.visits;
+    prev_kldgain_visits_ = result.visits;
     prev_kldgain_target_policy_.resize(num_intersections+1);
     std::copy(std::begin(result.target_policy_dist),
                   std::begin(result.target_policy_dist) + (num_intersections+1),
@@ -378,7 +378,7 @@ ComputationResult Search::Computation(int playouts, Search::OptionTag tag) {
         keep_running &= !AchieveCap(playouts, tag);
         keep_running &= !StoppedByKldGain(computation_result, tag);
         keep_running &= running_.load(std::memory_order_relaxed);
-        if (!keep_running) {
+        if (keep_running) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     };
@@ -1566,7 +1566,7 @@ int Search::GetPlayoutsLeft(const int cap, Search::OptionTag tag) {
 }
 
 bool Search::StoppedByKldGain(ComputationResult &result, Search::OptionTag tag) {
-    int visits_diff = result.visits - prev_kldgain_visits;
+    int visits_diff = result.visits - prev_kldgain_visits_;
     if (param_->kldgain_interval <= 0 ||
             visits_diff < param_->kldgain_interval) {
         return false;
@@ -1582,7 +1582,7 @@ bool Search::StoppedByKldGain(ComputationResult &result, Search::OptionTag tag) 
     const auto kldgain = GetKlDivergence(curr_target_policy, prev_kldgain_target_policy_);
     bool should_stop = kldgain / visits_diff < param_->kldgain_per_node;
 
-    prev_kldgain_visits = result.visits;
+    prev_kldgain_visits_ = result.visits;
     prev_kldgain_target_policy_ = curr_target_policy;
 
     if (param_->fastsearch_playouts > 0 &&
