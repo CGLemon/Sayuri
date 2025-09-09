@@ -83,7 +83,7 @@ The selfplay-config.txt file controls the behavior of the self-play engine, whic
                                 # during the opening phase.
 
 --random-fastsearch-prob 0.75   # Probability of playing a random move during
-                                # reduced-playout searches.
+                                # fastsearch-playout searches.
 
 --komi-stddev 2.5               # Standard deviation for random komi in self-play games.
 
@@ -103,6 +103,13 @@ The selfplay-config.txt file controls the behavior of the self-play engine, whic
 
 --playouts 150                  # Main number of playouts per move.
 
+--kldgain-per-node 0.000004     # Minimum KLD gain required to continue search. If the gain
+                                # falls below this value, the search is stopped early.
+
+--kldgain-interval 50           # Frequency (in visits) to check KLD gain during search. A
+                                # lower value means more frequent checks, higher value means
+                                # fewer checks.
+
 --gumbel                        # Enable Sequential Halving with Gumbel search.
 
 --gumbel-playouts-threshold 50  # Use Gumbel search when current playouts
@@ -110,22 +117,22 @@ The selfplay-config.txt file controls the behavior of the self-play engine, whic
 
 --always-completed-q-policy
 
---reduce-playouts 50            # In 75% of games, use 50 playouts without noise
-                                # and do not save training data.
+--fastsearch-playouts 50        # In 75% of games, use 50 playouts without noise
+                                # and do not save training data. Should be lower
+                                # than main playouts.
 
---reduce-playouts-prob 0.75     # Probability of using reduced playouts.
+--fastsearch-playouts-prob 0.75 # Probability of using reduced playouts.
 
---resign-playouts 75            # Use this number of playouts if a player's win rate
-                                # falls below the resign threshold.
+--resign-playouts 32            # Use this number of playouts if a player's win rate
+                                # falls below the resign threshold. Should be lower
+                                # than fastsearch-playouts.
 
 --resign-threshold 0.05         # Resign if a player's win rate falls below this threshold.
 
 --resign-discard-prob 0.8       # Discard 80% of training data when the game
                                 # has a clear winner.
 
---parallel-games 128            # Number of self-play games to run in parallel.
-
---batch-size 64                 # Batch size for neural network inference.
+--parallel-games 64             # Number of self-play games to run in parallel.
 
 --cache-memory-mib 400          # Cache memory size in MiB.
 

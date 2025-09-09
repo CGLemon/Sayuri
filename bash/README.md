@@ -31,6 +31,36 @@ To use multiple specific GPUs:
 
     $ bash simple.sh -g 1 -g 2    # run it on the 2nd and 3rd GPU
 
+## Update Wegihts
+
+This document explains how to update training weights when switching to a larger neural network.
+
+First, create a new setting.json file. Its format is similar to configs/selfplay-setting.json. The following parameters need to be adjusted:
+
+* ```NeuralNetwork```: Define the neural network architecture
+* ```StepsPerEpoch```: Number of training steps per checkpoint/weight save
+* ```MaxStepsPerRunning```: Total number of training steps
+* ```NumberChunks```: Number of training game records (chunks)
+* ```ChunksIncreasingC```: Set to null
+* ```LearningRateSchedule```: Learning rate schedule
+
+For detailed parameter descriptions, see [CONFIG.md](./CONFIG.md).
+
+After preparing ```setting.json```, start training with the following command. Training results will be stored in the ```temp``` directory:
+
+    $ training-worker.sh --no-loop --setting setting.json --workspace temp
+
+Once training is finished, copy the last weights into the ```weights``` directory:
+
+    $ gate-worker.sh --no-loop --workspace temp
+
+Please wait until the process is complete. Finally, complete the update by:
+
+1. Replacing the original ```workspace``` with the ```temp``` directory
+2. Updating the ```NeuralNetwork``` settings in ```configs/selfplay-setting.json```
+
+After these steps, you can continue self-play with the new network.
+
 ## Notes on Policy Surprise Weighting
 
 The value of ```PolicySurpriseFactor``` in the ```configs/selfplay-setting.json``` file may need to be adjusted depending on your training scenario. When training board sizes ranging from 7x7 to 19x19 simultaneously, a value of ```0.5``` is generally a good choice. However, if you are only training on 9x9 boards, setting PolicySurpriseFactor to ```0``` yields better results.

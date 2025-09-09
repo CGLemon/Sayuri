@@ -15,7 +15,7 @@
 --root-fpu-reduction 0.25
 
 --lcb-reduction 0
---score-utility-factor 0.1
+--score-utility-factor 0.2
 --score-utility-div 20
 
 --selfplay-query bkp:19:7:0.54  --selfplay-query bhp:19:6:0.1
@@ -38,14 +38,14 @@
 # --gumbel-playouts-threshold 0
 # --always-completed-q-policy
 
-# --reduce-playouts 50
-# --reduce-playouts-prob 0
+# --fastsearch-playouts 50
+# --fastsearch-playouts-prob 0
 
 --resign-playouts 80
 --resign-threshold 0.05
 --resign-discard-prob 0.9
 
---parallel-games 128
+--parallel-games 64
 --cache-memory-mib 400
 --early-symm-cache
 --first-pass-bonus
