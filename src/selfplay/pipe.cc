@@ -13,6 +13,7 @@
 SelfPlayPipe::SelfPlayPipe() {
     Initialize();
     Loop();
+    Finish();
 }
 
 void SelfPlayPipe::Initialize() {
@@ -274,7 +275,8 @@ void SelfPlayPipe::AssignSelfplayWorkers() {
                         }
                     }
 
-                    // Engine play the self-play game then save the data into queue.
+                    // Engine start self-play and saving the data into queue after
+                    // game is finished.
                     auto data_sgf_pair = std::make_shared<DataSgfPair>();
                     engine_.PrepareGame(g);
                     engine_.Selfplay(g);
@@ -287,14 +289,14 @@ void SelfPlayPipe::AssignSelfplayWorkers() {
                     auto played_games = played_games_.fetch_add(1) + 1;
 
                     {
-                        // Save some verbose.
+                        // Dump number of games verbose.
                         std::lock_guard<std::mutex> lock(log_mutex_);
                         if (played_games % kVerboseGames == 0) {
                             LOGGING << '[' << CurrentDateTime() << ']'
                                         << " Played " << played_games << " games." << std::endl;
                         }
-                        // Not a precision value but the final accumulation value is
-                        // correct.
+                        // The accumulated value throughout the process may be inaccurate,
+                        // but the final value is correct.
                         games_queries_buffer_.emplace_back(
                             played_games, engine_.GetNetReportQueries());
                     }
@@ -313,22 +315,21 @@ void SelfPlayPipe::AssignSelfplayWorkers() {
 }
 
 void SelfPlayPipe::Loop() {
-    // Be sure that all data are ready.
     if (target_directory_.size() == 0) {
-        LOGGING << "Please give the target directory name." << std::endl;
+        LOGGING << "ABORT: Please give the target directory name." << std::endl;
         return;
     }
     if (!IsDirectoryExist(target_directory_)) {
-        LOGGING << "Target directory do not exist." << std::endl;
+        LOGGING << "ABORT: Target directory do not exist." << std::endl;
         return;
     }
     if (max_games_ == 0) {
-        LOGGING << "The number of self-play games must be greater than one." << std::endl;
+        LOGGING << "ABORT: The number of self-play games must be greater than one." << std::endl;
         return;
     }
     if (max_games_ < engine_.GetParallelGames()) {
         max_games_ = engine_.GetParallelGames();
-        LOGGING << "The number of self-play games must be greater than parallel games. New value is "
+        LOGGING << "WARNING: The number of self-play games must be greater than parallel games. New value is "
                     << max_games_ << "." << std::endl;
     }
     if (!IsGzipValid()) {
@@ -336,7 +337,6 @@ void SelfPlayPipe::Loop() {
     }
     CreateWorkspace();
 
-    // Dump some infomations.
     LOGGING << "============================================" << std::endl
                 << "Hash value: " << filename_hash_ << std::endl
                 << "Number of parallel games: " << engine_.GetParallelGames() << std::endl
@@ -348,9 +348,12 @@ void SelfPlayPipe::Loop() {
     AssignSelfplayWorkers();
 
     group_->WaitToJoin();
-    engine_.Abort();
 
     LOGGING << '[' << CurrentDateTime() << ']'
                 << " Finish the self-play loop. Totally played "
                 << played_games_.load(std::memory_order_relaxed) << " games." << std::endl;
+}
+
+void SelfPlayPipe::Finish() {
+    engine_.Abort();
 }

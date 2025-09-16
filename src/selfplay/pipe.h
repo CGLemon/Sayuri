@@ -24,6 +24,7 @@ private:
     void Initialize();
     void CreateWorkspace();
     void Loop();
+    void Finish();
 
     bool SaveSgf(std::string &sgfstring);
     bool SaveChunk(const int out_id,
