@@ -26,11 +26,14 @@ if(NOT DEFINED BLAS_BACKEND)
 elseif(NOT BLAS_BACKEND STREQUAL "EIGEN"
        AND NOT BLAS_BACKEND STREQUAL "OPENBLAS"
        AND NOT BLAS_BACKEND STREQUAL "CUDA"
-       AND NOT BLAS_BACKEND STREQUAL "CUDNN")
+       AND NOT BLAS_BACKEND STREQUAL "CUDNN"
+       AND NOT BLAS_BACKEND STREQUAL "TENSORRT")
     set(BLAS_BACKEND "BUILT_IN")
 endif()
 
-if(BLAS_BACKEND STREQUAL "CUDA" OR BLAS_BACKEND STREQUAL "CUDNN")
+if(BLAS_BACKEND STREQUAL "CUDA"
+   OR BLAS_BACKEND STREQUAL "CUDNN"
+   OR BLAS_BACKEND STREQUAL "TENSORRT")
     project(sayuri LANGUAGES CXX CUDA)
     cmake_minimum_required(VERSION 3.15)
 else()
@@ -107,18 +110,25 @@ if(USE_ZLIB)
     include_directories(${ZLIB_INCLUDE_DIRS})
 endif()
 
-if(BLAS_BACKEND STREQUAL "CUDA" OR BLAS_BACKEND STREQUAL "CUDNN")
-    if(BLAS_BACKEND STREQUAL "CUDNN")
-        message(STATUS "Backend is set to cuDNN.")
-    else()
+if(BLAS_BACKEND STREQUAL "CUDA"
+   OR BLAS_BACKEND STREQUAL "CUDNN"
+   OR BLAS_BACKEND STREQUAL "TENSORRT")
+    if(BLAS_BACKEND STREQUAL "CUDA")
         message(STATUS "Backend is set to CUDA-only.")
+    elseif(BLAS_BACKEND STREQUAL "CUDNN")
+        message(STATUS "Backend is set to cuDNN.")
+    elseif(BLAS_BACKEND STREQUAL "TENSORRT")
+        message(STATUS "Backend is set to TensorRT.")
     endif()
 
     add_definitions(-DUSE_CUDA)
     enable_language(CUDA)
     aux_source_directory(${NEURAL_SOURCES_DIR}/cuda CUDA_SOURCES)
+    if(BLAS_BACKEND STREQUAL "TENSORRT")
+        aux_source_directory(${NEURAL_SOURCES_DIR}/trt TRT_SOURCES)
+    endif()
 
-    set(CUDA_STANDARD 14)
+    set(CUDA_STANDARD 17)
 
     if(${CMAKE_VERSION} VERSION_LESS "3.18.2")
         message(WARNING "We recommend using CMake version 3.18.2 or higher to support the CMAKE_CUDA_ARCHITECTURES feature.")
@@ -169,7 +179,7 @@ else()
 endif()
 
 find_package(Threads REQUIRED)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED on)
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
@@ -226,6 +236,7 @@ add_executable(sayuri
     ${UTILS_SOURCES}
     ${SELFPLAY_SOURCES}
     ${CUDA_SOURCES}
+    ${TRT_SOURCES}
     )
 
 target_link_libraries(sayuri Threads::Threads)
@@ -234,7 +245,9 @@ if(USE_ZLIB)
     target_link_libraries(sayuri ${ZLIB_LIBRARIES})
 endif()
 
-if(BLAS_BACKEND STREQUAL "CUDA" OR BLAS_BACKEND STREQUAL "CUDNN")
+if(BLAS_BACKEND STREQUAL "CUDA"
+   OR BLAS_BACKEND STREQUAL "CUDNN"
+   OR BLAS_BACKEND STREQUAL "TENSORRT")
     target_compile_definitions(sayuri PRIVATE USE_CUDA_BACKEND)
     find_package(CUDA REQUIRED)
     if(BLAS_BACKEND STREQUAL "CUDNN")
@@ -245,7 +258,57 @@ if(BLAS_BACKEND STREQUAL "CUDA" OR BLAS_BACKEND STREQUAL "CUDNN")
         add_definitions(-DUSE_CUDNN)
         find_library(CUDNN_LIBRARY libcudnn.so PATHS /usr/local/cuda/lib64 /opt/cuda/lib64)
         include_directories(SYSTEM ${CUDNN_INCLUDE_DIR})
+    elseif(BLAS_BACKEND STREQUAL "TENSORRT")
+        find_path(TENSORRT_INCLUDE_DIR NvInfer.h HINTS ${TENSORRT_ROOT_DIR} ${CUDAToolkit_INCLUDE_DIRS} PATH_SUFFIXES include)
+        if((NOT TENSORRT_INCLUDE_DIR))
+            message(FATAL_ERROR "NvInfer.h was NOT found, specify TENSORRT_INCLUDE_DIR to indicate where it is.")
+        endif()
+        add_definitions(-DUSE_TENSORRT)
+        find_library(TENSORRT_LIBRARY nvinfer HINTS ${TENSORRT_ROOT_DIR} ${CUDAToolkit_LIBRARY_DIR} PATH_SUFFIXES lib64)
+        file(READ "${TENSORRT_INCLUDE_DIR}/NvInferVersion.h" tensorrt_version_header)
+        set(TENSORRT_VERSION_MAJOR "")
+        set(TENSORRT_VERSION_MINOR "")
+        set(TENSORRT_VERSION_PATCH "")
+        string(REGEX MATCH "#define NV_TENSORRT_MAJOR +([0-9]+)" tensorrt_version_macro ${tensorrt_version_header})
+        if(DEFINED CMAKE_MATCH_1 AND NOT "${CMAKE_MATCH_1}" STREQUAL "")
+            set(TENSORRT_VERSION_MAJOR ${CMAKE_MATCH_1})
+        else()
+            string(REGEX MATCH "#define TRT_MAJOR_ENTERPRISE +([0-9]+)" tensorrt_major_enterprise ${tensorrt_version_header})
+            if(DEFINED CMAKE_MATCH_1 AND NOT "${CMAKE_MATCH_1}" STREQUAL "")
+                set(TENSORRT_VERSION_MAJOR ${CMAKE_MATCH_1})
+            endif()
+        endif()
+        string(REGEX MATCH "#define NV_TENSORRT_MINOR +([0-9]+)" tensorrt_version_macro ${tensorrt_version_header})
+        if(DEFINED CMAKE_MATCH_1 AND NOT "${CMAKE_MATCH_1}" STREQUAL "")
+            set(TENSORRT_VERSION_MINOR ${CMAKE_MATCH_1})
+        else()
+            string(REGEX MATCH "#define TRT_MINOR_ENTERPRISE +([0-9]+)" tensorrt_minor_enterprise ${tensorrt_version_header})
+            if(DEFINED CMAKE_MATCH_1 AND NOT "${CMAKE_MATCH_1}" STREQUAL "")
+                set(TENSORRT_VERSION_MINOR ${CMAKE_MATCH_1})
+            endif()
+        endif()
+        string(REGEX MATCH "#define NV_TENSORRT_PATCH +([0-9]+)" tensorrt_version_macro ${tensorrt_version_header})
+        if(DEFINED CMAKE_MATCH_1 AND NOT "${CMAKE_MATCH_1}" STREQUAL "")
+            set(TENSORRT_VERSION_PATCH ${CMAKE_MATCH_1})
+        else()
+            string(REGEX MATCH "#define TRT_PATCH_ENTERPRISE +([0-9]+)" tensorrt_patch_enterprise ${tensorrt_version_header})
+            if(DEFINED CMAKE_MATCH_1 AND NOT "${CMAKE_MATCH_1}" STREQUAL "")
+                set(TENSORRT_VERSION_PATCH ${CMAKE_MATCH_1})
+            endif()
+        endif()
+        set(TENSORRT_VERSION "${TENSORRT_VERSION_MAJOR}.${TENSORRT_VERSION_MINOR}.${TENSORRT_VERSION_PATCH}")
+        message(STATUS "Detected TensorRT version: ${TENSORRT_VERSION}")
+        if("${TENSORRT_VERSION_MAJOR}" STREQUAL "" OR "${TENSORRT_VERSION_MINOR}" STREQUAL "" OR "${TENSORRT_VERSION_PATCH}" STREQUAL "")
+            message(FATAL_ERROR "Could not determine TensorRT version from header file")
+        endif()
+        # Version 8 is required for serializing the builder timing cache.
+        # Version 8.2 is required for eliminating the global logger for Builder and Runtime.
+        # Version 8.5 is required for eliminating many deprecated APIs and adopting new features.
+        # Version 8.6 is for CUDA 12 support and further reduction in initialization time.
+        if(TENSORRT_VERSION VERSION_LESS 8.5)
+            message(FATAL_ERROR "TensorRT 8.5 or greater is required but ${TENSORRT_VERSION} was not found.")
+        endif()
     endif()
-    include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})
-    target_link_libraries(sayuri ${CUDNN_LIBRARY} ${CUDA_CUBLAS_LIBRARIES} ${CUDA_LIBRARIES})
+    include_directories(SYSTEM ${CUDAToolkit_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS} ${TENSORRT_INCLUDE_DIR})
+    target_link_libraries(sayuri ${CUDNN_LIBRARY} ${CUDA_CUBLAS_LIBRARIES} ${CUDA_LIBRARIES} ${TENSORRT_LIBRARY})
 endif()
