@@ -82,8 +82,13 @@ struct ForwardQuery {
         return *this;
     }
     ForwardQuery SetOffset(PolicyBufferOffset o) {
-        read_cache = false;
-        write_cache = false;
+        if (o == PolicyBufferOffset::kDefault) {
+            read_cache = true;
+            write_cache = true;
+        } else {
+            read_cache = false;
+            write_cache = false;
+        }
         offset = o;
         return *this;
     }
