@@ -174,6 +174,13 @@ void Search::PrepareRootNode(ComputationResult &result, Search::OptionTag tag) {
     std::copy(std::begin(result.target_policy_dist),
                   std::begin(result.target_policy_dist) + (num_intersections+1),
                   std::begin(prev_kldgain_target_policy_));
+
+    PrepareParam();
+}
+
+void Search::PrepareParam() {
+    param_->recent_expected_black_score = root_node_->GetFinalScore(kBlack);
+    param_->board_size = root_state_.GetBoardSize();
 }
 
 void Search::ReleaseTree() {
@@ -470,6 +477,7 @@ void Search::UpdateComputationResult(ComputationResult &result) const {
     const auto num_intersections = root_state_.GetNumIntersections();
 
     UpdateComputationResultFast(result);
+    param_->recent_expected_black_score = root_node_->GetFinalScore(kBlack);
 
     // Fill best moves, root eval and score.
     result.best_move = root_node_->GetBestMove(true);
@@ -558,11 +566,10 @@ void Search::UpdateComputationResult(ComputationResult &result) const {
 
         // Fill estimated Q value for each child. If the child is
         // unvisited, set the FPU value.
-        const auto parent_score = result.root_score_lead;
         const auto q_value = visits == 0 ?
                                  node->GetFpu(color, total_visited_policy, true) :
                                  node->GetWL(color, false) +
-                                     node->GetScoreEval(color, parent_score);
+                                     node->GetScoreEval(color);
         result.root_estimated_q[index] = q_value;
     }
 

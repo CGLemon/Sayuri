@@ -16,8 +16,8 @@
 --root-fpu-reduction 0.25
 
 --lcb-reduction 0
---score-utility-factor 0.2
---score-utility-div 20
+--score-utility-factor 0.4
+--score-utility-div 1.0
 
 --selfplay-query bkp:9:7:1
 

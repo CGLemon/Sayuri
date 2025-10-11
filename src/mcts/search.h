@@ -247,6 +247,8 @@ private:
 
     void PrepareRootNode(ComputationResult &result, Search::OptionTag tag);
 
+    void PrepareParam();
+
     AnalysisConfig analysis_config_;
 
     // Self-play training data.

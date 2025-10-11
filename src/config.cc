@@ -8,6 +8,7 @@
 #include "game/board.h"
 #include "pattern/pattern.h"
 #include "mcts/lcb.h"
+#include "mcts/score_value.h"
 #include "mcts/time_control.h"
 #include "neural/network_basic.h"
 #include "config.h"
@@ -67,8 +68,8 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["cpuct_dynamic"] << Option::SetOption(true);
     kOptionsMap["cpuct_dynamic_k_factor"] << Option::SetOption(4.f);
     kOptionsMap["cpuct_dynamic_k_base"] << Option::SetOption(10000.f);
-    kOptionsMap["score_utility_factor"] << Option::SetOption(0.1f);
-    kOptionsMap["score_utility_div"] << Option::SetOption(20.f);
+    kOptionsMap["score_utility_factor"] << Option::SetOption(0.4f);
+    kOptionsMap["score_utility_div"] << Option::SetOption(1.f);
     kOptionsMap["forced_playouts_k"] << Option::SetOption(0.f);
     kOptionsMap["suppress_pass_factor"] << Option::SetOption(0.1667f, 1.f, 0.f);
     kOptionsMap["gammas_policy_factor"] << Option::SetOption(0.f, 1.f, 0.f);
@@ -134,6 +135,7 @@ void ArgsParser::InitBasicParameters() const {
     Zobrist::Initialize();
     Symmetry::Get().Initialize();
     LcbEntries::Get().Initialize(GetOption<float>("ci_alpha"));
+    ScoreValue::Get().Initialize();
     LogOptions::Get().SetQuiet(GetOption<bool>("quiet"));
 
     // Try to select a reasonable number for const time and playouts.

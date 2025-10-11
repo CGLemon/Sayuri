@@ -1,5 +1,6 @@
 #include "mcts/node.h"
 #include "mcts/lcb.h"
+#include "mcts/score_value.h"
 #include "mcts/rollout.h"
 #include "utils/atomic.h"
 #include "utils/random.h"
@@ -527,10 +528,9 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
         }
     }
 
-    const float raw_cpuct     = GetCpuct(children_visits);
-    const float numerator     = std::sqrt(float(children_visits));
-    const float fpu_value     = GetFpu(color, total_visited_policy, is_root);
-    const float parent_score  = GetFinalScore(color);
+    const float raw_cpuct = GetCpuct(children_visits);
+    const float numerator = std::sqrt(float(children_visits));
+    const float fpu_value = GetFpu(color, total_visited_policy, is_root);
 
     Edge* best_node = nullptr;
     float best_value = std::numeric_limits<float>::lowest();
@@ -560,7 +560,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
             } else if (visits > 0) {
                 // Combine win/loss evaluation and score lead to optimize path selection.
                 q_value = node->GetWL(color, true) +
-                              node->GetScoreEval(color, parent_score);
+                              node->GetScoreEval(color);
                 // Apply forced playouts.
                 const int forced_n = GetForcedVisits(psa, children_visits, is_root);
                 if (forced_n - visits > 0) {
@@ -779,11 +779,18 @@ float Node::GetScoreBonus(const int color) const {
     return 0.f - black_sb_;
 }
 
-float Node::GetScoreEval(const int color, float parent_score) const {
-    const auto factor = param_->score_utility_factor;
+float Node::GetScoreEval(const int color) const {
+    const auto recent_score = color == kBlack ?
+        param_->recent_expected_black_score :
+        -param_->recent_expected_black_score;
+    const auto mean = GetFinalScore(color) + GetScoreBonus(color);
+    const auto stddev = GetScoreStddev();
     const auto div = param_->score_utility_div;
-    const auto score = GetFinalScore(color) + GetScoreBonus(color);
-    return factor * std::tanh((score - parent_score)/div);
+    const auto board_size = param_->board_size;
+    const auto factor = param_->score_utility_factor;
+    const auto score_value = ScoreValue::Get().ExpectedScoreValue(
+                                 mean, stddev, recent_score, div, board_size);
+    return score_value * factor;
 }
 
 float Node::GetScoreVariance(const float default_var, const int visits) const {
@@ -1190,7 +1197,6 @@ std::vector<std::pair<float, int>> Node::GetSortedLcbUtilityList(const int color
     // Clamp lcb_reduction parameter to the [0, 1] range.
     const auto lcb_reduction = std::min(
         std::max(0.f, param_->lcb_reduction), 1.f);
-    const auto parent_score = GetFinalScore(color);
     auto lcblist = std::vector<std::pair<float, int>>{};
 
     for (const auto & child : children_) {
@@ -1208,7 +1214,7 @@ std::vector<std::pair<float, int>> Node::GetSortedLcbUtilityList(const int color
             // This ensures the bias of LCB with scoring matches that of Q evaluation
             // in the PUCT phase.
             const auto mixed_lcb = node->GetLcb(color) +
-                                       node->GetScoreEval(color, parent_score);
+                                       node->GetScoreEval(color);
 
             // Adjust the mixed LCB to penalize moves with fewer visits.
             // For example, a node with 100 visits and 90% LCB might be less stable
@@ -1505,13 +1511,13 @@ void Node::ComputeNodeCount(size_t &nodes, size_t &edges) {
     }
 }
 
-float Node::GetGumbelEval(int color, float parent_score) const {
+float Node::GetGumbelEval(int color) const {
     // Return the non-transformed complete Q value. In the original
     // Gumbel AlphaZero paper, this corresponds to the Q value. Here,
     // we combine the Q value with the score lead to refine move probability
     // optimization, encouraging the selection of the best move.
     const auto mixed_q = GetWL(color, false) +
-                             GetScoreEval(color, parent_score);
+                             GetScoreEval(color);
     return mixed_q;
 }
 
@@ -1557,8 +1563,6 @@ void Node::MixLogitsCompletedQ(GameState &state,
     if (num_intersections + 1 != static_cast<int>(prob.size())) {
         return;
     }
-
-    const auto parent_score = GetFinalScore(color);
     auto logits_q = GetZeroLogits<float>(num_intersections+1);
 
     int max_visits = 0;
@@ -1580,7 +1584,7 @@ void Node::MixLogitsCompletedQ(GameState &state,
 
         if (visits > 0) {
             weighted_q += child.GetPolicy() *
-                              node->GetGumbelEval(color, parent_score);
+                              node->GetGumbelEval(color);
             weighted_pi += child.GetPolicy();
         }
     }
@@ -1609,7 +1613,7 @@ void Node::MixLogitsCompletedQ(GameState &state,
             // virtual approximate Q value.
             completed_q = approximate_q;
         } else {
-            completed_q = node->GetGumbelEval(color, parent_score);
+            completed_q = node->GetGumbelEval(color);
         }
         completed_q_list.emplace_back(completed_q);
     }
@@ -1781,7 +1785,6 @@ end_loop:;
     }
 
     int count = 0;
-    const auto parent_score = GetFinalScore(color);
     auto gumbel_type1 = std::extreme_value_distribution<float>(0, 1);
 
     for (int i = 0; i < size; ++i) {
@@ -1799,7 +1802,7 @@ end_loop:;
             auto completed_q = 0.f;
             if (is_pointer && target_visits > 0) {
                 completed_q = TransformCompletedQ(
-                    node->GetGumbelEval(color, parent_score), max_visists);
+                    node->GetGumbelEval(color), max_visists);
             }
             gumbel_logits[i] = logit + completed_q;
             count += 1;

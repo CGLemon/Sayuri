@@ -77,6 +77,10 @@ public:
         use_rollout = GetOption<bool>("use_rollout");
         capture_all_dead = GetOption<bool>("capture_all_dead");
         no_exploring_phase = false;
+
+        board_size = kBoardSize;
+        recent_expected_black_score = 0.0f;
+        dirichlet_buffer.fill(0);
     }
 
     int timemanage;
@@ -147,5 +151,7 @@ public:
     bool capture_all_dead;
     bool no_exploring_phase;
 
+    int board_size;
+    float recent_expected_black_score;
     std::array<float, kNumVertices + 10> dirichlet_buffer;
 };

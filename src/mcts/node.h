@@ -188,7 +188,7 @@ public:
     float GetFinalScore(const int color) const;
 
     // Get score ultility evaluation.
-    float GetScoreEval(const int color, float parent_score) const;
+    float GetScoreEval(const int color) const;
 
     // Get the average win-loss value.
     float GetWL(const int color, const bool use_virtual_loss=false) const;
@@ -270,7 +270,7 @@ private:
     void ReleaseAllChildren();
     int GetVirtualLoss() const;
 
-    float GetGumbelEval(int color, float parent_score) const;
+    float GetGumbelEval(int color) const;
     float TransformCompletedQ(const float completed_q,
                               const int max_visits) const;
     void ComputeNodeCount(size_t &nodes, size_t &edges);
