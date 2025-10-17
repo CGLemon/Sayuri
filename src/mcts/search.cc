@@ -73,7 +73,7 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
         } else if (scoring == kTerritory) {
             // The scoring area should be easier rule for network,
             // so we switch the rule into territory and keep playing. 
-            while (currstate.GetPasses() >= 1) {
+            while (currstate.GetLastMove() == kPass) {
                 currstate.UndoMove();
             }
             const auto komi = currstate.GetKomi();
@@ -89,10 +89,10 @@ void Search::PlaySimulation(GameState &currstate, Node *const node,
         const auto last_move = currstate.GetLastMove();
 
         if (end_by_passes && scoring == kArea) {
-            if (node->SetTerminal() &&
-                    search_result.IsValid()) {
-                // The game is over, setting the game result value.
-                node->ApplyEvals(search_result.GetEvals());
+            // Game is over under area scoring. If we already have a
+            // valid result, mark this node as terminal.
+            if (search_result.IsValid()) {
+                node->SetTerminal(search_result.GetEvals());
             }
         } else if (last_move != kPass &&
                        currstate.IsSuperko()) {
@@ -178,7 +178,7 @@ void Search::PrepareRootNode(ComputationResult &result, Search::OptionTag tag) {
     PrepareParam();
 }
 
-void Search::PrepareParam() {
+void Search::PrepareParam() const {
     param_->recent_expected_black_score = root_node_->GetFinalScore(kBlack);
     param_->board_size = root_state_.GetBoardSize();
 }
@@ -477,7 +477,7 @@ void Search::UpdateComputationResult(ComputationResult &result) const {
     const auto num_intersections = root_state_.GetNumIntersections();
 
     UpdateComputationResultFast(result);
-    param_->recent_expected_black_score = root_node_->GetFinalScore(kBlack);
+    PrepareParam();
 
     // Fill best moves, root eval and score.
     result.best_move = root_node_->GetBestMove(true);
@@ -913,7 +913,7 @@ bool ShouldForbidPass(GameState &state,
     const auto num_intersections = state.GetNumIntersections();
     const auto move_threshold = num_intersections / 6;
     if (state.GetMoveNumber() <= move_threshold) {
-        // Too early to pass.
+        // Passing at this point is premature.
         return true;
     }
     if (state.GetScoringRule() == kTerritory) {

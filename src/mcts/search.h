@@ -247,7 +247,7 @@ private:
 
     void PrepareRootNode(ComputationResult &result, Search::OptionTag tag);
 
-    void PrepareParam();
+    void PrepareParam() const;
 
     AnalysisConfig analysis_config_;
 

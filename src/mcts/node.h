@@ -153,7 +153,7 @@ public:
     const std::vector<Edge> &GetChildren() const;
 
     bool HasChildren() const;
-    bool SetTerminal();
+    bool SetTerminal(const NodeEvals *evals);
 
     // Get the pointer of this node.
     Node *Get();
@@ -209,9 +209,6 @@ public:
 
     // Get the average ownership value.
     std::array<float, kNumIntersections> GetOwnership(int color);
-
-    // Set the network win-loss value from outside.
-    void ApplyEvals(const NodeEvals *evals);
 
     float GetWLStddev() const;
     float GetScoreStddev() const;
@@ -323,9 +320,6 @@ private:
     // the bonus is not side to move bonus. It will award any side
     // score utility.
     float black_sb_{0.f};
-
-    // The softmax policy temperature.
-    float policy_temp_{1.0f};
 
     // The network win-loss value.
     float black_wl_{0.5f};

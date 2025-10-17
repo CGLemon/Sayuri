@@ -6,6 +6,7 @@
 #include <cmath>
 #include <vector>
 
+// Imported from the: https://github.com/lightvector/KataGo/blob/master/cpp/neuralnet/nninputs.cpp
 class ScoreValue {
 public:
     ScoreValue() = default;
@@ -14,8 +15,7 @@ public:
 
     void Initialize();
     float ExpectedScoreValue(float mean, float stddev, float center,
-                             float scale, float sqrt_board_area);
-
+                             float scale, float board_size);
 private:
     static constexpr float kTwoOverPi = 0.63661977236758134308f;
     static constexpr int kExtraRadius = 60;
@@ -52,7 +52,7 @@ inline void ScoreValue::Initialize() {
     auto normal_pdf = std::vector<float>(max_stddev_steps - min_stddev_steps +1);
     for(int i = min_stddev_steps; i <= max_stddev_steps; i++) {
         float x_in_stddevs = static_cast<float>(i) / steps_per_unit;
-        float w = exp(-0.5 * x_in_stddevs * x_in_stddevs);
+        float w = std::exp(-0.5f * x_in_stddevs * x_in_stddevs);
         normal_pdf[i - min_stddev_steps] = w;
     }
     // Precompute scorevalue at increments of 1/steps_per_unit points

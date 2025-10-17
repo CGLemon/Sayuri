@@ -137,13 +137,13 @@ Network::Result Node::GetNetOutput(Network &network,
 
     // Policy softmax temperature. If 't' is greater than 1, policy
     // will be broader. If 't' is less than 1, policy will be sharper.
-    policy_temp_ = is_root ?
+    const auto policy_temp = is_root ?
         param_->root_policy_temp : param_->policy_temp;
 
     // The network cache only stores a single policy and does not recognize different
     // types of policies. Therefore, if the policy used differs from the default one,
     // the cache should be disabled.
-    const auto query = Network::Query::Get().SetTemperature(policy_temp_).
+    const auto query = Network::Query::Get().SetTemperature(policy_temp).
                                                  SetCache(!default_using_normal_policy).
                                                  SetOffset(policy_offset);
     auto result = network.GetOutput(state, Network::kRandom, query);
@@ -359,12 +359,14 @@ void Node::FillNodeEvalsFromNet(GameState &state,
     }
 }
 
-bool Node::SetTerminal() {
+bool Node::SetTerminal(const NodeEvals *node_evals) {
     if (!AcquireExpanding()) {
         return false;
     }
 
     color_ = kInvalid; // no children
+    black_wl_ = node_evals->black_wl;
+    black_fs_ = node_evals->black_final_score;
 
     ExpandDone();
     return true;
@@ -751,11 +753,6 @@ void Node::Update(const NodeEvals *evals) {
             avg_black_ownership_[idx] += diff_owner;
         }
     }
-}
-
-void Node::ApplyEvals(const NodeEvals *evals) {
-    black_wl_ = evals->black_wl;
-    black_fs_ = evals->black_final_score;
 }
 
 std::array<float, kNumIntersections> Node::GetOwnership(int color) {
