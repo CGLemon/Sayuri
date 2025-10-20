@@ -15,7 +15,7 @@
 --fpu-reduction 0.25
 --root-fpu-reduction 0.25
 
---lcb-reduction 0
+--lcb-reduction 1.0
 --score-utility-factor 0.4
 --score-utility-div 1.0
 
@@ -24,7 +24,8 @@
 --playouts 150
 
 --gumbel
---gumbel-playouts-threshold 50
+--gumbel-playouts-threshold 32
+--gumbel-prom-visits 1
 
 --fastsearch-playouts 50
 --fastsearch-playouts-prob 0.75
@@ -43,6 +44,6 @@
 --dirichlet-init 0.03
 --dirichlet-factor 361
 
---root-policy-temp 1.1
+--root-policy-temp 1.0
 
 --num-games 2500
