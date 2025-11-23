@@ -57,6 +57,10 @@ For details on how to run the self-play loop, please refer to this [guide](./bas
 
 ![sayuri-vs-kata](./img/sayurivskata-v7.png)
 
+## Other Version
+
+* [Sayuri-TensoRT](https://github.com/MAOmao000/Sayuri-TensorRT): Replaces the original CUDA inference backend with TensorRT, delivering a significant boost in model inference performance.
+
 ## Other Resources
 
 * Go Text Protocol, [https://www.gnu.org/software/gnugo/gnugo_19.html](https://www.gnu.org/software/gnugo/gnugo_19.html)
