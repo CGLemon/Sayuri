@@ -590,6 +590,14 @@ class DepthwiseConvBlock(nn.Module):
             renorm_clipping=renorm_clipping,
             momentum_basic_batchsize=256
         )
+        self.bn3x3 = BatchNorm2d(
+            num_features=self.channels,
+            eps=1e-5,
+            use_gamma=use_gamma,
+            mode="renorm",
+            renorm_clipping=renorm_clipping,
+            momentum_basic_batchsize=256
+        )
         self.activation = activation
         self.act = activation_func(self.activation, inplace=True)
         self._init_weights()
@@ -601,23 +609,33 @@ class DepthwiseConvBlock(nn.Module):
         nn.init.xavier_normal_(
             self.rep3x3.weight, gain=compute_gain(self.activation))
 
+
+    def fuse_depthwise_bn(self, dw, bn):
+        weights, biases = dw.get_merged_params()
+        bn_mean, bn_std = bn.get_merged_params()
+
+        w_fused = weights / bn_std.view(self.channels, 1, 1, 1)
+        b_fused = (biases - bn_mean) / bn_std
+        return w_fused, b_fused
+
     def tensors_to_text(self, use_bin):
         if use_bin:
             out = bytes()
         else:
             out = str()
 
-        weights, biases = self.conv.get_merged_params()
+        weights, biases = self.fuse_depthwise_bn(self.conv, self.bn);
 
         ps = int((self.kernel_size - 3) / 2)
-        rep3x3_weights, rep3x3_biases = self.rep3x3.get_merged_params()
+        rep3x3_weights, rep3x3_biases = self.fuse_depthwise_bn(self.rep3x3, self.bn3x3);
         weights += F.pad(rep3x3_weights, (ps, ps, ps, ps), "constant", 0)
         biases += rep3x3_biases
 
         out += tensor_to_text(weights, use_bin)
         out += tensor_to_text(biases, use_bin)
 
-        bn_mean, bn_std = self.bn.get_merged_params()
+        bn_mean = torch.zeros(self.channels)
+        bn_std = torch.ones(self.channels)
         out += tensor_to_text(bn_mean, use_bin)
         out += tensor_to_text(bn_std, use_bin)
         return out
@@ -633,9 +651,11 @@ class DepthwiseConvBlock(nn.Module):
         return out
 
     def forward(self, x, mask):
-        x = (self.conv(x) + self.rep3x3(x)) * mask
-        x = self.bn(x, mask)
-        x = self.act(x)
+        x0 = self.conv(x) * mask
+        x0 = self.bn(x0, mask)
+        x1 = self.rep3x3(x) * mask
+        x1 = self.bn3x3(x1, mask)
+        x = self.act(x0 + x1)
         return x
 
 class ResidualBlock(nn.Module):
