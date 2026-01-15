@@ -1,10 +1,11 @@
+import io
 import numpy as np
 from symmetry import numpy_symmetry_planes, numpy_symmetry_plane, numpy_symmetry_prob
 
 V2_DATA_LINES = 53
 
 '''
-    Output format is here. Every v2 data package is 54 lines.
+    The data format is defined below. Each v2 data package consists of 53 lines.
 
     ------- Version -------
      L1        : Version
@@ -33,12 +34,12 @@ V2_DATA_LINES = 53
 '''
 
 class Data():
-    NULL = 0
-    HALF = 1
-    DONE = 2
+    STATE_UNINITIALIZED = 0   # Not initialized; no processing has started
+    STATE_PROCESSING    = 1   # Data is currently being processed
+    STATE_READY         = 2   # Processing finished; data is ready for use
 
     def __init__(self):
-        self.status = self.NULL
+        self.status = self.STATE_UNINITIALIZED
         self.lines = list()
         self.weight = 1.0
 
@@ -155,11 +156,11 @@ class Data():
             buf[index] = float(values[index])
         return buf
 
-    def _fill_v2(self, virtual_linecnt, readline):
-        linecnt = virtual_linecnt + 1
+    def _fill_v2(self, idx, readline):
+        linecnt = idx + 1
 
         if linecnt == 1:
-            self.version = int(line)
+            self.version = int(readline)
         elif linecnt == 2:
             self.mode = int(readline)
         elif linecnt == 3:
@@ -206,8 +207,8 @@ class Data():
             self.kld = float(readline)
 
     def apply_symmetry(self, symm):
-        if self.status != self.DONE:
-            raise Exception("The data should be filled.")
+        if self.status != self.STATE_READY:
+            raise Exception("Data is not ready. Processing must be completed before applying symmetry.")
 
         channels       = self.planes.shape[0]
         bsize          = self.board_size
@@ -220,12 +221,20 @@ class Data():
         self.ownership = numpy_symmetry_plane(symm, self.ownership)
         self.ownership = np.reshape(self.ownership, (bsize * bsize))
 
-        self.prob          = numpy_symmetry_prob(symm, self.prob)
-        self.aux_prob      = numpy_symmetry_prob(symm, self.aux_prob)
+        self.prob      = numpy_symmetry_prob(symm, self.prob)
+        self.aux_prob  = numpy_symmetry_prob(symm, self.aux_prob)
 
     def load_from_stream(self, stream):
-        if self.status == self.DONE:
-            raise Exception("The data is already filled.")
+        # The load_from_stream() reads a single data entry from the input stream and
+        # stores the raw strings into an internal buffer. At this stage, only the minimal
+        # required information is parsed (e.g., version and KLD). The version is used to
+        # verify whether the data format is supported, while KLD is required for policy
+        # surprise sampler. Since the data may be discarded in later stages, fully parsing
+        # all fields at this point would introduce unnecessary performance overhead. Therefore,
+        # full parsing is deferred to a later stage.
+
+        if self.status == self.STATE_READY:
+            raise Exception("Data is already processed and ready, reloading is not allowed.")
 
         line = stream.readline()
         if len(line) == 0:
@@ -235,7 +244,7 @@ class Data():
         if self.version == 2:
             datalines = V2_DATA_LINES
         else:
-            raise Exception("The data is not correct version. The loaded data version is {}.".format(self.version))
+            raise Exception("Unsupported data version {}. Should be version 2.".format(self.version))
 
         self.lines.clear()
         self.lines.append(line)
@@ -243,14 +252,89 @@ class Data():
             self.lines.append(stream.readline())
 
         self.kld = float(self.lines[52])
-        self.status = self.HALF
+        self.status = self.STATE_PROCESSING
         return True
 
     def parse(self):
-        if self.status != self.HALF:
+        # After confirming that the current data will be used, all data is fully parsed.
+        if self.status != self.STATE_PROCESSING:
             raise Exception("The data should load the stream first.")
 
         datalines = len(self.lines)
         for cnt in range(1, datalines):
             self._fill_v2(cnt, self.lines[cnt])
-        self.status = self.DONE
+        self.status = self.STATE_READY
+
+    def load_from_stream_and_parse(self, stream):
+        if not self.load_from_stream(stream):
+            return False
+        self.parse()
+        return True
+
+if __name__ == "__main__":
+    raw_data = """2
+0
+9
+7
+0
+0
+004081012620e84320000
+0080021e18c8119404000
+000000000008000000000
+004081012620e84320000
+0080021e18c0119404000
+000000000000080000000
+004081012620e04320000
+0080021e18c0119404000
+000000000000001000000
+004081012620e04320000
+0080021e18c0118404000
+000080000000000000000
+004001012620e04320000
+0080021e18c0118404000
+000002000000000000000
+004001012620e04320000
+0080001e18c0118404000
+004000000000000000000
+000001012620e04320000
+0080001e18c0118404000
+008000000000000000000
+000001012620e04320000
+0000001e18c0118404000
+000000000000000020000
+000000000000000000000
+000000000000000000000
+000000000000000000000
+004081012620e84320000
+0080021e18c8119404000
+000000002000008000000
+008000000000000400000
+0000001000c0090024000
+000000000020e04300000
+000000002000000000000
+008000000000000000000
+000100000000000000000
+000000004000000000000
+0
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.0025 0.96 0 0.02375 0 0 0 0 0 0 0.01375 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0 0 0 0.0025 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.0025 0 0 0 0 0 0 0 0 0 0 0.0025 0 0 0 0 0 0 0 0 0.04125 0 0 0.94875 0 0 0 0 0 0 0 0 0.0025 0 0 0
+333333333313333333311333333113333333111311333133311133113311113111111111111111111
+1
+0.779271 0.780061 0.781635 0.786311
+2
+1.53194 1.53094 1.52894 1.52294
+0.125479 0.860285
+0.344604"""
+
+    stream = io.StringIO(raw_data)
+    while 1:
+        data = Data()
+        success = data.load_from_stream_and_parse(stream)
+        print("=================================")
+        print("Load Success: {}".format(success))
+        if not success:
+          break
+        print("Version: {}".format(data.version))
+        print("Board Size: {}".format(data.board_size))
+        print("Plane Shape: {}".format(data.planes.shape))
+        print("Policy Shape: {}".format(data.prob.shape))
