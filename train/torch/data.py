@@ -168,9 +168,9 @@ class Data():
         elif linecnt == 4:
             self.komi = float(readline)
         elif linecnt == 5:
-            self.wave = float(readline)
-        elif linecnt == 6:
             self.rule = float(readline)
+        elif linecnt == 6:
+            self.wave = float(readline)
         elif linecnt >= 7 and linecnt <= 43:
             plane = self._gether_binary_plane(self.board_size, readline)
             self.planes.append(plane)
