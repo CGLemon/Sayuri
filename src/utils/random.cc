@@ -3,8 +3,8 @@
 
 namespace random_utils {
 
-inline std::uint64_t SplitMix64(std::uint64_t z) {
-    // The detail of parameteres are from
+constexpr std::uint64_t SplitMix64(std::uint64_t z) {
+    // Please see the details from:
     // https://github.com/lemire/testingRNG/blob/master/source/splitmix64.h
 
     z += 0x9e3779b97f4a7c15;
@@ -13,51 +13,53 @@ inline std::uint64_t SplitMix64(std::uint64_t z) {
     return z ^ (z >> 31);
 }
 
-inline std::uint64_t rotl(const std::uint64_t x, const int k) {
+constexpr std::uint64_t Rotl(const std::uint64_t x, const int k) {
     return (x << k) | (x >> (64 - k));
 }
 
-inline std::uint64_t GetSeed(std::uint64_t seed) {
+std::uint64_t ResolveSeed(std::uint64_t seed) {
     if (seed == kThreadSeed) {
-        // Get the seed from thread id.
+        // Get the seed from thread ID.
         auto thread_id = std::hash<std::thread::id>()(std::this_thread::get_id());
-        seed = static_cast<std::uint64_t>(thread_id);
-    } else if (seed == kTimeSeed) {
+        return static_cast<std::uint64_t>(thread_id);
+    }
+    if (seed == kTimeSeed) {
         // Get the seed from system time.
         auto get_time = std::chrono::system_clock::now().time_since_epoch().count();
-        seed = static_cast<std::uint64_t>(get_time);
+        return static_cast<std::uint64_t>(get_time);
     }
     return seed;
 }
+
 } // namespace random_utils
 
 
-#define RANDOM_INIT__(TYPE__, CNT__)                \
-template<>                                          \
-void Random<TYPE__>::InitSeed(std::uint64_t seed) { \
-    seed = random_utils::GetSeed(seed);             \
-    static_assert(kSeedSize >= CNT__,               \
-        "The number of seeds is not enough?\n");    \
-    for (auto i = size_t{0}; i < kSeedSize; ++i) {  \
-        seed = random_utils::SplitMix64(seed);      \
-        seeds_[i] = seed;                           \
-    }                                               \
+#define RANDOM_INIT__(TYPE__, CNT__)                   \
+template<>                                             \
+void Random<TYPE__>::InitSeed(std::uint64_t seed) {    \
+    seed = random_utils::ResolveSeed(seed);            \
+    static_assert(kMaxSeedSize >= CNT__,               \
+        "The number of seeds is not enough?\n");       \
+    for (auto i = size_t{0}; i < kMaxSeedSize; ++i) {  \
+        seed = random_utils::SplitMix64(seed);         \
+        seeds_[i] = seed;                              \
+    }                                                  \
 }
 
-template<RandomType T>
+template<RandomMethod R>
 thread_local std::uint64_t
-    Random<T>::seeds_[Random<T>::kSeedSize];
+    Random<R>::seeds_[Random<R>::kMaxSeedSize];
 
-RANDOM_INIT__(RandomType::kSplitMix64, 1);
+RANDOM_INIT__(RandomMethod::kSplitMix64, 1);
 
-RANDOM_INIT__(RandomType::kXoroShiro128Plus, 2);
+RANDOM_INIT__(RandomMethod::kXoroShiro128Plus, 2);
 
 template<>
-std::uint64_t Random<RandomType::kSplitMix64>::Generate() {
-    // The detail of parameteres are from
+std::uint64_t Random<RandomMethod::kSplitMix64>::Generate() {
+    // Please see the details from:
     // https://github.com/lemire/testingRNG/blob/master/source/splitmix64.h
 
-    constexpr auto kSeedIndex = kSeedSize - 1;
+    constexpr auto kSeedIndex = kMaxSeedSize - 1;
 
     seeds_[kSeedIndex] += 0x9e3779b97f4a7c15;
     auto z = seeds_[kSeedIndex];
@@ -67,8 +69,8 @@ std::uint64_t Random<RandomType::kSplitMix64>::Generate() {
 }
 
 template<>
-std::uint64_t Random<RandomType::kXoroShiro128Plus>::Generate() {
-    // The detail of parameteres are from
+std::uint64_t Random<RandomMethod::kXoroShiro128Plus>::Generate() {
+    // Please see the details from:
     // https://github.com/lemire/testingRNG/blob/master/source/xoroshiro128plus.h
 
     const std::uint64_t s0 = seeds_[0];
@@ -76,8 +78,8 @@ std::uint64_t Random<RandomType::kXoroShiro128Plus>::Generate() {
     const std::uint64_t result = s0 + s1;
 
     s1 ^= s0;
-    seeds_[0] = random_utils::rotl(s0, 55) ^ s1 ^ (s1 << 14);
-    seeds_[1] = random_utils::rotl(s1, 36);
+    seeds_[0] = random_utils::Rotl(s0, 55) ^ s1 ^ (s1 << 14);
+    seeds_[1] = random_utils::Rotl(s1, 36);
 
     return result;
 }

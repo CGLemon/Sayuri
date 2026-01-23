@@ -202,7 +202,7 @@ void Engine::PrepareGame(int g) {
     state.SetRule(kArea);
 
     constexpr std::uint32_t kRange = 1000000;
-    std::uint32_t rand = Random<>::Get().RandFix<kRange>();
+    std::uint32_t rand = Random<>::Get().RandFix(kRange);
 
     float acc_prob = 0.f;
     int select_bk_idx = 0;
@@ -243,7 +243,7 @@ void Engine::Selfplay(int g) {
 
 void Engine::SetNormalGame(int g) {
     Handel(g);
-    if (Random<>::Get().Roulette<10000>(random_opening_prob_)) {
+    if (Random<>::Get().Roulette(random_opening_prob_)) {
         SetRandomOpeningGame(g);
     }
     SetUnfairKomi(g);
@@ -261,10 +261,10 @@ void Engine::SetHandicapGame(int g, int handicaps) {
     state.SetHandicap(handicaps);
     SetFairKomi(g);
 
-    if (Random<>::Get().Roulette<10000>(random_opening_prob_)) {
+    if (Random<>::Get().Roulette(random_opening_prob_)) {
         SetRandomOpeningGame(g);
     }
-    if (!Random<>::Get().Roulette<10000>(handicap_fair_komi_prob_)) {
+    if (!Random<>::Get().Roulette(handicap_fair_komi_prob_)) {
         SetUnfairKomi(g);
     }
 }
@@ -306,7 +306,7 @@ void Engine::SetUnfairKomi(int g) {
     float komi = state.GetKomi();
 
     float stddev = komi_stddev_;
-    if (Random<>::Get().Roulette<10000>(komi_big_stddev_prob_)) {
+    if (Random<>::Get().Roulette(komi_big_stddev_prob_)) {
         stddev = komi_big_stddev_;
     }
 
@@ -338,7 +338,7 @@ int Engine::GetHandicaps(int g) {
 
     for (auto &q : handicap_queries_) {
         if (state.GetBoardSize() == q.board_size) {
-            if (Random<>::Get().Roulette<10000>(q.probabilities)) {
+            if (Random<>::Get().Roulette(q.probabilities)) {
                 return Random<>::Get().Generate() % (q.handicaps-1) + 2;
             }
         }

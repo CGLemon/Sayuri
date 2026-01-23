@@ -277,7 +277,7 @@ Network::Result Network::GetOutput(const GameState &state,
             query.symmetry = Symmetry::kIdentitySymmetry;
         }
     } else if (ensemble == kRandom) {
-        query.symmetry = Random<>::Get().RandFix<Symmetry::kNumSymmetris>();
+        query.symmetry = Random<>::Get().RandFix(Symmetry::kNumSymmetris);
     }
 
     if (no_cache_ || ensemble == kAverage) {

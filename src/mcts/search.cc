@@ -1019,7 +1019,7 @@ int Search::GetSelfPlayMove(OptionTag tag) {
 
     if (param_->fastsearch_playouts > 0 &&
             param_->fastsearch_playouts < param_->playouts &&
-            Random<>::Get().Roulette<10000>(fast_search_prob)) {
+            Random<>::Get().Roulette(fast_search_prob)) {
 
         // The reduce playouts must be smaller than default
         // playouts. It is fast search phase so we also disable
@@ -1072,7 +1072,7 @@ int Search::GetSelfPlayMove(OptionTag tag) {
     if ((is_opening_random && !is_gumbel) ||
             (!already_lost &&
                  (tag & kNoExploring) &&
-                 Random<>::Get().Roulette<10000>(param_->random_fastsearch_prob))) {
+                 Random<>::Get().Roulette(param_->random_fastsearch_prob))) {
         if (!(forbid_pass && result.random_move == kPass)) {
             move = result.random_move;
         }

@@ -534,7 +534,7 @@ void GameState::PlayRandomMove() {
                      std::end(candidate_moves),
                      Random<>::Get());
 
-    if (Random<>::Get().Roulette<10000>(0.90f)) {
+    if (Random<>::Get().Roulette(0.90)) {
         // ~90%: capture
         for (const auto vtx : candidate_moves) {
             if (board_.IsCaptureMove(vtx, color)) {
@@ -543,7 +543,7 @@ void GameState::PlayRandomMove() {
             }
         }
     }
-    if (Random<>::Get().Roulette<10000>(0.95f)) {
+    if (Random<>::Get().Roulette(0.95)) {
         // ~95%: pattern3
         for (const auto vtx : candidate_moves) {
             if (board_.MatchPattern3(vtx) &&
@@ -553,7 +553,7 @@ void GameState::PlayRandomMove() {
             }
         }
     }
-    if (Random<>::Get().Roulette<10000>(0.90f)) {
+    if (Random<>::Get().Roulette(0.90)) {
         // ~90%: atari
         for (const auto vtx : candidate_moves) {
             if (board_.IsAtariMove(vtx, color) &&
@@ -563,7 +563,7 @@ void GameState::PlayRandomMove() {
             }
         }
     }
-    if (Random<>::Get().Roulette<10000>(0.90f)) {
+    if (Random<>::Get().Roulette(0.90)) {
         // ~90%: escape
         for (const auto vtx : candidate_moves) {
             if (board_.IsEscapeMove(vtx, color) &&

@@ -152,7 +152,7 @@ bool SelfPlayPipe::SaveChunk(const int out_id,
     vdata_prob = std::max(std::min(vdata_prob, 1.0f), 0.0f);
 
     for (auto &data : chunk) {
-        if (Random<>::Get().Roulette<10000>(1.0f - vdata_prob)) {
+        if (Random<>::Get().Roulette(1.0f - vdata_prob)) {
             data.StreamOut(tdata_oss);
         } else {
             data.StreamOut(vdata_oss);
