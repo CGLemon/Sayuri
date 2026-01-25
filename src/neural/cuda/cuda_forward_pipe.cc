@@ -3,7 +3,6 @@
 #include <sstream>
 #include <stdexcept>
 
-#include "config.h"
 #include "neural/cuda/cuda_forward_pipe.h"
 #include "neural/cuda/cuda_kernels.h"
 #include "neural/encoder.h"
@@ -16,79 +15,20 @@ void CudaForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
 
     dump_gpu_info_ = true;
 
-    group_ = std::make_unique<ThreadGroup<void>>(&ThreadPool::Get());
-
     auto option = ForwardPipeOption::Get().
                       SetBoardSize(GetOption<int>("defualt_boardsize")).
                       SetBatchSize(GetOption<int>("batch_size"));
     Construct(option, weights);
 
-    AssignWorkers(); // Run the batch forwarding worker.
+    BatchForwardPipe::AssignWorkers(nngraphs_.size());
 }
 
-OutputResult CudaForwardPipe::Forward(const InputData &input) {
-    OutputResult output;
-    InputData reordered_input = input;
+OutputResult CudaForwardPipe::Forward(const InputData& input) {
+    return BatchForwardPipe::SendQueryAndWait(input);
+}
 
-    // Reorder the inputs data.
-    const int planes_bsize = input.board_size;
-    const bool should_reorder = planes_bsize != board_size_;
-
-    if (should_reorder) {
-        // The input data's board size doesn't match the NN's expected
-        // input size. We are reordering the original input data to conform
-        // to the NN's input dimensions.
-        for (int c = 0; c < weights_->input_channels; ++c) {
-            int offset_r = c * board_size_ * board_size_; // data's ordering index
-            int offset_p = c * planes_bsize * planes_bsize; // NN's ordering index
-
-            for (int idx = 0; idx < board_size_ * board_size_; ++idx) {
-                const int x = idx % board_size_;
-                const int y = idx / board_size_;
-                if (x < planes_bsize && y < planes_bsize) {
-                    reordered_input.planes[offset_r++] = input.planes[offset_p++];
-                } else {
-                    reordered_input.planes[offset_r++] = 0.f;
-                }
-            }
-        }
-    }
-
-    auto entry = std::make_shared<ForwawrdEntry>(reordered_input, output);
-    std::unique_lock<std::mutex> lock(entry->mutex);
-    {
-        // Push the entry into queue.
-        std::lock_guard<std::mutex> queue_lock(queue_mutex_);
-        entry_queue_.emplace_back(entry);
-    }
-
-    if (static_cast<int>(entry_queue_.size()) >= forwarding_batch_per_nn_) {
-        cv_.notify_one(); // Wake up one worker if there are enough batch size.
-    }
-    entry->cv.wait(lock); // Wait for batch forwarding worker.
-
-    // Reorder the outputs data.
-    OutputResult reordered_ouput = output;
-
-    if (should_reorder) {
-        // Reorder the NN's outputs data to fit the correct data format.
-        int offset_r = 0; // data order index
-        int offset_p = 0; // NN order index
-        for (int idx = 0; idx < board_size_ * board_size_; ++idx) {
-            const int x = idx % board_size_;
-            const int y = idx / board_size_;
-            if (x < planes_bsize && y < planes_bsize) {
-                reordered_ouput.probabilities[offset_r] = output.probabilities[offset_p];
-                reordered_ouput.ownership[offset_r] = output.ownership[offset_p];
-                offset_r++;
-                offset_p++;
-            } else {
-                offset_p++;
-            }
-        }
-    }
-
-    return reordered_ouput;
+std::vector<OutputResult> CudaForwardPipe::BatchForward(int gpu, const std::vector<InputData>& inputs) {
+    return nngraphs_[gpu]->BatchForward(inputs);
 }
 
 bool CudaForwardPipe::Valid() const {
@@ -104,7 +44,7 @@ void CudaForwardPipe::Construct(ForwardPipeOption option,
         weights_ = weights;
     }
     if (weights_ == nullptr) {
-        // use dummy backend
+        // Note: Will use dummy backend
         return;
     }
 
@@ -120,15 +60,22 @@ void CudaForwardPipe::Construct(ForwardPipeOption option,
         return;
     }
 
-    forwarding_batch_per_nn_ = batch_size;
+    // The actual inference batch size may be smaller than the maximum batch size
+    // supported by the neural network. In this case, we only need to dynamically
+    // adjust the batch size used for the current forward pipe.
+    BatchForwardPipe::SetForwardingSize(batch_size);
+
     if (board_size_ == board_size &&
             batch_size <= max_batch_per_nn_) {
+        // The current network already supports this configuration. No reinitialization is
+        // required.
         return;
     }
     Release();
 
     board_size_ = board_size;
     max_batch_per_nn_ = batch_size;
+    BatchForwardPipe::SetBoardSize(board_size);
 
     // Dynamically allocates GPU resources for neural network computation.
     // It prioritizes user-specified GPUs, validates them, and if none are
@@ -160,8 +107,6 @@ void CudaForwardPipe::Construct(ForwardPipeOption option,
         nngraphs_.emplace_back(std::make_unique<NNGraph>(io_mutex_));
     }
 
-    max_batch_per_nn_ = batch_size;
-
     // Construct network graph for each valid GPU.
     for (auto i = size_t{0}; i < gpus_list.size(); ++i) {
         nngraphs_[i]->ConstructGraph(
@@ -180,7 +125,7 @@ void CudaForwardPipe::Release() {
 
 void CudaForwardPipe::Destroy() {
     Release();
-    QuitWorkers();
+    BatchForwardPipe::QuitWorkers();
 }
 
 void CudaForwardPipe::NNGraph::ConstructGraph(bool dump_gpu_info,
@@ -705,7 +650,7 @@ void CudaForwardPipe::NNGraph::ConstructGraph(bool dump_gpu_info,
     cuda::ReportCUDAErrors(cudaMallocHost(&host_output_val_, val_size));
 }
 
-void CudaForwardPipe::NNGraph::SetComputationMode(cuda::CudaHandles *handles) {
+void CudaForwardPipe::NNGraph::SetComputationMode(cuda::CudaHandles* handles) {
     cudaDeviceProp dev_prop = cuda::GetDeviceProp();
 
     if (dev_prop.major <= 6 ||
@@ -729,7 +674,7 @@ void CudaForwardPipe::NNGraph::SetComputationMode(cuda::CudaHandles *handles) {
     }
 }
 
-bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData> &batch_input) {
+bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData>& batch_input) {
     const int batch_size = batch_input.size();
     if (batch_size == 0) {
         return false;
@@ -783,7 +728,7 @@ bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData> &batch_inp
     return should_apply_mask;
 }
 
-std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vector<InputData> &batch_input) {
+std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vector<InputData>& batch_input) {
     const auto batch_size = (int)batch_input.size();
 
     assert(max_batch_ >= batch_size);
@@ -1083,12 +1028,12 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     return batch_output_result;
 }
 
-void CudaForwardPipe::NNGraph::FillOutputs(const std::vector<float> &batch_prob,
-                                           const std::vector<float> &batch_prob_pass,
-                                           const std::vector<float> &batch_value_misc,
-                                           const std::vector<float> &batch_ownership,
-                                           const std::vector<InputData> &batch_input,
-                                           std::vector<OutputResult> &batch_output_result) {
+void CudaForwardPipe::NNGraph::FillOutputs(const std::vector<float>& batch_prob,
+                                           const std::vector<float>& batch_prob_pass,
+                                           const std::vector<float>& batch_value_misc,
+                                           const std::vector<float>& batch_ownership,
+                                           const std::vector<InputData>& batch_input,
+                                           std::vector<OutputResult>& batch_output_result) {
     const int batch_size = batch_output_result.size();
     const auto num_intersections = board_size_ * board_size_;
     const auto encoder_version = Encoder::GetEncoderVersion(weights_->version); 
@@ -1201,111 +1146,6 @@ void CudaForwardPipe::NNGraph::DestroyGraph() {
 
 CudaForwardPipe::NNGraph::~NNGraph() {
     DestroyGraph();
-}
-
-void CudaForwardPipe::AssignWorkers() {
-    worker_running_.store(true);
-    waittime_.store(GetOption<int>("gpu_waittime"), std::memory_order_relaxed);
-
-    ThreadPool::Get("cuda-forward-pipe", nngraphs_.size());
-    if (group_->FutureEmpty()) {
-        for (int gpu = 0; gpu < (int)nngraphs_.size(); ++gpu) {
-            group_->AddTask([g=gpu, this](){ Worker(g); });
-        }
-    }
-}
-
-void CudaForwardPipe::Worker(int gpu) {
-    const auto GatherBatches = [this](int gpu_waittime) {
-        auto entries = std::vector<std::shared_ptr<ForwawrdEntry>>{};
-
-        // Running the loop until there are enough entries in the queue or time out,
-        // then breaking the loop.
-        {
-            std::unique_lock<std::mutex> lock(worker_mutex_);
-            while(true) {
-                if (!worker_running_.load(std::memory_order_relaxed)) {
-                    return entries;
-                }
-                if (static_cast<int>(entry_queue_.size()) >= forwarding_batch_per_nn_) {
-                    break;
-                }
-
-                bool timeout = false;
-                if (waittime_.load(std::memory_order_relaxed) != 0) {
-                    // Wait for some time to avoid busy waiting.
-                    timeout = !cv_.wait_for(
-                        lock, std::chrono::milliseconds(waittime_.load(std::memory_order_relaxed)),
-                        [this]() {
-                            return !worker_running_.load(std::memory_order_relaxed) ||
-                                       static_cast<int>(entry_queue_.size()) >= forwarding_batch_per_nn_; });
-                }
-
-                if (entry_queue_.empty()) {
-                    // No any entry in the queue. In this case, we can not
-                    // expect next forwarding time. Keep increasing waiting
-                    // time.
-                    auto last_waittime = waittime_.fetch_add(1, std::memory_order_relaxed);
-                    if (last_waittime >= gpu_waittime) {
-                        waittime_.store(gpu_waittime, std::memory_order_relaxed);
-                    }
-                } else {
-                    if (timeout) {
-                        // May be CPU-bound time. Boost forwarding.
-                        waittime_.store(0, std::memory_order_relaxed);
-                    }
-                    break;
-                }
-            }
-        }
-
-        // Gather the entries and return.
-        {
-            std::unique_lock<std::mutex> lock(queue_mutex_);
-            auto count = std::min(static_cast<int>(entry_queue_.size()), forwarding_batch_per_nn_);
-            auto end = std::begin(entry_queue_);
-            std::advance(end, count);
-            std::move(std::begin(entry_queue_), end, std::back_inserter(entries));
-            entry_queue_.erase(std::begin(entry_queue_), end);
-        }
-        return entries;
-    };
-
-    const auto gpu_waittime_base = GetOption<int>("gpu_waittime");
-    while (true) {
-        if (!worker_running_.load(std::memory_order_relaxed)) return;
-
-        auto entries = GatherBatches(gpu_waittime_base);
-        const auto batch_size = entries.size();
-
-        if (batch_size == 0) {
-            continue;
-        }
-
-        // Gather batch data.
-        auto inputs = std::vector<InputData>(batch_size);
-        for (auto b = size_t{0}; b < batch_size; ++b) {
-            inputs[b] = entries[b]->input;
-        }
-
-        // Forwarding...
-        auto outputs = nngraphs_[gpu]->BatchForward(inputs);
-
-        for (auto b = size_t{0}; b < batch_size; ++b) {
-            entries[b]->output = outputs[b];
-            {
-                // Be sure the condition variable of current entry is ready.
-                std::unique_lock<std::mutex> lk(entries[b]->mutex);
-            }
-            entries[b]->cv.notify_all();
-        }
-    }
-}
-
-void CudaForwardPipe::QuitWorkers() {
-    worker_running_.store(false);
-    cv_.notify_all();
-    group_->WaitToJoin();
 }
 
 #endif

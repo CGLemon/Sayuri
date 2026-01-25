@@ -130,7 +130,7 @@ public:
 
     virtual void Initialize(std::shared_ptr<DNNWeights> weights) = 0;
 
-    virtual OutputResult Forward(const InputData &inpnt) = 0;
+    virtual OutputResult Forward(const InputData& inpnt) = 0;
 
     virtual void Construct(ForwardPipeOption option, std::shared_ptr<DNNWeights> weights) = 0;
 

@@ -1,26 +1,28 @@
 #pragma once
 
 #ifdef USE_CUDA
-#include <atomic>
-#include <memory>
-#include <list>
+
 #include <array>
-#include <vector>
-#include <mutex>
+#include <atomic>
 #include <condition_variable>
+#include <list>
+#include <memory>
+#include <mutex>
+#include <vector>
 
 #include "neural/cuda/cuda_common.h"
 #include "neural/cuda/cuda_layers.h"
 #include "neural/activation.h"
+#include "neural/batch_forward_pipe.h"
 #include "neural/network_basic.h"
 #include "neural/description.h"
 #include "utils/threadpool.h"
 
-class CudaForwardPipe : public NetworkForwardPipe {
+class CudaForwardPipe : public BatchForwardPipe {
 public:
     virtual void Initialize(std::shared_ptr<DNNWeights> weights);
 
-    virtual OutputResult Forward(const InputData &input);
+    virtual OutputResult Forward(const InputData& input);
 
     virtual bool Valid() const;
 
@@ -30,6 +32,8 @@ public:
     virtual void Release();
 
     virtual void Destroy();
+
+    virtual std::vector<OutputResult> BatchForward(int gpu, const std::vector<InputData>& inputs);
 
 private:
 
@@ -81,21 +85,21 @@ private:
                             const int board_size,
                             std::shared_ptr<DNNWeights> weights);
 
-        std::vector<OutputResult> BatchForward(const std::vector<InputData> &input);
+        std::vector<OutputResult> BatchForward(const std::vector<InputData>& input);
 
         void DestroyGraph();
 
     private:
-        void SetComputationMode(cuda::CudaHandles *handles);
+        void SetComputationMode(cuda::CudaHandles* handles);
 
-        bool ApplyMask(const std::vector<InputData> &input);
+        bool ApplyMask(const std::vector<InputData>& input);
 
-        void FillOutputs(const std::vector<float> &batch_prob,
-                         const std::vector<float> &batch_prob_pass,
-                         const std::vector<float> &batch_value_misc,
-                         const std::vector<float> &batch_ownership,
-                         const std::vector<InputData> &batch_input,
-                         std::vector<OutputResult> &batch_output_result);
+        void FillOutputs(const std::vector<float>& batch_prob,
+                         const std::vector<float>& batch_prob_pass,
+                         const std::vector<float>& batch_value_misc,
+                         const std::vector<float>& batch_ownership,
+                         const std::vector<InputData>& batch_input,
+                         std::vector<OutputResult>& batch_output_result);
 
         cuda::CudaHandles handles_;
 
@@ -130,38 +134,11 @@ private:
         std::shared_ptr<DNNWeights> weights_{nullptr};
     };
 
-    struct ForwawrdEntry {
-	    const InputData &input;
-        OutputResult &output;
-
-        std::condition_variable cv;
-        std::mutex mutex;
-
-        ForwawrdEntry(const InputData &in,
-                      OutputResult &out) :
-                      input(in), output(out) {}
-    };
-
-    std::list<std::shared_ptr<ForwawrdEntry>> entry_queue_;
-    std::mutex worker_mutex_;
-    std::mutex queue_mutex_;
     std::mutex io_mutex_;
-
-    std::condition_variable cv_;
-
-    std::atomic<int> waittime_{0};
-    std::atomic<bool> worker_running_;
-
     std::vector<std::unique_ptr<NNGraph>> nngraphs_;
-    std::unique_ptr<ThreadGroup<void>> group_;
 
     bool dump_gpu_info_;
     int max_batch_per_nn_{0};
-    int forwarding_batch_per_nn_{0};
     int board_size_{0};
-
-    void AssignWorkers();
-    void Worker(int gpu);
-    void QuitWorkers();
 };
 #endif
