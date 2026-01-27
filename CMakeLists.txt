@@ -60,6 +60,11 @@ else()
     add_definitions(-DENABLE_FP16)
 endif()
 
+if(SELF_CHECK)
+    message(STATUS "Enable self-check.")
+    add_definitions(-DSELF_CHECK)
+endif()
+
 # Gather all source files
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(BENCHMARK_SOURCES_DIR ${SOURCE_DIR}/benchmark)

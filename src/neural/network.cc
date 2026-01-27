@@ -1,3 +1,5 @@
+#include "neural/network.h"
+
 #ifdef USE_CUDA
 #include "neural/cuda/cuda_forward_pipe.h"
 #endif
@@ -16,23 +18,22 @@
 #endif
 #endif
 
-#include "config.h"
-#include "neural/blas/blas_forward_pipe.h"
-#include "game/symmetry.h"
-#include "neural/loader.h"
-#include "neural/network.h"
-#include "neural/encoder.h"
-#include "utils/log.h"
-#include "utils/random.h"
-#include "utils/format.h"
-#include "utils/option.h"
-#include "utils/logits.h"
-
+#include <iomanip>
 #include <random>
 #include <sstream>
-#include <iomanip>
 
-void Network::Initialize(const std::string &weightsfile) {
+#include "config.h"
+#include "game/symmetry.h"
+#include "neural/blas/blas_forward_pipe.h"
+#include "neural/encoder.h"
+#include "neural/loader.h"
+#include "utils/format.h"
+#include "utils/log.h"
+#include "utils/logits.h"
+#include "utils/option.h"
+#include "utils/random.h"
+
+void Network::Initialize(const std::string& weightsfile) {
 #ifndef __APPLE__
 #ifdef USE_OPENBLAS
     openblas_set_num_threads(1);
@@ -83,6 +84,11 @@ void Network::Initialize(const std::string &weightsfile) {
     // Initialize the NN forward pipe.
     pipe_->Initialize(dnn_weights);
     SetCacheSize(GetOption<int>("cache_memory_mib"));
+
+#ifdef SELF_CHECK
+    cpu_pipe_ = std::make_unique<BlasForwardPipe>();
+    cpu_pipe_->Initialize(dnn_weights);
+#endif
 
     ResetNumQueries();
 }
@@ -156,9 +162,8 @@ Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
 }
 
 Network::Result Network::GetOutputInternal(const GameState &state,
-                                          const int symmetry,
-                                          PolicyBufferOffset offset) {
-    // gather input features with symmetry
+                                           const int symmetry,
+                                           PolicyBufferOffset offset) {
     auto inputs = Encoder::Get().GetInputs(state, symmetry, GetVersion());
     if (offset == PolicyBufferOffset::kDefault) {
         inputs.offset = default_policy_offset_;
@@ -166,66 +171,25 @@ Network::Result Network::GetOutputInternal(const GameState &state,
         inputs.offset = offset;
     }
 
-    Network::Result out_result;
-    Network::Result result_buf;
-
+    Network::Result result;
     if (pipe_->Valid()) {
         num_queries_.fetch_add(1, std::memory_order_relaxed);
-        result_buf = pipe_->Forward(inputs);
+        result = pipe_->Forward(inputs);
     } else {
-        result_buf = DummyForward(inputs);
+        result = DummyForward(inputs);
     }
-    out_result = result_buf;
+    TransformResult(result, symmetry);
 
-    const auto boardsize = inputs.board_size;
-    const auto num_intersections = boardsize * boardsize;
-
-    auto probabilities_buffer = std::vector<float>(num_intersections);
-    auto ownership_buffer = std::vector<float>(num_intersections);
-
-    // copy result to buffer
-    std::copy(std::begin(result_buf.probabilities),
-                  std::begin(result_buf.probabilities) + num_intersections,
-                  std::begin(probabilities_buffer));
-    std::copy(std::begin(result_buf.ownership),
-                  std::begin(result_buf.ownership) + num_intersections,
-                  std::begin(ownership_buffer));
-
-    // apply invert symmetry for probabilities, ownership
-    for (int idx = 0; idx < num_intersections; ++idx) {
-        const auto symm_index = Symmetry::Get().TransformIndex(boardsize, symmetry, idx);
-        out_result.probabilities[symm_index] = probabilities_buffer[idx];
-        out_result.ownership[symm_index] = std::tanh(ownership_buffer[idx]);
+#ifdef SELF_CHECK
+    // TODO: Make self-check optional.
+    if (pipe_->Valid() && cpu_pipe_->Valid()) {
+        auto ref = cpu_pipe_->Forward(inputs);
+        TransformResult(ref, symmetry);
+        SelfCheck(result, ref);
     }
+#endif
 
-    // final score
-    out_result.final_score = 20 * result_buf.final_score;
-
-    // winrate
-    auto wdl_buffer = std::vector<float>(3);
-    wdl_buffer[0] = result_buf.wdl[0];
-    wdl_buffer[1] = result_buf.wdl[1];
-    wdl_buffer[2] = result_buf.wdl[2];
-    wdl_buffer = Softmax(wdl_buffer, 1);
-
-    out_result.wdl[0] = wdl_buffer[0];
-    out_result.wdl[1] = wdl_buffer[1];
-    out_result.wdl[2] = wdl_buffer[2];
-    out_result.wdl_winrate = (wdl_buffer[0] - wdl_buffer[2] + 1.f) / 2;
-    out_result.stm_winrate = (std::tanh(result_buf.stm_winrate) + 1.f) / 2;
-
-    // error
-    auto SoftplusSquare = [](float x) -> float {
-        if (x <= 20.f) {
-            x = std::log(1.f + std::exp(x));
-        }
-        return (x * x) / 4.f;
-    };
-
-    out_result.q_error = 0.25 * SoftplusSquare(result_buf.q_error);
-    out_result.score_error = 150 * SoftplusSquare(result_buf.score_error);
-
-    return out_result;
+    return result;
 }
 
 bool Network::ProbeCache(const GameState &state,
@@ -366,7 +330,87 @@ std::string Network::GetOutputString(const GameState &state,
     return out.str();
 }
 
-void Network::ActivatePolicy(Result &result, const float temperature) const {
+void Network::SelfCheck(Network::Result result, Network::Result ref) {
+    // Calculates L2-norm between result and ref.
+    constexpr auto kMaxError = 0.2f;
+
+    auto GetSquareError = [](double a, double b) -> double {
+        const auto diff = a - b; 
+        return diff * diff;
+    };
+
+    ActivatePolicy(result, 1.0f);
+    ActivatePolicy(ref, 1.0f);
+
+    auto error = 0.0;
+    const auto board_size = result.board_size;
+    const auto num_intersections = board_size * board_size;
+
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        error += GetSquareError(result.probabilities[idx], ref.probabilities[idx]);
+    }
+    error += GetSquareError(result.pass_probability, ref.pass_probability);
+    error += GetSquareError(result.wdl_winrate, ref.wdl_winrate);
+    error = std::sqrt(error);
+
+    if (error > kMaxError || std::isnan(error)) {
+       throw std::runtime_error(Format("GPU self-check mismatch (%10.6f).", error));
+    }
+}
+
+void Network::TransformResult(Network::Result& result, const int symmetry) {
+    const Network::Result result_buf = result;
+
+    const auto boardsize = result.board_size;
+    const auto num_intersections = boardsize * boardsize;
+
+    auto probabilities_buffer = std::vector<float>(num_intersections);
+    auto ownership_buffer = std::vector<float>(num_intersections);
+
+    // copy result to buffer
+    std::copy(std::begin(result_buf.probabilities),
+                  std::begin(result_buf.probabilities) + num_intersections,
+                  std::begin(probabilities_buffer));
+    std::copy(std::begin(result_buf.ownership),
+                  std::begin(result_buf.ownership) + num_intersections,
+                  std::begin(ownership_buffer));
+
+    // apply invert symmetry for probabilities, ownership
+    for (int idx = 0; idx < num_intersections; ++idx) {
+        const auto symm_index = Symmetry::Get().TransformIndex(boardsize, symmetry, idx);
+        result.probabilities[symm_index] = probabilities_buffer[idx];
+        result.ownership[symm_index] = std::tanh(ownership_buffer[idx]);
+    }
+
+    // final score
+    result.final_score = 20 * result_buf.final_score;
+
+    // winrate
+    auto wdl_buffer = std::vector<float>(3);
+    wdl_buffer[0] = result_buf.wdl[0];
+    wdl_buffer[1] = result_buf.wdl[1];
+    wdl_buffer[2] = result_buf.wdl[2];
+    wdl_buffer = Softmax(wdl_buffer, 1);
+
+    result.wdl[0] = wdl_buffer[0];
+    result.wdl[1] = wdl_buffer[1];
+    result.wdl[2] = wdl_buffer[2];
+    result.wdl_winrate = (wdl_buffer[0] - wdl_buffer[2] + 1.f) / 2;
+    result.stm_winrate = (std::tanh(result_buf.stm_winrate) + 1.f) / 2;
+
+    // error
+    auto SoftplusSquare = [](float x) -> float {
+        if (x <= 20.f) {
+            x = std::log(1.f + std::exp(x));
+        }
+        return (x * x) / 4.f;
+    };
+
+    result.q_error = 0.25 * SoftplusSquare(result_buf.q_error);
+    result.score_error = 150 * SoftplusSquare(result_buf.score_error);
+}
+
+void Network::ActivatePolicy(Result& result, const float temperature) const {
     const auto board_size = result.board_size;
     const auto num_intersections = board_size * board_size;
 
@@ -384,7 +428,7 @@ void Network::ActivatePolicy(Result &result, const float temperature) const {
     result.pass_probability = probabilities_buffer[num_intersections];
 }
 
-int Network::GetVertexWithPolicy(const GameState &state,
+int Network::GetVertexWithPolicy(const GameState& state,
                                  const float temperature,
                                  const bool allow_pass) {
     const auto result = GetOutput(state, kRandom, Query::Get().SetTemperature(temperature));

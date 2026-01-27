@@ -1,18 +1,18 @@
 #pragma once
 
-#include "neural/activation.h"
-
 #include <cmath>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
+
+#include "neural/activation.h"
 
 class LinearLayer {
 public:
     void Set(int inputs, int outputs);
 
-    void LoadWeights(std::vector<float> &load_weights);
-    void LoadBiases(std::vector<float> &load_weights);
+    void LoadWeights(std::vector<float>& load_weights);
+    void LoadBiases(std::vector<float>& load_weights);
 
     int GetInputs() const;
     int GetOutputs() const;
@@ -32,8 +32,8 @@ class BatchNormLayer {
 public:
     void Set(int channels);
 
-    void LoadMeans(std::vector<float> &load_weights);
-    void LoadStddevs(std::vector<float> &load_weights, bool is_v1);
+    void LoadMeans(std::vector<float>& load_weights);
+    void LoadStddevs(std::vector<float>& load_weights, bool is_v1);
 
     std::vector<float>& GetMeans();
     std::vector<float>& GetStddevs();
@@ -42,14 +42,14 @@ public:
 
 private:
     template <typename container>
-    void ProcessVariance(container &weights) {
+    void ProcessVariance(container& weights) {
         static constexpr float epsilon = 1e-5f;
         for (auto &&w : weights) {
             w = 1.0f / std::sqrt(w + epsilon);
         }
     }
     template <typename container>
-    void ProcessStddev(container &weights) {
+    void ProcessStddev(container& weights) {
         for (auto &&w : weights) {
             w = 1.0f / w;
         }
@@ -65,18 +65,21 @@ class ConvLayer {
 public:
     void Set(int inputs, int outputs, int filter);
 
-    void LoadWeights(std::vector<float> &load_weights);
-    void LoadBiases(std::vector<float> &load_weights);
+    void LoadWeights(std::vector<float>& load_weights);
+    void LoadBiases(std::vector<float>& load_weights);
+    void TransformF();
 
     int GetInputs() const;
     int GetOutputs() const;
     int GetFilter() const;
 
     std::vector<float>& GetWeights();
+    std::vector<float>& GetTransformF();
     std::vector<float>& GetBiases();
 
 private:
     std::vector<float> weights_;
+    std::vector<float> transformed_f_;
     std::vector<float> biases_;
 
     int inputs_{0};
@@ -160,7 +163,6 @@ public:
 
     bool loaded{false};
     bool winograd{false};
-    bool winograd_initialized{false};
 
     int input_channels{0};
 

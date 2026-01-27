@@ -1,5 +1,8 @@
-#include <stdexcept>
 #include "neural/description.h"
+
+#include <stdexcept>
+
+#include "neural/winograd_helper.h"
 #include "utils/format.h"
 
 void LinearLayer::Set(int inputs, int outputs) {
@@ -7,7 +10,7 @@ void LinearLayer::Set(int inputs, int outputs) {
     outputs_ = outputs;
 }
 
-void LinearLayer::LoadWeights(std::vector<float> &load_weights) {
+void LinearLayer::LoadWeights(std::vector<float>& load_weights) {
     const int weights_size = load_weights.size();
     const int expected_size = GetInputs() * GetOutputs();
     if (weights_size != expected_size) {
@@ -18,7 +21,7 @@ void LinearLayer::LoadWeights(std::vector<float> &load_weights) {
     weights_ = load_weights;
 }
 
-void LinearLayer::LoadBiases(std::vector<float> &load_weights) {
+void LinearLayer::LoadBiases(std::vector<float>& load_weights) {
     const int weights_size = load_weights.size();
     const int expected_size = GetOutputs();
     if (weights_size != expected_size) {
@@ -49,7 +52,7 @@ void BatchNormLayer::Set(int channels) {
     channels_ = channels;
 }
 
-void BatchNormLayer::LoadMeans(std::vector<float> &load_weights){
+void BatchNormLayer::LoadMeans(std::vector<float>& load_weights){
     const int weights_size = load_weights.size();
     const int expected_size = GetChannels();
     if (weights_size != expected_size) {
@@ -60,7 +63,7 @@ void BatchNormLayer::LoadMeans(std::vector<float> &load_weights){
     means_ = load_weights;
 }
 
-void BatchNormLayer::LoadStddevs(std::vector<float> &load_weights, bool is_v1){
+void BatchNormLayer::LoadStddevs(std::vector<float>& load_weights, bool is_v1){
     const int weights_size = load_weights.size();
     const int expected_size = GetChannels();
     if (weights_size != expected_size) {
@@ -94,7 +97,7 @@ void ConvLayer::Set(int inputs, int outputs, int filter) {
     filter_ = filter;
 }
 
-void ConvLayer::LoadWeights(std::vector<float> &load_weights) {
+void ConvLayer::LoadWeights(std::vector<float>& load_weights) {
     const int weights_size = load_weights.size();
     const int expected_size = GetInputs() * GetOutputs() * GetFilter() * GetFilter();
     if (weights_size != expected_size) {
@@ -105,7 +108,7 @@ void ConvLayer::LoadWeights(std::vector<float> &load_weights) {
     weights_ = load_weights;
 }
 
-void ConvLayer::LoadBiases(std::vector<float> &load_weights) {
+void ConvLayer::LoadBiases(std::vector<float>& load_weights) {
     const int weights_size = load_weights.size();
     const int expected_size = GetOutputs();
     if (weights_size != expected_size) {
@@ -114,6 +117,16 @@ void ConvLayer::LoadBiases(std::vector<float> &load_weights) {
                        expected_size, weights_size)};
     }
     biases_ = load_weights;
+}
+
+void ConvLayer::TransformF() {
+    const int filter = GetFilter();
+    if (filter != 3) {
+        throw std::runtime_error{
+            Format("Winograd only supports 3x3 filter size, not %d", filter)};
+    }
+    transformed_f_ = WinogradTransformF(
+        weights_, GetOutputs(), GetInputs());
 }
 
 int ConvLayer::GetInputs() const {
@@ -130,6 +143,10 @@ int ConvLayer::GetFilter() const {
 
 std::vector<float>& ConvLayer::GetWeights() {
     return weights_;
+}
+
+std::vector<float>& ConvLayer::GetTransformF() {
+    return transformed_f_;
 }
 
 std::vector<float>& ConvLayer::GetBiases() {

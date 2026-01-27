@@ -1,17 +1,18 @@
-#include "neural/activation.h"
 #include "neural/loader.h"
-#include "neural/network_basic.h"
-#include "utils/log.h"
-#include "utils/format.h"
-#include "utils/filesystem.h"
-#include "utils/parse_float.h"
-#include "utils/option.h"
-#include "utils/time.h"
-#include "config.h"
 
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+
+#include "config.h"
+#include "neural/activation.h"
+#include "neural/network_basic.h"
+#include "utils/filesystem.h"
+#include "utils/format.h"
+#include "utils/log.h"
+#include "utils/option.h"
+#include "utils/parse_float.h"
+#include "utils/time.h"
 
 #ifdef USE_FAST_PARSER
 #include "fast_float.h"
@@ -65,7 +66,7 @@ void DNNLoader::FromFile(std::shared_ptr<DNNWeights> weights, std::string filena
     }
 }
 
-void DNNLoader::Parse(std::istream &buffer) {
+void DNNLoader::Parse(std::istream& buffer) {
    /**
     * get main
     * get info
@@ -122,7 +123,7 @@ void DNNLoader::Parse(std::istream &buffer) {
     FillWeights(netinfo, netstack, netstruct, buffer);
 }
 
-void DNNLoader::ParseInfo(NetInfo &netinfo, std::istream &buffer) const {
+void DNNLoader::ParseInfo(NetInfo& netinfo, std::istream& buffer) const {
     auto line = std::string{};
     while (std::getline(buffer, line)) {
         const auto spt = Splitter(line);
@@ -136,7 +137,7 @@ void DNNLoader::ParseInfo(NetInfo &netinfo, std::istream &buffer) const {
     }
 }
 
-void DNNLoader::ParseStack(NetStack &netstack, std::istream &buffer) const {
+void DNNLoader::ParseStack(NetStack& netstack, std::istream& buffer) const {
     auto line = std::string{};
     while (std::getline(buffer, line)) {
         const auto spt = Splitter(line);
@@ -149,7 +150,7 @@ void DNNLoader::ParseStack(NetStack &netstack, std::istream &buffer) const {
     }
 }
 
-void DNNLoader::ParseStruct(NetStruct &netstruct, std::istream &buffer) const {
+void DNNLoader::ParseStruct(NetStruct& netstruct, std::istream& buffer) const {
     auto line = std::string{};
     auto cnt = size_t{0};
     while (std::getline(buffer, line)) {
@@ -190,8 +191,8 @@ void DNNLoader::ParseStruct(NetStruct &netstruct, std::istream &buffer) const {
     }
 }
 
-void DNNLoader::CheckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netstruct) {
-    const auto NotFound = [](NetInfo &netinfo, std::string target) -> bool {
+void DNNLoader::CheckMisc(NetInfo& netinfo, NetStack& netstack, NetStruct& netstruct) {
+    const auto NotFound = [](NetInfo& netinfo, std::string target) -> bool {
         return std::end(netinfo) == netinfo.find(target);
     };
 
@@ -249,7 +250,7 @@ void DNNLoader::CheckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
         weights_->policy_head_type = PolicyHeadType::kNormal;
     } else {
         auto policy_head_type = netinfo["PolicyHeadType"];
-        for (char &c: policy_head_type) {
+        for (char& c: policy_head_type) {
             c = std::tolower(c);
         }
         if (policy_head_type == "normal") {
@@ -304,8 +305,8 @@ void DNNLoader::CheckMisc(NetInfo &netinfo, NetStack &netstack, NetStruct &netst
         "FixUp"
     };
 
-    for (auto &block_type : netstack) {
-        for (auto &c: block_type) {
+    for (auto& block_type : netstack) {
+        for (auto& c: block_type) {
             if (c == '-') {
                 c = ' ';
             }
@@ -367,9 +368,9 @@ void DNNLoader::DumpInfo() const {
 
 int DNNLoader::FillBlock(int offset,
                          Splitter block_spt,
-                         NetStruct &netstruct,
-                         std::istream &buffer) const {
-    auto SplitterFound = [](Splitter &spt, std::string key) {
+                         NetStruct& netstruct,
+                         std::istream& buffer) const {
+    auto SplitterFound = [](Splitter& spt, std::string key) {
         if (const auto res = spt.Find(key)) {
             return true;
         }
@@ -648,10 +649,10 @@ int DNNLoader::FillBlock(int offset,
     return offset;
 }
 
-void DNNLoader::FillWeights(NetInfo &netinfo,
-                            NetStack &netstack,
-                            NetStruct &netstruct,
-                            std::istream &buffer) const {
+void DNNLoader::FillWeights(NetInfo& netinfo,
+                            NetStack& netstack,
+                            NetStruct& netstruct,
+                            std::istream& buffer) const {
     weights_->residual_blocks = std::stoi(netinfo["ResidualBlocks"]);
     weights_->residual_channels = std::stoi(netinfo["ResidualChannels"]);
     if (weights_->version >= 5) {
@@ -827,7 +828,7 @@ void DNNLoader::FillWeights(NetInfo &netinfo,
 }
 
 void DNNLoader::ProcessWeights() const {
-    const auto ProcessConvBlock = [](ConvLayer &conv, BatchNormLayer &bn) {
+    const auto ProcessConvBlock = [](ConvLayer& conv, BatchNormLayer& bn) {
         // Fuse the BatchNormLayer into the ConvLayer.
         for (auto idx = size_t{0};
                  idx < conv.GetBiases().size(); ++idx) {
@@ -843,13 +844,16 @@ void DNNLoader::ProcessWeights() const {
             conv.GetBiases()[idx] *= scale;
             bn.GetStddevs()[idx] = 1.0f;
         }
+        if (conv.GetFilter() == 3) {
+            conv.TransformF();
+        }
     };
 
     // input layers
     ProcessConvBlock(weights_->input_conv, weights_->input_bn);
 
     // block tower
-    for (auto &block : weights_->tower) {
+    for (auto& block : weights_->tower) {
         if (block->IsResidualBlock()) {
             ProcessConvBlock(block->conv1, block->bn1);
             ProcessConvBlock(block->conv2, block->bn2);
@@ -883,7 +887,7 @@ void DNNLoader::ProcessWeights() const {
     ProcessConvBlock(weights_->v_hd_conv, weights_->v_hd_bn);
 }
 
-void DNNLoader::GetWeightsFromBuffer(std::vector<float> &weights, std::istream &buffer) const {
+void DNNLoader::GetWeightsFromBuffer(std::vector<float>& weights, std::istream& buffer) const {
     weights.clear();
 
     if (use_binary_) {
@@ -947,8 +951,8 @@ void DNNLoader::GetWeightsFromBuffer(std::vector<float> &weights, std::istream &
     }
 }
 
-void DNNLoader::FillFullyconnectLayer(LinearLayer &layer,
-                                     std::istream &buffer,
+void DNNLoader::FillFullyconnectLayer(LinearLayer& layer,
+                                     std::istream& buffer,
                                      const int in_size,
                                      const int out_size) const {
     auto weights = std::vector<float>{};
@@ -961,8 +965,8 @@ void DNNLoader::FillFullyconnectLayer(LinearLayer &layer,
     layer.LoadBiases(weights);
 }
 
-void DNNLoader::FillBatchnormLayer(BatchNormLayer &layer,
-                                  std::istream &buffer,
+void DNNLoader::FillBatchnormLayer(BatchNormLayer& layer,
+                                  std::istream& buffer,
                                   const int channels) const {
     auto weights = std::vector<float>{};
     layer.Set(channels);
@@ -974,8 +978,8 @@ void DNNLoader::FillBatchnormLayer(BatchNormLayer &layer,
     layer.LoadStddevs(weights, weights_->version==1);
 }
 
-void DNNLoader::FillConvolutionLayer(ConvLayer &layer,
-                                    std::istream &buffer,
+void DNNLoader::FillConvolutionLayer(ConvLayer& layer,
+                                    std::istream& buffer,
                                     const int in_channels,
                                     const int out_channels,
                                     const int kernel_size) const {
