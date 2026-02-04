@@ -34,21 +34,21 @@ protected:
     void QuitWorkers();
 
 private:
-    struct ForwawrdEntry {
+    struct ForwardEntry {
 	    const InputData& input;
         OutputResult& output;
 
         std::condition_variable cv;
         std::mutex mutex;
 
-        ForwawrdEntry(const InputData &in,
-                      OutputResult &out) :
-                      input(in), output(out) {}
+        ForwardEntry(const InputData &in,
+                     OutputResult &out) :
+                     input(in), output(out) {}
     };
 
     void Worker(int gpu);
 
-    std::list<std::shared_ptr<ForwawrdEntry>> entry_queue_;
+    std::list<std::shared_ptr<ForwardEntry>> entry_queue_;
     std::mutex worker_mutex_;
     std::mutex queue_mutex_;
 

@@ -31,7 +31,7 @@ OutputResult BatchForwardPipe::SendQueryAndWait(const InputData& input) {
         }
     }
 
-    auto entry = std::make_shared<ForwawrdEntry>(reordered_input, output);
+    auto entry = std::make_shared<ForwardEntry>(reordered_input, output);
     std::unique_lock<std::mutex> lock(entry->mutex);
     {
         // Push the entry into queue.
@@ -86,7 +86,8 @@ void BatchForwardPipe::AssignWorkers(int num_gpus) {
     worker_running_.store(true);
     waittime_.store(GetOption<int>("gpu_waittime"), std::memory_order_relaxed);
 
-    ThreadPool::Get("cuda-forward-pipe", num_gpus);
+    // Allocate threads for BatchForwardPipe.
+    ThreadPool::Get("batch-forward-pipe", num_gpus);
     if (group_->FutureEmpty()) {
         for (int gpu = 0; gpu < num_gpus; ++gpu) {
             group_->AddTask([g=gpu, this](){ Worker(g); });
@@ -101,7 +102,7 @@ void BatchForwardPipe::Worker(int gpu) {
     //   2. A timeout occurs (adaptive wait time), OR
     //   3. The worker is stopped.
     const auto GatherBatches = [this](int gpu_waittime) {
-        auto entries = std::vector<std::shared_ptr<ForwawrdEntry>>{};
+        auto entries = std::vector<std::shared_ptr<ForwardEntry>>{};
 
         {
             std::unique_lock<std::mutex> lock(worker_mutex_);
