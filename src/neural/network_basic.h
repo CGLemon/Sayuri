@@ -140,6 +140,8 @@ public:
 
     virtual bool Valid() const = 0;
 
+    virtual int GetNumWorkers() const { return 0; }
+
     inline std::string GetName() const { return Valid() ? weights_->name : "random"; }
 
     inline int GetVersion() const { return Valid() ? weights_->version : -1; }

@@ -53,6 +53,7 @@ public:
 
     PolicyBufferOffset GetDefaultPolicyOffset() const;
     int GetVersion() const;
+    int GetNumWorkers() const;
 
 private:
     void SelfCheck(Network::Result result, Network::Result ref);

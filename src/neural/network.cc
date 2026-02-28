@@ -474,6 +474,10 @@ int Network::GetVersion() const {
     return pipe_->GetVersion();
 }
 
+int Network::GetNumWorkers() const {
+    return pipe_->GetNumWorkers();
+}
+
 bool Network::Valid() const {
     if (pipe_) {
         return pipe_->Valid();

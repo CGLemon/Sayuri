@@ -35,6 +35,10 @@ bool CudaForwardPipe::Valid() const {
     return weights_ != nullptr;
 }
 
+int CudaForwardPipe::GetNumWorkers() const {
+    return static_cast<int>(nngraphs_.size());
+}
+
 void CudaForwardPipe::Construct(ForwardPipeOption option,
                                 std::shared_ptr<DNNWeights> weights) {
     // Construct the network with parameters (e.g., board_size) and weights.

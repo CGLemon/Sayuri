@@ -1538,7 +1538,12 @@ bool GtpLoop::NetBench(Splitter &spt, std::string &rep) {
     };
 
     for (int batch_size: batchsize_list) {
-        const int threads = batch_size * 2;
+        const int num_workers = agent_->GetNetwork().GetNumWorkers();
+        if (num_workers == 0) {
+            LOGGING << "Warning: The network is CPU backend.\n";
+            batch_size = 1;
+        }
+        const int threads = std::max(1, batch_size * 2 * num_workers);
         agent_->SetBatchSize(batch_size);
         agent_->GetNetwork().ResetNumQueries();
 
@@ -1564,6 +1569,10 @@ bool GtpLoop::NetBench(Splitter &spt, std::string &rep) {
                        batch_size,
                        num_nn_queries,
                        num_nn_queries/elapsed);
+        if (num_workers == 0) {
+            LOGGING << "Warning: The network is CPU backend.\n";
+            break;
+        }
     }
 
     if (orig_batch != param->batch_size) {

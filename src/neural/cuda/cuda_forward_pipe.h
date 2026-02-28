@@ -33,6 +33,8 @@ public:
 
     virtual void Destroy();
 
+    virtual int GetNumWorkers() const;
+
     virtual std::vector<OutputResult> BatchForward(int gpu, const std::vector<InputData>& inputs);
 
 private:
