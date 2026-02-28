@@ -81,11 +81,24 @@ void CopyToCudaOp(bool fp16, void **cude_op,
                   const std::vector<float> &inputs,
                   void **pinned_op = nullptr);
 
+// Same as CopyToCudaOp, but enqueues host-to-device copy
+// on the given CUDA stream.
+void CopyToCudaOpAsync(bool fp16, void **cude_op,
+                       const std::vector<float> &inputs,
+                       cudaStream_t stream,
+                       void **pinned_op = nullptr);
+
 // Copy the 'cude_op' data to 'outputs'. Use the
 // pinned memory if we provide the 'pinned_op'.
 // Otherwise, set it as null pointer.
 void CopyToHostOp(bool fp16, std::vector<float> &outputs,
                   void **cude_op, void **pinned_op = nullptr);
+
+// Enqueues device-to-host copy on the given CUDA stream and
+// converts fp16 output to fp32 within this function.
+void CopyToHostOpAsync(bool fp16, std::vector<float> &outputs,
+                       void **cude_op, cudaStream_t stream,
+                       void **pinned_op = nullptr);
 
 } // namespace cuda
 

@@ -313,6 +313,39 @@ void CopyToCudaOp(bool fp16, void **cude_op,
     }
 }
 
+void CopyToCudaOpAsync(bool fp16, void **cude_op,
+                       const std::vector<float> &inputs,
+                       cudaStream_t stream,
+                       void **pinned_op) {
+    size_t in_size = inputs.size();
+    if (fp16) {
+        auto buf = std::vector<half_float_t>(in_size);
+        for (size_t i = 0; i < in_size; ++i) {
+            buf[i] = GetFp16(inputs[i]); // assume it is the normal number
+        }
+        size_t op_size = in_size * sizeof(half_float_t);
+
+        if (pinned_op) {
+            std::memcpy(*pinned_op, buf.data(), op_size);
+            ReportCUDAErrors(cudaMemcpyAsync(
+                *cude_op, *pinned_op, op_size, cudaMemcpyHostToDevice, stream));
+        } else {
+            ReportCUDAErrors(cudaMemcpyAsync(
+                *cude_op, buf.data(), op_size, cudaMemcpyHostToDevice, stream));
+        }
+    } else {
+        size_t op_size = in_size * sizeof(float);
+        if (pinned_op) {
+            std::memcpy(*pinned_op, inputs.data(), op_size);
+            ReportCUDAErrors(cudaMemcpyAsync(
+                *cude_op, *pinned_op, op_size, cudaMemcpyHostToDevice, stream));
+        } else {
+            ReportCUDAErrors(cudaMemcpyAsync(
+                *cude_op, inputs.data(), op_size, cudaMemcpyHostToDevice, stream));
+        }
+    }
+}
+
 void CopyToHostOp(bool fp16, std::vector<float> &outputs,
                   void **cude_op, void **pinned_op) {
     size_t out_size = outputs.size();
@@ -339,6 +372,41 @@ void CopyToHostOp(bool fp16, std::vector<float> &outputs,
         } else {
             ReportCUDAErrors(cudaMemcpy(
                 outputs.data(), *cude_op, op_size, cudaMemcpyDeviceToHost));
+        }
+    }
+}
+
+void CopyToHostOpAsync(bool fp16, std::vector<float> &outputs,
+                       void **cude_op, cudaStream_t stream,
+                       void **pinned_op) {
+    size_t out_size = outputs.size();
+    if (fp16) {
+        size_t op_size = out_size * sizeof(half_float_t);
+        auto buf = std::vector<half_float_t>(out_size);
+        if (!pinned_op) {
+            ReportCUDAErrors(cudaMemcpyAsync(
+                buf.data(), *cude_op, op_size, cudaMemcpyDeviceToHost, stream));
+            WaitToFinish(stream);
+        } else {
+            ReportCUDAErrors(cudaMemcpyAsync(
+                *pinned_op, *cude_op, op_size, cudaMemcpyDeviceToHost, stream));
+            WaitToFinish(stream);
+            std::memcpy(buf.data(), *pinned_op, op_size);
+        }
+        for (size_t i = 0; i < out_size; ++i) {
+            outputs[i] = GetFp32(buf[i]);
+        }
+    } else {
+        size_t op_size = out_size * sizeof(float);
+        if (pinned_op) {
+            ReportCUDAErrors(cudaMemcpyAsync(
+                *pinned_op, *cude_op, op_size, cudaMemcpyDeviceToHost, stream));
+            WaitToFinish(stream);
+            std::memcpy(outputs.data(), *pinned_op, op_size);
+        } else {
+            ReportCUDAErrors(cudaMemcpyAsync(
+                outputs.data(), *cude_op, op_size, cudaMemcpyDeviceToHost, stream));
+            WaitToFinish(stream);
         }
     }
 }

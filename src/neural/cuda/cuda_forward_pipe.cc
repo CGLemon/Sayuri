@@ -108,7 +108,7 @@ void CudaForwardPipe::Construct(ForwardPipeOption option,
     }
 
     for (size_t i = 0; i < gpus_list.size(); ++i) {
-        nngraphs_.emplace_back(std::make_unique<NNGraph>(io_mutex_));
+        nngraphs_.emplace_back(std::make_unique<NNGraph>());
     }
 
     // Construct network graph for each valid GPU.
@@ -715,18 +715,14 @@ bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData>& batch_inp
             sqrt_mask[b] = planes_bsize;
         }
 
-        // Copy the mask from host memory to device.
-        {
-            std::lock_guard<std::mutex> lock(io_mutex_);
-            cuda::SetDevice(handles_.gpu_id);
-
-            cuda::CopyToCudaOp(
-                handles_.fp16, &(cuda_mask_op_[0]),
-                spat_mask, &(host_mask_op_[0]));
-            cuda::CopyToCudaOp(
-                handles_.fp16, &(cuda_mask_op_[1]),
-                sqrt_mask, &(host_mask_op_[1]));
-        }
+        // Copy masks on this graph's stream, so each worker thread/GPU
+        // can run independently without a global lock.
+        cuda::CopyToCudaOpAsync(
+            handles_.fp16, &(cuda_mask_op_[0]), spat_mask,
+            handles_.stream, &(host_mask_op_[0]));
+        cuda::CopyToCudaOpAsync(
+            handles_.fp16, &(cuda_mask_op_[1]), sqrt_mask,
+            handles_.stream, &(host_mask_op_[1]));
     }
 
     return should_apply_mask;
@@ -736,6 +732,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     const auto batch_size = (int)batch_input.size();
 
     assert(max_batch_ >= batch_size);
+    cuda::SetDevice(handles_.gpu_id);
 
     const auto should_apply_mask = ApplyMask(batch_input);
     const auto input_channels = weights_->input_channels;
@@ -756,13 +753,9 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     }
 
     // copy the inputs data from host memory to device
-    {
-        std::lock_guard<std::mutex> lock(io_mutex_);
-        cuda::SetDevice(handles_.gpu_id);
-        cuda::CopyToCudaOp(
-            handles_.fp16, &cuda_input_planes_,
-            batch_planes, &host_input_planes_);
-    }
+    cuda::CopyToCudaOpAsync(
+        handles_.fp16, &cuda_input_planes_, batch_planes,
+        handles_.stream, &host_input_planes_);
 
     // input layer
     graph_->input_conv.Forward(
@@ -999,27 +992,19 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     auto batch_value_misc = std::vector<float>(batch_size * value_misc_outputs);
     auto batch_ownership = std::vector<float>(batch_size * ownership_channels * num_intersections);
 
-    cuda::WaitToFinish(handles_.stream);
-
-    {
-        std::lock_guard<std::mutex> lock(io_mutex_);
-
-        // copy the results to host memory
-        cuda::SetDevice(handles_.gpu_id);
-
-        cuda::CopyToHostOp(
-            handles_.fp16, batch_prob,
-            &cuda_output_prob_, &host_output_prob_);
-        cuda::CopyToHostOp(
-            handles_.fp16, batch_prob_pass,
-            &cuda_output_prob_pass_, &host_output_prob_pass_);
-        cuda::CopyToHostOp(
-            handles_.fp16, batch_value_misc,
-            &cuda_output_val_, &host_output_val_);
-        cuda::CopyToHostOp(
-            handles_.fp16, batch_ownership,
-            &cuda_output_ownership_, &host_output_ownership_);
-    }
+    // Copy results on this graph's stream, then wait once before decoding.
+    cuda::CopyToHostOpAsync(
+        handles_.fp16, batch_prob,
+        &cuda_output_prob_, handles_.stream, &host_output_prob_);
+    cuda::CopyToHostOpAsync(
+        handles_.fp16, batch_prob_pass,
+        &cuda_output_prob_pass_, handles_.stream, &host_output_prob_pass_);
+    cuda::CopyToHostOpAsync(
+        handles_.fp16, batch_value_misc,
+        &cuda_output_val_, handles_.stream, &host_output_val_);
+    cuda::CopyToHostOpAsync(
+        handles_.fp16, batch_ownership,
+        &cuda_output_ownership_, handles_.stream, &host_output_ownership_);
 
     auto batch_output_result = std::vector<OutputResult>(batch_size);
 
@@ -1107,6 +1092,7 @@ void CudaForwardPipe::NNGraph::DestroyGraph() {
     if (graph_ == nullptr) {
         return;
     }
+    cuda::SetDevice(handles_.gpu_id);
 
     cuda::ReportCUDAErrors(cudaFree(cuda_scratch_op_[0]));
     cuda::ReportCUDAErrors(cudaFree(cuda_scratch_op_[1]));

@@ -7,7 +7,6 @@
 #include <condition_variable>
 #include <list>
 #include <memory>
-#include <mutex>
 #include <vector>
 
 #include "neural/cuda/cuda_common.h"
@@ -79,7 +78,7 @@ private:
         };
 
     public:
-        NNGraph(std::mutex &mtx) : io_mutex_(mtx) {}
+        NNGraph() = default;
         ~NNGraph();
         void ConstructGraph(bool dump_gpu_info,
                             const int gpu,
@@ -130,13 +129,9 @@ private:
         std::array<void*, 3> cuda_val_op_;
         std::array<void*, 2> cuda_mask_op_;
 
-        std::mutex &io_mutex_;
-
         size_t scratch_size_;
         std::shared_ptr<DNNWeights> weights_{nullptr};
     };
-
-    std::mutex io_mutex_;
     std::vector<std::unique_ptr<NNGraph>> nngraphs_;
 
     bool dump_gpu_info_;
