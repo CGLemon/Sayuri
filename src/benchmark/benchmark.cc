@@ -1,17 +1,19 @@
 #include "benchmark.h"
-#include "utils/option.h"
-#include "utils/splitter.h"
-#include "utils/time.h"
-#include "utils/threadpool.h"
-#include "utils/log.h"
-#include "utils/random.h"
-#include "game/sgf.h"
 
 #include <atomic>
 #include <cmath>
 
+#include "game/sgf.h"
+#include "utils/log.h"
+#include "utils/option.h"
+#include "utils/random.h"
+#include "utils/splitter.h"
+#include "utils/threadpool.h"
+#include "utils/time.h"
+
 double ComputeEloEffect(int playouts_per_move, double playouts_per_second, int threads) {
-    // From: https://github.com/lightvector/KataGo/blob/9030f72d152da42c1dd03590aa5116993ea842f6/cpp/program/playutils.cpp#L850
+    // From:
+    // https://github.com/lightvector/KataGo/blob/9030f72d152da42c1dd03590aa5116993ea842f6/cpp/program/playutils.cpp#L850
     auto ComputeEloCost = [&](int p, int t) {
         // Completely ad-hoc formula that approximately fits noisy tests. Probably not very good
         // but then again the recommendation of this benchmark program is very rough anyways, it
@@ -26,8 +28,8 @@ double ComputeEloEffect(int playouts_per_move, double playouts_per_second, int t
 }
 
 void Benchmark::Initialize() {
-    const auto query_cnt = IsOptionDefault("benchmark_query") ?
-                               0 : GetOptionCount("benchmark_query");
+    const auto query_cnt =
+        IsOptionDefault("benchmark_query") ? 0 : GetOptionCount("benchmark_query");
 
     for (int idx = 0; idx < query_cnt; ++idx) {
         auto query = GetOption<std::string>("benchmark_query", idx);
@@ -35,7 +37,7 @@ void Benchmark::Initialize() {
         if (query.empty()) {
             break;
         }
-        for (char &c : query) {
+        for (char& c : query) {
             if (c == ':') {
                 c = ' ';
             }
@@ -57,15 +59,12 @@ void Benchmark::Initialize() {
             queries_list_.emplace_back(q);
         }
     }
-    auto ite = std::remove_if(std::begin(queries_list_), std::end(queries_list_),
-                              [](Query &q) {
-                                  if (q.threads <= 0 ||
-                                          q.batch_size <= 0 ||
-                                          q.games <= 0) {
-                                      return true;
-                                  }
-                                  return false;
-                              });
+    auto ite = std::remove_if(std::begin(queries_list_), std::end(queries_list_), [](Query& q) {
+        if (q.threads <= 0 || q.batch_size <= 0 || q.games <= 0) {
+            return true;
+        }
+        return false;
+    });
     queries_list_.erase(ite, std::end(queries_list_));
 
     if (queries_list_.empty()) {
@@ -85,8 +84,8 @@ std::vector<std::string> Benchmark::GenerateTestSet(int num_games) {
         agent_->GetNetwork().ClearCache();
         agent_->GetState().ClearBoard();
 
-        auto dist = std::normal_distribution<float>(
-            0.f, (float)agent_->GetState().GetBoardSize()/4);
+        auto dist =
+            std::normal_distribution<float>(0.f, (float)agent_->GetState().GetBoardSize() / 4);
         const int random_moves_cnt =
             dist(Random<>::Get()) + 0.08f * agent_->GetState().GetNumIntersections();
 
@@ -95,8 +94,8 @@ std::vector<std::string> Benchmark::GenerateTestSet(int num_games) {
                 break;
             }
 
-            int random_move = agent_->GetNetwork().
-                GetVertexWithPolicy(agent_->GetState(), 0.95, false);
+            int random_move =
+                agent_->GetNetwork().GetVertexWithPolicy(agent_->GetState(), 0.95, false);
             agent_->GetState().PlayMove(random_move);
         }
         out.emplace_back(Sgf::Get().ToString(agent_->GetState()));
@@ -117,14 +116,16 @@ void Benchmark::Run() {
     auto sgf_list = GenerateTestSet(max_games);
 
     LOGGING << "Start Benchmark...\n";
-    Parameters * param = agent_->GetSearch().GetParams();
+    Parameters* param = agent_->GetSearch().GetParams();
 
     auto elo_list = std::vector<double>{};
     for (int i = 0; i < (int)queries_list_.size(); ++i) {
         auto& q = queries_list_[i];
-        LOGGING << Format(
-            "query %d/%d -> threads= %d, batch size= %d\n",
-             i+1, (int)queries_list_.size(), q.threads, q.batch_size);
+        LOGGING << Format("query %d/%d -> threads= %d, batch size= %d\n",
+                          i + 1,
+                          (int)queries_list_.size(),
+                          q.threads,
+                          q.batch_size);
         agent_->SetThreads(q.threads);
         agent_->SetBatchSize(q.batch_size);
 
@@ -136,26 +137,25 @@ void Benchmark::Run() {
             agent_->GetNetwork().ClearCache();
             agent_->GetNetwork().ResetNumQueries();
 
-            auto result = agent_->GetSearch().Computation(
-                              param->playouts, Search::kThinking);
+            auto result = agent_->GetSearch().Computation(param->playouts, Search::kThinking);
 
-            LOGGING << Format(
-                "   - game %d/%d -> %.2f p/s\n",
-                game_idx+1,
-                q.games,
-                result.playouts / result.elapsed);
+            LOGGING << Format("   - game %d/%d -> %.2f p/s\n",
+                              game_idx + 1,
+                              q.games,
+                              result.playouts / result.elapsed);
             avg_playouts += result.playouts / (double)q.games;
             avg_elapsed += result.elapsed / (double)q.games;
         }
         double playouts_per_move = avg_playouts;
         double playouts_per_second = playouts_per_move / avg_elapsed;
 
-        elo_list.emplace_back(
-            ComputeEloEffect(playouts_per_move, playouts_per_second, q.threads));
+        elo_list.emplace_back(ComputeEloEffect(playouts_per_move, playouts_per_second, q.threads));
         double elodiff = elo_list[i] - elo_list[0];
         char sign = elodiff >= 0.0 ? '+' : '-';
-        LOGGING << Format(
-            "   - final result -> %.2f p/s (elo %.1f, elo diff %c%.1f)\n",
-            playouts_per_second, elo_list[i], sign, std::abs(elodiff));
+        LOGGING << Format("   - final result -> %.2f p/s (elo %.1f, elo diff %c%.1f)\n",
+                          playouts_per_second,
+                          elo_list[i],
+                          sign,
+                          std::abs(elodiff));
     }
 }

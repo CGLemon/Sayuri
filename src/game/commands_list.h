@@ -1,54 +1,54 @@
 #pragma once
 
-#include <vector>
 #include <string>
+#include <vector>
 
 static constexpr auto kProtocolVersion = 2;
 
 static std::vector<std::string> kGtpCommandsList = {
-    "protocol_version",    // Part of GTP version 2 standard command.
+    "protocol_version", // Part of GTP version 2 standard command.
 
-    "name",                // Part of GTP version 2 standard command.
+    "name", // Part of GTP version 2 standard command.
 
-    "version",             // Part of GTP version 2 standard command.
+    "version", // Part of GTP version 2 standard command.
 
-    "quit",                // Part of GTP version 2 standard command.
+    "quit", // Part of GTP version 2 standard command.
 
-    "known_command",       // Part of GTP version 2 standard command.
+    "known_command", // Part of GTP version 2 standard command.
 
-    "list_commands",       // Part of GTP version 2 standard command.
+    "list_commands", // Part of GTP version 2 standard command.
 
-    "help",                // Part of GTP version 2 standard command.
+    "help", // Part of GTP version 2 standard command.
 
-    "boardsize",           // Part of GTP version 2 standard command.
+    "boardsize", // Part of GTP version 2 standard command.
 
-    "clear_board",         // Part of GTP version 2 standard command.
+    "clear_board", // Part of GTP version 2 standard command.
 
-    "komi",                // Part of GTP version 2 standard command.
+    "komi", // Part of GTP version 2 standard command.
 
-    "play",                // Part of GTP version 2 standard command.
+    "play", // Part of GTP version 2 standard command.
 
-    "genmove",             // Part of GTP version 2 standard command.
+    "genmove", // Part of GTP version 2 standard command.
 
-    "showboard",           // Part of GTP version 2 standard command.
+    "showboard", // Part of GTP version 2 standard command.
 
-    "undo",                // Part of GTP version 2 standard command.
+    "undo", // Part of GTP version 2 standard command.
 
-    "final_score",         // Part of GTP version 2 standard command.
+    "final_score", // Part of GTP version 2 standard command.
 
-    "final_status_list",   // Part of GTP version 2 standard command.
+    "final_status_list", // Part of GTP version 2 standard command.
 
-    "time_settings",       // Part of GTP version 2 standard command.
+    "time_settings", // Part of GTP version 2 standard command.
 
-    "time_left",           // Part of GTP version 2 standard command.
+    "time_left", // Part of GTP version 2 standard command.
 
-    "fixed_handicap",      // Part of GTP version 2 standard command.
+    "fixed_handicap", // Part of GTP version 2 standard command.
 
     "place_free_handicap", // Part of GTP version 2 standard command.
 
-    "set_free_handicap",   // Part of GTP version 2 standard command.
+    "set_free_handicap", // Part of GTP version 2 standard command.
 
-    "loadsgf",             // Part of GTP version 2 standard command.
+    "loadsgf", // Part of GTP version 2 standard command.
 
     "printsgf",
 
@@ -64,11 +64,11 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "clear_cache",
 
-    "selfplay-genmove",      // For self-play debug.
+    "selfplay-genmove", // For self-play debug.
 
-    "selfplay",              // For self-play debug.
+    "selfplay", // For self-play debug.
 
-    "dump_training_buffer",  // For self-play debug.
+    "dump_training_buffer", // For self-play debug.
 
     "clear_training_buffer", // For self-play debug.
 
@@ -82,7 +82,7 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "lz-genmove_analyze",
 
-    "kata-analyze",         // Subset of kata-analyze
+    "kata-analyze", // Subset of kata-analyze
 
     "kata-genmove_analyze", // Subset of kata-genmove_analyze
 
@@ -144,5 +144,4 @@ static std::vector<std::string> kGtpCommandsList = {
 
     "gogui-rules_side_to_move",
 
-    "gogui-rules_final_result"
-};
+    "gogui-rules_final_result"};

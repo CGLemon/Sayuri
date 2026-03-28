@@ -2,6 +2,6 @@
 
 #include <string>
 
-void SaveGzip(std::string filename, std::string &buffer);
+void SaveGzip(std::string filename, std::string& buffer);
 
 bool IsGzipValid();

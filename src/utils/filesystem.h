@@ -1,10 +1,10 @@
 #pragma once
 
-#include <ctime>
 #include <cstdint>
-#include <vector>
-#include <string>
+#include <ctime>
 #include <initializer_list>
+#include <string>
+#include <vector>
 
 // Split the pathname path into a vector.
 std::vector<std::string> SplitPath(std::string path);
@@ -30,7 +30,7 @@ std::vector<std::string> GetDirectoryList(const std::string& directory);
 
 // Returns list of full paths of regular files in this directory tree.
 // Silently returns empty vector on error.
-std::vector<std::string> SearchFileTree(const std::string& directory, size_t *counter = nullptr);
+std::vector<std::string> SearchFileTree(const std::string& directory, size_t* counter = nullptr);
 
 // Returns size of a file, 0 if file doesn't exist or can't be read.
 std::uint64_t GetFileSize(const std::string& filename);

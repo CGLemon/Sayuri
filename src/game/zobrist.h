@@ -13,9 +13,9 @@ private:
     static constexpr KEY kInitSeed = 0xabcdabcd12345678;
 
 public:
-    static constexpr KEY kEmpty        = 0x1234567887654321;
-    static constexpr KEY kBlackToMove  = 0xabcdabcdabcdabcd;
-    static constexpr KEY kHalfKomi     = 0x5678876556788765;
+    static constexpr KEY kEmpty = 0x1234567887654321;
+    static constexpr KEY kBlackToMove = 0xabcdabcdabcdabcd;
+    static constexpr KEY kHalfKomi = 0x5678876556788765;
     static constexpr KEY kNegativeKomi = 0x4321432143214321;
 
     static std::array<std::array<KEY, kZobristSize>, 4> kState;

@@ -1,21 +1,22 @@
 #include "game/gtp.h"
-#include "game/sgf.h"
-#include "game/commands_list.h"
-#include "utils/log.h"
-#include "utils/time.h"
-#include "utils/komi.h"
-#include "utils/gogui_helper.h"
-#include "utils/filesystem.h"
-#include "pattern/mm_trainer.h"
-#include "neural/encoder.h"
 
 #include <array>
 #include <atomic>
 #include <iomanip>
 #include <iostream>
-#include <string>
 #include <stdexcept>
+#include <string>
 #include <vector>
+
+#include "game/commands_list.h"
+#include "game/sgf.h"
+#include "neural/encoder.h"
+#include "pattern/mm_trainer.h"
+#include "utils/filesystem.h"
+#include "utils/gogui_helper.h"
+#include "utils/komi.h"
+#include "utils/log.h"
+#include "utils/time.h"
 
 void GtpLoop::Loop() {
     while (true) {
@@ -72,7 +73,7 @@ void GtpLoop::Loop() {
     }
 }
 
-std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
+std::string GtpLoop::Execute(Splitter& spt, bool& try_ponder) {
     if (!agent_) {
         return std::string{};
     }
@@ -88,7 +89,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
     } else if (const auto res = spt.Find("showboard", 0)) {
         agent_->GetState().ShowBoard();
         out << GtpSuccess("");
-    } else if (const auto res = spt.Find("boardsize", 0)){
+    } else if (const auto res = spt.Find("boardsize", 0)) {
         int bsize = -1;
         if (const auto input = spt.GetWord(1)) {
             bool error;
@@ -98,15 +99,13 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             }
         }
 
-        if (bsize <= kBoardSize &&
-                bsize <= kMaxGTPBoardSize &&
-                bsize >= kMinGTPBoardSize) {
+        if (bsize <= kBoardSize && bsize <= kMaxGTPBoardSize && bsize >= kMinGTPBoardSize) {
             agent_->SetBoardSize(bsize);
             out << GtpSuccess("");
         } else {
             out << GtpFail("invalid board size");
         }
-    } else if (const auto res = spt.Find("clear_board", 0)){
+    } else if (const auto res = spt.Find("clear_board", 0)) {
         agent_->GetSearch().ReleaseTree();
         agent_->GetNetwork().ClearCache();
         agent_->GetState().ClearBoard();
@@ -148,8 +147,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
                 LOGGING << "error: handicaps must be <INT>\n";
             }
         }
-        if (handicaps >= 1 &&
-                agent_->GetState().SetFixdHandicap(handicaps)) {
+        if (handicaps >= 1 && agent_->GetState().SetFixdHandicap(handicaps)) {
             out << GtpSuccess("");
         } else {
             out << GtpFail("invalid handicap");
@@ -164,17 +162,14 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             }
         }
         bool network_valid = agent_->GetNetwork().Valid();
-        int max_handicaps = network_valid ?
-                                agent_->GetState().GetNumIntersections() / 4 :
-                                9;
+        int max_handicaps = network_valid ? agent_->GetState().GetNumIntersections() / 4 : 9;
         auto stones_list = std::vector<int>{};
 
         if (handicaps >= 1 && handicaps <= max_handicaps) {
             if (network_valid) {
                 for (int i = 0; i < handicaps; ++i) {
                     const int vtx =
-                        agent_->GetNetwork().GetVertexWithPolicy(
-                            agent_->GetState(), 1.f, false);
+                        agent_->GetNetwork().GetVertexWithPolicy(agent_->GetState(), 1.f, false);
                     stones_list.emplace_back(vtx);
                     // agent_->GetState().ClearBoard();
                     agent_->GetState().PlayHandicapStones(stones_list, true);
@@ -189,7 +184,8 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             for (size_t i = 0; i < stones_list.size(); i++) {
                 const auto vtx = stones_list[i];
                 vtx_list << agent_->GetState().VertexToText(vtx);
-                if (i != stones_list.size() - 1) vtx_list << ' ';
+                if (i != stones_list.size() - 1)
+                    vtx_list << ' ';
             }
             out << GtpSuccess(vtx_list.str());
         } else {
@@ -225,7 +221,8 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             out << GtpFail(Format("invalid SGF file, cause %s.", e.what()));
         }
     } else if (const auto res = spt.Find("is_legal", 0)) {
-        auto color = agent_->GetState().GetToMove();;
+        auto color = agent_->GetState().GetToMove();
+        ;
         auto move = kNullVertex;
 
         if (const auto input = spt.GetWord(1)) {
@@ -295,8 +292,8 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             auto dead_list = std::vector<int>{};
             auto fork_state = agent_->GetState();
 
-            for (const auto &string : result.dead_strings) {
-                for (const auto vtx: string) {
+            for (const auto& string : result.dead_strings) {
+                for (const auto vtx : string) {
                     dead_list.emplace_back(vtx);
                 }
             }
@@ -388,10 +385,8 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             message = spt.GetSlice(3)->Get<>();
             out << GtpSuccess("I'm a go bot, not a chat bot.");
         }
-    } else if (const auto res = spt.Find({"analyze",
-                                              "lz-analyze",
-                                              "kata-analyze",
-                                              "sayuri-analyze"}, 0)) {
+    } else if (const auto res =
+                   spt.Find({"analyze", "lz-analyze", "kata-analyze", "sayuri-analyze"}, 0)) {
         auto color = agent_->GetState().GetToMove();
         auto config = ParseAnalysisConfig(spt, color);
 
@@ -405,9 +400,10 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         agent_->GetSearch().Analyze(true, config);
         DUMPING << "\n";
     } else if (const auto res = spt.Find({"genmove_analyze",
-                                             "lz-genmove_analyze",
-                                             "kata-genmove_analyze",
-                                             "sayuri-genmove_analyze"}, 0)) {
+                                          "lz-genmove_analyze",
+                                          "kata-genmove_analyze",
+                                          "sayuri-genmove_analyze"},
+                                         0)) {
         auto color = agent_->GetState().GetToMove();
         auto config = ParseAnalysisConfig(spt, color);
 
@@ -451,8 +447,8 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             success = false;
         }
         if (success && !error) {
-            agent_->GetSearch().TimeSettings(main_time, byo_yomi_time,
-                                                 byo_yomi_stones, byo_yomi_periods);
+            agent_->GetSearch().TimeSettings(
+                main_time, byo_yomi_time, byo_yomi_stones, byo_yomi_periods);
             out << GtpSuccess("");
         } else {
             out << GtpFail("invalid time settings");
@@ -508,29 +504,29 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         if (const auto input = spt.Find("alive", 1)) {
             for (size_t i = 0; i < result.alive_strings.size(); i++) {
                 vtx_list << (i == 0 ? "" : "\n");
-                auto &string = result.alive_strings[i];
+                auto& string = result.alive_strings[i];
                 for (size_t j = 0; j < string.size(); j++) {
                     auto vtx = string[j];
                     vtx_list << agent_->GetState().VertexToText(vtx);
-                    if (j != string.size() - 1) vtx_list << ' ';
+                    if (j != string.size() - 1)
+                        vtx_list << ' ';
                 }
             }
             out << GtpSuccess(vtx_list.str());
         } else if (const auto input = spt.Find("dead", 1)) {
-             for (size_t i = 0; i < result.dead_strings.size(); i++) {
+            for (size_t i = 0; i < result.dead_strings.size(); i++) {
                 vtx_list << (i == 0 ? "" : "\n");
-                auto &string = result.dead_strings[i];
+                auto& string = result.dead_strings[i];
                 for (size_t j = 0; j < string.size(); j++) {
                     auto vtx = string[j];
                     vtx_list << agent_->GetState().VertexToText(vtx);
-                    if (j != string.size() - 1) vtx_list << ' ';
+                    if (j != string.size() - 1)
+                        vtx_list << ' ';
                 }
             }
             out << GtpSuccess(vtx_list.str());
-        } else if (const auto input = spt.Find({"black_area",
-                                                    "white_area",
-                                                    "black_territory",
-                                                    "white_territory"}, 1)) {
+        } else if (const auto input = spt.Find(
+                       {"black_area", "white_area", "black_territory", "white_territory"}, 1)) {
             bool counted = false;
             const bool is_black = (input->Get<>().find("black") != std::string::npos);
             const bool is_area = (input->Get<>().find("area") != std::string::npos);
@@ -543,7 +539,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             for (int idx = 0; idx < num_intersections; ++idx) {
                 const auto x = idx % board_size;
                 const auto y = idx / board_size;
-                const auto vtx = agent_->GetState().GetVertex(x,y);
+                const auto vtx = agent_->GetState().GetVertex(x, y);
 
                 // -1 ~ 1
                 auto owner_val = result.root_ownership[idx];
@@ -553,7 +549,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
 
                 static constexpr float kThreshold = 0.35f; // give the low threshold
                 if ((is_black && owner_val >= kThreshold) ||
-                        (!is_black && owner_val <= -kThreshold)) {
+                    (!is_black && owner_val <= -kThreshold)) {
                     if (is_area || agent_->GetState().GetState(vtx) != check_color) {
                         vtx_list << agent_->GetState().VertexToText(vtx) << ' ';
                         counted = true;
@@ -562,7 +558,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             }
             if (counted) {
                 int pos = vtx_list.tellp();
-                vtx_list.seekp(pos-1);
+                vtx_list.seekp(pos - 1);
             }
             out << GtpSuccess(vtx_list.str());
         } else {
@@ -574,9 +570,10 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
 
         std::sort(std::begin(kGtpCommandsList), std::end(kGtpCommandsList));
 
-        for (const auto &cmd : kGtpCommandsList) {
+        for (const auto& cmd : kGtpCommandsList) {
             list_commands << cmd;
-            if (++idx != kGtpCommandsList.size()) list_commands << std::endl;
+            if (++idx != kGtpCommandsList.size())
+                list_commands << std::endl;
         }
         out << GtpSuccess(list_commands.str());
     } else if (const auto res = spt.Find("known_command", 0)) {
@@ -598,9 +595,8 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         }
 
         if (symmetry <= 8 && symmetry >= 0) {
-            out << GtpSuccess(
-                Encoder::Get().GetPlanesString(
-                    agent_->GetState(), symmetry, agent_->GetNetwork().GetVersion()));
+            out << GtpSuccess(Encoder::Get().GetPlanesString(
+                agent_->GetState(), symmetry, agent_->GetNetwork().GetVersion()));
         } else {
             out << GtpFail("symmetry must be from 0 to 7");
         }
@@ -618,7 +614,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         if (symmetry <= 8 && symmetry >= 0) {
             auto ensemble = use_avg ? Network::kAverage : Network::kDirect;
             out << GtpSuccess(agent_->GetNetwork().GetOutputString(
-                       agent_->GetState(), ensemble, Network::Query::Get().SetSymmetry(symmetry)));
+                agent_->GetState(), ensemble, Network::Query::Get().SetSymmetry(symmetry)));
         } else {
             out << GtpFail("symmetry must be from 0 to 7, or avg");
         }
@@ -701,8 +697,8 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         if (!save_dir.empty()) {
             try {
                 TryCreateDirectory(save_dir);
-            } catch (char * err) {
-                (void) err;
+            } catch (char* err) {
+                (void)err;
             }
 
             const auto fair_result = agent_->GetSearch().Computation(400, Search::kForced);
@@ -714,8 +710,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
                 agent_->GetState().ClearBoard();
                 for (int i = 0; i < opening_moves; ++i) {
                     const int vtx =
-                        agent_->GetNetwork().GetVertexWithPolicy(
-                            agent_->GetState(), 1.2f, false);
+                        agent_->GetNetwork().GetVertexWithPolicy(agent_->GetState(), 1.2f, false);
                     agent_->GetState().PlayMove(vtx);
                 }
                 const auto hash = agent_->GetState().GetHash();
@@ -729,13 +724,13 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
                 if (result.to_move != fair_result.to_move) {
                     winrate_upper = 1.f - winrate_upper;
                 }
-                winrate_upper += range/2.0f;
+                winrate_upper += range / 2.0f;
 
-                if (result.root_eval > winrate_upper ||
-                        result.root_eval < (1.f - winrate_upper)) {
+                if (result.root_eval > winrate_upper || result.root_eval < (1.f - winrate_upper)) {
                     continue;
                 }
-                for (int symm = Symmetry::kIdentitySymmetry; symm < Symmetry::kNumSymmetris; ++symm) {
+                for (int symm = Symmetry::kIdentitySymmetry; symm < Symmetry::kNumSymmetris;
+                     ++symm) {
                     buf.emplace_back(agent_->GetState().ComputeSymmetryHash(symm));
                 }
                 const auto sgf_name = std::to_string(games++) + ".sgf";
@@ -768,8 +763,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             auto move = spt.GetWord(i)->Get<>();
             moves.emplace_back(agent_->GetState().TextToVertex(move));
         }
-        out << GtpSuccess(
-                   agent_->GetSearch().GetDebugMoves(moves));
+        out << GtpSuccess(agent_->GetSearch().GetDebugMoves(moves));
     } else if (const auto res = spt.Find("gogui-analyze_commands", 0)) {
         auto gogui_cmds = std::ostringstream{};
 
@@ -805,8 +799,8 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             auto prob = result.probabilities[idx];
             if (prob > ave_pol) {
                 if (agent_->GetState().PlayMove(vtx)) {
-                    const auto next_result = agent_->GetNetwork().GetOutput(
-                                                 agent_->GetState(), Network::kDirect);
+                    const auto next_result =
+                        agent_->GetNetwork().GetOutput(agent_->GetState(), Network::kDirect);
 
                     const float wdl = next_result.wdl_winrate;
                     if (!first) {
@@ -840,9 +834,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             }
         }
         const auto result = agent_->GetNetwork().GetOutput(
-            agent_->GetState(),
-            Network::kDirect,
-            Network::Query::Get().SetOffset(offset));
+            agent_->GetState(), Network::kDirect, Network::Query::Get().SetOffset(offset));
         const auto board_size = result.board_size;
         const auto num_intersections = board_size * board_size;
 
@@ -883,9 +875,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             }
         }
         const auto result = agent_->GetNetwork().GetOutput(
-            agent_->GetState(),
-            Network::kDirect,
-            Network::Query::Get().SetOffset(offset));
+            agent_->GetState(), Network::kDirect, Network::Query::Get().SetOffset(offset));
         const auto board_size = result.board_size;
         const auto num_intersections = board_size * board_size;
         const auto ave_pol = 1.f / num_intersections;
@@ -897,8 +887,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             const auto vtx = agent_->GetState().IndexToVertex(idx);
             auto prob = result.probabilities[idx];
             if (prob > ave_pol) {
-                if (max_idx < 0 ||
-                        result.probabilities[max_idx] < prob) {
+                if (max_idx < 0 || result.probabilities[max_idx] < prob) {
                     max_idx = idx;
                 }
                 policy_rating << '\n';
@@ -911,9 +900,11 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         const auto max_vtx = agent_->GetState().IndexToVertex(max_idx);
 
         if (side_to_move == kBlack) {
-            policy_rating_var << Format("VAR b %s", agent_->GetState().VertexToText(max_vtx).c_str());
+            policy_rating_var << Format("VAR b %s",
+                                        agent_->GetState().VertexToText(max_vtx).c_str());
         } else {
-            policy_rating_var << Format("VAR w %s", agent_->GetState().VertexToText(max_vtx).c_str());
+            policy_rating_var << Format("VAR w %s",
+                                        agent_->GetState().VertexToText(max_vtx).c_str());
         }
         policy_rating_var << policy_rating.str();
         out << GtpSuccess(policy_rating_var.str());
@@ -932,22 +923,24 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             const auto vtx = agent_->GetState().IndexToVertex(idx);
             auto prob = result.target_policy_dist[idx];
             if (prob > ave_pol) {
-                if (max_idx < 0 ||
-                        result.target_policy_dist[max_idx] < prob) {
+                if (max_idx < 0 || result.target_policy_dist[max_idx] < prob) {
                     max_idx = idx;
                 }
                 policy_rating << '\n';
                 policy_rating << GoguiLable(prob, agent_->GetState().VertexToText(vtx));
             }
         }
-        policy_rating << Format("\nTEXT pass %3.2f%%", 100.0f * result.target_policy_dist[num_intersections]);
+        policy_rating << Format("\nTEXT pass %3.2f%%",
+                                100.0f * result.target_policy_dist[num_intersections]);
         auto policy_rating_var = std::ostringstream{};
         const auto max_vtx = agent_->GetState().IndexToVertex(max_idx);
 
         if (agent_->GetState().GetToMove() == kBlack) {
-            policy_rating_var << Format("VAR b %s", agent_->GetState().VertexToText(max_vtx).c_str());
+            policy_rating_var << Format("VAR b %s",
+                                        agent_->GetState().VertexToText(max_vtx).c_str());
         } else {
-            policy_rating_var << Format("VAR w %s", agent_->GetState().VertexToText(max_vtx).c_str());
+            policy_rating_var << Format("VAR w %s",
+                                        agent_->GetState().VertexToText(max_vtx).c_str());
         }
         policy_rating_var << policy_rating.str();
         out << GtpSuccess(policy_rating_var.str());
@@ -976,9 +969,8 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             // map [-1, 1] to [0, 1]
             const auto owner_val = (result.root_ownership[idx] + 1.f) / 2.f;
 
-            owner_map << GoguiGray(owner_val,
-                                       agent_->GetState().VertexToText(vtx),
-                                       color == kWhite);
+            owner_map << GoguiGray(
+                owner_val, agent_->GetState().VertexToText(vtx), color == kWhite);
         }
         out << GtpSuccess(owner_map.str());
     } else if (const auto res = spt.Find("gogui-ownership_influence", 0)) {
@@ -1004,9 +996,8 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
                 owner_val = -owner_val;
             }
 
-            owner_map << Format(" %s %.1f",
-                                    agent_->GetState().VertexToText(vtx).c_str(),
-                                    owner_val);
+            owner_map << Format(
+                " %s %.1f", agent_->GetState().VertexToText(vtx).c_str(), owner_val);
         }
 
         out << GtpSuccess(owner_map.str());
@@ -1055,7 +1046,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             gammas_map << GoguiColor(gnval, agent_->GetState().VertexToText(vtx));
         }
         out << GtpSuccess(gammas_map.str());
-    }  else if (const auto res = spt.Find("gogui-gammas_rating", 0)) {
+    } else if (const auto res = spt.Find("gogui-gammas_rating", 0)) {
         const auto board_size = agent_->GetState().GetBoardSize();
         const auto num_intersections = board_size * board_size;
         const auto color = agent_->GetState().GetToMove();
@@ -1070,8 +1061,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             auto gnval = gammas[idx];
 
             if (gnval > ave_pol) {
-                if (max_idx < 0 ||
-                        gammas[max_idx] < gnval) {
+                if (max_idx < 0 || gammas[max_idx] < gnval) {
                     max_idx = idx;
                 }
                 gammas_rating << '\n';
@@ -1082,9 +1072,11 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         const auto max_vtx = agent_->GetState().IndexToVertex(max_idx);
 
         if (agent_->GetState().GetToMove() == kBlack) {
-            gammas_rating_var << Format("VAR b %s", agent_->GetState().VertexToText(max_vtx).c_str());
+            gammas_rating_var << Format("VAR b %s",
+                                        agent_->GetState().VertexToText(max_vtx).c_str());
         } else {
-            gammas_rating_var << Format("VAR w %s", agent_->GetState().VertexToText(max_vtx).c_str());
+            gammas_rating_var << Format("VAR w %s",
+                                        agent_->GetState().VertexToText(max_vtx).c_str());
         }
         gammas_rating_var << gammas_rating.str();
         out << GtpSuccess(gammas_rating_var.str());
@@ -1122,9 +1114,9 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
         const auto board_size = agent_->GetState().GetBoardSize();
         auto board_oss = std::ostringstream{};
 
-        for (int y = board_size-1; y >= 0; --y) {
+        for (int y = board_size - 1; y >= 0; --y) {
             for (int x = 0; x < board_size; ++x) {
-                const auto s = agent_->GetState().GetState(x,y);
+                const auto s = agent_->GetState().GetState(x, y);
                 if (s == kBlack) {
                     board_oss << "X";
                 } else if (s == kWhite) {
@@ -1132,7 +1124,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
                 } else if (s == kEmpty) {
                     board_oss << ".";
                 }
-                board_oss << " \n"[board_size == x+1];
+                board_oss << " \n"[board_size == x + 1];
             }
         }
         out << GtpSuccess(board_oss.str());
@@ -1145,9 +1137,9 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             const auto board_size = agent_->GetState().GetBoardSize();
             auto legal_list = std::vector<int>{kPass};
 
-            for (int y = board_size-1; y >= 0; --y) {
+            for (int y = board_size - 1; y >= 0; --y) {
                 for (int x = 0; x < board_size; ++x) {
-                    const auto vtx = agent_->GetState().GetVertex(x,y);
+                    const auto vtx = agent_->GetState().GetVertex(x, y);
                     if (agent_->GetState().IsLegalMove(vtx)) {
                         legal_list.emplace_back(vtx);
                     }
@@ -1155,7 +1147,7 @@ std::string GtpLoop::Execute(Splitter &spt, bool &try_ponder) {
             }
 
             auto legal_oss = std::ostringstream{};
-            for (auto v: legal_list) {
+            for (auto v : legal_list) {
                 legal_oss << agent_->GetState().VertexToText(v) << ' ';
             }
             out << GtpSuccess(legal_oss.str());
@@ -1218,7 +1210,7 @@ std::string GtpLoop::GtpFail(std::string response) {
     return out.str();
 }
 
-AnalysisConfig GtpLoop::ParseAnalysisConfig(Splitter &spt, int &color) {
+AnalysisConfig GtpLoop::ParseAnalysisConfig(Splitter& spt, int& color) {
     AnalysisConfig config;
 
     config.interval = 0;
@@ -1274,7 +1266,7 @@ AnalysisConfig GtpLoop::ParseAnalysisConfig(Splitter &spt, int &color) {
                     config.use_reuse_label = true;
                     config.reuse_tree = false;
                     curr_idx += 1;
-                } 
+                }
             }
             continue;
         }
@@ -1369,10 +1361,9 @@ AnalysisConfig GtpLoop::ParseAnalysisConfig(Splitter &spt, int &color) {
             if (moves_color != kInvalid && moves_movenum >= 0) {
                 for (const auto vtx : moves) {
                     MoveToAvoid avoid_move;
-                    avoid_move.vertex     = vtx;
-                    avoid_move.color      = moves_color;
-                    avoid_move.until_move = moves_movenum +
-                                                agent_->GetState().GetMoveNumber() - 1;
+                    avoid_move.vertex = vtx;
+                    avoid_move.color = moves_color;
+                    avoid_move.until_move = moves_movenum + agent_->GetState().GetMoveNumber() - 1;
                     if (avoid_move.Valid()) {
                         if (token->Lower() == "allow") {
                             config.allow_moves.emplace_back(avoid_move);
@@ -1389,9 +1380,9 @@ AnalysisConfig GtpLoop::ParseAnalysisConfig(Splitter &spt, int &color) {
     return config;
 }
 
-bool GtpLoop::ParseOption(Splitter &spt, std::string &rep) {
+bool GtpLoop::ParseOption(Splitter& spt, std::string& rep) {
     const auto GetLowerString = [](std::string val) -> std::string {
-        for (auto & c: val) {
+        for (auto& c : val) {
             c = std::tolower(c);
         }
         return val;
@@ -1413,10 +1404,10 @@ bool GtpLoop::ParseOption(Splitter &spt, std::string &rep) {
         return false;
     }
 
-    if (const auto res = spt.GetSlice(name_idx+1, value_idx)) {
+    if (const auto res = spt.GetSlice(name_idx + 1, value_idx)) {
         name = res->Get<>();
     }
-    if (const auto res = spt.GetSlice(value_idx+1)) {
+    if (const auto res = spt.GetSlice(value_idx + 1)) {
         value = res->Get<>();
     }
     if (name.empty() || value.empty()) {
@@ -1425,7 +1416,7 @@ bool GtpLoop::ParseOption(Splitter &spt, std::string &rep) {
         return false;
     }
 
-    Parameters * param = agent_->GetSearch().GetParams();
+    Parameters* param = agent_->GetSearch().GetParams();
     try {
         if (name == "playouts") {
             param->playouts = std::max(0, std::stoi(value));
@@ -1448,8 +1439,7 @@ bool GtpLoop::ParseOption(Splitter &spt, std::string &rep) {
                 return false;
             }
         } else if (name == "resign threshold") {
-            param->resign_threshold =
-                std::min(1.f, std::max(0.f, std::stof(value)));
+            param->resign_threshold = std::min(1.f, std::max(0.f, std::stof(value)));
         } else if (name == "scoring rule") {
             if (GetLowerString(value) == "territory") {
                 agent_->GetState().SetRule(kTerritory);
@@ -1459,11 +1449,11 @@ bool GtpLoop::ParseOption(Splitter &spt, std::string &rep) {
                 rep = "invalid rule";
                 return false;
             }
-        }  else if (name == "threads") {
+        } else if (name == "threads") {
             agent_->SetThreads(std::stoi(value));
         } else if (name == "batch size") {
             agent_->SetBatchSize(std::stoi(value));
-        }  else if (name == "batch size") {
+        } else if (name == "batch size") {
         } else {
             rep = "invalid option name";
             return false;
@@ -1475,8 +1465,8 @@ bool GtpLoop::ParseOption(Splitter &spt, std::string &rep) {
     return true;
 }
 
-bool GtpLoop::NetBench(Splitter &spt, std::string &rep) {
-    Parameters * param = agent_->GetSearch().GetParams();
+bool GtpLoop::NetBench(Splitter& spt, std::string& rep) {
+    Parameters* param = agent_->GetSearch().GetParams();
     const auto orig_batch = param->batch_size;
     auto optrep = std::string{};
     auto batchsize_list = std::vector<int>{};
@@ -1489,7 +1479,7 @@ bool GtpLoop::NetBench(Splitter &spt, std::string &rep) {
             break;
         }
         if (token->Lower() == "timelimit") {
-           if (auto time_token = spt.GetWord(curr_idx)) {
+            if (auto time_token = spt.GetWord(curr_idx)) {
                 timelimit = time_token->Get<float>();
                 curr_idx += 1;
             }
@@ -1508,16 +1498,14 @@ bool GtpLoop::NetBench(Splitter &spt, std::string &rep) {
             }
             continue;
         }
-        
     }
 
     if (batchsize_list.empty()) {
         batchsize_list.emplace_back(orig_batch);
     }
     std::sort(std::begin(batchsize_list), std::end(batchsize_list));
-    batchsize_list.erase(
-        std::unique(std::begin(batchsize_list), std::end(batchsize_list)),
-        std::end(batchsize_list));
+    batchsize_list.erase(std::unique(std::begin(batchsize_list), std::end(batchsize_list)),
+                         std::end(batchsize_list));
 
     if (batchsize_list.empty()) {
         rep = "invalid batch size";
@@ -1532,12 +1520,11 @@ bool GtpLoop::NetBench(Splitter &spt, std::string &rep) {
     const auto Worker = [&, this]() -> void {
         while (running.load(std::memory_order_relaxed)) {
             agent_->GetNetwork().GetOutput(
-                agent_->GetState(), Network::kRandom,
-                Network::Query::Get().SetCache(false));
+                agent_->GetState(), Network::kRandom, Network::Query::Get().SetCache(false));
         }
     };
 
-    for (int batch_size: batchsize_list) {
+    for (int batch_size : batchsize_list) {
         const int num_workers = agent_->GetNetwork().GetNumWorkers();
         if (num_workers == 0) {
             LOGGING << "Warning: The network is CPU backend.\n";
@@ -1564,11 +1551,10 @@ bool GtpLoop::NetBench(Splitter &spt, std::string &rep) {
         const auto elapsed = timer.GetDuration();
         const auto num_nn_queries = agent_->GetNetwork().GetNumQueries();
 
-        LOGGING << Format(
-                       "batch size= %d -> %d evals | %.2f evals/s\n",
-                       batch_size,
-                       num_nn_queries,
-                       num_nn_queries/elapsed);
+        LOGGING << Format("batch size= %d -> %d evals | %.2f evals/s\n",
+                          batch_size,
+                          num_nn_queries,
+                          num_nn_queries / elapsed);
         if (num_workers == 0) {
             LOGGING << "Warning: The network is CPU backend.\n";
             break;

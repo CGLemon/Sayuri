@@ -1,7 +1,7 @@
-#include <sstream>
-#include <iomanip>
-
 #include "game/strings.h"
+
+#include <iomanip>
+#include <sstream>
 
 void Strings::Reset() {
     for (int vtx = 0; vtx < kNumVertices + 1; ++vtx) {
@@ -55,7 +55,6 @@ std::string Strings::GetDebugString(const int boardsize) const {
         out << std::endl;
     }
     out << "Last: " << GetStones(kNumVertices) << std::endl << std::endl;
-
 
     return out.str();
 }

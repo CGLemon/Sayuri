@@ -4,8 +4,8 @@
 
 void Option::Adjust() {
     HandleInvalid();
-    for (auto &sval : val_list_) {
-        if (type_ == Type::kInteger)  {
+    for (auto& sval : val_list_) {
+        if (type_ == Type::kInteger) {
             auto ival = std::stoi(sval);
             if (use_max_) {
                 ival = std::min(ival, std::stoi(max_));
@@ -83,7 +83,7 @@ void Option::HandleInvalid() const {
 void Option::Unique() {
     auto dest_list = std::vector<std::string>{};
     auto check_set = std::set<std::string>{};
-    for (auto &val : val_list_) {
+    for (auto& val : val_list_) {
         if (check_set.count(val) == 0) {
             dest_list.emplace_back(val);
         }

@@ -1,10 +1,10 @@
 #pragma once
 
-#include <sstream>
-#include <fstream>
-#include <string>
 #include <deque>
+#include <fstream>
 #include <mutex>
+#include <sstream>
+#include <string>
 
 class LogWriter {
 public:
@@ -48,6 +48,6 @@ private:
     int line_;
 };
 
-#define LOGGING (::Logging(__FILE__, __LINE__, true,  false, true))
-#define WRITING (::Logging(__FILE__, __LINE__, false, true,  true))
+#define LOGGING (::Logging(__FILE__, __LINE__, true, false, true))
+#define WRITING (::Logging(__FILE__, __LINE__, false, true, true))
 #define DUMPING (::Logging(__FILE__, __LINE__, false, false, false))

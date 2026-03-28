@@ -1,14 +1,13 @@
 #pragma once
 
-#include "utils/cppattributes.h"
-
-#include <mutex>
 #include <atomic>
 #include <cassert>
+#include <mutex>
 #include <thread>
 
-#if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && \
-    !defined(_M_ARM64)
+#include "utils/cppattributes.h"
+
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
 #include <emmintrin.h>
 #endif
 
@@ -30,7 +29,8 @@ public:
         // However, just trying to Test-and-Set first improves performance in almost
         // all cases
         while (exclusive_.exchange(true, std::memory_order_acquire)) {
-            while (exclusive_.load(std::memory_order_relaxed));
+            while (exclusive_.load(std::memory_order_relaxed))
+                ;
         }
     }
 
@@ -38,11 +38,11 @@ public:
         auto lock_held = exclusive_.exchange(false, std::memory_order_release);
 
         // If this fails it means we are unlocking an unlocked lock
-    #ifdef NDEBUG
+#ifdef NDEBUG
         (void)lock_held;
-    #else
+#else
         assert(lock_held);
-    #endif
+#endif
     }
 
     Mutex() = default;
@@ -83,7 +83,7 @@ public:
             }
         }
     }
-    void unlock() RELEASE()  {
+    void unlock() RELEASE() {
         owner_.store(0, std::memory_order_release);
     }
 
@@ -94,8 +94,7 @@ private:
     std::atomic<int> owner_{0};
 
     inline void SpinLoopPause() {
-#if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && \
-    !defined(_M_ARM64)
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM) && !defined(_M_ARM64)
         _mm_pause();
 #endif
     }

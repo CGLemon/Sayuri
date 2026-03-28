@@ -1,20 +1,21 @@
 #include "neural/blas/se_unit.h"
+
+#include <cassert>
+#include <cmath>
+#include <cstddef>
+
 #include "neural/blas/fullyconnect.h"
 
-#include <cstddef>
-#include <cmath>
-#include <cassert>
-
-template<>
+template <>
 void GlobalPooling<false>::Forward(const size_t board_size,
                                    const size_t channels,
-                                   const std::vector<float> &input,
-                                   std::vector<float> &output) {
+                                   const std::vector<float>& input,
+                                   std::vector<float>& output) {
     const auto width = board_size;
     const auto height = board_size;
     const auto spatial_size = width * height;
     const float b_coeff = ((float)board_size - kAvgBSize) / 10.f;
-    const float *input_ptr = input.data();
+    const float* input_ptr = input.data();
 
     for (auto c = size_t{0}; c < channels; ++c) {
         float sum = 0.0f;
@@ -35,15 +36,15 @@ void GlobalPooling<false>::Forward(const size_t board_size,
     }
 }
 
-template<>
+template <>
 void GlobalPooling<true>::Forward(const size_t board_size,
                                   const size_t channels,
-                                  const std::vector<float> &input,
-                                  std::vector<float> &output) {
+                                  const std::vector<float>& input,
+                                  std::vector<float>& output) {
     const auto width = board_size;
     const auto height = board_size;
     const auto spatial_size = width * height;
-    const float *input_ptr = input.data();
+    const float* input_ptr = input.data();
 
     const float b_diff = (float)board_size - kAvgBSize;
     const float b_coeff0 = b_diff / 10.f;
@@ -69,42 +70,40 @@ void GlobalPooling<true>::Forward(const size_t board_size,
 void SEUnit::Forward(const size_t board_size,
                      const size_t channels,
                      const size_t se_size,
-                     std::vector<float> &input,
-                     const std::vector<float> &residual,
-                     const std::vector<float> &weights_w1,
-                     const std::vector<float> &weights_b1,
-                     const std::vector<float> &weights_w2,
-                     const std::vector<float> &weights_b2,
+                     std::vector<float>& input,
+                     const std::vector<float>& residual,
+                     const std::vector<float>& weights_w1,
+                     const std::vector<float>& weights_b1,
+                     const std::vector<float>& weights_w2,
+                     const std::vector<float>& weights_b2,
                      const Activation act) {
     using Pooling = GlobalPooling<false>;
     auto pool = std::vector<float>(3 * channels);
     auto fc_out = std::vector<float>(se_size);
 
     Pooling::Forward(board_size, channels, input, pool);
-    FullyConnect::Forward(3*channels, se_size, pool, weights_w1, weights_b1, fc_out, act);
-    FullyConnect::Forward(se_size, 2*channels, fc_out, weights_w2, weights_b2, pool, Activation::kIdentity);
+    FullyConnect::Forward(3 * channels, se_size, pool, weights_w1, weights_b1, fc_out, act);
+    FullyConnect::Forward(
+        se_size, 2 * channels, fc_out, weights_w2, weights_b2, pool, Activation::kIdentity);
     SEProcess(board_size, channels, input, residual, pool, act);
 }
 
 void SEUnit::SEProcess(const size_t board_size,
                        const size_t channels,
-                       std::vector<float> &input,
-                       const std::vector<float> &residual,
-                       const std::vector<float> &scale,
+                       std::vector<float>& input,
+                       const std::vector<float>& residual,
+                       const std::vector<float>& scale,
                        const Activation act) {
     const auto width = board_size;
     const auto height = board_size;
     const auto spatial_size = width * height;
 
-    const auto lambda_sigmoid = [](const auto val) {
-        return 1.0f / (1.0f + std::exp(-val));
-    };
+    const auto lambda_sigmoid = [](const auto val) { return 1.0f / (1.0f + std::exp(-val)); };
 
     auto gamma_ptr = scale.data();
     auto beta_ptr = scale.data() + channels;
     auto input_ptr = input.data();
-    const float *residual_ptr = residual.empty() ?
-                                    nullptr : residual.data();
+    const float* residual_ptr = residual.empty() ? nullptr : residual.data();
     for (auto c = size_t{0}; c < channels; ++c) {
         const auto gamma = lambda_sigmoid(*gamma_ptr);
         const auto beta = *beta_ptr;

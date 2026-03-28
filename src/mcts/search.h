@@ -1,30 +1,34 @@
 #pragma once
 
-#include "mcts/time_control.h"
-#include "mcts/parameters.h"
-#include "mcts/node.h"
-#include "game/game_state.h"
-#include "neural/training_data.h"
-#include "utils/threadpool.h"
-#include "utils/operators.h"
-#include "utils/time.h"
-
-#include <thread>
-#include <memory>
 #include <atomic>
 #include <limits>
+#include <memory>
+#include <thread>
+
+#include "game/game_state.h"
+#include "mcts/node.h"
+#include "mcts/parameters.h"
+#include "mcts/time_control.h"
+#include "neural/training_data.h"
+#include "utils/operators.h"
+#include "utils/threadpool.h"
+#include "utils/time.h"
 
 struct SearchResult {
 public:
     SearchResult() = default;
-    bool IsValid() const { return nn_evals_ != nullptr; }
-    NodeEvals *GetEvals() const { return nn_evals_.get(); }
+    bool IsValid() const {
+        return nn_evals_ != nullptr;
+    }
+    NodeEvals* GetEvals() const {
+        return nn_evals_.get();
+    }
 
     void FromNetEvals(NodeEvals nn_evals) {
         nn_evals_ = std::make_unique<NodeEvals>(nn_evals);
     }
 
-    void FromGameOver(Network &network, GameState &state) {
+    void FromGameOver(Network& network, GameState& state) {
         assert(state.GetPasses() >= 2);
 
         if (nn_evals_ == nullptr) {
@@ -44,8 +48,7 @@ public:
             }
         }
 
-        nn_evals_->black_final_score =
-            state.GetFinalScore(kBlack, ownership);
+        nn_evals_->black_final_score = state.GetFinalScore(kBlack, ownership);
 
         if (nn_evals_->black_final_score > 1e-4) {
             nn_evals_->black_wl = 1.0f;
@@ -60,9 +63,7 @@ public:
     }
 
 private:
-    void TryRecoverOwnershipMap(Network &network,
-                                GameState &state,
-                                std::vector<int> &ownership) {
+    void TryRecoverOwnershipMap(Network& network, GameState& state, std::vector<int>& ownership) {
         auto fork_state = state;
         while (fork_state.GetPasses() >= 2) {
             fork_state.UndoMove();
@@ -142,20 +143,20 @@ public:
     static constexpr int kMaxPlayouts = std::numeric_limits<int>::max() / 2;
 
     enum OptionTag : int {
-        kNullTag     = 0,
-        kThinking    = 1 << 1, // use time control
-        kPonder      = 1 << 2, // thinking on opponent's time
-        kAnalysis    = 1 << 3, // use the analysis mode
-        kForced      = 1 << 4, // remove double pass move before search
-        kUnreused    = 1 << 5, // don't reuse the tree
+        kNullTag = 0,
+        kThinking = 1 << 1,    // use time control
+        kPonder = 1 << 2,      // thinking on opponent's time
+        kAnalysis = 1 << 3,    // use the analysis mode
+        kForced = 1 << 4,      // remove double pass move before search
+        kUnreused = 1 << 5,    // don't reuse the tree
         kNoExploring = 1 << 6, // disable any exploring setting
-        kNoBuffer    = 1 << 7  // don't push data to training data buffer
+        kNoBuffer = 1 << 7     // don't push data to training data buffer
     };
 
     // Enable OptionTag operations.
     ENABLE_FRIEND_BITWISE_OPERATORS_ON(OptionTag);
 
-    Search(GameState &state, Network &network) : root_state_(state), network_(network) {
+    Search(GameState& state, Network& network) : root_state_(state), network_(network) {
         Initialize();
     }
     ~Search();
@@ -172,7 +173,7 @@ public:
     int ThinkBestMove();
 
     // Will dump analysis information.
-    int Analyze(bool ponder, AnalysisConfig &analysis_config);
+    int Analyze(bool ponder, AnalysisConfig& analysis_config);
 
     // Get the self-play move.
     int GetSelfPlayMove(OptionTag tag = Search::kNullTag);
@@ -193,7 +194,7 @@ public:
     void SaveTrainingBuffer(std::string filename);
 
     // Output the self-play training data.
-    void GatherTrainingBuffer(std::vector<TrainingData> &chunk);
+    void GatherTrainingBuffer(std::vector<TrainingData>& chunk);
 
     // Clear the training data in the buffer.
     void ClearTrainingBuffer();
@@ -209,7 +210,7 @@ public:
     void UpdateTerritoryHelper();
 
     // Return search parameters table.
-    Parameters *GetParams(bool no_exploring_param = false);
+    Parameters* GetParams(bool no_exploring_param = false);
 
 private:
     // Try to reuse the sub-tree.
@@ -217,14 +218,16 @@ private:
 
     // Reture false if there is only one reasonable move and
     // enable the time management.
-    bool HaveAlternateMoves(const float elapsed, const float limit,
-                            const int cap, Search::OptionTag tag);
+    bool HaveAlternateMoves(const float elapsed,
+                            const float limit,
+                            const int cap,
+                            Search::OptionTag tag);
 
     // Reture true if the root achieve visit cap or playout
     // cap.
     bool AchieveCap(const int cap, Search::OptionTag tag);
 
-    bool StoppedByKldGain(ComputationResult &result, Search::OptionTag tag);
+    bool StoppedByKldGain(ComputationResult& result, Search::OptionTag tag);
 
     int GetPlayoutsLeft(const int cap, Search::OptionTag tag);
 
@@ -232,20 +235,20 @@ private:
 
     bool InputPending(Search::OptionTag tag) const;
 
-    void UpdateComputationResultFast(ComputationResult &result) const;
-    void UpdateComputationResult(ComputationResult &result) const;
+    void UpdateComputationResultFast(ComputationResult& result) const;
+    void UpdateComputationResult(ComputationResult& result) const;
 
-    void GatherData(const GameState &state,
-                    ComputationResult &result,
-                    bool discard);
+    void GatherData(const GameState& state, ComputationResult& result, bool discard);
 
     void UpdateLagBuffer(float thinking_time, float buffer_effect);
 
     void PlaySinglePlayout();
-    void PlaySimulation(GameState &currstate, Node *const node,
-                        const int depth, SearchResult &search_result);
+    void PlaySimulation(GameState& currstate,
+                        Node* const node,
+                        const int depth,
+                        SearchResult& search_result);
 
-    void PrepareRootNode(ComputationResult &result, Search::OptionTag tag);
+    void PrepareRootNode(ComputationResult& result, Search::OptionTag tag);
 
     void PrepareParam() const;
 
@@ -264,13 +267,13 @@ private:
     TimeControl time_control_;
 
     // The current game state.
-    GameState &root_state_;
+    GameState& root_state_;
 
     // The game state of last root node.
     GameState last_state_;
 
     // The forwarding network for this search.
-    Network &network_;
+    Network& network_;
 
     // The root node of tree.
     std::unique_ptr<Node> root_node_;

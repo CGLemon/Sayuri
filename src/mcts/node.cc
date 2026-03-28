@@ -1,24 +1,25 @@
 #include "mcts/node.h"
-#include "mcts/lcb.h"
-#include "mcts/score_value.h"
-#include "mcts/rollout.h"
-#include "utils/atomic.h"
-#include "utils/random.h"
-#include "utils/format.h"
-#include "utils/logits.h"
-#include "utils/kldivergence.h"
-#include "game/symmetry.h"
-#include "pattern/gammas_dict.h"
 
-#include <cassert>
 #include <algorithm>
+#include <cassert>
 #include <cmath>
-#include <sstream>
 #include <iomanip>
-#include <stack>
 #include <numeric>
+#include <sstream>
+#include <stack>
 
-Node::Node(Parameters *param, std::int16_t vertex, float policy) {
+#include "game/symmetry.h"
+#include "mcts/lcb.h"
+#include "mcts/rollout.h"
+#include "mcts/score_value.h"
+#include "pattern/gammas_dict.h"
+#include "utils/atomic.h"
+#include "utils/format.h"
+#include "utils/kldivergence.h"
+#include "utils/logits.h"
+#include "utils/random.h"
+
+Node::Node(Parameters* param, std::int16_t vertex, float policy) {
     param_ = param;
     vertex_ = vertex;
     policy_ = policy;
@@ -28,10 +29,10 @@ Node::~Node() {
     ReleaseAllChildren();
 }
 
-bool Node::PrepareRootNode(Network &network,
-                           GameState &state,
-                           NodeEvals &node_evals,
-                           AnalysisConfig &config) {
+bool Node::PrepareRootNode(Network& network,
+                           GameState& state,
+                           NodeEvals& node_evals,
+                           AnalysisConfig& config) {
     const auto is_root = true;
     const auto success = ExpandChildren(network, state, node_evals, config, is_root);
     assert(HasChildren());
@@ -62,7 +63,7 @@ bool Node::PrepareRootNode(Network &network,
     return success;
 }
 
-void Node::UpdateScoreBonus(GameState &state, NodeEvals &node_evals) {
+void Node::UpdateScoreBonus(GameState& state, NodeEvals& node_evals) {
     if (!param_->first_pass_bonus) {
         return;
     }
@@ -73,15 +74,15 @@ void Node::UpdateScoreBonus(GameState &state, NodeEvals &node_evals) {
     black_sb_ = 0.0f;
 
     InflateAllChildren();
-    for (auto &child : children_) {
+    for (auto& child : children_) {
         const auto node = child.GetPointer();
         node->ComputeScoreBonus(state, node_evals);
     }
 }
 
-void Node::RecomputePolicy(Network &network,
-                           GameState &state,
-                           NodeEvals &node_evals,
+void Node::RecomputePolicy(Network& network,
+                           GameState& state,
+                           NodeEvals& node_evals,
                            const bool is_root) {
     WaitExpanded();
     if (!HasChildren()) {
@@ -95,80 +96,75 @@ void Node::RecomputePolicy(Network &network,
     FillNodeEvalsFromNet(state, raw_netlist, node_evals, state.GetToMove());
 
     auto buffer = std::vector<float>{};
-    for (auto &child : children_) {
-         const auto vtx = child.GetVertex();
-         if (vtx == kPass) {
-             buffer.emplace_back(raw_netlist.pass_probability);
-         } else {
-             buffer.emplace_back(raw_netlist.probabilities[state.VertexToIndex(vtx)]);
-         }
+    for (auto& child : children_) {
+        const auto vtx = child.GetVertex();
+        if (vtx == kPass) {
+            buffer.emplace_back(raw_netlist.pass_probability);
+        } else {
+            buffer.emplace_back(raw_netlist.probabilities[state.VertexToIndex(vtx)]);
+        }
     }
 
     // rescaling policy
-    const auto legal_accumulate =
-        std::accumulate(std::begin(buffer), std::end(buffer), 0.0f);
+    const auto legal_accumulate = std::accumulate(std::begin(buffer), std::end(buffer), 0.0f);
     if (legal_accumulate < 1e-8f) {
-        for (auto &p: buffer) {
+        for (auto& p : buffer) {
             p /= legal_accumulate;
         }
     } else {
-        for (auto &p: buffer) {
+        for (auto& p : buffer) {
             p /= legal_accumulate;
         }
     }
 
     // Assume we already inflated all children. Refill the new policy.
     int idx = 0;
-    for (auto &child : children_) {
+    for (auto& child : children_) {
         child.GetPointer()->SetPolicy(buffer[idx++]);
     }
 }
 
-Network::Result Node::GetNetOutput(Network &network,
-                                   GameState &state,
-                                   const bool is_root) {
+Network::Result Node::GetNetOutput(Network& network, GameState& state, const bool is_root) {
     // Root node policy always normal policy. Therefore, we check whether the current
     // network is using the default normal policy. If not, certain settings will be
     // disabled afterward.
     const auto default_using_normal_policy =
         network.GetDefaultPolicyOffset() == PolicyBufferOffset::kNormal;
-    const auto policy_offset = is_root ?
-        PolicyBufferOffset::kNormal : PolicyBufferOffset::kDefault;
+    const auto policy_offset = is_root ? PolicyBufferOffset::kNormal : PolicyBufferOffset::kDefault;
 
     // Policy softmax temperature. If 't' is greater than 1, policy
     // will be broader. If 't' is less than 1, policy will be sharper.
-    const auto policy_temp = is_root ?
-        param_->root_policy_temp : param_->policy_temp;
+    const auto policy_temp = is_root ? param_->root_policy_temp : param_->policy_temp;
 
     // The network cache only stores a single policy and does not recognize different
     // types of policies. Therefore, if the policy used differs from the default one,
     // the cache should be disabled.
-    const auto query = Network::Query::Get().SetTemperature(policy_temp).
-                                                 SetCache(!default_using_normal_policy).
-                                                 SetOffset(policy_offset);
+    const auto query = Network::Query::Get()
+                           .SetTemperature(policy_temp)
+                           .SetCache(!default_using_normal_policy)
+                           .SetOffset(policy_offset);
     auto result = network.GetOutput(state, Network::kRandom, query);
 
     // TODO: We are curious whether using a weaker policy can significantly and reasonably
     //       reduce the playing strength. If feasible, I can train a neural network with multiple
     //       strength levels to replace it.
     if (param_->gammas_policy_factor > 0.f && GammasDict::Get().Valid()) {
-        auto gammas_policy = state.GetGammasPolicy(
-                                 state.GetToMove(), result.ownership.data());
+        auto gammas_policy = state.GetGammasPolicy(state.GetToMove(), result.ownership.data());
         const float reduction = (1.0f - result.pass_probability);
         const float factor = param_->gammas_policy_factor;
         int num_intersections = state.GetNumIntersections();
         for (int idx = 0; idx < num_intersections; ++idx) {
             result.probabilities[idx] = (1.0f - factor) * result.probabilities[idx] +
-                                            factor * reduction * gammas_policy[idx];
+                                        factor * reduction * gammas_policy[idx];
         }
     }
     return result;
 }
 
-bool Node::ExpandChildren(Network &network,
-                          GameState &state,
-                          NodeEvals &node_evals,
-                          AnalysisConfig &config,
+bool Node::ExpandChildren(Network& network,
+                          GameState& state,
+                          NodeEvals& node_evals,
+                          AnalysisConfig& config,
                           const bool is_root) {
     // The node must be the first time to expand and is not the terminate node.
     assert(state.GetPasses() < 2);
@@ -195,13 +191,13 @@ bool Node::ExpandChildren(Network &network,
     const auto safe_area = state.GetStrictSafeArea();
 
     // For symmetry pruning.
-    bool apply_symm_pruning = param_->symm_pruning &&
-                                  board_size >= state.GetMoveNumber();
+    bool apply_symm_pruning = param_->symm_pruning && board_size >= state.GetMoveNumber();
     auto moves_hash = std::vector<std::uint64_t>{};
     auto symm_base_hash = std::vector<std::uint64_t>(Symmetry::kNumSymmetris, 0ULL);
 
     for (int symm = Symmetry::kIdentitySymmetry;
-             apply_symm_pruning && symm < Symmetry::kNumSymmetris; ++symm) {
+         apply_symm_pruning && symm < Symmetry::kNumSymmetris;
+         ++symm) {
         symm_base_hash[symm] = state.ComputeSymmetryHash(symm);
     }
 
@@ -212,11 +208,12 @@ bool Node::ExpandChildren(Network &network,
         // Discard moves that are illegal, forbidden by configuration,
         // or otherwise undesirable.
         int movenum = state.GetMoveNumber();
-        if (!state.IsLegalMove(vtx, color_,
-                [movenum, &config](int vtx, int color){
-                    return !config.IsLegal(vtx, color, movenum);
-                })
-                    || safe_area[idx]) {
+        if (!state.IsLegalMove(vtx,
+                               color_,
+                               [movenum, &config](int vtx, int color) {
+                                   return !config.IsLegal(vtx, color, movenum);
+                               }) ||
+            safe_area[idx]) {
             continue;
         }
 
@@ -225,23 +222,22 @@ bool Node::ExpandChildren(Network &network,
         // moves.
         if (apply_symm_pruning) {
             bool hash_found = false;
-            for (int symm = Symmetry::kIdentitySymmetry+1;
-                     symm < Symmetry::kNumSymmetris && !hash_found; ++symm) {
+            for (int symm = Symmetry::kIdentitySymmetry + 1;
+                 symm < Symmetry::kNumSymmetris && !hash_found;
+                 ++symm) {
                 const auto symm_vtx = Symmetry::Get().TransformVertex(board_size, symm, vtx);
                 const auto symm_hash = symm_base_hash[symm] ^ state.GetMoveHash(symm_vtx, color_);
                 hash_found = std::end(moves_hash) !=
-                                 std::find(std::begin(moves_hash),
-                                               std::end(moves_hash), symm_hash);
+                             std::find(std::begin(moves_hash), std::end(moves_hash), symm_hash);
             }
 
             if (!hash_found) {
-                // Compute the hash of the next game state. 
+                // Compute the hash of the next game state.
                 // This hash may be inaccurate for capture moves,
                 // but since it's only used during the opening stage,
-                // and captures are rare in that phase, the inaccuracy 
+                // and captures are rare in that phase, the inaccuracy
                 // is acceptable.
-                moves_hash.emplace_back(
-                    state.GetHash() ^ state.GetMoveHash(vtx, color_));
+                moves_hash.emplace_back(state.GetHash() ^ state.GetMoveHash(vtx, color_));
             } else {
                 // This pruned node represents a legal move, so its policy
                 // value should be accumulated into the total for all legal moves.
@@ -256,8 +252,8 @@ bool Node::ExpandChildren(Network &network,
 
     // In the early stages, pass is usually not an option that should be
     // considered, so we remove it directly."
-    const auto left_threshold = std::max(
-        0, static_cast<int>((1.0f - param_->suppress_pass_factor) * num_intersections));
+    const auto left_threshold =
+        std::max(0, static_cast<int>((1.0f - param_->suppress_pass_factor) * num_intersections));
     const bool should_suppress_pass =
         !nodelist.empty() && static_cast<int>(nodelist.size()) > left_threshold;
     if (!should_suppress_pass) {
@@ -269,12 +265,12 @@ bool Node::ExpandChildren(Network &network,
         // This can occur if the policy assigns most of its probability
         // mass to illegal moves. In that case, fall back to a uniform
         // distribution over all nodes.
-        for (auto &node : nodelist) {
-            node.first = 1.f/nodelist.size();
+        for (auto& node : nodelist) {
+            node.first = 1.f / nodelist.size();
         }
     } else {
         // Normalize the policy values over legal moves.
-        for (auto &node : nodelist) {
+        for (auto& node : nodelist) {
             node.first /= legal_accumulate;
         }
     }
@@ -288,11 +284,11 @@ bool Node::ExpandChildren(Network &network,
     return true;
 }
 
-void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
+void Node::LinkNodeList(std::vector<Network::PolicyVertexPair>& nodelist) {
     // Besure that the best policy is on the top.
     std::stable_sort(std::rbegin(nodelist), std::rend(nodelist));
 
-    for (const auto &node : nodelist) {
+    for (const auto& node : nodelist) {
         const auto vertex = (std::uint16_t)node.second;
         const auto policy = node.first;
         children_.emplace_back(vertex, policy);
@@ -301,9 +297,10 @@ void Node::LinkNodeList(std::vector<Network::PolicyVertexPair> &nodelist) {
     assert(!children_.empty());
 }
 
-void Node::ApplyNetOutput(GameState &state,
-                          const Network::Result &raw_netlist,
-                          NodeEvals& node_evals, const int color) {
+void Node::ApplyNetOutput(GameState& state,
+                          const Network::Result& raw_netlist,
+                          NodeEvals& node_evals,
+                          const int color) {
     FillNodeEvalsFromNet(state, raw_netlist, node_evals, color);
 
     black_wl_ = node_evals.black_wl;
@@ -311,9 +308,10 @@ void Node::ApplyNetOutput(GameState &state,
     avg_black_ownership_.fill(0.f);
 }
 
-void Node::FillNodeEvalsFromNet(GameState &state,
-                                const Network::Result &raw_netlist,
-                                NodeEvals& node_evals, const int color) const {
+void Node::FillNodeEvalsFromNet(GameState& state,
+                                const Network::Result& raw_netlist,
+                                NodeEvals& node_evals,
+                                const int color) const {
     auto black_ownership = std::array<float, kNumIntersections>{};
     auto draw = raw_netlist.wdl[1];
 
@@ -345,8 +343,7 @@ void Node::FillNodeEvalsFromNet(GameState &state,
         // Use random rollout instead of net's ownership
         // outputs.
         float mc_black_score;
-        GetBlackRolloutResult(
-            state, black_ownership.data(), mc_black_score);
+        GetBlackRolloutResult(state, black_ownership.data(), mc_black_score);
     }
 
     // Store the network evals.
@@ -359,7 +356,7 @@ void Node::FillNodeEvalsFromNet(GameState &state,
     }
 }
 
-bool Node::SetTerminal(const NodeEvals *node_evals) {
+bool Node::SetTerminal(const NodeEvals* node_evals) {
     if (!AcquireExpanding()) {
         return false;
     }
@@ -372,7 +369,7 @@ bool Node::SetTerminal(const NodeEvals *node_evals) {
     return true;
 }
 
-Node *Node::DescentSelectChild(const int color, const bool is_root) {
+Node* Node::DescentSelectChild(const int color, const bool is_root) {
     // At the root, attempt to select a child using the Gumbel-Top-k
     // trick. Fall back to regular PUCT if no Gumbel move is found.
     if (is_root && param_->gumbel) {
@@ -384,18 +381,18 @@ Node *Node::DescentSelectChild(const int color, const bool is_root) {
     return PuctSelectChild(color, is_root);
 }
 
-Node *Node::ProbSelectChild(bool allow_pass) {
+Node* Node::ProbSelectChild(bool allow_pass) {
     WaitExpanded();
     assert(HasChildren());
 
     Edge* best_node = nullptr;
     float best_prob = std::numeric_limits<float>::lowest();
 
-    for (auto &child : children_) {
+    for (auto& child : children_) {
         const auto node = child.GetPointer();
         const bool is_pointer = node != nullptr;
 
-        // Skip nodes that are unvisited, pruned, or inactive. 
+        // Skip nodes that are unvisited, pruned, or inactive.
         if (is_pointer && !node->IsActive()) {
             continue;
         }
@@ -423,9 +420,7 @@ Node *Node::ProbSelectChild(bool allow_pass) {
     return best_node->GetPointer();
 }
 
-float Node::GetFpu(const int color,
-                   const float total_visited_policy,
-                   const bool is_root) const {
+float Node::GetFpu(const int color, const float total_visited_policy, const bool is_root) const {
     // Computes the First Play Urgency (FPU) value for unvisited moves.
     // FPU gives a starting evaluation for child nodes before they are
     // explored, based on a combination of neural network predictions
@@ -442,13 +437,11 @@ float Node::GetFpu(const int color,
     return fpu_value - fpu_reduction;
 }
 
-float Node::GetDynamicCpuctFactor(Node *node, const int visits, const int children_visits) {
+float Node::GetDynamicCpuctFactor(Node* node, const int visits, const int children_visits) {
     // Imported form http://www.yss-aya.com/bbs/patio.cgi?read=33&ukey=0
 
     bool cpuct_dynamic = param_->cpuct_dynamic;
-    if (!cpuct_dynamic ||
-            node == nullptr ||
-            visits <= 1) {
+    if (!cpuct_dynamic || node == nullptr || visits <= 1) {
         return 1.0f;
     }
 
@@ -462,8 +455,8 @@ float Node::GetDynamicCpuctFactor(Node *node, const int visits, const int childr
     k = std::max(0.5, k);
     k = std::min(1.4, k);
 
-    double alpha = 1.0 / (1.0 + std::sqrt(children_visits/cpuct_dynamic_k_base));
-    k = alpha*k + (1.0-alpha) * 1.0;
+    double alpha = 1.0 / (1.0 + std::sqrt(children_visits / cpuct_dynamic_k_base));
+    k = alpha * k + (1.0 - alpha) * 1.0;
     return k;
 }
 
@@ -472,32 +465,27 @@ float Node::GetCpuct(const int children_visits) const {
     const auto cpuct_base_factor = param_->cpuct_base_factor;
     const auto cpuct_base = param_->cpuct_base;
 
-    const auto cpuct = cpuct_init + cpuct_base_factor *
-                           std::log((float(children_visits) + cpuct_base + 1) / cpuct_base);
+    const auto cpuct =
+        cpuct_init +
+        cpuct_base_factor * std::log((float(children_visits) + cpuct_base + 1) / cpuct_base);
     return cpuct;
 }
 
-int Node::GetForcedVisits(const float policy,
-                          const int children_visits,
-                          const bool is_root) const {
+int Node::GetForcedVisits(const float policy, const int children_visits, const bool is_root) const {
     const auto forced_playouts_k = is_root ? param_->forced_playouts_k : 0.f;
 
     // Forced Playouts: Encourage exploration of low visit, high priority
     // children. We think 20% is big enough and high priority child is easy
     // to be explored with PUCT. We don't need to add any bonus for these
     // kind of children.
-    const float forced_n_factor =
-        std::max(1e-4f, forced_playouts_k *
-        std::min(0.2f, policy) *
-        static_cast<float>(children_visits));
+    const float forced_n_factor = std::max(
+        1e-4f, forced_playouts_k * std::min(0.2f, policy) * static_cast<float>(children_visits));
     const int forced_n = std::sqrt(forced_n_factor);
     return forced_n;
 }
 
-float Node::GetSearchPolicy(Node::Edge& child,
-                            const bool is_root) {
-    const auto noise = is_root ?
-                           param_->dirichlet_noise : false;
+float Node::GetSearchPolicy(Node::Edge& child, const bool is_root) {
+    const auto noise = is_root ? param_->dirichlet_noise : false;
     auto policy = child.GetPolicy();
     if (noise) {
         const auto vertex = child.GetVertex();
@@ -508,7 +496,7 @@ float Node::GetSearchPolicy(Node::Edge& child,
     return policy;
 }
 
-Node *Node::PuctSelectChild(const int color, const bool is_root) {
+Node* Node::PuctSelectChild(const int color, const bool is_root) {
     WaitExpanded();
     assert(HasChildren());
     // assert(color == color_);
@@ -516,7 +504,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     // Gather all parent's visits.
     int children_visits = 0;
     float total_visited_policy = 0.0f;
-    for (auto &child : children_) {
+    for (auto& child : children_) {
         const auto node = child.GetPointer();
         const bool is_pointer = node != nullptr;
 
@@ -537,7 +525,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     Edge* best_node = nullptr;
     float best_value = std::numeric_limits<float>::lowest();
 
-    for (auto &child : children_) {
+    for (auto& child : children_) {
         const auto node = child.GetPointer();
         const bool is_pointer = node != nullptr;
 
@@ -561,8 +549,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
                 q_value = std::min(fpu_value, -1.0f);
             } else if (visits > 0) {
                 // Combine win/loss evaluation and score lead to optimize path selection.
-                q_value = node->GetWL(color, true) +
-                              node->GetScoreEval(color);
+                q_value = node->GetWL(color, true) + node->GetScoreEval(color);
                 // Apply forced playouts.
                 const int forced_n = GetForcedVisits(psa, children_visits, is_root);
                 if (forced_n - visits > 0) {
@@ -588,9 +575,7 @@ Node *Node::PuctSelectChild(const int color, const bool is_root) {
     return best_node->GetPointer();
 }
 
-int Node::GetRandomMoveProportionally(float temp,
-                                      float min_ratio,
-                                      int min_visits) {
+int Node::GetRandomMoveProportionally(float temp, float min_ratio, int min_visits) {
     // Selects a move at random, with probability proportional to its visit count.
     // Moves with more visits are more likely to be chosen, and the "temp" parameter
     // controls how strongly the selection favors high-visit moves.
@@ -599,18 +584,17 @@ int Node::GetRandomMoveProportionally(float temp,
     //   - min_ratio: relative threshold compared to the most-visited move
     //   - min_visits: absolute threshold on visits
     auto selected_vertex = kNullVertex;
-    auto norm_factor= double{0};
+    auto norm_factor = double{0};
     auto accum = double{0};
     auto accum_vector = std::vector<std::pair<decltype(accum), int>>{};
     auto max_n = int{0};
 
-    for (const auto &child : children_) {
+    for (const auto& child : children_) {
         max_n = std::max(max_n, child.GetVisits());
     }
-    min_visits = std::max(
-        static_cast<int>(std::round(max_n * min_ratio)), min_visits);
+    min_visits = std::max(static_cast<int>(std::round(max_n * min_ratio)), min_visits);
 
-    for (const auto &child : children_) {
+    for (const auto& child : children_) {
         auto node = child.GetPointer();
         const auto visits = node->GetVisits();
         const auto vertex = node->GetVertex();
@@ -620,8 +604,7 @@ int Node::GetRandomMoveProportionally(float temp,
             }
             double val = visits / norm_factor;
             accum += std::pow(val, (1.0 / temp));
-            accum_vector.emplace_back(
-                std::pair<decltype(accum), int>(accum, vertex));
+            accum_vector.emplace_back(std::pair<decltype(accum), int>(accum, vertex));
         }
     }
 
@@ -631,8 +614,7 @@ int Node::GetRandomMoveProportionally(float temp,
     }
 
     // Draw a random number and select the corresponding move.
-    auto distribution =
-        std::uniform_real_distribution<decltype(accum)>{0.0, accum};
+    auto distribution = std::uniform_real_distribution<decltype(accum)>{0.0, accum};
     auto pick = distribution(Random<>::Get());
     auto size = accum_vector.size();
 
@@ -646,13 +628,13 @@ int Node::GetRandomMoveProportionally(float temp,
     return selected_vertex;
 }
 
-int Node::GetRandomMoveWithLogitsQ(GameState &state, float temp) {
+int Node::GetRandomMoveWithLogitsQ(GameState& state, float temp) {
     const auto num_intersections = state.GetNumIntersections();
-    auto prob = std::vector<float>(num_intersections+1, 0.f);
-    auto vertices_table = std::vector<int>(num_intersections+1, kNullVertex);
+    auto prob = std::vector<float>(num_intersections + 1, 0.f);
+    auto vertices_table = std::vector<int>(num_intersections + 1, kNullVertex);
     int accum_visists = 0;
 
-    for (const auto &child : children_) {
+    for (const auto& child : children_) {
         auto node = child.GetPointer();
         const auto visits = node->GetVisits();
         const auto vtx = child.GetVertex();
@@ -669,7 +651,7 @@ int Node::GetRandomMoveWithLogitsQ(GameState &state, float temp) {
     if (accum_visists == 0) {
         return GetBestMove(true);
     }
-    for (float &p : prob) {
+    for (float& p : prob) {
         p /= (float)accum_visists;
     }
     MixLogitsCompletedQ(state, prob);
@@ -678,13 +660,12 @@ int Node::GetRandomMoveWithLogitsQ(GameState &state, float temp) {
     auto accum = double{0};
     auto accum_vector = std::vector<std::pair<decltype(accum), int>>{};
 
-    for (int idx = 0; idx < num_intersections+1; ++idx) {
+    for (int idx = 0; idx < num_intersections + 1; ++idx) {
         // Prune the unvisited moves.
         int vtx = vertices_table[idx];
         if (vtx != kNullVertex) {
             accum += std::pow((decltype(accum))prob[idx], (1.0 / temp));
-            accum_vector.emplace_back(
-                std::pair<decltype(accum), int>(accum, vtx));
+            accum_vector.emplace_back(std::pair<decltype(accum), int>(accum, vtx));
         }
     }
 
@@ -694,8 +675,7 @@ int Node::GetRandomMoveWithLogitsQ(GameState &state, float temp) {
     }
 
     // Draw a random number and select the corresponding move
-    auto distribution =
-        std::uniform_real_distribution<decltype(accum)>{0.0, accum};
+    auto distribution = std::uniform_real_distribution<decltype(accum)>{0.0, accum};
     auto pick = distribution(Random<>::Get());
     auto size = accum_vector.size();
 
@@ -709,13 +689,11 @@ int Node::GetRandomMoveWithLogitsQ(GameState &state, float temp) {
     return selected_vertex;
 }
 
-void Node::Update(const NodeEvals *evals) {
-    auto WelfordDelta = [](double eval,
-                           double old_acc_eval,
-                           int old_visits) {
+void Node::Update(const NodeEvals* evals) {
+    auto WelfordDelta = [](double eval, double old_acc_eval, int old_visits) {
         // Welford's online algorithm for calculating variance.
         const double old_delta = old_visits > 0 ? eval - old_acc_eval / old_visits : 0.0f;
-        const double new_delta = eval - (old_acc_eval + eval) / (old_visits+1);
+        const double new_delta = eval - (old_acc_eval + eval) / (old_visits + 1);
         const double delta = old_delta * new_delta;
         return delta;
     };
@@ -738,17 +716,17 @@ void Node::Update(const NodeEvals *evals) {
 
     visits_.fetch_add(1, std::memory_order_relaxed);
     AtomicFetchAdd(accumulated_black_wl_, eval);
-    AtomicFetchAdd(accumulated_draw_    , draw);
+    AtomicFetchAdd(accumulated_draw_, draw);
     AtomicFetchAdd(accumulated_black_fs_, score);
-    AtomicFetchAdd(squared_eval_diff_   , eval_delta);
-    AtomicFetchAdd(squared_score_diff_  , score_delta);
+    AtomicFetchAdd(squared_eval_diff_, eval_delta);
+    AtomicFetchAdd(squared_score_diff_, score_delta);
 
     {
         std::lock_guard<std::mutex> lock(os_mtx_);
         for (int idx = 0; idx < kNumIntersections; ++idx) {
             const double eval_owner = evals->black_ownership[idx];
-            const double avg_owner  = avg_black_ownership_[idx];
-            const double diff_owner = (eval_owner - avg_owner) / (old_visits+1);
+            const double avg_owner = avg_black_ownership_[idx];
+            const double diff_owner = (eval_owner - avg_owner) / (old_visits + 1);
 
             avg_black_ownership_[idx] += diff_owner;
         }
@@ -777,23 +755,21 @@ float Node::GetScoreBonus(const int color) const {
 }
 
 float Node::GetScoreEval(const int color) const {
-    const auto recent_score = color == kBlack ?
-        param_->recent_expected_black_score :
-        -param_->recent_expected_black_score;
+    const auto recent_score = color == kBlack ? param_->recent_expected_black_score
+                                              : -param_->recent_expected_black_score;
     const auto mean = GetFinalScore(color) + GetScoreBonus(color);
     const auto stddev = GetScoreStddev();
     const auto div = param_->score_utility_div;
     const auto board_size = param_->board_size;
     const auto factor = param_->score_utility_factor;
-    const auto score_value = ScoreValue::Get().ExpectedScoreValue(
-                                 mean, stddev, recent_score, div, board_size);
+    const auto score_value =
+        ScoreValue::Get().ExpectedScoreValue(mean, stddev, recent_score, div, board_size);
     return score_value * factor;
 }
 
 float Node::GetScoreVariance(const float default_var, const int visits) const {
-    return visits > 1 ?
-               squared_score_diff_.load(std::memory_order_relaxed) / (visits - 1) :
-               default_var;
+    return visits > 1 ? squared_score_diff_.load(std::memory_order_relaxed) / (visits - 1)
+                      : default_var;
 }
 
 float Node::GetScoreStddev() const {
@@ -803,9 +779,8 @@ float Node::GetScoreStddev() const {
 }
 
 float Node::GetWLVariance(const float default_var, const int visits) const {
-    return visits > 1 ?
-               squared_eval_diff_.load(std::memory_order_relaxed) / (visits - 1) :
-               default_var;
+    return visits > 1 ? squared_eval_diff_.load(std::memory_order_relaxed) / (visits - 1)
+                      : default_var;
 }
 
 float Node::GetWLStddev() const {
@@ -832,12 +807,11 @@ float Node::GetLcb(const int color) const {
 
     // The variance divide the visits in order to empirically
     // make the bound decrease slower.
-    return mean - z * (stddev/visits);
+    return mean - z * (stddev / visits);
 }
 
-void Node::ComputeScoreBonus(GameState &state, NodeEvals &parent_node_evals) {
-    if (!param_->first_pass_bonus ||
-            state.GetKoMove() != kNullVertex) {
+void Node::ComputeScoreBonus(GameState& state, NodeEvals& parent_node_evals) {
+    if (!param_->first_pass_bonus || state.GetKoMove() != kNullVertex) {
         black_sb_ = 0.0f;
         return;
     }
@@ -861,7 +835,7 @@ void Node::ComputeScoreBonus(GameState &state, NodeEvals &parent_node_evals) {
             const auto black_owner = parent_node_evals.black_ownership[idx];
 
             if ((black_owner > kRawOwnershipThreshold && color == kBlack) ||
-                    (black_owner < -kRawOwnershipThreshold && color == kWhite)) {
+                (black_owner < -kRawOwnershipThreshold && color == kWhite)) {
                 if (state.IsNeighborColor(vtx, !color)) {
                     black_bonus += kEndBonus;
                 }
@@ -877,16 +851,14 @@ void Node::ComputeScoreBonus(GameState &state, NodeEvals &parent_node_evals) {
         // moves in the opponent's territory to prolong the game. So also discourage those
         // moves to.
         if (vtx == kPass) {
-            black_bonus -= (2.f/3.f) * kEndBonus;
+            black_bonus -= (2.f / 3.f) * kEndBonus;
         } else {
             const auto idx = state.VertexToIndex(vtx);
             const auto black_owner = parent_node_evals.black_ownership[idx];
             float owner_penalty_factor = 0.0f;
 
-            if (black_owner > kRawOwnershipThreshold ||
-                    black_owner < -kRawOwnershipThreshold) {
-                owner_penalty_factor = (
-                    std::abs(black_owner) - kRawOwnershipThreshold) / kTail;
+            if (black_owner > kRawOwnershipThreshold || black_owner < -kRawOwnershipThreshold) {
+                owner_penalty_factor = (std::abs(black_owner) - kRawOwnershipThreshold) / kTail;
             }
             black_bonus -= owner_penalty_factor * kEndBonus;
         }
@@ -897,8 +869,7 @@ void Node::ComputeScoreBonus(GameState &state, NodeEvals &parent_node_evals) {
     black_sb_ = black_bonus;
 }
 
-std::string Node::GetPathVerboseString(GameState &state, int color,
-                                       std::vector<int> &moves) {
+std::string Node::GetPathVerboseString(GameState& state, int color, std::vector<int>& moves) {
     auto curr_node = Get();
     auto out = std::ostringstream{};
     int depth = 0;
@@ -912,10 +883,14 @@ std::string Node::GetPathVerboseString(GameState &state, int color,
             const auto policy = curr_node->GetPolicy();
             const auto raw_winrate = curr_node->GetNetWL(color);
             const auto raw_score = curr_node->GetNetScore(color);
-            out << Format("%s -> avg-WL: %.2f(\%), avg-S: %.2f, P: %.2f(\%), WL: %.2f(\%), S: %.2f\n",
-                       state.VertexToText(vertex).c_str(),
-                       100 * winrate, score,
-                       100 * policy, 100 * raw_winrate, raw_score);
+            out << Format(
+                "%s -> avg-WL: %.2f(\%), avg-S: %.2f, P: %.2f(\%), WL: %.2f(\%), S: %.2f\n",
+                state.VertexToText(vertex).c_str(),
+                100 * winrate,
+                score,
+                100 * policy,
+                100 * raw_winrate,
+                raw_score);
         }
         color = !color;
     }
@@ -928,10 +903,8 @@ std::string Node::GetPathVerboseString(GameState &state, int color,
         } else {
             auto verbose = curr_node->ToVerboseString(state, color);
             auto vsize = verbose.size();
-            verbose.resize(vsize-1);
-            out << "To move color is "
-                    << (color == kBlack ? "BLACK" : "WHITE")
-                    << std::endl;
+            verbose.resize(vsize - 1);
+            out << "To move color is " << (color == kBlack ? "BLACK" : "WHITE") << std::endl;
             out << verbose;
         }
     } else {
@@ -940,7 +913,7 @@ std::string Node::GetPathVerboseString(GameState &state, int color,
     return out.str();
 }
 
-std::string Node::ToVerboseString(GameState &state, const int color) {
+std::string Node::ToVerboseString(GameState& state, const int color) {
     auto out = std::ostringstream{};
     const auto children_visits = GetChildrenVisits();
     const auto lcblist = GetSortedLcbUtilityList(color, children_visits);
@@ -952,17 +925,11 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
 
     const auto space1 = 7;
     out << " * Search List:" << std::endl;
-    out << std::setw(6) << "move"
-            << std::setw(10) << "visits"
-            << std::setw(space1) << "WL(%)"
-            << std::setw(space1) << "LCB(%)"
-            << std::setw(space1) << "D(%)"
-            << std::setw(space1) << "P(%)"
-            << std::setw(space1) << "N(%)"
-            << std::setw(space1) << "S"
-            << std::endl;
+    out << std::setw(6) << "move" << std::setw(10) << "visits" << std::setw(space1) << "WL(%)"
+        << std::setw(space1) << "LCB(%)" << std::setw(space1) << "D(%)" << std::setw(space1)
+        << "P(%)" << std::setw(space1) << "N(%)" << std::setw(space1) << "S" << std::endl;
 
-    for (auto &lcb_pair : lcblist) {
+    for (auto& lcb_pair : lcblist) {
         const auto lcb = lcb_pair.first > 0.0f ? lcb_pair.first : 0.0f;
         const auto vertex = lcb_pair.second;
 
@@ -978,17 +945,17 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
         const auto pv_string = state.VertexToText(vertex) + ' ' + child->GetPvString(state);
 
         const auto visit_ratio = static_cast<float>(visits) / children_visits;
-        out << std::fixed << std::setprecision(2)
-                << std::setw(6) << state.VertexToText(vertex)  // move
-                << std::setw(10) << visits                     // visits
-                << std::setw(space1) << eval * 100.f           // win loss eval
-                << std::setw(space1) << lcb * 100.f            // LCB eval
-                << std::setw(space1) << draw * 100.f           // draw probability
-                << std::setw(space1) << pobability * 100.f     // move probability
-                << std::setw(space1) << visit_ratio * 100.f    // visits ratio
-                << std::setw(space1) << final_score            // score lead
-                << std::setw(6) << "| PV:" << ' ' << pv_string // principal variation
-                << std::endl;
+        out << std::fixed << std::setprecision(2) << std::setw(6)
+            << state.VertexToText(vertex)                  // move
+            << std::setw(10) << visits                     // visits
+            << std::setw(space1) << eval * 100.f           // win loss eval
+            << std::setw(space1) << lcb * 100.f            // LCB eval
+            << std::setw(space1) << draw * 100.f           // draw probability
+            << std::setw(space1) << pobability * 100.f     // move probability
+            << std::setw(space1) << visit_ratio * 100.f    // visits ratio
+            << std::setw(space1) << final_score            // score lead
+            << std::setw(6) << "| PV:" << ' ' << pv_string // principal variation
+            << std::endl;
     }
 
     auto nodes = size_t{0};
@@ -999,26 +966,22 @@ std::string Node::ToVerboseString(GameState &state, const int color) {
     const auto edge_mem = sizeof(Edge);
 
     // Here are some errors to compute memory used.
-    const auto mem_used = static_cast<double>(
-        nodes * node_mem + edges * edge_mem) / (1024.f * 1024.f);
+    const auto mem_used =
+        static_cast<double>(nodes * node_mem + edges * edge_mem) / (1024.f * 1024.f);
 
     const auto space2 = 14;
     out << " * Tree Status:" << std::endl
-            << std::fixed << std::setprecision(4)
-            << std::setw(space2) << "nodes:"   << ' ' << nodes    << std::endl
-            << std::setw(space2) << "edges:"   << ' ' << edges    << std::endl
-            << std::setw(space2) << "memory:"  << ' ' << mem_used << ' ' << "(MiB)" << std::endl;
+        << std::fixed << std::setprecision(4) << std::setw(space2) << "nodes:" << ' ' << nodes
+        << std::endl
+        << std::setw(space2) << "edges:" << ' ' << edges << std::endl
+        << std::setw(space2) << "memory:" << ' ' << mem_used << ' ' << "(MiB)" << std::endl;
 
     return out.str();
 }
 
-std::string Node::ToAnalysisString(GameState &state,
-                                   const int color,
-                                   AnalysisConfig &config) {
-    const auto OwnershipToString = [](GameState &state,
-                                      const int color,
-                                      std::string name,
-                                      Node *node) -> std::string {
+std::string Node::ToAnalysisString(GameState& state, const int color, AnalysisConfig& config) {
+    const auto OwnershipToString =
+        [](GameState& state, const int color, std::string name, Node* node) -> std::string {
         auto out = std::ostringstream{};
         const auto num_intersections = state.GetNumIntersections();
         auto ownership = node->GetOwnership(color);
@@ -1038,19 +1001,18 @@ std::string Node::ToAnalysisString(GameState &state,
     auto root = Get();
     if (config.output_format == AnalysisConfig::kSayuri) {
         out << Format("info move null visits %d winrate %.6f drawrate %.6f scorelead %.6f ",
-                         root->GetVisits(),
-                         root->GetWL(color, false),
-                         root->GetDraw(),
-                         root->GetFinalScore(color)
-                     );
+                      root->GetVisits(),
+                      root->GetWL(color, false),
+                      root->GetDraw(),
+                      root->GetFinalScore(color));
         if (config.ownership) {
             out << OwnershipToString(state, color, "ownership", root);
         }
     }
 
     int order = 0;
-    for (auto &lcb_pair : lcblist) {
-        if (order+1 > config.max_moves) {
+    for (auto& lcb_pair : lcblist) {
+        if (order + 1 > config.max_moves) {
             break;
         }
 
@@ -1066,39 +1028,39 @@ std::string Node::ToAnalysisString(GameState &state,
 
         if (config.output_format == AnalysisConfig::kSayuri) {
             const auto drawrate = child->GetDraw();
-            out << Format("info move %s visits %d winrate %.6f drawrate %.6f scorelead %.6f prior %.6f lcb %.6f order %d pv %s",
-                             state.VertexToText(vertex).c_str(),
-                             visits,
-                             winrate,
-                             drawrate,
-                             final_score,
-                             prior,
-                             std::min(1.0f, lcb),
-                             order,
-                             pv_string.c_str()
-                         );
+            out << Format("info move %s visits %d winrate %.6f drawrate %.6f scorelead %.6f prior "
+                          "%.6f lcb %.6f order %d pv %s",
+                          state.VertexToText(vertex).c_str(),
+                          visits,
+                          winrate,
+                          drawrate,
+                          final_score,
+                          prior,
+                          std::min(1.0f, lcb),
+                          order,
+                          pv_string.c_str());
         } else if (config.output_format == AnalysisConfig::kKata) {
-            out << Format("info move %s visits %d winrate %.6f scoreLead %.6f prior %.6f lcb %.6f order %d pv %s",
-                             state.VertexToText(vertex).c_str(),
-                             visits,
-                             winrate,
-                             final_score,
-                             prior,
-                             std::min(1.0f, lcb),
-                             order,
-                             pv_string.c_str()
-                         );
+            out << Format("info move %s visits %d winrate %.6f scoreLead %.6f prior %.6f lcb %.6f "
+                          "order %d pv %s",
+                          state.VertexToText(vertex).c_str(),
+                          visits,
+                          winrate,
+                          final_score,
+                          prior,
+                          std::min(1.0f, lcb),
+                          order,
+                          pv_string.c_str());
         } else {
-            out << Format("info move %s visits %d winrate %d scoreLead %.6f prior %d lcb %d order %d pv %s",
-                             state.VertexToText(vertex).c_str(),
-                             visits,
-                             std::min(10000, (int)(10000 * winrate)),
-                             final_score,
-                             std::min(10000, (int)(10000 * prior)),
-                             std::min(10000, (int)(10000 * lcb)),
-                             order,
-                             pv_string.c_str()
-                         );
+            out << Format(
+                "info move %s visits %d winrate %d scoreLead %.6f prior %d lcb %d order %d pv %s",
+                state.VertexToText(vertex).c_str(),
+                visits,
+                std::min(10000, (int)(10000 * winrate)),
+                final_score,
+                std::min(10000, (int)(10000 * prior)),
+                std::min(10000, (int)(10000 * lcb)),
+                order,
+                pv_string.c_str());
         }
         if (config.ownership && config.output_format == AnalysisConfig::kSayuri) {
             out << OwnershipToString(state, color, "ownership", child);
@@ -1121,32 +1083,31 @@ std::string Node::ToAnalysisString(GameState &state,
     }
     out.seekp(0, std::ios::end);
 
-
     return out.str();
 }
 
-std::string Node::GetPvString(GameState &state) {
+std::string Node::GetPvString(GameState& state) {
     auto pvlist = std::vector<int>{};
-    auto *next = this;
+    auto* next = this;
     while (next->HasChildren()) {
         const auto vtx = next->GetBestMove(true);
         pvlist.emplace_back(vtx);
         next = next->GetChild(vtx);
     }
     auto res = std::string{};
-    for (const auto &vtx : pvlist) {
+    for (const auto& vtx : pvlist) {
         res += state.VertexToText(vtx);
         res += " ";
     }
     return res;
 }
 
-Node *Node::Get() {
+Node* Node::Get() {
     return this;
 }
 
-Node *Node::GetChild(const int vertex) {
-    for (auto & child : children_) {
+Node* Node::GetChild(const int vertex) {
+    for (auto& child : children_) {
         if (vertex == child.GetVertex()) {
             Inflate(child);
             return child.GetPointer();
@@ -1155,13 +1116,12 @@ Node *Node::GetChild(const int vertex) {
     return nullptr;
 }
 
-Node *Node::PopChild(const int vertex) {
+Node* Node::PopChild(const int vertex) {
     auto node = GetChild(vertex);
     if (node) {
-        auto ite = std::remove_if(std::begin(children_), std::end(children_),
-                                  [node](Edge &ele) {
-                                      return ele.GetPointer() == node;
-                                  });
+        auto ite = std::remove_if(std::begin(children_), std::end(children_), [node](Edge& ele) {
+            return ele.GetPointer() == node;
+        });
         children_.erase(ite, std::end(children_));
     }
     return node;
@@ -1171,7 +1131,7 @@ int Node::GetChildrenVisits() const {
     // Returns the total number of visits across all active child
     // nodes. Only counts visits from children that are marked active.
     int validvisits = 0;
-    for (const auto & child : children_) {
+    for (const auto& child : children_) {
         const auto node = child.GetPointer();
         const bool is_pointer = node != nullptr;
 
@@ -1192,11 +1152,10 @@ std::vector<std::pair<float, int>> Node::GetSortedLcbUtilityList(const int color
     assert(HasChildren());
 
     // Clamp lcb_reduction parameter to the [0, 1] range.
-    const auto lcb_reduction = std::min(
-        std::max(0.f, param_->lcb_reduction), 1.f);
+    const auto lcb_reduction = std::min(std::max(0.f, param_->lcb_reduction), 1.f);
     auto lcblist = std::vector<std::pair<float, int>>{};
 
-    for (const auto & child : children_) {
+    for (const auto& child : children_) {
         const auto node = child.GetPointer();
         const bool is_pointer = node != nullptr;
 
@@ -1210,15 +1169,14 @@ std::vector<std::pair<float, int>> Node::GetSortedLcbUtilityList(const int color
             // Compute mixed LCB by combining the node's LCB with its score evaluation.
             // This ensures the bias of LCB with scoring matches that of Q evaluation
             // in the PUCT phase.
-            const auto mixed_lcb = node->GetLcb(color) +
-                                       node->GetScoreEval(color);
+            const auto mixed_lcb = node->GetLcb(color) + node->GetScoreEval(color);
 
             // Adjust the mixed LCB to penalize moves with fewer visits.
             // For example, a node with 100 visits and 90% LCB might be less stable
             // than a node with 1,000,000 visits and 89% LCB. This adjustment
             // favors more stable nodes with higher visit counts.
             const auto rlcb = mixed_lcb * (1.0f - lcb_reduction) +
-                                  lcb_reduction * ((float)visits/children_visits);
+                              lcb_reduction * ((float)visits / children_visits);
             lcblist.emplace_back(rlcb, node->GetVertex());
         }
     }
@@ -1235,7 +1193,7 @@ int Node::GetBestMove(bool allow_pass) {
     float best_value = std::numeric_limits<float>::lowest();
     int best_move = kNullVertex;
 
-    for (auto &lcb_pair : lcblist) {
+    for (auto& lcb_pair : lcblist) {
         const auto lcb = lcb_pair.first;
         const auto vtx = lcb_pair.second;
         if (lcb > best_value) {
@@ -1257,13 +1215,12 @@ int Node::GetBestMove(bool allow_pass) {
     return best_move;
 }
 
-const std::vector<Node::Edge> &Node::GetChildren() const {
+const std::vector<Node::Edge>& Node::GetChildren() const {
     return children_;
 }
 
 int Node::GetVirtualLoss() const {
-    return param_->virtual_loss_count *
-               running_threads_.load(std::memory_order_relaxed);
+    return param_->virtual_loss_count * running_threads_.load(std::memory_order_relaxed);
 }
 
 int Node::GetVertex() const {
@@ -1329,14 +1286,14 @@ float Node::GetWL(const int color, const bool use_virtual_loss) const {
 }
 
 void Node::InflateAllChildren() {
-    for (auto &child : children_) {
-         Inflate(child);
+    for (auto& child : children_) {
+        Inflate(child);
     }
 }
 
 void Node::ReleaseAllChildren() {
-    for (auto &child : children_) {
-         Release(child);
+    for (auto& child : children_) {
+        Release(child);
     }
 }
 
@@ -1398,7 +1355,7 @@ bool Node::AcquireExpanding() {
 void Node::ExpandDone() {
     auto v = expand_state_.exchange(ExpandState::kExpanded, std::memory_order_release);
 #ifdef NDEBUG
-    (void) v;
+    (void)v;
 #endif
     assert(v == ExpandState::kExpanding);
 }
@@ -1406,7 +1363,7 @@ void Node::ExpandDone() {
 void Node::ExpandCancel() {
     auto v = expand_state_.exchange(ExpandState::kInitial, std::memory_order_release);
 #ifdef NDEBUG
-    (void) v;
+    (void)v;
 #endif
     assert(v == ExpandState::kExpanding);
 }
@@ -1440,13 +1397,12 @@ void Node::ApplyDirichletNoise(const float alpha) {
     auto buffer = std::vector<float>(child_cnt);
     auto gamma = std::gamma_distribution<float>(alpha, 1.0f);
 
-    std::generate(std::begin(buffer), std::end(buffer),
-                      [&gamma] () { return gamma(Random<>::Get()); });
+    std::generate(
+        std::begin(buffer), std::end(buffer), [&gamma]() { return gamma(Random<>::Get()); });
 
-    auto sample_sum =
-        std::accumulate(std::begin(buffer), std::end(buffer), 0.0f);
+    auto sample_sum = std::accumulate(std::begin(buffer), std::end(buffer), 0.0f);
 
-    auto &dirichlet = param_->dirichlet_buffer;
+    auto& dirichlet = param_->dirichlet_buffer;
     dirichlet.fill(0.0f);
 
     // If the noise vector sums to 0 or a denormal, then don't try to
@@ -1456,7 +1412,7 @@ void Node::ApplyDirichletNoise(const float alpha) {
         return;
     }
 
-    for (auto &v : buffer) {
+    for (auto& v : buffer) {
         v /= sample_sum;
     }
 
@@ -1474,23 +1430,23 @@ void Node::SetPolicy(float p) {
     policy_ = p;
 }
 
-void Node::ComputeNodeCount(size_t &nodes, size_t &edges) {
+void Node::ComputeNodeCount(size_t& nodes, size_t& edges) {
     // Use DFS to search all nodes.
-    auto stk = std::stack<Node *>{};
+    auto stk = std::stack<Node*>{};
 
     // Start search from this node.
     stk.emplace(Get());
     nodes++;
 
     while (!stk.empty()) {
-        Node * node = stk.top();
+        Node* node = stk.top();
         stk.pop();
 
-        const auto &children = node->GetChildren();
+        const auto& children = node->GetChildren();
 
         // Because we want compute the memory used, collect
         // all types of nodes. Including pruned and invalid node.
-        for (const auto &child : children) {
+        for (const auto& child : children) {
             node = child.GetPointer();
             const bool is_pointer = node != nullptr;
 
@@ -1513,36 +1469,33 @@ float Node::GetGumbelEval(int color) const {
     // Gumbel AlphaZero paper, this corresponds to the Q value. Here,
     // we combine the Q value with the score lead to refine move probability
     // optimization, encouraging the selection of the best move.
-    const auto mixed_q = GetWL(color, false) +
-                             GetScoreEval(color);
+    const auto mixed_q = GetWL(color, false) + GetScoreEval(color);
     return mixed_q;
 }
 
-float Node::TransformCompletedQ(const float completed_q,
-                                const int max_visits) const {
+float Node::TransformCompletedQ(const float completed_q, const int max_visits) const {
     // The transformation progressively increases the scale for
     // Q value and reduces the effect of the prior policy.
     const auto c_visit = param_->gumbel_c_visit;
     const auto c_scale = param_->gumbel_c_scale;
     const auto threshold = param_->gumbel_playouts_threshold;
 
-    return (c_visit + std::min(threshold, max_visits)) *
-               c_scale * completed_q;
+    return (c_visit + std::min(threshold, max_visits)) * c_scale * completed_q;
 }
 
-std::vector<float> Node::GetProbLogitsCompletedQ(GameState &state) {
+std::vector<float> Node::GetProbLogitsCompletedQ(GameState& state) {
     const auto num_intersections = state.GetNumIntersections();
-    auto prob = std::vector<float>(num_intersections+1, 0.f);
+    auto prob = std::vector<float>(num_intersections + 1, 0.f);
     float acc = 0.f;
 
-    for (auto & child : children_) {
+    for (auto& child : children_) {
         const auto vtx = child.GetVertex();
         const auto idx = state.VertexToIndexIncludingPass(vtx);
         acc += child.GetPolicy();
         prob[idx] = child.GetPolicy();
     }
 
-    for (auto &v : prob) {
+    for (auto& v : prob) {
         v /= acc;
     }
 
@@ -1550,8 +1503,7 @@ std::vector<float> Node::GetProbLogitsCompletedQ(GameState &state) {
     return prob;
 }
 
-void Node::MixLogitsCompletedQ(GameState &state,
-                               std::vector<float> &prob) {
+void Node::MixLogitsCompletedQ(GameState& state, std::vector<float>& prob) {
     const auto num_intersections = state.GetNumIntersections();
     const auto color = state.GetToMove();
 
@@ -1560,15 +1512,16 @@ void Node::MixLogitsCompletedQ(GameState &state,
     if (num_intersections + 1 != static_cast<int>(prob.size())) {
         return;
     }
-    auto logits_q = GetZeroLogits<float>(num_intersections+1);
+    auto logits_q = GetZeroLogits<float>(num_intersections + 1);
 
     int max_visits = 0;
-    int children_visits = 0;;
+    int children_visits = 0;
+    ;
     float weighted_q = 0.f;
     float weighted_pi = 0.f;
 
     // Compute weigted Q and sum of weigted policy.
-    for (auto & child : children_) {
+    for (auto& child : children_) {
         const auto node = child.GetPointer();
         const bool is_pointer = node != nullptr;
 
@@ -1580,8 +1533,7 @@ void Node::MixLogitsCompletedQ(GameState &state,
         max_visits = std::max(max_visits, visits);
 
         if (visits > 0) {
-            weighted_q += child.GetPolicy() *
-                              node->GetGumbelEval(color);
+            weighted_q += child.GetPolicy() * node->GetGumbelEval(color);
             weighted_pi += child.GetPolicy();
         }
     }
@@ -1593,9 +1545,9 @@ void Node::MixLogitsCompletedQ(GameState &state,
     // to improve the performance when the children_visits is very
     // low (<= 4).
     const float raw_value = GetNetWL(color);
-    const float approximate_q = (raw_value + (children_visits/weighted_pi) *
-                                    weighted_q) / (1 + children_visits);
-    for (auto & child : children_) {
+    const float approximate_q =
+        (raw_value + (children_visits / weighted_pi) * weighted_q) / (1 + children_visits);
+    for (auto& child : children_) {
         const auto node = child.GetPointer();
         const bool is_pointer = node != nullptr;
 
@@ -1617,7 +1569,7 @@ void Node::MixLogitsCompletedQ(GameState &state,
 
     // Apply the completed Q with policy.
     int completed_q_idx = 0;
-    for (auto & child : children_) {
+    for (auto& child : children_) {
         const auto vtx = child.GetVertex();
         const auto idx = state.VertexToIndexIncludingPass(vtx);
 
@@ -1626,16 +1578,15 @@ void Node::MixLogitsCompletedQ(GameState &state,
 
         // Transform the Completed Q value because it makes
         // policy logit and Q value balance.
-        logits_q[idx] = logits + TransformCompletedQ(
-                                     completed_q, max_visits);
+        logits_q[idx] = logits + TransformCompletedQ(completed_q, max_visits);
     }
     prob = Softmax(logits_q, 1.f);
 
     // Prune moves with negligible probability.
     double psize = prob.size();
-    double noise_threshold = 1./(100. + psize);
+    double noise_threshold = 1. / (100. + psize);
     double o = 0.;
-    for (auto &v : prob) {
+    for (auto& v : prob) {
         if (v < noise_threshold) {
             v = 0.;
         } else {
@@ -1643,17 +1594,16 @@ void Node::MixLogitsCompletedQ(GameState &state,
         }
     }
 
-    for (auto &v : prob) {
+    for (auto& v : prob) {
         v /= o;
     }
 }
 
 bool Node::ShouldApplyGumbel() const {
-    return param_->gumbel &&
-               param_->gumbel_playouts_threshold > GetChildrenVisits();
+    return param_->gumbel && param_->gumbel_playouts_threshold > GetChildrenVisits();
 }
 
-bool Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
+bool Node::ProcessGumbelLogits(std::vector<float>& gumbel_logits,
                                const int color,
                                const bool only_max_visits) {
     // This is a variant of the Sequential Halving algorithm.
@@ -1695,7 +1645,7 @@ bool Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
     gumbel_logits.resize(size, LOGIT_ZERO);
 
     for (int i = 0; i < size; ++i) {
-        auto &child = children_[i];
+        auto& child = children_[i];
         const auto node = child.GetPointer();
         const bool is_pointer = node != nullptr;
 
@@ -1713,12 +1663,11 @@ bool Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
     std::stable_sort(std::rbegin(table), std::rend(table));
     const int max_visists = table[0].first;
 
-    const int considered_moves =
-        std::min(param_->gumbel_considered_moves, (int)children_.size());
+    const int considered_moves = std::min(param_->gumbel_considered_moves, (int)children_.size());
     int playouts_thres = param_->gumbel_playouts_threshold;
     const int prom_visits = std::max(1, param_->gumbel_prom_visits);
     const int n = std::log2(std::max(1, considered_moves)) + 1;
-    const int adj_considered_moves = std::pow(2, n-1); // Be sure that it is pow of 2.
+    const int adj_considered_moves = std::pow(2, n - 1); // Be sure that it is pow of 2.
 
     int target_visits = 0;
     int width = adj_considered_moves;
@@ -1731,7 +1680,7 @@ bool Node::ProcessGumbelLogits(std::vector<float> &gumbel_logits,
         goto end_loop;
     }
 
-    // We may reuse the sub-tree. Try to fill the old distribution  
+    // We may reuse the sub-tree. Try to fill the old distribution
     // so that it covers the Sequential Halving distribution. For example:
     //
     // Original distribution (sorted):
@@ -1785,7 +1734,7 @@ end_loop:;
     auto gumbel_type1 = std::extreme_value_distribution<float>(0, 1);
 
     for (int i = 0; i < size; ++i) {
-        auto &child = children_[i];
+        auto& child = children_[i];
         const auto node = child.GetPointer();
         const bool is_pointer = node != nullptr;
 
@@ -1794,12 +1743,10 @@ end_loop:;
             continue;
         }
         if (target_visits == child.GetVisits()) {
-            auto logit = gumbel_type1(Random<>::Get()) +
-                             SafeLog(child.GetPolicy());
+            auto logit = gumbel_type1(Random<>::Get()) + SafeLog(child.GetPolicy());
             auto completed_q = 0.f;
             if (is_pointer && target_visits > 0) {
-                completed_q = TransformCompletedQ(
-                    node->GetGumbelEval(color), max_visists);
+                completed_q = TransformCompletedQ(node->GetGumbelEval(color), max_visists);
             }
             gumbel_logits[i] = logit + completed_q;
             count += 1;
@@ -1812,7 +1759,7 @@ end_loop:;
     return true;
 }
 
-Node *Node::GumbelSelectChild(int color, bool only_max_visits, bool allow_pass) {
+Node* Node::GumbelSelectChild(int color, bool only_max_visits, bool allow_pass) {
     WaitExpanded();
     assert(HasChildren());
 
@@ -1828,7 +1775,7 @@ Node *Node::GumbelSelectChild(int color, bool only_max_visits, bool allow_pass) 
     const int size = children_.size();
 
     for (int i = 0; i < size; ++i) {
-        auto &child = children_[i];
+        auto& child = children_[i];
         const auto value = gumbel_logits[i];
 
         if (value > best_value) {
@@ -1853,7 +1800,7 @@ int Node::GetGumbelMove(bool allow_pass) {
     assert(HasChildren());
 
     int num_candidates = 0;
-    for (auto &child : children_) {
+    for (auto& child : children_) {
         const auto node = child.GetPointer();
         const int visits = child.GetVisits();
         if (visits > 0 && node->IsValid()) {
@@ -1874,23 +1821,21 @@ int Node::GetGumbelMove(bool allow_pass) {
     return node->GetVertex();
 }
 
-void Node::KillRootSuperkos(GameState &state) {
-    for (const auto &child : children_) {
+void Node::KillRootSuperkos(GameState& state) {
+    for (const auto& child : children_) {
         const auto vtx = child.GetVertex();
 
         auto fork_state = state;
         fork_state.PlayMove(vtx);
 
-        if (vtx != kPass &&
-                fork_state.IsSuperko()) {
+        if (vtx != kPass && fork_state.IsSuperko()) {
             // Kill all superko moves.
             child.GetPointer()->Invalidate();
         }
     }
 
-    auto ite = std::remove_if(std::begin(children_), std::end(children_),
-                              [](Edge &ele) {
-                                  return !ele.GetPointer()->IsValid();
-                              });
+    auto ite = std::remove_if(std::begin(children_), std::end(children_), [](Edge& ele) {
+        return !ele.GetPointer()->IsValid();
+    });
     children_.erase(ite, std::end(children_));
 }

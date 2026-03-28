@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-GameStateIterator::GameStateIterator(GameState &state) {
+GameStateIterator::GameStateIterator(GameState& state) {
     curr_state_ = state;
     Reset();
 }
@@ -22,7 +22,6 @@ void GameStateIterator::Reset() {
         move_history_.emplace_back(cv);
     }
 
-
     if (!move_history_.empty()) {
         std::reverse(std::begin(move_history_), std::end(move_history_));
 
@@ -34,7 +33,7 @@ void GameStateIterator::Reset() {
 }
 
 bool GameStateIterator::Next() {
-    if (curr_idx_+1 >= (int)move_history_.size()) {
+    if (curr_idx_ + 1 >= (int)move_history_.size()) {
         return false;
     }
 
@@ -44,7 +43,7 @@ bool GameStateIterator::Next() {
     return true;
 }
 
-GameState &GameStateIterator::GetState() {
+GameState& GameStateIterator::GetState() {
     return curr_state_;
 }
 
@@ -57,8 +56,8 @@ int GameStateIterator::GetVertex() const {
 }
 
 int GameStateIterator::GetNextVertex() const {
-    if (curr_idx_+1 < (int)move_history_.size()) {
-        return move_history_[curr_idx_+1].vertex;
+    if (curr_idx_ + 1 < (int)move_history_.size()) {
+        return move_history_[curr_idx_ + 1].vertex;
     }
     return kPass;
 }
@@ -75,8 +74,7 @@ void GameStateIterator::RemoveUnusedDoublePass() {
         const auto cv = move_history_[i];
 
         if (cv.vertex == kPass) {
-            if ((i+1) < (int)move_history_.size()-1 &&
-                     move_history_[i+1].vertex == kPass) {
+            if ((i + 1) < (int)move_history_.size() - 1 && move_history_[i + 1].vertex == kPass) {
                 skip = true;
             }
         }

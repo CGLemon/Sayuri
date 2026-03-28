@@ -1,16 +1,16 @@
 #pragma once
 
-#include "selfplay/engine.h"
-#include "neural/training_data.h"
-#include "utils/threadpool.h"
-
 #include <atomic>
-#include <vector>
-#include <thread>
-#include <string>
-#include <memory>
-#include <utility>
 #include <list>
+#include <memory>
+#include <string>
+#include <thread>
+#include <utility>
+#include <vector>
+
+#include "neural/training_data.h"
+#include "selfplay/engine.h"
+#include "utils/threadpool.h"
 
 class SelfPlayPipe {
 public:
@@ -26,12 +26,10 @@ private:
     void Loop();
     void Finish();
 
-    bool SaveSgf(std::string &sgfstring);
-    bool SaveChunk(const int out_id,
-                   float vdata_prob,
-                   std::vector<TrainingData> &chunk);
+    bool SaveSgf(std::string& sgfstring);
+    bool SaveChunk(const int out_id, float vdata_prob, std::vector<TrainingData>& chunk);
     bool SaveNetQueries(int games, std::string net_queries);
-    bool GatherChunkFromBuffer(int games, std::vector<TrainingData> &chunk);
+    bool GatherChunkFromBuffer(int games, std::vector<TrainingData>& chunk);
     int FancyCeil(int val, int step) const;
 
     void AssignDataWorker();

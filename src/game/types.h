@@ -42,9 +42,9 @@ static_assert(kMinGTPBoardSize <= kBoardSize, "");
 #define WHITE_EYE_MASK (4 * (1 << WHITE_NBR_SHIFT))
 
 enum VertexType : std::uint8_t {
-    kBlack   = BLACK_NUMBER,
-    kWhite   = WHITE_NUMBER,
-    kEmpty   = EMPTY_NUMBER,
+    kBlack = BLACK_NUMBER,
+    kWhite = WHITE_NUMBER,
+    kEmpty = EMPTY_NUMBER,
     kInvalid = INVAL_NUMBER,
 };
 
@@ -61,7 +61,7 @@ static constexpr std::uint16_t kEyeMask[2] = {BLACK_EYE_MASK, WHITE_EYE_MASK};
 enum GameResult : std::uint8_t {
     kBlackWon = BLACK_NUMBER,
     kWhiteWon = WHITE_NUMBER,
-    kDraw     = EMPTY_NUMBER,
+    kDraw = EMPTY_NUMBER,
     kUndecide = INVAL_NUMBER,
 };
 
@@ -79,10 +79,7 @@ enum LadderType {
     kNotLadder,
 };
 
-enum ScoringRuleType : std::uint8_t {
-    kArea      = 0,
-    kTerritory = 1
-};
+enum ScoringRuleType : std::uint8_t { kArea = 0, kTerritory = 1 };
 
 static constexpr int KLibertiesReset = 16384;
 

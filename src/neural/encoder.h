@@ -1,10 +1,11 @@
 #pragma once
 
-#include <vector>
 #include <array>
-#include "game/types.h"
-#include "game/symmetry.h"
+#include <vector>
+
 #include "game/game_state.h"
+#include "game/symmetry.h"
+#include "game/types.h"
 #include "neural/network_basic.h"
 
 class Encoder {
@@ -12,7 +13,7 @@ public:
     static Encoder& Get();
 
     // Get the Network input datas.
-    InputData GetInputs(const GameState &state,
+    InputData GetInputs(const GameState& state,
                         const int symmetry = Symmetry::kIdentitySymmetry,
                         const int weights_version = -1) const;
 
@@ -44,7 +45,7 @@ public:
      *                    3. last move
      * plane     25 : ko move
      * plane     26 : pass-alive and pass-dead area
-     * planes 27-30 : strings with 1, 2, 3 and 4 liberties 
+     * planes 27-30 : strings with 1, 2, 3 and 4 liberties
      * planes 31-34 : ladder features
      * plane     35 : komi/20
      * plane     36 : -komi/20
@@ -52,33 +53,36 @@ public:
      * plane     38 : fill ones
      *
      */
-    std::vector<float> GetPlanes(const GameState &state,
+    std::vector<float> GetPlanes(const GameState& state,
                                  const int symmetry = Symmetry::kIdentitySymmetry,
                                  const int weights_version = -1) const;
 
-    std::string GetPlanesString(const GameState &state,
+    std::string GetPlanesString(const GameState& state,
                                 const int symmetry = Symmetry::kIdentitySymmetry,
                                 const int weights_version = -1) const;
 
     constexpr static int GetEncoderVersion(const int weights_version = -1) {
         switch (weights_version) {
-            case 5: 
+            case 5:
             case 4:
-            case 3: return 2; 
+            case 3:
+                return 2;
             case 2:
-            case 1: return 1;
-            default: break;
+            case 1:
+                return 1;
+            default:
+                break;
         };
         return 2;
     }
-    constexpr static int GetHistoryMoves(const int weights_version = - 1) {
+    constexpr static int GetHistoryMoves(const int weights_version = -1) {
         const int encoder_version = GetEncoderVersion(weights_version);
         if (encoder_version == 1 || encoder_version == 2) {
             return 8;
         }
         return 0;
     }
-    constexpr static int GetNumBinaryFeatures(const int weights_version = - 1) {
+    constexpr static int GetNumBinaryFeatures(const int weights_version = -1) {
         const int encoder_version = GetEncoderVersion(weights_version);
         if (encoder_version == 1) {
             return 10;
@@ -88,7 +92,7 @@ public:
         }
         return 0;
     }
-    constexpr static int GetNumMiscFeatures(const int weights_version = - 1) {
+    constexpr static int GetNumMiscFeatures(const int weights_version = -1) {
         const int encoder_version = GetEncoderVersion(weights_version);
         if (encoder_version == 1) {
             return 4;
@@ -98,31 +102,30 @@ public:
         }
         return 0;
     }
-    constexpr static int GetNumFeatures(const int weights_version = - 1) {
+    constexpr static int GetNumFeatures(const int weights_version = -1) {
         return GetNumBinaryFeatures(weights_version) + GetNumMiscFeatures(weights_version);
     }
     constexpr static int GetInputChannels(const int weights_version = -1) {
         return 3 * GetHistoryMoves(weights_version) + GetNumFeatures(weights_version);
     }
 
-
 private:
-    void SymmetryPlanes(const GameState &state, std::vector<float> &planes,
-                        const int symmetry, const int weights_version) const;
+    void SymmetryPlanes(const GameState& state,
+                        std::vector<float>& planes,
+                        const int symmetry,
+                        const int weights_version) const;
 
     void FillColorStones(const Board* board,
                          std::vector<float>::iterator black_it,
                          std::vector<float>::iterator white_it) const;
 
-    void FillMove(const Board* board,
-                  std::vector<float>::iterator move_it) const;
+    void FillMove(const Board* board, std::vector<float>::iterator move_it) const;
 
-    void EncoderHistoryMove(const GameState &state,
+    void EncoderHistoryMove(const GameState& state,
                             std::vector<float>::iterator it,
                             const int weights_version) const;
 
-    void FillKoMove(const Board* board,
-                    std::vector<float>::iterator ko_it) const;
+    void FillKoMove(const Board* board, std::vector<float>::iterator ko_it) const;
 
     void FillArea(const Board* board,
                   const int to_move,
@@ -130,19 +133,19 @@ private:
                   std::vector<float>::iterator area_it,
                   const int weights_version) const;
 
-    void FillLiberties(const Board* board,
-                       std::vector<float>::iterator liberties_it) const;
+    void FillLiberties(const Board* board, std::vector<float>::iterator liberties_it) const;
 
-    void FillLadder(const Board* board,
-                    std::vector<float>::iterator ladder_it) const;
+    void FillLadder(const Board* board, std::vector<float>::iterator ladder_it) const;
 
     void FillMisc(const Board* board,
                   const int to_move,
-                  const int scoring, float wave, float komi,
+                  const int scoring,
+                  float wave,
+                  float komi,
                   std::vector<float>::iterator misc_it,
                   const int weights_version) const;
 
-    void EncoderFeatures(const GameState &state,
+    void EncoderFeatures(const GameState& state,
                          std::vector<float>::iterator it,
                          const int weights_version) const;
 };

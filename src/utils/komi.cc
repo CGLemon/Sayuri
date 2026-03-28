@@ -1,4 +1,5 @@
 #include "utils/komi.h"
+
 #include <cmath>
 #include <iostream>
 
@@ -10,8 +11,7 @@ bool EqualToZero(float v) {
     return IsSameKomi(v, 0.f);
 }
 
-template <>
-float AdjustKomi<float>(float komi) {
+template <> float AdjustKomi<float>(float komi) {
     if (EqualToZero(komi)) {
         return 0;
     }
@@ -40,8 +40,7 @@ float AdjustKomi<float>(float komi) {
     return komi;
 }
 
-template <>
-float AdjustKomi<int>(float komi) {
+template <> float AdjustKomi<int>(float komi) {
     if (EqualToZero(komi)) {
         return 0;
     }

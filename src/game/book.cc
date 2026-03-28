@@ -1,20 +1,21 @@
+#include "game/book.h"
+
 #include <algorithm>
 #include <fstream>
-#include <sstream>
-#include <utility>
-#include <stdexcept>
 #include <numeric>
+#include <sstream>
+#include <stdexcept>
+#include <utility>
 
+#include "game/iterator.h"
+#include "game/sgf.h"
+#include "game/symmetry.h"
+#include "game/types.h"
+#include "utils/format.h"
 #include "utils/log.h"
 #include "utils/random.h"
-#include "utils/format.h"
-#include "game/sgf.h"
-#include "game/types.h"
-#include "game/book.h"
-#include "game/symmetry.h"
-#include "game/iterator.h"
 
-Book &Book::Get() {
+Book& Book::Get() {
     static Book book;
     return book;
 }
@@ -24,11 +25,10 @@ void Book::GenerateBook(std::string sgf_name, std::string filename) const {
     auto sgfs = SgfParser::Get().ChopAll(sgf_name);
     BookMap<VertexFrequencyList> book_data_freq;
 
-    std::shuffle(std::begin(sgfs),
-        std::end(sgfs), Random<kXoroShiro128Plus>::Get());
+    std::shuffle(std::begin(sgfs), std::end(sgfs), Random<kXoroShiro128Plus>::Get());
 
     int games = 0;
-    for (const auto &sgf: sgfs) {
+    for (const auto& sgf : sgfs) {
         if (games >= kMaxSgfGames) {
             LOGGING << "Too many games. Cut off remaining games.\n";
             break;
@@ -50,34 +50,33 @@ void Book::GenerateBook(std::string sgf_name, std::string filename) const {
 
     int idx = 0;
 
-    for (const auto &it: book_data_freq) {
+    for (const auto& it : book_data_freq) {
         auto filtered_vfreq_list = VertexFrequencyList{};
         auto filtered_vprob_list = VertexProbabilityList{};
 
         const auto hash = it.first;
-        const auto &vfreq_list = it.second;
+        const auto& vfreq_list = it.second;
 
-        for (const auto &vfreq: vfreq_list) {
+        for (const auto& vfreq : vfreq_list) {
             if (vfreq.second >= kFilterFreqThreshold) {
                 filtered_vfreq_list.emplace_back(vfreq);
             }
         }
         if (!filtered_vfreq_list.empty()) {
-            const int accum_freq = std::accumulate(
-                std::begin(filtered_vfreq_list),
-                std::end(filtered_vfreq_list),
-                0,
-                [](int sum, const auto &vfreq) { return sum + vfreq.second; }
-            );
+            const int accum_freq =
+                std::accumulate(std::begin(filtered_vfreq_list),
+                                std::end(filtered_vfreq_list),
+                                0,
+                                [](int sum, const auto& vfreq) { return sum + vfreq.second; });
             float accum_prob = 0.0f;
-            for (const auto &vfreq: filtered_vfreq_list) {
-                float prob = static_cast<float>(vfreq.second)/accum_freq;
+            for (const auto& vfreq : filtered_vfreq_list) {
+                float prob = static_cast<float>(vfreq.second) / accum_freq;
                 if (prob >= kFilterProbThreshold) {
                     filtered_vprob_list.emplace_back(vfreq.first, prob);
                     accum_prob += prob;
                 }
             }
-            for (auto &vprob: filtered_vprob_list) {
+            for (auto& vprob : filtered_vprob_list) {
                 vprob.second /= accum_prob;
             }
         }
@@ -88,10 +87,10 @@ void Book::GenerateBook(std::string sgf_name, std::string filename) const {
             }
             file << hash;
 
-            for (const auto &vprob: filtered_vprob_list) {
+            for (const auto& vprob : filtered_vprob_list) {
                 int vertex = vprob.first;
                 float prob = vprob.second;
-                file << ' ' <<  vertex << ' ' << prob;
+                file << ' ' << vertex << ' ' << prob;
             }
         }
     }
@@ -100,13 +99,13 @@ void Book::GenerateBook(std::string sgf_name, std::string filename) const {
 }
 
 bool Book::BookDataProcess(std::string sgfstring,
-                           Book::BookMap<VertexFrequencyList> &book_data) const {
+                           Book::BookMap<VertexFrequencyList>& book_data) const {
     GameState state;
     try {
         state = Sgf::Get().FromString(sgfstring, kMaxBookMoves);
     } catch (const std::exception& e) {
         LOGGING << "Fail to load the SGF file! Discard it." << std::endl
-                    << Format("\tCause: %s.", e.what()) << std::endl;
+                << Format("\tCause: %s.", e.what()) << std::endl;
         return false;
     }
 
@@ -116,8 +115,8 @@ bool Book::BookDataProcess(std::string sgfstring,
         return false;
     }
     if (state.GetHandicap() != 0) {
-        LOGGING << "Rejected: Handicap (" << state.GetHandicap()
-                << ") is not supported." << std::endl;
+        LOGGING << "Rejected: Handicap (" << state.GetHandicap() << ") is not supported."
+                << std::endl;
         return false;
     }
 
@@ -140,7 +139,8 @@ bool Book::BookDataProcess(std::string sgfstring,
             auto hash = main_state.ComputeSymmetryKoHash(symm);
             auto it = book_data.find(hash);
 
-            const int symm_vtx = Symmetry::Get().TransformVertex(state.GetBoardSize(), symm, vertex);
+            const int symm_vtx =
+                Symmetry::Get().TransformVertex(state.GetBoardSize(), symm, vertex);
 
             if (it == std::end(book_data)) {
                 // Insert new hash state in the book, also insert the
@@ -149,11 +149,13 @@ bool Book::BookDataProcess(std::string sgfstring,
                 VertexFrequencyList vfreq;
                 vfreq.emplace_back(symm_vtx, 1);
 
-                book_data.insert({hash,  vfreq});
+                book_data.insert({hash, vfreq});
             } else {
-                auto &vfreq_list = it->second;
-                auto vfreq_it = std::find_if(std::begin(vfreq_list), std::end(vfreq_list),
-                                                 [symm_vtx](auto &element) { return element.first == symm_vtx; });
+                auto& vfreq_list = it->second;
+                auto vfreq_it =
+                    std::find_if(std::begin(vfreq_list),
+                                 std::end(vfreq_list),
+                                 [symm_vtx](auto& element) { return element.first == symm_vtx; });
                 if (vfreq_it == std::end(vfreq_list)) {
                     // Insert new move in the book.
                     vfreq_list.emplace_back(symm_vtx, 1);
@@ -167,7 +169,8 @@ bool Book::BookDataProcess(std::string sgfstring,
 }
 
 void Book::LoadBook(std::string book_name) {
-    if (book_name.empty()) return;
+    if (book_name.empty())
+        return;
 
     try {
         std::ifstream file;
@@ -179,8 +182,9 @@ void Book::LoadBook(std::string book_name) {
         data_.clear();
 
         auto line = std::string{};
-        while(std::getline(file, line)) {
-            if (line.empty()) break;
+        while (std::getline(file, line)) {
+            if (line.empty())
+                break;
 
             std::istringstream iss{line};
 
@@ -204,10 +208,9 @@ void Book::LoadBook(std::string book_name) {
     }
 }
 
-bool Book::Probe(const GameState &state, int &book_move) const {
-    if (data_.empty() ||
-            state.GetBoardSize() != kBookBoardSize ||
-            state.GetMoveNumber() > kMaxBookMoves) {
+bool Book::Probe(const GameState& state, int& book_move) const {
+    if (data_.empty() || state.GetBoardSize() != kBookBoardSize ||
+        state.GetMoveNumber() > kMaxBookMoves) {
         return false;
     }
 
@@ -216,19 +219,20 @@ bool Book::Probe(const GameState &state, int &book_move) const {
         return false;
     }
 
-    auto accum_score = std::accumulate(
-        std::begin(candidate_moves), std::end(candidate_moves), 0.0f,
-        [](float sum, const auto &candidate) { return sum + candidate.first; }
-    );
+    auto accum_score =
+        std::accumulate(std::begin(candidate_moves),
+                        std::end(candidate_moves),
+                        0.0f,
+                        [](float sum, const auto& candidate) { return sum + candidate.first; });
 
     const unsigned N_base = 1000000;
-    const auto rand = Random<kXoroShiro128Plus>::Get().Generate() %
-                          static_cast<unsigned>(N_base * accum_score);
+    const auto rand =
+        Random<kXoroShiro128Plus>::Get().Generate() % static_cast<unsigned>(N_base * accum_score);
     int choice = 0;
     accum_score = 0.0f;
 
     for (int i = 0; i < (int)candidate_moves.size(); ++i) {
-        accum_score +=  candidate_moves[i].first;
+        accum_score += candidate_moves[i].first;
         if (rand < static_cast<unsigned>(N_base * accum_score)) {
             choice = i;
             break;
@@ -239,15 +243,15 @@ bool Book::Probe(const GameState &state, int &book_move) const {
     return true;
 }
 
-std::vector<std::pair<float, int>> Book::GetCandidateMoves(const GameState &state) const {
+std::vector<std::pair<float, int>> Book::GetCandidateMoves(const GameState& state) const {
     auto candidate_moves = std::vector<std::pair<float, int>>{};
     auto hash = state.GetKoHash();
     auto it = data_.find(hash);
 
     if (it != std::end(data_)) {
-        auto &vprob_list = it->second;
+        auto& vprob_list = it->second;
 
-        for (auto &vprob : vprob_list) {
+        for (auto& vprob : vprob_list) {
             int vtx = vprob.first;
             float score = vprob.second;
             if (!state.IsLegalMove(vtx)) {
@@ -266,7 +270,7 @@ std::string Book::GetInformation() const {
 
     int positions = 0;
     int moves = 0;
-    for (auto &it : data_) {
+    for (auto& it : data_) {
         positions += 1;
         moves += it.second.size();
     }

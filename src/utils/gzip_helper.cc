@@ -1,14 +1,14 @@
 #include "utils/gzip_helper.h"
 
-#include <stdexcept>
-#include <memory>
 #include <cstring>
+#include <memory>
+#include <stdexcept>
 
 #ifdef USE_ZLIB
 
 #include "zlib.h"
 
-void SaveGzip(std::string filename, std::string &buffer) {
+void SaveGzip(std::string filename, std::string& buffer) {
     filename += ".gz";
     auto out = gzopen(filename.c_str(), "wb9");
 
@@ -25,7 +25,7 @@ void SaveGzip(std::string filename, std::string &buffer) {
 
 #else
 
-void SaveGzip(std::string /* filename */, std::string & /* buffer */ ) {
+void SaveGzip(std::string /* filename */, std::string& /* buffer */) {
     throw std::runtime_error{"No gzip library"};
 }
 

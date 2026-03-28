@@ -1,9 +1,10 @@
+#include "game/zobrist.h"
+
 #include <algorithm>
-#include <vector>
 #include <cassert>
+#include <vector>
 
 #include "utils/random.h"
-#include "game/zobrist.h"
 
 constexpr Zobrist::KEY Zobrist::kInitSeed;
 constexpr Zobrist::KEY Zobrist::kEmpty;
@@ -19,8 +20,7 @@ std::array<Zobrist::KEY, 5> Zobrist::KPass;
 std::array<Zobrist::KEY, 2> Zobrist::KScoringRule;
 std::array<Zobrist::KEY, Zobrist::kZobristSize> Zobrist::kKomi;
 
-template<typename T>
-bool Collision(std::vector<T> &array) {
+template <typename T> bool Collision(std::vector<T>& array) {
     std::sort(std::begin(array), std::end(array));
     auto ite = std::unique(std::begin(array), std::end(array));
 

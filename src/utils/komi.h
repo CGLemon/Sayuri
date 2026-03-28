@@ -2,5 +2,4 @@
 
 bool IsSameKomi(float k1, float k2);
 
-template <typename T>
-float AdjustKomi(float komi);
+template <typename T> float AdjustKomi(float komi);

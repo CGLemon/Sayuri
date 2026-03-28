@@ -1,0 +1,40 @@
+---
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: c++14
+
+IndentWidth: 4
+ContinuationIndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+ColumnLimit: 100
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+PointerAlignment: Left
+ReferenceAlignment: Left
+SpaceBeforeParens: ControlStatements
+SpacesInParentheses: false
+
+SortIncludes: true
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<.*>$'
+    Priority: 1
+  - Regex: '^".*"'
+    Priority: 2
+
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignOperands: AlignAfterOperator
+BinPackArguments: false
+BinPackParameters: false
+Cpp11BracedListStyle: true
+
+IndentCaseLabels: true
+NamespaceIndentation: None
+AccessModifierOffset: -4
+...

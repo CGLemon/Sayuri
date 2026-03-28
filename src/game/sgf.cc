@@ -1,12 +1,13 @@
 #include "game/sgf.h"
-#include "game/types.h"
-#include "utils/log.h"
-#include "utils/time.h"
-#include "version.h"
 
 #include <ctype.h>
 #include <limits>
 #include <stdexcept>
+
+#include "game/types.h"
+#include "utils/log.h"
+#include "utils/time.h"
+#include "version.h"
 
 void SgfNode::AddProperty(std::string property, std::string value) {
     properties_.emplace(property, value);
@@ -81,8 +82,7 @@ int SgfNode::GetVertexFromString(const std::string& movestring) {
     }
 
     // catch illegal SGF
-    if (cc1 < 0 || cc1 >= bsize
-        || cc2 < 0 || cc2 >= bsize) {
+    if (cc1 < 0 || cc1 >= bsize || cc2 < 0 || cc2 >= bsize) {
         throw std::runtime_error{"illegal SGF move format"};
     }
 
@@ -104,7 +104,8 @@ void SgfNode::PopulateState(GameState currstate) {
     // board size
     if (const auto res = GetPropertyValue("SZ")) {
         for (const char c : *res) {
-            if (!std::isspace(c) && !std::isdigit(c)) throw std::runtime_error{"not a square board"};
+            if (!std::isspace(c) && !std::isdigit(c))
+                throw std::runtime_error{"not a square board"};
         }
 
         const auto bsize = std::stoi(*res);
@@ -120,8 +121,8 @@ void SgfNode::PopulateState(GameState currstate) {
     // handicap
     if (const auto res = GetPropertyValue("HA")) {
         const auto handicap = std::stoi(*res);
-        const auto is_free_handicap = (GetPropertyValue("AB") != nullptr ||
-                                           GetPropertyValue("AW")!= nullptr);
+        const auto is_free_handicap =
+            (GetPropertyValue("AB") != nullptr || GetPropertyValue("AW") != nullptr);
         if (!is_free_handicap) {
             GetState().SetFixdHandicap(handicap);
         } else {
@@ -133,7 +134,6 @@ void SgfNode::PopulateState(GameState currstate) {
     if (const auto res = GetPropertyValue("TM")) {
         // pass...
     }
-
 
     // append moves
     const auto& prop_pair_ab = properties_.equal_range("AB");
@@ -167,9 +167,7 @@ void SgfNode::PopulateState(GameState currstate) {
         if (result == "0") {
             black_final_score = 0;
         } else {
-            if (result.size() > 2 &&
-                    result.find("+") == 1 &&
-                    isdigit(result[2])) {
+            if (result.size() > 2 && result.find("+") == 1 && isdigit(result[2])) {
                 result.erase(0, 2);
                 black_final_score = std::stof(result);
 
@@ -178,7 +176,7 @@ void SgfNode::PopulateState(GameState currstate) {
                 }
             }
         }
-        (void) black_final_score;
+        (void)black_final_score;
     }
 
     if (const auto res = GetPropertyValue("PL")) {
@@ -199,8 +197,7 @@ void SgfNode::PopulateState(GameState currstate) {
     }
 
     if (const auto res = GetPropertyValue("C")) {
-        GetState().RewriteComment(
-            *res, GetState().GetMoveNumber());
+        GetState().RewriteComment(*res, GetState().GetMoveNumber());
     }
 
     for (auto& child : children_) {
@@ -246,8 +243,7 @@ GameState SgfNode::GetMainLineState(unsigned int movenum) {
                 if (!main_state.PlayMove(vtx, color)) {
                     throw std::runtime_error{"illegal SGF move"};
                 }
-                main_state.RewriteComment(
-                    comment, main_state.GetMoveNumber());
+                main_state.RewriteComment(comment, main_state.GetMoveNumber());
             } else {
                 return main_state;
             }
@@ -257,7 +253,7 @@ GameState SgfNode::GetMainLineState(unsigned int movenum) {
     return main_state;
 }
 
-std::string SgfParser::ParsePropertyName(std::istringstream & strm) const {
+std::string SgfParser::ParsePropertyName(std::istringstream& strm) const {
     auto result = std::ostringstream{};
 
     auto c = char{};
@@ -276,7 +272,7 @@ std::string SgfParser::ParsePropertyName(std::istringstream & strm) const {
     return result.str();
 }
 
-std::string SgfParser::ParsePropertyValue(std::istringstream &strm, bool &success) const {
+std::string SgfParser::ParsePropertyValue(std::istringstream& strm, bool& success) const {
     strm >> std::noskipws;
     auto c = char{};
 
@@ -311,7 +307,7 @@ std::string SgfParser::ParsePropertyValue(std::istringstream &strm, bool &succes
     return result.str();
 }
 
-void SgfParser::Parse(std::istringstream &strm, SgfNode* node) const {
+void SgfParser::Parse(std::istringstream& strm, SgfNode* node) const {
     auto splitpoint = false;
     auto c = char{};
 
@@ -337,7 +333,7 @@ void SgfParser::Parse(std::istringstream &strm, SgfNode* node) const {
                 } else {
                     break;
                 }
-            } while(true);
+            } while (true);
 
             continue;
         }
@@ -385,13 +381,14 @@ std::vector<std::string> SgfParser::ChopStream(std::istream& ins, size_t stopat)
 
     ins >> std::noskipws;
 
-    int nesting = 0;      // parentheses
-    bool intag = false;   // brackets
+    int nesting = 0;    // parentheses
+    bool intag = false; // brackets
     int line = 0;
 
     auto c = char{};
     while (ins >> c && result.size() <= stopat) {
-        if (c == '\n') line++;
+        if (c == '\n')
+            line++;
 
         gamebuff.push_back(c);
         if (c == '\\') {
@@ -435,8 +432,7 @@ std::vector<std::string> SgfParser::ChopStream(std::istream& ins, size_t stopat)
     return result;
 }
 
-std::vector<std::string> SgfParser::ChopAll(std::string filename,
-                                            size_t stopat) const {
+std::vector<std::string> SgfParser::ChopAll(std::string filename, size_t stopat) const {
     std::ifstream ins(filename.c_str(), std::ifstream::binary | std::ifstream::in);
 
     if (ins.fail()) {
@@ -496,16 +492,17 @@ GameState Sgf::FromString(std::string sgfstring, unsigned int movenum) {
     return node->GetMainLineState(movenum);
 }
 
-template<typename T>
-std::string MakePropertyString(std::string property, T value) {
+template <typename T> std::string MakePropertyString(std::string property, T value) {
     auto out = std::ostringstream{};
     out << property << '[' << value << ']';
     return out.str();
 }
 
-std::string MakePropertyVetexListString(std::string property, std::vector<int> vertex_list, GameState &state) {
+std::string
+MakePropertyVetexListString(std::string property, std::vector<int> vertex_list, GameState& state) {
     auto out = std::ostringstream{};
-    if (vertex_list.empty()) return out.str();
+    if (vertex_list.empty())
+        return out.str();
 
     out << property;
     for (const auto vtx : vertex_list) {
@@ -514,13 +511,12 @@ std::string MakePropertyVetexListString(std::string property, std::vector<int> v
     return out.str();
 }
 
-std::string Sgf::ToString(GameState &state) {
+std::string Sgf::ToString(GameState& state) {
     auto out = std::ostringstream{};
-    auto &history = state.GetHistory();
-    auto bot_name = GetProgramName() + 
-                        " " + GetProgramVersion();
+    auto& history = state.GetHistory();
+    auto bot_name = GetProgramName() + " " + GetProgramVersion();
 
-    out << '(' <<';';
+    out << '(' << ';';
     out << MakePropertyString("GM", 1);
     out << MakePropertyString("FF", 4);
     out << MakePropertyString("SZ", state.GetBoardSize());
@@ -555,20 +551,23 @@ std::string Sgf::ToString(GameState &state) {
         out << "RE[";
         if (state.GetWinner() == kBlackWon) {
             out << "B+";
-            if (pass_end) out << score;
+            if (pass_end)
+                out << score;
         } else if (state.GetWinner() == kWhiteWon) {
             out << "W+";
-            if (pass_end) out << -score;
+            if (pass_end)
+                out << -score;
         } else if (state.GetWinner() == kDraw) {
             out << "0";
         }
-        if (!pass_end && state.GetWinner() != kDraw) out << "Resign";
+        if (!pass_end && state.GetWinner() != kDraw)
+            out << "Resign";
 
         out << ']';
     }
 
     size_t i = 0;
-    for (const auto &board : history) {
+    for (const auto& board : history) {
         auto color = !board->GetToMove();
         auto lastmove = board->GetLastMove();
         auto c = state.GetComment(i++);
@@ -590,7 +589,7 @@ std::string Sgf::ToString(GameState &state) {
     return out.str();
 }
 
-void Sgf::ToFile(std::string filename, GameState &state) {
+void Sgf::ToFile(std::string filename, GameState& state) {
     std::ofstream out(filename.c_str(), std::ofstream::app | std::ofstream::out);
     if (out.is_open()) {
         out << ToString(state) << std::endl;
@@ -605,7 +604,7 @@ void Sgf::CleanSgf(std::string in, std::string out) {
     if (!fout.is_open()) {
         return;
     }
-    for (auto &sgf : all_sgfs) {
+    for (auto& sgf : all_sgfs) {
         try {
             auto game_state = FromString(sgf, 9999);
             fout << ToString(game_state) << std::endl;

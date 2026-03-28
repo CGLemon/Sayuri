@@ -1,12 +1,12 @@
 #pragma once
 
-#include "game/game_state.h"
-
 #include <map>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include "game/game_state.h"
 
 class SgfNode {
 public:
@@ -39,16 +39,16 @@ class SgfParser {
 public:
     static SgfParser& Get();
 
-    std::unique_ptr<SgfNode> ParseFromFile(std::string filename, size_t index=0) const;
-    std::unique_ptr<SgfNode> ParseFromString(std::string sgfstring, size_t index=0) const;
+    std::unique_ptr<SgfNode> ParseFromFile(std::string filename, size_t index = 0) const;
+    std::unique_ptr<SgfNode> ParseFromString(std::string sgfstring, size_t index = 0) const;
 
     std::vector<std::string> ChopAll(std::string filename) const;
 
 private:
-    void Parse(std::istringstream &strm, SgfNode* node) const;
+    void Parse(std::istringstream& strm, SgfNode* node) const;
 
-    std::string ParsePropertyValue(std::istringstream &strm, bool &success) const;
-    std::string ParsePropertyName(std::istringstream &strm) const;
+    std::string ParsePropertyValue(std::istringstream& strm, bool& success) const;
+    std::string ParsePropertyName(std::istringstream& strm) const;
 
     std::vector<std::string> ChopStream(std::istream& ins, size_t stopat) const;
     std::vector<std::string> ChopAll(std::string filename, size_t stopat) const;
@@ -66,10 +66,10 @@ public:
     GameState FromString(std::string sgfstring, unsigned int movenum);
 
     // Import the game state to string.
-    std::string ToString(GameState &state);
+    std::string ToString(GameState& state);
 
     // Import the game state as SGF file.
-    void ToFile(std::string filename, GameState &state);
+    void ToFile(std::string filename, GameState& state);
 
     // Remove unused SGF elements for this program and save it.
     void CleanSgf(std::string in, std::string out);

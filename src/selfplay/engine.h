@@ -1,21 +1,21 @@
 #pragma once
 
+#include <memory>
+#include <string>
+#include <vector>
+
 #include "game/game_state.h"
 #include "game/types.h"
 #include "mcts/search.h"
 #include "neural/training_data.h"
-
-#include <string>
-#include <vector>
-#include <memory>
 
 class Engine {
 public:
     void Initialize();
     void Abort();
 
-    void GatherSgfString(std::string &sgf, int g);
-    void GatherTrainingData(std::vector<TrainingData> &chunk, int g);
+    void GatherSgfString(std::string& sgf, int g);
+    void GatherTrainingData(std::vector<TrainingData>& chunk, int g);
     void PrepareGame(int g);
     void Selfplay(int g);
 

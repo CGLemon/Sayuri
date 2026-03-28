@@ -1,6 +1,7 @@
-#include <stdexcept>
-#include <algorithm>
 #include "utils/filesystem.h"
+
+#include <algorithm>
+#include <stdexcept>
 
 #ifdef WIN32
 #include <windows.h>
@@ -24,7 +25,7 @@ std::vector<std::string> SplitPath(std::string path) {
             break;
         }
         pathvec.emplace_back(path.substr(0, pos));
-        path = path.substr(pos+1);
+        path = path.substr(pos + 1);
     }
     pathvec.emplace_back(path);
     return pathvec;
@@ -46,7 +47,7 @@ std::string ConcatPath(std::initializer_list<std::string> list) {
     auto next = std::begin(list);
     auto path = *next;
     while (true) {
-        next+=1;
+        next += 1;
         if (next == std::end(list)) {
             break;
         }
@@ -57,7 +58,8 @@ std::string ConcatPath(std::initializer_list<std::string> list) {
 
 void TryCreateDirectory(const std::string& path) {
 #ifdef WIN32
-    if (CreateDirectoryA(path.c_str(), nullptr)) return;
+    if (CreateDirectoryA(path.c_str(), nullptr))
+        return;
     if (GetLastError() != ERROR_ALREADY_EXISTS) {
         throw std::runtime_error("Cannot create directory: " + path);
     }
@@ -72,10 +74,12 @@ bool IsDirectoryExist(const std::string& directory) {
 #ifdef WIN32
     WIN32_FIND_DATAA dir;
     const auto handle = FindFirstFileA((directory + "\\*").c_str(), &dir);
-    if (handle == INVALID_HANDLE_VALUE) return false;
+    if (handle == INVALID_HANDLE_VALUE)
+        return false;
 #else
     DIR* dir = opendir(directory.c_str());
-    if (!dir) return false;
+    if (!dir)
+        return false;
 #endif
     return true;
 }
@@ -85,7 +89,8 @@ std::vector<std::string> GetFileList(const std::string& directory) {
 #ifdef WIN32
     WIN32_FIND_DATAA dir;
     const auto handle = FindFirstFileA((directory + "\\*").c_str(), &dir);
-    if (handle == INVALID_HANDLE_VALUE) return result;
+    if (handle == INVALID_HANDLE_VALUE)
+        return result;
     do {
         if ((dir.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
             result.emplace_back(dir.cFileName);
@@ -94,7 +99,8 @@ std::vector<std::string> GetFileList(const std::string& directory) {
     FindClose(handle);
 #else
     DIR* dir = opendir(directory.c_str());
-    if (!dir) return result;
+    if (!dir)
+        return result;
     while (auto* entry = readdir(dir)) {
         bool exists = false;
         if (entry->d_type == DT_REG) {
@@ -104,7 +110,8 @@ std::vector<std::string> GetFileList(const std::string& directory) {
             struct stat s;
             exists = stat(filename.c_str(), &s) == 0 && (s.st_mode & S_IFMT) == S_IFREG;
         }
-        if (exists) result.push_back(entry->d_name);
+        if (exists)
+            result.push_back(entry->d_name);
     }
     closedir(dir);
 #endif
@@ -116,7 +123,8 @@ std::vector<std::string> GetDirectoryList(const std::string& directory) {
 #ifdef WIN32
     WIN32_FIND_DATAA dir;
     const auto handle = FindFirstFileA((directory + "\\*").c_str(), &dir);
-    if (handle == INVALID_HANDLE_VALUE) return result;
+    if (handle == INVALID_HANDLE_VALUE)
+        return result;
     do {
         if ((dir.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
             result.emplace_back(dir.cFileName);
@@ -125,26 +133,26 @@ std::vector<std::string> GetDirectoryList(const std::string& directory) {
     FindClose(handle);
 #else
     DIR* dir = opendir(directory.c_str());
-    if (!dir) return result;
+    if (!dir)
+        return result;
     while (auto* entry = readdir(dir)) {
         bool exists = false;
         if (entry->d_type == DT_DIR) {
             exists = true;
         }
-        if (exists) result.push_back(entry->d_name);
+        if (exists)
+            result.push_back(entry->d_name);
     }
     closedir(dir);
 #endif
     result.erase(std::remove_if(std::begin(result),
                                 std::end(result),
-                                [](auto in) -> bool {
-                                    return in == "." ||  in == "..";
-                                }),
+                                [](auto in) -> bool { return in == "." || in == ".."; }),
                  std::end(result));
     return result;
 }
 
-std::vector<std::string> SearchFileTree(const std::string& directory, size_t *counter) {
+std::vector<std::string> SearchFileTree(const std::string& directory, size_t* counter) {
     size_t root_counter = 0;
     if (counter == nullptr) {
         counter = &root_counter;
@@ -157,7 +165,7 @@ std::vector<std::string> SearchFileTree(const std::string& directory, size_t *co
     }
 
     auto dir_list = GetDirectoryList(directory);
-    for (const auto &dir : dir_list) {
+    for (const auto& dir : dir_list) {
         auto fullname = std::string{};
 #ifdef WIN32
         fullname = directory + "\\" + dir;
@@ -166,7 +174,7 @@ std::vector<std::string> SearchFileTree(const std::string& directory, size_t *co
 #endif
 
         auto sub_result = SearchFileTree(fullname, counter);
-        for (auto &sub : sub_result) {
+        for (auto& sub : sub_result) {
 #ifdef WIN32
             sub = dir + "\\" + sub;
 #else
@@ -174,9 +182,7 @@ std::vector<std::string> SearchFileTree(const std::string& directory, size_t *co
 #endif
         }
 
-        result.insert(std::end(result),
-                          std::begin(sub_result),
-                          std::end(sub_result));
+        result.insert(std::end(result), std::begin(sub_result), std::end(sub_result));
     }
     return result;
 }
@@ -204,7 +210,7 @@ time_t GetFileTime(const std::string& filename) {
         return 0;
     }
     return (static_cast<std::uint64_t>(s.ftLastWriteTime.dwHighDateTime) << 32) +
-               s.ftLastWriteTime.dwLowDateTime;
+           s.ftLastWriteTime.dwLowDateTime;
 #else
     struct stat s;
     if (stat(filename.c_str(), &s) < 0) {

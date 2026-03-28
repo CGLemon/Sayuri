@@ -1,9 +1,9 @@
 #pragma once
 
-#include <vector>
+#include <cstdint>
 #include <memory>
 #include <string>
-#include <cstdint>
+#include <vector>
 
 #include "game/board.h"
 
@@ -12,9 +12,7 @@ public:
     Board board_;
 
     // Reset all data and clear the board.
-    void Reset(const int boardsize,
-               const float komi,
-               const int scoring);
+    void Reset(const int boardsize, const float komi, const int scoring);
 
     // GTP interface to reset the boardsize.
     void SetBoardSize(const int boardsize);
@@ -51,7 +49,7 @@ public:
 
     // Set the territory helper. The element of vector should be one
     // of kBlack/kWhite/kEmpty.
-    void SetTerritoryHelper(const std::vector<int> &ownership);
+    void SetTerritoryHelper(const std::vector<int>& ownership);
 
     // Transfer GTP vertex string to vertex numeric.
     int TextToVertex(std::string text) const;
@@ -88,13 +86,11 @@ public:
 
     // Place the handicap stone one the board. All Handicap() functions
     // should play the stones via this function.
-    bool PlayHandicapStones(std::vector<int> movelist_vertex,
-                            bool kata_like_handicap_style);
+    bool PlayHandicapStones(std::vector<int> movelist_vertex, bool kata_like_handicap_style);
 
     // Compute final score based on current scoring rule.
     float GetFinalScore(const int color) const;
-    float GetFinalScore(const int color,
-                        const std::vector<int> &territory_helper) const;
+    float GetFinalScore(const int color, const std::vector<int>& territory_helper) const;
 
     // The safe area means both players do not need to play move in
     // it. It can be efficiently to end the a game if someone refuses
@@ -110,8 +106,8 @@ public:
     // Return true if the move is legal.
     bool IsLegalMove(const int vertex) const;
     bool IsLegalMove(const int vertex, const int color) const;
-    bool IsLegalMove(const int vertex, const int color,
-                     std::function<bool(int, int)> AvoidToMove) const;
+    bool
+    IsLegalMove(const int vertex, const int color, std::function<bool(int, int)> AvoidToMove) const;
 
     // Reture true if the specified color is adjacent to this vertex.
     bool IsNeighborColor(const int vtx, const int color) const;
@@ -128,7 +124,7 @@ public:
 
     // Remove the strings which is in the list. It will remove whole string
     // if one vertex is in the dead list.
-    void RemoveDeadStrings(std::vector<int> &dead_list);
+    void RemoveDeadStrings(std::vector<int>& dead_list);
 
     int GetVertex(const int x, const int y) const;
     int GetIndex(const int x, const int y) const;
@@ -180,7 +176,7 @@ public:
 
     void PlayRandomMove();
     float GetGammaValue(const int vtx, const int color) const;
-    std::vector<float> GetGammasPolicy(const int color, const float * ownership=nullptr) const;
+    std::vector<float> GetGammasPolicy(const int color, const float* ownership = nullptr) const;
 
     // Reture the zobrist hash value only for this move.
     std::uint64_t GetMoveHash(const int vtx, const int color) const;

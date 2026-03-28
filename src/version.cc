@@ -1,26 +1,29 @@
 #include "version.h"
-#include "utils/format.h"
 
 #include <vector>
 
+#include "utils/format.h"
+
 const std::string kProgram = "Sayuri";
 
-const std::vector<std::string> kReMember = { // R∃/MEMBER
+const std::vector<std::string> kReMember = {
+    // R∃/MEMBER
     "2019-3-6",
     "ME & CREED <nZkv>" // 8. ~
 };
 
 // for the version 0.x.x ...
-const std::vector<std::string> kMikazukiNoKoukai = { // 新月航程 / ミカヅキの航海
+const std::vector<std::string> kMikazukiNoKoukai = {
+    // 新月航程 / ミカヅキの航海
     "2017-5-17",
-    "Mikazuki",                           // 1.  三日月 / ミカヅキ
-    "Heikousen",                          // 2.  平行線
-    "Juu Oku Nen",                        // 3.  十億年
-    "Cake wo Yaku",                       // 4.  烤蛋糕 / ケーキを焼
-    "Furaregai Girl",                     // 5.  被甩的男男女女 / フラレガイガール
-    "Hachi to Misemono",                  // 6.  蜜蜂與馬戲團 / 蜂と見世物
-    "Ru-Rararu-Ra-Rurararu-Ra",           // 7.  嚕啦啦嚕拉嚕拉拉嚕拉 / るーららるーらーるららるーらー
-    "Odd Eye",                            // 8.  異色瞳 / オッドアイ
+    "Mikazuki",          // 1.  三日月 / ミカヅキ
+    "Heikousen",         // 2.  平行線
+    "Juu Oku Nen",       // 3.  十億年
+    "Cake wo Yaku",      // 4.  烤蛋糕 / ケーキを焼
+    "Furaregai Girl",    // 5.  被甩的男男女女 / フラレガイガール
+    "Hachi to Misemono", // 6.  蜜蜂與馬戲團 / 蜂と見世物
+    "Ru-Rararu-Ra-Rurararu-Ra", // 7.  嚕啦啦嚕拉嚕拉拉嚕拉 / るーららるーらーるららるーらー
+    "Odd Eye",                  // 8.  異色瞳 / オッドアイ
     "Sore wa Chiisa na Hikari no You na", // 9.  宛如渺小的微光 / それは小さな光のような
     "Raise de Aou",                       // 10. 來世再會吧 / 来世で会おう
     "Knot",                               // 11. ~
@@ -30,7 +33,8 @@ const std::vector<std::string> kMikazukiNoKoukai = { // 新月航程 / ミカヅ
 };
 
 // for the version 1.x.x ...
-const std::vector<std::string> kSanketsuGirl = { // 酸欠少女
+const std::vector<std::string> kSanketsuGirl = {
+    // 酸欠少女
     "2022-8-10",
     "Sanketsu Girl",   // 1.  酸欠少女
     "Tower of Flower", // 2.  花之塔 / 花の塔
@@ -66,15 +70,12 @@ std::string GetVersionName() {
         return kReMember[1];
     }
     if (kVersionMajor == 0) {
-        if (kVersionMinor <= 0 ||
-                kVersionMinor >= kMikazukiNoKoukai.size()) {
+        if (kVersionMinor <= 0 || kVersionMinor >= kMikazukiNoKoukai.size()) {
             return "N/A";
         }
         return kMikazukiNoKoukai[kVersionMinor];
-    }
-    else if (kVersionMajor == 1) {
-        if (kVersionMinor <= 0 ||
-                kVersionMinor >= kSanketsuGirl.size()) {
+    } else if (kVersionMajor == 1) {
+        if (kVersionMinor <= 0 || kVersionMinor >= kSanketsuGirl.size()) {
             return "N/A";
         }
         return kSanketsuGirl[kVersionMinor];

@@ -11,13 +11,9 @@ static constexpr std::uint64_t kThreadSeed = -1;
 static constexpr std::uint64_t kTimeSeed = -2;
 
 // Select the different random generator that you want.
-enum RandomMethod {
-    kSplitMix64,
-    kXoroShiro128Plus
-};
+enum RandomMethod { kSplitMix64, kXoroShiro128Plus };
 
-template<RandomMethod=kXoroShiro128Plus>
-class Random {
+template <RandomMethod = kXoroShiro128Plus> class Random {
 public:
     Random() = delete;
 
@@ -48,7 +44,9 @@ public:
         return std::numeric_limits<result_type>::max();
     }
 
-    result_type operator()() { return Generate(); }
+    result_type operator()() {
+        return Generate();
+    }
 
 private:
     static constexpr size_t kMaxSeedSize = 2;
@@ -58,26 +56,22 @@ private:
     void InitSeed(std::uint64_t);
 };
 
-template<RandomMethod R>
-Random<R>::Random(std::uint64_t seed) {
+template <RandomMethod R> Random<R>::Random(std::uint64_t seed) {
     InitSeed(seed);
 }
 
-template<RandomMethod R>
-Random<R>& Random<R>::Get(const std::uint64_t seed) {
+template <RandomMethod R> Random<R>& Random<R>::Get(const std::uint64_t seed) {
     static thread_local Random s_rng{seed};
     return s_rng;
 }
 
-template<RandomMethod R>
-std::uint32_t Random<R>::RandFix(std::uint32_t range) {
+template <RandomMethod R> std::uint32_t Random<R>::RandFix(std::uint32_t range) {
     // Please see the details from:
     // https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
     return ((Generate() >> 32) * static_cast<std::uint64_t>(range)) >> 32;
 }
 
-template<RandomMethod R>
-bool Random<R>::Roulette(double prob) {
+template <RandomMethod R> bool Random<R>::Roulette(double prob) {
     constexpr long double k2Pow64 = 18446744073709551616.0L; // 2^64
 
     prob = std::max(0.0, prob);

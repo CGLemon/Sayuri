@@ -1,9 +1,9 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 #include <sstream>
 #include <stdexcept>
-#include <cmath>
 
 // Imported from the: https://www.johndcook.com/blog/cpp_phi_inverse/
 static double RationalApprox(double t) {
@@ -11,26 +11,24 @@ static double RationalApprox(double t) {
     // The absolute value of the error should be less than 4.5 e-4.
     constexpr double c[3] = {2.515517, 0.802853, 0.010328};
     constexpr double d[3] = {1.432788, 0.189269, 0.001308};
-    return t - ((c[2]*t + c[1])*t + c[0]) /
-                   (((d[2]*t + d[1])*t + d[0])*t + 1.0);
+    return t - ((c[2] * t + c[1]) * t + c[0]) / (((d[2] * t + d[1]) * t + d[0]) * t + 1.0);
 }
 
 // Imported from the: https://www.johndcook.com/blog/cpp_phi_inverse/
 static double NormalCdfInverse(double p) {
     if (p <= 0.0 || p >= 1.0) {
         auto err = std::ostringstream{};
-        err << "Invalid input argument (" << p
-               << "); must be larger than 0 but less than 1.";
+        err << "Invalid input argument (" << p << "); must be larger than 0 but less than 1.";
         throw std::invalid_argument(err.str());
     }
 
     // See article above for explanation of this section.
     if (p < 0.5) {
         // F^-1(p) = - G^-1(p)
-        return -RationalApprox(std::sqrt(-2.0*log(p)));
+        return -RationalApprox(std::sqrt(-2.0 * log(p)));
     } else {
         // F^-1(p) = G^-1(1-p)
-        return RationalApprox(std::sqrt(-2.0*log(1-p)));
+        return RationalApprox(std::sqrt(-2.0 * log(1 - p)));
     }
 }
 
@@ -38,10 +36,12 @@ static double NormalCdfInverse(double p) {
 static double NormToTApprox(double z, double degrees_of_freedom) {
     double n = degrees_of_freedom + 2;
     if (degrees_of_freedom > 8) {
-        n-=1;
-        return std::sqrt(n * std::exp(z * z * (n-1.5) / ((n-1) * (n-1))) - n);
+        n -= 1;
+        return std::sqrt(n * std::exp(z * z * (n - 1.5) / ((n - 1) * (n - 1))) - n);
     }
-    return std::sqrt(n * std::exp(z * z * (n-0.853999327911) / ((n-1.044042304114) * (n-0.954115472059))) - n);
+    return std::sqrt(
+        n * std::exp(z * z * (n - 0.853999327911) / ((n - 1.044042304114) * (n - 0.954115472059))) -
+        n);
 }
 
 class LcbEntries {

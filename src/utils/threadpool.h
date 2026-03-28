@@ -25,27 +25,26 @@
     distribution.
 */
 
-# pragma once
+#pragma once
 
-#include <atomic>
 #include <algorithm>
-#include <vector>
-#include <queue>
-#include <memory>
-#include <thread>
-#include <mutex>
+#include <atomic>
 #include <condition_variable>
-#include <future>
 #include <functional>
-#include <stdexcept>
-#include <string>
-#include <sstream>
-#include <unordered_map>
+#include <future>
 #include <iomanip>
 #include <iostream>
+#include <memory>
+#include <mutex>
+#include <queue>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <unordered_map>
+#include <vector>
 
-template<typename K>
-class ThreadPoolItem {
+template <typename K> class ThreadPoolItem {
 public:
     ThreadPoolItem() = default;
 
@@ -94,7 +93,7 @@ public:
 
     std::vector<K> GetKeys() const {
         auto keys = std::vector<K>{};
-        for (auto &it : key_to_idx_) {
+        for (auto& it : key_to_idx_) {
             keys.emplace_back(it.first);
         }
         return keys;
@@ -111,8 +110,8 @@ class ThreadPool {
 public:
     ThreadPool(size_t threads) {
         stop_running_.store(false);
-        for (auto t = size_t{0}; t < threads ; ++t) {
-            AddThread([](){});
+        for (auto t = size_t{0}; t < threads; ++t) {
+            AddThread([]() {});
         }
         // Wait some milliseconds until all the threads are constructed.
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
@@ -120,42 +119,40 @@ public:
     ~ThreadPool() {
         stop_running_.store(true);
         cv_.notify_all();
-        for(auto &worker: workers_) {
+        for (auto& worker : workers_) {
             worker.join();
         }
         workers_.clear();
     }
 
     // Get the global thread pool.
-    static ThreadPool& Get(size_t threads=0) {
-        auto &pool = GetInternal();
+    static ThreadPool& Get(size_t threads = 0) {
+        auto& pool = GetInternal();
         while (threads > pool.GetNumThreads()) {
-            pool.AddThread([](){});
+            pool.AddThread([]() {});
         }
         return pool;
     }
-    static ThreadPool& Get(std::string key, size_t threads=0) {
-        auto &pool = GetInternal();
+    static ThreadPool& Get(std::string key, size_t threads = 0) {
+        auto& pool = GetInternal();
         while (threads > pool.GetNumThreads(key)) {
-            pool.AddThread(key, [](){});
+            pool.AddThread(key, []() {});
         }
         return pool;
     }
 
     // Add the task function to waiting queue.
-    template<class F, class... Args>
-    auto AddTask(F&& f, Args&&... args)
-        -> std::future<typename std::result_of<F(Args...)>::type> {
+    template <class F, class... Args>
+    auto AddTask(F&& f, Args&&... args) -> std::future<typename std::result_of<F(Args...)>::type> {
         using return_type = typename std::result_of<F(Args...)>::type;
 
         auto task = std::make_shared<std::packaged_task<return_type()>>(
-                std::bind(std::forward<F>(f), std::forward<Args>(args)...)
-            );
+            std::bind(std::forward<F>(f), std::forward<Args>(args)...));
 
         std::future<return_type> res = task->get_future();
         {
             std::lock_guard<std::mutex> lock(queue_mutex_);
-            tasks_.emplace([task](){ (*task)(); });
+            tasks_.emplace([task]() { (*task)(); });
         }
         cv_.notify_one();
         return res;
@@ -171,21 +168,18 @@ public:
     std::string ToString() const {
         auto oss = std::ostringstream{};
         auto keys = num_threads_per_item_.GetKeys();
-        size_t max_keysize = std::max_element(std::begin(keys), std::end(keys),
-                                 [](std::string &a, std::string &b) {
-                                     return a.size() < b.size();
-                                 })->size();
+        size_t max_keysize =
+            std::max_element(std::begin(keys), std::end(keys), [](std::string& a, std::string& b) {
+                return a.size() < b.size();
+            })->size();
         size_t wsize = max_keysize + 2;
 
         oss << "totally threads= " << GetNumThreads() << std::endl;
-        for (auto &key: keys) {
-            oss << std::setw(wsize) << key
-                    << std::setw(4) << GetNumThreads(key)
-                    << std::endl;
+        for (auto& key : keys) {
+            oss << std::setw(wsize) << key << std::setw(4) << GetNumThreads(key) << std::endl;
         }
-        oss << std::setw(wsize) << "others"
-                << std::setw(4) << num_threads_per_item_.GetNoItemNumThreads()
-                << std::endl;
+        oss << std::setw(wsize) << "others" << std::setw(4)
+            << num_threads_per_item_.GetNoItemNumThreads() << std::endl;
         return oss.str();
     }
 
@@ -195,23 +189,21 @@ private:
         return pool;
     }
     void AddWorker(std::function<void()> initializer) {
-        workers_.emplace_back(
-            [this, initializer]() -> void {
-                initializer();
-                while (true) {
-                    auto task = std::function<void(void)>{};
-                    {
-                        std::unique_lock<std::mutex> lock(queue_mutex_);
-                        cv_.wait(lock,
-                            [this](){ return IsStopRunning() || !tasks_.empty(); });
-                        if (IsStopRunning() && tasks_.empty()) break;
-                        task = std::move(tasks_.front());
-                        tasks_.pop();
-                    }
-                    task();
+        workers_.emplace_back([this, initializer]() -> void {
+            initializer();
+            while (true) {
+                auto task = std::function<void(void)>{};
+                {
+                    std::unique_lock<std::mutex> lock(queue_mutex_);
+                    cv_.wait(lock, [this]() { return IsStopRunning() || !tasks_.empty(); });
+                    if (IsStopRunning() && tasks_.empty())
+                        break;
+                    task = std::move(tasks_.front());
+                    tasks_.pop();
                 }
+                task();
             }
-        );
+        });
     }
     void AddThread(std::function<void()> initializer) {
         num_threads_per_item_.AddNumThreads(1);
@@ -243,28 +235,24 @@ private:
     std::condition_variable cv_;
 };
 
-
-template<typename T>
-class ThreadGroup {
+template <typename T> class ThreadGroup {
 public:
-    ThreadGroup(ThreadPool *pool) {
+    ThreadGroup(ThreadPool* pool) {
         pool_ = pool;
     }
-    ThreadGroup(ThreadGroup &&group) {
+    ThreadGroup(ThreadGroup&& group) {
         pool_ = group.pool_;
     }
     ~ThreadGroup() {
         WaitToJoin();
     }
 
-    template<class F, class... Args>
-    void AddTask(F&& f, Args&&... args) {
-        tasks_future_.emplace_back(
-            pool_->AddTask(std::forward<F>(f), std::forward<Args>(args)...));
+    template <class F, class... Args> void AddTask(F&& f, Args&&... args) {
+        tasks_future_.emplace_back(pool_->AddTask(std::forward<F>(f), std::forward<Args>(args)...));
     }
 
     void WaitToJoin() {
-        for (auto &&res : tasks_future_) {
+        for (auto&& res : tasks_future_) {
             res.get();
         }
         tasks_future_.clear();
@@ -275,6 +263,6 @@ public:
     }
 
 private:
-    ThreadPool *pool_;
+    ThreadPool* pool_;
     std::vector<std::future<T>> tasks_future_;
 };

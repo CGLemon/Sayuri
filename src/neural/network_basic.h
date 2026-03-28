@@ -1,10 +1,11 @@
 #pragma once
 
-#include "neural/description.h"
-#include "game/types.h"
 #include <array>
-#include <string>
 #include <memory>
+#include <string>
+
+#include "game/types.h"
+#include "neural/description.h"
 
 static constexpr int kInputChannels = 43; // 8 past moves * 3
                                           // 13 binary features
@@ -38,7 +39,7 @@ struct OutputResult {
         probabilities.fill(0.f);
         ownership.fill(0.f);
     }
-    void ImportQueryInfo(OutputResult &other) {
+    void ImportQueryInfo(OutputResult& other) {
         fp16 = other.fp16;
         board_size = other.board_size;
         komi = other.komi;
@@ -117,8 +118,12 @@ struct ForwardPipeOption {
         return *this;
     }
 
-    bool IsValidBoardSize() const { return board_size > 0; }
-    bool IsValidBatchSize() const { return batch_size > 0; }
+    bool IsValidBoardSize() const {
+        return board_size > 0;
+    }
+    bool IsValidBatchSize() const {
+        return batch_size > 0;
+    }
 
     int board_size{-1};
     int batch_size{-1};
@@ -140,11 +145,17 @@ public:
 
     virtual bool Valid() const = 0;
 
-    virtual int GetNumWorkers() const { return 0; }
+    virtual int GetNumWorkers() const {
+        return 0;
+    }
 
-    inline std::string GetName() const { return Valid() ? weights_->name : "random"; }
+    inline std::string GetName() const {
+        return Valid() ? weights_->name : "random";
+    }
 
-    inline int GetVersion() const { return Valid() ? weights_->version : -1; }
+    inline int GetVersion() const {
+        return Valid() ? weights_->version : -1;
+    }
 
     std::shared_ptr<DNNWeights> weights_{nullptr};
 };

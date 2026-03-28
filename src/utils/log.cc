@@ -1,6 +1,6 @@
-#include <iostream>
-
 #include "utils/log.h"
+
+#include <iostream>
 
 LogWriter& LogWriter::Get() {
     static LogWriter writer;

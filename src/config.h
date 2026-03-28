@@ -1,8 +1,9 @@
 #pragma once
 
-#include "utils/splitter.h"
 #include <string>
 #include <unordered_map>
+
+#include "utils/splitter.h"
 
 class ArgsParser {
 public:
@@ -10,7 +11,7 @@ public:
     ArgsParser(int argc, char** argv);
 
 private:
-    void Parse(Splitter &splitter);
+    void Parse(Splitter& splitter);
 
     void DumpHelper() const;
     void DumpWarning() const;

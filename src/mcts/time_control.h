@@ -7,9 +7,7 @@
 
 class TimeControl {
 public:
-    enum TimeManagement : int {
-        kOff = 0, kOn = 1, kFast = 2, kKeep = 3
-    };
+    enum TimeManagement : int { kOff = 0, kOn = 1, kFast = 2, kKeep = 3 };
 
     TimeControl();
 
@@ -24,8 +22,7 @@ public:
     float GetLagBuffer() const;
     float GetBufferEffect(int color, int boardsize, int move_num) const;
 
-    float GetThinkingTime(int color, int boardsize,
-                          int move_num, bool use_lag_buffer=true) const;
+    float GetThinkingTime(int color, int boardsize, int move_num, bool use_lag_buffer = true) const;
 
     void Clock();
     void TookTime(int color);
@@ -34,8 +31,8 @@ public:
     bool InByo(int color) const;
     bool IsTimeOver(int color) const;
 
-    void TimeStream(std::ostream &out) const;
-    void TimeStream(std::ostream &out, int color) const;
+    void TimeStream(std::ostream& out) const;
+    void TimeStream(std::ostream& out, int color) const;
     std::string ToString() const;
 
     bool IsInfiniteTime(int color) const;
@@ -56,7 +53,7 @@ private:
     std::array<int, 2> stones_left_;
     std::array<int, 2> periods_left_;
 
-    std::array<bool,  2> in_byo_;
+    std::array<bool, 2> in_byo_;
 
     int lag_buffer_{0}; // centiseconds
 

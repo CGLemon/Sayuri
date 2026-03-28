@@ -1,8 +1,9 @@
 #pragma once
 
-#include "game/gtp.h"
-#include <vector>
 #include <memory>
+#include <vector>
+
+#include "game/gtp.h"
 
 class Benchmark {
 public:

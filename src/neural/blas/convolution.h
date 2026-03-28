@@ -1,8 +1,9 @@
 #pragma once
 
-#include <vector>
 #include <cassert>
 #include <cstddef>
+#include <vector>
+
 #include "neural/blas/blas.h"
 
 class Convolution1 {
@@ -11,41 +12,40 @@ public:
     static void Forward(const size_t board_size,
                         const size_t input_channels,
                         const size_t output_channels,
-                        const std::vector<float> &input,
-                        const std::vector<float> &weights,
-                        std::vector<float> &col,
-                        std::vector<float> &output);
+                        const std::vector<float>& input,
+                        const std::vector<float>& weights,
+                        std::vector<float>& col,
+                        std::vector<float>& output);
 };
 
-template<unsigned int FILTERS>
-class Convolution {
+template <unsigned int FILTERS> class Convolution {
 public:
     Convolution() = delete;
     static void Forward(const size_t board_size,
                         const size_t input_channels,
                         const size_t output_channels,
-                        const std::vector<float> &input,
-                        const std::vector<float> &weights,
-                        std::vector<float> &col,
-                        std::vector<float> &output);
+                        const std::vector<float>& input,
+                        const std::vector<float>& weights,
+                        std::vector<float>& col,
+                        std::vector<float>& output);
 
     static size_t GetWorkspaceSize(const size_t board_size, const size_t input_channels);
 
 private:
     static void Im2col(const size_t board_size,
                        const int channels,
-                       const std::vector<float> &input,
-                       std::vector<float> &col);
+                       const std::vector<float>& input,
+                       std::vector<float>& col);
 };
 
-template<unsigned int FILTERS>
+template <unsigned int FILTERS>
 void Convolution<FILTERS>::Forward(const size_t board_size,
                                    const size_t input_channels,
                                    const size_t output_channels,
-                                   const std::vector<float> &input,
-                                   const std::vector<float> &weights,
-                                   std::vector<float> &col,
-                                   std::vector<float> &output) {
+                                   const std::vector<float>& input,
+                                   const std::vector<float>& weights,
+                                   std::vector<float>& col,
+                                   std::vector<float>& output) {
     constexpr unsigned int filter_size = FILTERS;
     const unsigned int width = board_size;
     const unsigned int height = board_size;
@@ -80,11 +80,11 @@ void Convolution<FILTERS>::Forward(const size_t board_size,
                            (int)spatial_size);
 }
 
-template<unsigned int FILTERS>
+template <unsigned int FILTERS>
 void Convolution<FILTERS>::Im2col(const size_t board_size,
                                   const int channels,
-                                  const std::vector<float> &input,
-                                  std::vector<float> &output) {
+                                  const std::vector<float>& input,
+                                  std::vector<float>& output) {
     constexpr unsigned int filter_size = FILTERS;
     const unsigned int width = board_size;
     const unsigned int height = board_size;
@@ -94,12 +94,12 @@ void Convolution<FILTERS>::Im2col(const size_t board_size,
     unsigned int output_h = height + 2 * pad - filter_size + 1;
     unsigned int output_w = width + 2 * pad - filter_size + 1;
 
-    const float *data_im = input.data();
-    float *data_col = output.data();
+    const float* data_im = input.data();
+    float* data_col = output.data();
 
     for (int channel = channels; channel--; data_im += spatial_size) {
         for (unsigned int kernel_row = 0; kernel_row < filter_size; kernel_row++) {
-            for (unsigned int kernel_col = 0; kernel_col < filter_size;  kernel_col++) {
+            for (unsigned int kernel_col = 0; kernel_col < filter_size; kernel_col++) {
                 int input_row = -pad + kernel_row;
                 for (int output_rows = output_h; output_rows; output_rows--) {
                     if (unsigned(input_row) < height) {
@@ -124,8 +124,9 @@ void Convolution<FILTERS>::Im2col(const size_t board_size,
     }
 }
 
-template<unsigned int FILTERS>
-size_t Convolution<FILTERS>::GetWorkspaceSize(const size_t board_size, const size_t input_channels) {
+template <unsigned int FILTERS>
+size_t Convolution<FILTERS>::GetWorkspaceSize(const size_t board_size,
+                                              const size_t input_channels) {
     const auto width = board_size;
     const auto height = board_size;
 
@@ -141,7 +142,7 @@ public:
     static void Forward(const size_t board_size,
                         const size_t filter_size,
                         const size_t channels,
-                        const std::vector<float> &input,
-                        const std::vector<float> &weights,
-                        std::vector<float> &output);
+                        const std::vector<float>& input,
+                        const std::vector<float>& weights,
+                        std::vector<float>& output);
 };

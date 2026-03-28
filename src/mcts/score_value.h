@@ -1,10 +1,10 @@
 #pragma once
 
-#include "game/types.h"
-
 #include <array>
 #include <cmath>
 #include <vector>
+
+#include "game/types.h"
 
 // Imported from the: https://github.com/lightvector/KataGo/blob/master/cpp/neuralnet/nninputs.cpp
 class ScoreValue {
@@ -14,21 +14,22 @@ public:
     static ScoreValue& Get();
 
     void Initialize();
-    float ExpectedScoreValue(float mean, float stddev, float center,
-                             float scale, float board_size);
+    float ExpectedScoreValue(float mean, float stddev, float center, float scale, float board_size);
+
 private:
     static constexpr float kTwoOverPi = 0.63661977236758134308f;
     static constexpr int kExtraRadius = 60;
     static constexpr int kSvTableAssumedBSize = kBoardSize;
-    static constexpr int kSvTableMeanRadius = kSvTableAssumedBSize * kSvTableAssumedBSize + kExtraRadius;
+    static constexpr int kSvTableMeanRadius =
+        kSvTableAssumedBSize * kSvTableAssumedBSize + kExtraRadius;
     static constexpr int kSvTableMeanLen = kSvTableMeanRadius * 2;
-    static constexpr int kSvTableStddevLen = kSvTableAssumedBSize * kSvTableAssumedBSize + kExtraRadius;
+    static constexpr int kSvTableStddevLen =
+        kSvTableAssumedBSize * kSvTableAssumedBSize + kExtraRadius;
 
     static constexpr int kEntrySize = kSvTableMeanLen * kSvTableStddevLen;
     std::array<float, kEntrySize> expected_lookup_table_;
 
-    float ScoreSmoothAdjust(float mean, float center,
-                            float scale, float board_size);
+    float ScoreSmoothAdjust(float mean, float center, float scale, float board_size);
 };
 
 inline ScoreValue& ScoreValue::Get() {
@@ -49,52 +50,51 @@ inline void ScoreValue::Initialize() {
     const int min_stddev_steps = -bound_stddev_steps_abs;
     const int max_stddev_steps = bound_stddev_steps_abs;
 
-    auto normal_pdf = std::vector<float>(max_stddev_steps - min_stddev_steps +1);
-    for(int i = min_stddev_steps; i <= max_stddev_steps; i++) {
+    auto normal_pdf = std::vector<float>(max_stddev_steps - min_stddev_steps + 1);
+    for (int i = min_stddev_steps; i <= max_stddev_steps; i++) {
         float x_in_stddevs = static_cast<float>(i) / steps_per_unit;
         float w = std::exp(-0.5f * x_in_stddevs * x_in_stddevs);
         normal_pdf[i - min_stddev_steps] = w;
     }
     // Precompute scorevalue at increments of 1/steps_per_unit points
-    const int sv_steps_abs = kSvTableMeanRadius * steps_per_unit +
-                                 steps_per_unit/2 +
-                                 bound_stddevs * kSvTableStddevLen * steps_per_unit;
+    const int sv_steps_abs = kSvTableMeanRadius * steps_per_unit + steps_per_unit / 2 +
+                             bound_stddevs * kSvTableStddevLen * steps_per_unit;
     const int min_sv_steps = -sv_steps_abs;
     const int max_sv_steps = sv_steps_abs;
 
     auto sv_precomp = std::vector<float>(max_sv_steps - min_sv_steps + 1);
-    for(int i = min_sv_steps; i <= max_sv_steps; i++) {
+    for (int i = min_sv_steps; i <= max_sv_steps; i++) {
         float mean = static_cast<float>(i) / steps_per_unit;
         float sv = ScoreSmoothAdjust(mean, 0.0, 1.0, kSvTableAssumedBSize);
         sv_precomp[i - min_sv_steps] = sv;
     }
 
     // Perform numeric integration
-    for(int mean_idx = 0; mean_idx < kSvTableMeanLen; mean_idx++) {
-        int mean_steps = (mean_idx - kSvTableMeanRadius) * steps_per_unit - steps_per_unit/2;
-        for(int stddev_idx = 0; stddev_idx < kSvTableStddevLen; stddev_idx++) {
+    for (int mean_idx = 0; mean_idx < kSvTableMeanLen; mean_idx++) {
+        int mean_steps = (mean_idx - kSvTableMeanRadius) * steps_per_unit - steps_per_unit / 2;
+        for (int stddev_idx = 0; stddev_idx < kSvTableStddevLen; stddev_idx++) {
             float w_sum = 0.0;
             float w_sv_sum = 0.0;
-            for(int i = min_stddev_steps; i <= max_stddev_steps; i++) {
+            for (int i = min_stddev_steps; i <= max_stddev_steps; i++) {
                 int x_steps = mean_steps + stddev_idx * i;
-                float w = normal_pdf[i-min_stddev_steps];
+                float w = normal_pdf[i - min_stddev_steps];
                 float sv = sv_precomp[x_steps - min_sv_steps];
                 w_sum += w;
-                w_sv_sum += w*sv;
+                w_sv_sum += w * sv;
             }
             expected_lookup_table_[mean_idx * kSvTableStddevLen + stddev_idx] = w_sv_sum / w_sum;
         }
     }
 }
 
-inline float ScoreValue::ScoreSmoothAdjust(float final_score, float center,
-                                           float scale, float board_size) {
+inline float
+ScoreValue::ScoreSmoothAdjust(float final_score, float center, float scale, float board_size) {
     float adjusted_score = final_score - center;
     return std::atan(adjusted_score / (scale * board_size)) * kTwoOverPi;
 }
 
-inline float ScoreValue::ExpectedScoreValue(float mean, float stddev, float center,
-                                            float scale, float board_size) {
+inline float ScoreValue::ExpectedScoreValue(
+    float mean, float stddev, float center, float scale, float board_size) {
     float scale_factor = static_cast<float>(kSvTableAssumedBSize) / (scale * board_size);
 
     float mean_scaled = (mean - center) * scale_factor;
@@ -132,4 +132,3 @@ inline float ScoreValue::ExpectedScoreValue(float mean, float stddev, float cent
     float b1 = a10 + lambda_stddev * (a11 - a10);
     return b0 + lambda_mean * (b1 - b0);
 }
-

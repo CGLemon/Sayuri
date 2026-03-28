@@ -50,9 +50,8 @@ void Network::Initialize(const std::string& weightsfile) {
 #endif
 
 #ifdef USE_EIGEN
-    LOGGING << "BLAS Core: Eigen" << ' '
-                << EIGEN_WORLD_VERSION << '.' << EIGEN_MAJOR_VERSION << '.' << EIGEN_MINOR_VERSION << ' '
-                << "library." << std::endl;
+    LOGGING << "BLAS Core: Eigen" << ' ' << EIGEN_WORLD_VERSION << '.' << EIGEN_MAJOR_VERSION << '.'
+            << EIGEN_MINOR_VERSION << ' ' << "library." << std::endl;
 #endif
 
 #ifdef USE_CUDA
@@ -62,7 +61,8 @@ void Network::Initialize(const std::string& weightsfile) {
 #endif
 
     // Initialize the parameters.
-    default_policy_offset_ = static_cast<PolicyBufferOffset>(GetOption<int>("policy_buffer_offset"));
+    default_policy_offset_ =
+        static_cast<PolicyBufferOffset>(GetOption<int>("policy_buffer_offset"));
     no_cache_ = GetOption<bool>("no_cache");
     early_symm_cache_ = GetOption<bool>("early_symm_cache");
     cache_memory_mib_ = 0;
@@ -94,10 +94,9 @@ void Network::Initialize(const std::string& weightsfile) {
 }
 
 size_t Network::SetCacheSize(size_t MiB) {
-    const size_t mem_mib = std::min(
-                               std::max(size_t{5}, MiB), // min:   5 MB
-                               size_t{128 * 1024}        // max: 128 GB
-                           );
+    const size_t mem_mib = std::min(std::max(size_t{5}, MiB), // min:   5 MB
+                                    size_t{128 * 1024}        // max: 128 GB
+    );
 
     const size_t entry_byte = nn_cache_.GetEntrySize();
     const size_t mem_byte = mem_mib * 1024 * 1024;
@@ -106,14 +105,12 @@ size_t Network::SetCacheSize(size_t MiB) {
     cache_memory_mib_ = mem_mib;
     nn_cache_.SetCapacity(num_entries);
 
-    const double mem_used =
-        static_cast<double>(num_entries * entry_byte) / (1024.f * 1024.f);
+    const double mem_used = static_cast<double>(num_entries * entry_byte) / (1024.f * 1024.f);
     if (no_cache_) {
         LOGGING << "Disable the NN cache.\n";
     } else {
         LOGGING << Format(
-            "Allocated %.2f MiB memory for NN cache (%zu entries).\n",
-            mem_used, num_entries);
+            "Allocated %.2f MiB memory for NN cache (%zu entries).\n", mem_used, num_entries);
     }
     return num_entries;
 }
@@ -161,9 +158,8 @@ Network::Result Network::DummyForward(const Network::Inputs& inputs) const {
     return result;
 }
 
-Network::Result Network::GetOutputInternal(const GameState &state,
-                                           const int symmetry,
-                                           PolicyBufferOffset offset) {
+Network::Result
+Network::GetOutputInternal(const GameState& state, const int symmetry, PolicyBufferOffset offset) {
     auto inputs = Encoder::Get().GetInputs(state, symmetry, GetVersion());
     if (offset == PolicyBufferOffset::kDefault) {
         inputs.offset = default_policy_offset_;
@@ -192,8 +188,7 @@ Network::Result Network::GetOutputInternal(const GameState &state,
     return result;
 }
 
-bool Network::ProbeCache(const GameState &state,
-                         Network::Result &result) {
+bool Network::ProbeCache(const GameState& state, Network::Result& result) {
     if (nn_cache_.LookupItem(state.GetHash(), result)) {
         if (result.board_size == state.GetBoardSize()) {
             return true;
@@ -201,7 +196,7 @@ bool Network::ProbeCache(const GameState &state,
     }
 
     if (state.GetBoardSize() >= state.GetMoveNumber() && early_symm_cache_) {
-        for (int symm = Symmetry::kIdentitySymmetry+1; symm < Symmetry::kNumSymmetris; ++symm) {
+        for (int symm = Symmetry::kIdentitySymmetry + 1; symm < Symmetry::kNumSymmetris; ++symm) {
             if (nn_cache_.LookupItem(state.ComputeSymmetryHash(symm), result)) {
                 if (result.board_size != state.GetBoardSize()) {
                     break;
@@ -214,11 +209,11 @@ bool Network::ProbeCache(const GameState &state,
 
                 // copy result to buffer
                 std::copy(std::begin(result.probabilities),
-                              std::begin(result.probabilities) + num_intersections,
-                              std::begin(probabilities_buffer));
+                          std::begin(result.probabilities) + num_intersections,
+                          std::begin(probabilities_buffer));
                 std::copy(std::begin(result.ownership),
-                              std::begin(result.ownership) + num_intersections,
-                              std::begin(ownership_buffer));
+                          std::begin(result.ownership) + num_intersections,
+                          std::begin(ownership_buffer));
 
                 // apply invert symmetry
                 for (int idx = 0; idx < num_intersections; ++idx) {
@@ -233,9 +228,8 @@ bool Network::ProbeCache(const GameState &state,
     return false;
 }
 
-Network::Result Network::GetOutput(const GameState &state,
-                                   const Ensemble ensemble,
-                                   Network::Query query) {
+Network::Result
+Network::GetOutput(const GameState& state, const Ensemble ensemble, Network::Query query) {
     if (ensemble == kDirect) {
         if (query.symmetry < 0 || query.symmetry >= Symmetry::kNumSymmetris) {
             query.symmetry = Symmetry::kIdentitySymmetry;
@@ -272,7 +266,8 @@ Network::Result Network::GetOutput(const GameState &state,
                 result.wdl[idx] += inter_result.wdl[idx] / Symmetry::kNumSymmetris;
             }
             for (int idx = 0; idx < num_intersections; ++idx) {
-                result.probabilities[idx] += inter_result.probabilities[idx] / Symmetry::kNumSymmetris;
+                result.probabilities[idx] +=
+                    inter_result.probabilities[idx] / Symmetry::kNumSymmetris;
                 result.ownership[idx] += inter_result.ownership[idx] / Symmetry::kNumSymmetris;
             }
             if (symm == Symmetry::kIdentitySymmetry) {
@@ -289,9 +284,8 @@ Network::Result Network::GetOutput(const GameState &state,
     return result;
 }
 
-std::string Network::GetOutputString(const GameState &state,
-                                     const Ensemble ensemble,
-                                     Network::Query query) {
+std::string
+Network::GetOutputString(const GameState& state, const Ensemble ensemble, Network::Query query) {
     query.read_cache = false;
     query.write_cache = false;
     const auto result = GetOutput(state, ensemble, query);
@@ -312,7 +306,7 @@ std::string Network::GetOutputString(const GameState &state,
     out << "probabilities: " << std::endl;
     for (int idx = 0; idx < num_intersections; ++idx) {
         out << Format("%10.6f", result.probabilities[state.IndexToRowMajorIndex(idx)]);
-        if ((idx+1) % board_size == 0) {
+        if ((idx + 1) % board_size == 0) {
             out << std::endl;
         }
     }
@@ -321,7 +315,7 @@ std::string Network::GetOutputString(const GameState &state,
     out << "ownership: " << std::endl;
     for (int idx = 0; idx < num_intersections; ++idx) {
         out << Format("%10.6f", result.ownership[state.IndexToRowMajorIndex(idx)]);
-        if ((idx+1) % board_size == 0) {
+        if ((idx + 1) % board_size == 0) {
             out << std::endl;
         }
     }
@@ -335,7 +329,7 @@ void Network::SelfCheck(Network::Result result, Network::Result ref) {
     constexpr auto kMaxError = 0.2f;
 
     auto GetSquareError = [](double a, double b) -> double {
-        const auto diff = a - b; 
+        const auto diff = a - b;
         return diff * diff;
     };
 
@@ -354,7 +348,7 @@ void Network::SelfCheck(Network::Result result, Network::Result ref) {
     error = std::sqrt(error);
 
     if (error > kMaxError || std::isnan(error)) {
-       throw std::runtime_error(Format("GPU self-check mismatch (%10.6f).", error));
+        throw std::runtime_error(Format("GPU self-check mismatch (%10.6f).", error));
     }
 }
 
@@ -369,11 +363,11 @@ void Network::TransformResult(Network::Result& result, const int symmetry) {
 
     // copy result to buffer
     std::copy(std::begin(result_buf.probabilities),
-                  std::begin(result_buf.probabilities) + num_intersections,
-                  std::begin(probabilities_buffer));
+              std::begin(result_buf.probabilities) + num_intersections,
+              std::begin(probabilities_buffer));
     std::copy(std::begin(result_buf.ownership),
-                  std::begin(result_buf.ownership) + num_intersections,
-                  std::begin(ownership_buffer));
+              std::begin(result_buf.ownership) + num_intersections,
+              std::begin(ownership_buffer));
 
     // apply invert symmetry for probabilities, ownership
     for (int idx = 0; idx < num_intersections; ++idx) {
@@ -414,7 +408,7 @@ void Network::ActivatePolicy(Result& result, const float temperature) const {
     const auto board_size = result.board_size;
     const auto num_intersections = board_size * board_size;
 
-    auto probabilities_buffer = std::vector<float>(num_intersections+1);
+    auto probabilities_buffer = std::vector<float>(num_intersections + 1);
 
     for (int idx = 0; idx < num_intersections; ++idx) {
         probabilities_buffer[idx] = result.probabilities[idx];

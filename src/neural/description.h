@@ -41,16 +41,14 @@ public:
     int GetChannels() const;
 
 private:
-    template <typename container>
-    void ProcessVariance(container& weights) {
+    template <typename container> void ProcessVariance(container& weights) {
         static constexpr float epsilon = 1e-5f;
-        for (auto &&w : weights) {
+        for (auto&& w : weights) {
             w = 1.0f / std::sqrt(w + epsilon);
         }
     }
-    template <typename container>
-    void ProcessStddev(container& weights) {
-        for (auto &&w : weights) {
+    template <typename container> void ProcessStddev(container& weights) {
+        for (auto&& w : weights) {
             w = 1.0f / w;
         }
     }
@@ -89,19 +87,21 @@ private:
 
 class BlockBasic {
 public:
-    enum Type {
-        kUnknown,
-        kResidualBlock,
-        kBottleneckBlock,
-        kNestedBottleneckBlock,
-        kMixerBlock
-    };
+    enum Type { kUnknown, kResidualBlock, kBottleneckBlock, kNestedBottleneckBlock, kMixerBlock };
     BlockBasic() = default;
 
-    bool IsResidualBlock() { return type == Type::kResidualBlock; }
-    bool IsBottleneckBlock() { return type == Type::kBottleneckBlock; }
-    bool IsNestedBottleneckBlock() { return type == Type::kNestedBottleneckBlock; }
-    bool IsMixerBlock() { return type == Type::kMixerBlock; }
+    bool IsResidualBlock() {
+        return type == Type::kResidualBlock;
+    }
+    bool IsBottleneckBlock() {
+        return type == Type::kBottleneckBlock;
+    }
+    bool IsNestedBottleneckBlock() {
+        return type == Type::kNestedBottleneckBlock;
+    }
+    bool IsMixerBlock() {
+        return type == Type::kMixerBlock;
+    }
 
     Type type{kUnknown};
 
@@ -133,28 +133,33 @@ public:
 
 class ResidualBlock : public BlockBasic {
 public:
-    ResidualBlock() { type = Type::kResidualBlock; }
+    ResidualBlock() {
+        type = Type::kResidualBlock;
+    }
 };
 
 class BottleneckBlock : public BlockBasic {
 public:
-    BottleneckBlock() { type = Type::kBottleneckBlock; }
+    BottleneckBlock() {
+        type = Type::kBottleneckBlock;
+    }
 };
 
 class NestedBottleneckBlock : public BlockBasic {
 public:
-    NestedBottleneckBlock() { type = Type::kNestedBottleneckBlock; }
+    NestedBottleneckBlock() {
+        type = Type::kNestedBottleneckBlock;
+    }
 };
 
 class MixerBlock : public BlockBasic {
 public:
-    MixerBlock() { type = Type::kMixerBlock; }
+    MixerBlock() {
+        type = Type::kMixerBlock;
+    }
 };
 
-enum class PolicyHeadType {
-    kNormal,
-    kRepLK
-};
+enum class PolicyHeadType { kNormal, kRepLK };
 
 class DNNWeights {
 public:

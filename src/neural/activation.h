@@ -1,9 +1,9 @@
 #pragma once
 
-#include <string>
-#include <stdexcept>
 #include <cctype>
 #include <cmath>
+#include <stdexcept>
+#include <string>
 
 enum class Activation : int {
     kIdentity = 0,
@@ -17,7 +17,7 @@ enum class Activation : int {
 };
 
 static inline Activation StringToAct(std::string val) {
-    for (char &c: val) {
+    for (char& c : val) {
         c = std::tolower(c);
     }
     if (val == "identity") {
@@ -40,42 +40,42 @@ static inline Activation StringToAct(std::string val) {
     throw std::runtime_error{"Unknown activation type."};
 }
 
-#define ACTIVATION_IDENTITY(x) \
-    ;
+#define ACTIVATION_IDENTITY(x) ;
 
-#define ACTIVATION_RELU(x) \
-    x = x > 0.f ? x : 0.f;
+#define ACTIVATION_RELU(x) x = x > 0.f ? x : 0.f;
 
-#define ACTIVATION_ELU(x) \
-    x = x > 0.f ? x : (expf(x) - 1);
+#define ACTIVATION_ELU(x) x = x > 0.f ? x : (expf(x) - 1);
 
-#define ACTIVATION_SELU(x) \
-    x = x > 0.f ?          \
-            (1.05070098f * x) : \
-            (1.05070098f * 1.67326324f * (expf(x) - 1.0f));
+#define ACTIVATION_SELU(x)                                                                         \
+    x = x > 0.f ? (1.05070098f * x) : (1.05070098f * 1.67326324f * (expf(x) - 1.0f));
 
-#define ACTIVATION_GELU(x) \
+#define ACTIVATION_GELU(x)                                                                         \
     x = 0.5f * x * (1.0f + tanhf(0.7978845608028654f * (x + 0.044715 * x * x * x)));
 
-#define ACTIVATION_MISH(x) \
-    x = x * tanhf(logf(1.0f + expf(x)));
+#define ACTIVATION_MISH(x) x = x * tanhf(logf(1.0f + expf(x)));
 
-#define ACTIVATION_SWISH(x) \
-    x = x / (1.0f + expf(-x));
+#define ACTIVATION_SWISH(x) x = x / (1.0f + expf(-x));
 
-#define ACTIVATION_HARDSWISH(x) \
-    x = x >= 3.f ? x :          \
-            x <= -3.f ? 0.f : (x * (x + 3.0f) / 6.0f);
+#define ACTIVATION_HARDSWISH(x) x = x >= 3.f ? x : x <= -3.f ? 0.f : (x * (x + 3.0f) / 6.0f);
 
-#define ACTIVATION_FUNC(x, type)                                    \
-    switch (type) {                                                 \
-        case Activation::kIdentity: ACTIVATION_IDENTITY(x) break;   \
-        case Activation::kReLU: ACTIVATION_RELU(x) break;           \
-        case Activation::kELU: ACTIVATION_ELU(x) break;             \
-        case Activation::kSELU: ACTIVATION_SELU(x) break;           \
-        case Activation::kGELU: ACTIVATION_GELU(x) break;           \
-        case Activation::kMISH: ACTIVATION_MISH(x) break;           \
-        case Activation::kSwish: ACTIVATION_SWISH(x) break;         \
-        case Activation::kHardSwish: ACTIVATION_HARDSWISH(x) break; \
-        default: break;                                             \
+#define ACTIVATION_FUNC(x, type)                                                                   \
+    switch (type) {                                                                                \
+        case Activation::kIdentity:                                                                \
+            ACTIVATION_IDENTITY(x) break;                                                          \
+        case Activation::kReLU:                                                                    \
+            ACTIVATION_RELU(x) break;                                                              \
+        case Activation::kELU:                                                                     \
+            ACTIVATION_ELU(x) break;                                                               \
+        case Activation::kSELU:                                                                    \
+            ACTIVATION_SELU(x) break;                                                              \
+        case Activation::kGELU:                                                                    \
+            ACTIVATION_GELU(x) break;                                                              \
+        case Activation::kMISH:                                                                    \
+            ACTIVATION_MISH(x) break;                                                              \
+        case Activation::kSwish:                                                                   \
+            ACTIVATION_SWISH(x) break;                                                             \
+        case Activation::kHardSwish:                                                               \
+            ACTIVATION_HARDSWISH(x) break;                                                         \
+        default:                                                                                   \
+            break;                                                                                 \
     }

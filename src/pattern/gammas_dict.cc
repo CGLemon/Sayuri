@@ -1,13 +1,14 @@
-#include "pattern/pattern.h"
 #include "pattern/gammas_dict.h"
-#include "game/types.h"
-#include "utils/log.h"
-#include "utils/format.h"
 
-#include <stdexcept>
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
+
+#include "game/types.h"
+#include "pattern/pattern.h"
+#include "utils/format.h"
+#include "utils/log.h"
 
 GammasDict& GammasDict::Get() {
     static GammasDict dict;
@@ -78,7 +79,7 @@ void GammasDict::LoadPatterns(std::string filename) {
     }
 }
 
-bool GammasDict::ProbePattern(std::uint64_t hash, float &val) const {
+bool GammasDict::ProbePattern(std::uint64_t hash, float& val) const {
     auto it = pattern_dict_.find(hash);
     if (it == std::end(pattern_dict_)) {
         return false;
@@ -87,7 +88,7 @@ bool GammasDict::ProbePattern(std::uint64_t hash, float &val) const {
     return true;
 }
 
-bool GammasDict::ProbeFeature(std::uint64_t hash, float &val) const {
+bool GammasDict::ProbeFeature(std::uint64_t hash, float& val) const {
     auto it = feature_dict_.find(hash);
     if (it == std::end(feature_dict_)) {
         return false;
@@ -117,7 +118,8 @@ bool GammasDict::InsertFeature(std::uint64_t hash, float val) {
 std::string GammasDict::GetInformation() const {
     auto oss = std::ostringstream();
     oss << Format("The patterns file contains %zu patterns and %zu features.\n",
-                      pattern_dict_.size(), feature_dict_.size());
+                  pattern_dict_.size(),
+                  feature_dict_.size());
     return oss.str();
 }
 

@@ -1,6 +1,7 @@
 #include "neural/batch_forward_pipe.h"
-#include "utils/log.h"
+
 #include "utils/format.h"
+#include "utils/log.h"
 #include "utils/option.h"
 
 OutputResult BatchForwardPipe::SendQueryAndWait(const InputData& input) {
@@ -17,7 +18,7 @@ OutputResult BatchForwardPipe::SendQueryAndWait(const InputData& input) {
         // to the NN's input dimensions.
         for (int c = 0; c < weights_->input_channels; ++c) {
             int offset_r = c * board_size_per_nn_ * board_size_per_nn_; // data's ordering index
-            int offset_p = c * planes_bsize * planes_bsize; // NN's ordering index
+            int offset_p = c * planes_bsize * planes_bsize;             // NN's ordering index
 
             for (int idx = 0; idx < board_size_per_nn_ * board_size_per_nn_; ++idx) {
                 const int x = idx % board_size_per_nn_;
@@ -90,7 +91,7 @@ void BatchForwardPipe::AssignWorkers(int num_gpus) {
     ThreadPool::Get("batch-forward-pipe", num_gpus);
     if (group_->FutureEmpty()) {
         for (int gpu = 0; gpu < num_gpus; ++gpu) {
-            group_->AddTask([g=gpu, this](){ Worker(g); });
+            group_->AddTask([g = gpu, this]() { Worker(g); });
         }
     }
 }
@@ -106,7 +107,7 @@ void BatchForwardPipe::Worker(int gpu) {
 
         {
             std::unique_lock<std::mutex> lock(worker_mutex_);
-            while(true) {
+            while (true) {
                 // If the worker is shutting down, return immediately.
                 if (!worker_running_.load(std::memory_order_relaxed)) {
                     return entries;
@@ -120,10 +121,13 @@ void BatchForwardPipe::Worker(int gpu) {
                 bool timeout = false;
                 if (waittime_.load(std::memory_order_relaxed) != 0) {
                     timeout = !cv_.wait_for(
-                        lock, std::chrono::milliseconds(waittime_.load(std::memory_order_relaxed)),
+                        lock,
+                        std::chrono::milliseconds(waittime_.load(std::memory_order_relaxed)),
                         [this]() {
                             return !worker_running_.load(std::memory_order_relaxed) ||
-                                       static_cast<int>(entry_queue_.size()) >= forwarding_batch_per_nn_; });
+                                   static_cast<int>(entry_queue_.size()) >=
+                                       forwarding_batch_per_nn_;
+                        });
                 }
 
                 if (entry_queue_.empty()) {
@@ -158,7 +162,8 @@ void BatchForwardPipe::Worker(int gpu) {
 
     const auto gpu_waittime_base = GetOption<int>("gpu_waittime");
     while (true) {
-        if (!worker_running_.load(std::memory_order_relaxed)) return;
+        if (!worker_running_.load(std::memory_order_relaxed))
+            return;
 
         auto entries = GatherBatches(gpu_waittime_base);
         const auto batch_size = entries.size();

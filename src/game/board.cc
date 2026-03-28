@@ -1,9 +1,10 @@
-#include <sstream>
-#include <algorithm>
-#include <set>
-#include <queue>
-
 #include "game/board.h"
+
+#include <algorithm>
+#include <queue>
+#include <set>
+#include <sstream>
+
 #include "game/symmetry.h"
 
 void Board::Reset(const int boardsize) {
@@ -30,17 +31,15 @@ void Board::ResetBoard() {
             empty_[empty_cnt_++] = vtx;
 
             if (x == 0 || x == (boardsize - 1)) {
-                neighbours_[vtx] += ((1ULL << kBlackNeighborShift) |
-                                    (1ULL << kWhiteNeighborShift) |
-                                    (1ULL << kEmptyNeighborShift));
+                neighbours_[vtx] += ((1ULL << kBlackNeighborShift) | (1ULL << kWhiteNeighborShift) |
+                                     (1ULL << kEmptyNeighborShift));
             } else {
                 neighbours_[vtx] += (2ULL << kEmptyNeighborShift);
             }
 
             if (y == 0 || y == (boardsize - 1)) {
-                neighbours_[vtx] += ((1ULL << kBlackNeighborShift) |
-                                    (1ULL << kWhiteNeighborShift) |
-                                    (1ULL << kEmptyNeighborShift));
+                neighbours_[vtx] += ((1ULL << kBlackNeighborShift) | (1ULL << kWhiteNeighborShift) |
+                                     (1ULL << kEmptyNeighborShift));
             } else {
                 neighbours_[vtx] += (2ULL << kEmptyNeighborShift);
             }
@@ -109,11 +108,12 @@ bool Board::IsStar(const int x, const int y) const {
 std::string Board::GetStateString(const VertexType color, bool is_star) const {
     auto res = std::ostringstream{};
 
-    color == kBlack ? res << 'x' :
-        color == kWhite   ? res << 'o' :
-        is_star == true   ? res << '+' :
-        color == kEmpty   ? res << '.' :
-        color == kInvalid ? res << '-' : res << "error";
+    color == kBlack     ? res << 'x'
+    : color == kWhite   ? res << 'o'
+    : is_star == true   ? res << '+'
+    : color == kEmpty   ? res << '.'
+    : color == kInvalid ? res << '-'
+                        : res << "error";
 
     return res.str();
 }
@@ -142,30 +142,25 @@ std::string Board::GetColumnsString(const int bsize) const {
 
 std::string Board::GetHashingString() const {
     auto out = std::ostringstream{};
-    out << std::hex << std::uppercase
-            << "Hash: " << GetHash() << " | "
-            << "Ko Hash: " << GetKoHash()
-            << std::dec // cancel hex
-            << std::endl;
+    out << std::hex << std::uppercase << "Hash: " << GetHash() << " | "
+        << "Ko Hash: " << GetKoHash() << std::dec // cancel hex
+        << std::endl;
     return out.str();
 }
 
 std::string Board::GetPrisonersString() const {
     auto out = std::ostringstream{};
-    out << "BLACK (X) has captured "
-            << std::to_string(GetPrisoner(kBlack))
-            << " stones" << std::endl
-            << "WHITE (O) has captured "
-            << std::to_string(GetPrisoner(kWhite))
-            << " stones" << std::endl;
+    out << "BLACK (X) has captured " << std::to_string(GetPrisoner(kBlack)) << " stones"
+        << std::endl
+        << "WHITE (O) has captured " << std::to_string(GetPrisoner(kWhite)) << " stones"
+        << std::endl;
     return out.str();
 }
 
 std::string Board::GetBoardString(const int last_move, bool y_invert) const {
     auto out = std::ostringstream{};
     auto boardsize = GetBoardSize();
-    boardsize > 9 ? (out << GetSpacesString(3))
-                  : (out << GetSpacesString(2));
+    boardsize > 9 ? (out << GetSpacesString(3)) : (out << GetSpacesString(2));
     out << GetColumnsString(boardsize);
 
     for (int y = 0; y < boardsize; y++) {
@@ -184,8 +179,7 @@ std::string Board::GetBoardString(const int last_move, bool y_invert) const {
         for (int x = 0; x < boardsize; x++) {
             const auto vtx = GetVertex(x, row);
             const auto state = GetState(vtx);
-            out << GetStateString(
-                       static_cast<VertexType>(state), IsStar(x, row));
+            out << GetStateString(static_cast<VertexType>(state), IsStar(x, row));
 
             if (last_move == GetVertex(x, row)) {
                 out << ')';
@@ -198,8 +192,7 @@ std::string Board::GetBoardString(const int last_move, bool y_invert) const {
         out << std::to_string(row + 1);
         out << std::endl;
     }
-    boardsize > 9 ? (out << GetSpacesString(3))
-                  : (out << GetSpacesString(2));
+    boardsize > 9 ? (out << GetSpacesString(3)) : (out << GetSpacesString(2));
     out << GetColumnsString(boardsize);
     out << GetPrisonersString();
     out << GetHashingString();
@@ -211,7 +204,8 @@ bool Board::IsLegalMove(const int vtx, const int color) const {
     return IsLegalMove(vtx, color, [](int /* vtx */, int /* color */) { return false; });
 }
 
-bool Board::IsLegalMove(const int vtx, const int color,
+bool Board::IsLegalMove(const int vtx,
+                        const int color,
                         std::function<bool(int, int)> AvoidToMove) const {
     if (vtx == kPass || vtx == kResign) {
         return true;
@@ -254,9 +248,9 @@ void Board::SetLastMove(int first_vtx, int second_vtx) {
     last_move_2_ = second_vtx;
 }
 
-void Board::RemoveMarkedStrings(std::vector<int> &marked) {
+void Board::RemoveMarkedStrings(std::vector<int>& marked) {
     int removed_stones[2] = {0, 0};
-    for (auto &vtx : marked) {
+    for (auto& vtx : marked) {
         auto color = GetState(vtx);
         if (color == kBlack || color == kWhite) {
             removed_stones[color] += RemoveString(vtx);
@@ -267,16 +261,16 @@ void Board::RemoveMarkedStrings(std::vector<int> &marked) {
     IncreasePrisoner(kWhite, removed_stones[kBlack]);
 }
 
-int Board::ComputeReachGroup(int start_vertex, int spread_color, std::vector<bool> &buf) const {
-    auto PeekState = [&](int vtx) -> int {
-        return state_[vtx];
-    };
+int Board::ComputeReachGroup(int start_vertex, int spread_color, std::vector<bool>& buf) const {
+    auto PeekState = [&](int vtx) -> int { return state_[vtx]; };
 
     return ComputeReachGroup(start_vertex, spread_color, buf, PeekState);
 }
 
-int Board::ComputeReachGroup(int start_vertex, int spread_color,
-                             std::vector<bool> &buf, std::function<int(int)> Peek) const {
+int Board::ComputeReachGroup(int start_vertex,
+                             int spread_color,
+                             std::vector<bool>& buf,
+                             std::function<int(int)> Peek) const {
     if (buf.size() != (size_t)num_vertices_) {
         buf.resize(num_vertices_);
     }
@@ -307,15 +301,14 @@ int Board::ComputeReachGroup(int start_vertex, int spread_color,
 
 int Board::ComputeReachColor(int color) const {
     auto buf = std::vector<bool>(num_vertices_, false);
-    auto PeekState = [&](int vtx) -> int {
-        return state_[vtx];
-    };
+    auto PeekState = [&](int vtx) -> int { return state_[vtx]; };
 
     return ComputeReachColor(color, kEmpty, buf, PeekState);
 }
 
-int Board::ComputeReachColor(int color, int spread_color,
-                             std::vector<bool> &buf,
+int Board::ComputeReachColor(int color,
+                             int spread_color,
+                             std::vector<bool>& buf,
                              std::function<int(int)> Peek) const {
     if (buf.size() != (size_t)num_vertices_) {
         buf.resize(num_vertices_);
@@ -407,7 +400,7 @@ void Board::FindStringSurround(const int vtx,
                                const int color,
                                std::vector<int>& lib_buf,
                                std::vector<int>& index_buf) const {
-    const auto set_insert = [](std::vector<int> &buf, int element){
+    const auto set_insert = [](std::vector<int>& buf, int element) {
         auto begin = std::begin(buf);
         auto end = std::end(buf);
         auto res = std::find(begin, end, element);
@@ -420,7 +413,7 @@ void Board::FindStringSurround(const int vtx,
     int next = vtx;
 
     do {
-        for(int k = 0; k < 4; ++k) {
+        for (int k = 0; k < 4; ++k) {
             const auto avtx = next + directions_[k];
             const auto state = GetState(avtx);
             if (state == kEmpty) {
@@ -433,12 +426,11 @@ void Board::FindStringSurround(const int vtx,
     } while (next != vtx);
 }
 
-int Board::FindStringLiberties(const int vtx,
-                                   std::vector<int>& buf) const {
+int Board::FindStringLiberties(const int vtx, std::vector<int>& buf) const {
     auto num_found = size_t{0};
     auto next = vtx;
     do {
-        for(int k = 0; k < 4; ++k) {
+        for (int k = 0; k < 4; ++k) {
             const auto avtx = next + directions_[k];
             if (GetState(avtx) == kEmpty) {
                 auto begin = std::begin(buf);
@@ -456,8 +448,7 @@ int Board::FindStringLiberties(const int vtx,
     return num_found;
 }
 
-int Board::FindStringLibertiesGainingCaptures(const int vtx,
-                                                  std::vector<int>& buf) const {
+int Board::FindStringLibertiesGainingCaptures(const int vtx, std::vector<int>& buf) const {
     const int color = GetState(vtx);
     const int opp = !(color);
 
@@ -468,11 +459,11 @@ int Board::FindStringLibertiesGainingCaptures(const int vtx,
     int next = vtx;
 
     do {
-        for(int k = 0; k < 4; ++k) {
+        for (int k = 0; k < 4; ++k) {
             const int avtx = next + directions_[k];
-            if(GetState(avtx) == opp) {
+            if (GetState(avtx) == opp) {
                 const int aip = strings_.GetParent(avtx);
-                if(strings_.GetLiberty(aip) == 1) {
+                if (strings_.GetLiberty(aip) == 1) {
                     auto begin = std::begin(strings_buf);
                     auto end = std::end(strings_buf);
                     auto res = std::find(begin, end, avtx);
@@ -494,8 +485,9 @@ std::pair<int, int> Board::GetLadderLiberties(const int vtx, const int color) co
     const int stone_libs = CountPliberties(vtx);
     const int opp = (!color);
 
-    int num_captures = 0;                 // Number of adjacent directions in which we will capture.
-    int potential_libs_from_captures = 0; // Total number of stones we're capturing (possibly with multiplicity).
+    int num_captures = 0; // Number of adjacent directions in which we will capture.
+    int potential_libs_from_captures =
+        0; // Total number of stones we're capturing (possibly with multiplicity).
     int num_connection_libs = 0;          // Sum over friendly groups connected to of their libs-1.
     int max_connection_libs = stone_libs; // Max over friendly groups connected to of their libs-1.
 
@@ -507,7 +499,7 @@ std::pair<int, int> Board::GetLadderLiberties(const int vtx, const int color) co
             const int alibs = strings_.GetLiberty(strings_.GetParent(avtx)) - 1;
             num_connection_libs += alibs;
 
-            if(alibs > max_connection_libs) {
+            if (alibs > max_connection_libs) {
                 max_connection_libs = alibs;
             }
         } else if (acolor == opp) {
@@ -519,25 +511,25 @@ std::pair<int, int> Board::GetLadderLiberties(const int vtx, const int color) co
             }
         }
     }
-    const int lower_bound =
-        num_captures + max_connection_libs;
-    const int upper_bound =
-        stone_libs + potential_libs_from_captures + num_connection_libs;
+    const int lower_bound = num_captures + max_connection_libs;
+    const int upper_bound = stone_libs + potential_libs_from_captures + num_connection_libs;
 
     return std::make_pair(lower_bound, upper_bound);
 }
 
 LadderType Board::PreySelections(const int prey_color,
                                  const int ladder_vtx,
-                                 std::vector<int>& selections, bool think_ko) const {
+                                 std::vector<int>& selections,
+                                 bool think_ko) const {
     assert(selections.empty());
 
     const int libs = strings_.GetLiberty(strings_.GetParent(ladder_vtx));
     if (libs >= 2 || (ko_move_ != kNullVertex && think_ko)) {
         // If we are the prey and the hunter left a simple ko point, assume we already win
         // because we don't want to say yes on ladders that depend on kos
-        // This should also hopefully prevent any possible infinite loops - I don't know of any infinite loop
-        // that would come up in a continuous atari sequence that doesn't ever leave a simple ko point.
+        // This should also hopefully prevent any possible infinite loops - I don't know of any
+        // infinite loop that would come up in a continuous atari sequence that doesn't ever leave a
+        // simple ko point.
 
         return LadderType::kGoodForPrey;
     }
@@ -551,12 +543,10 @@ LadderType Board::PreySelections(const int prey_color,
     num_move += FindStringLibertiesGainingCaptures(ladder_vtx, selections);
 
     // The moves must be the legal.
-    selections.erase(
-        std::remove_if(std::begin(selections), std::end(selections),
-            [&](int v) { return !IsLegalMove(v, prey_color);
-        }),
-        std::end(selections)
-    );
+    selections.erase(std::remove_if(std::begin(selections),
+                                    std::end(selections),
+                                    [&](int v) { return !IsLegalMove(v, prey_color); }),
+                     std::end(selections));
 
     num_move = selections.size();
 
@@ -575,7 +565,7 @@ LadderType Board::PreySelections(const int prey_color,
         if (lower_bound >= 3) {
             return LadderType::kGoodForPrey;
         }
-        if (num_move == 1  && upper_bound == 1) {
+        if (num_move == 1 && upper_bound == 1) {
             return LadderType::kGoodForHunter;
         }
     }
@@ -605,12 +595,12 @@ LadderType Board::HunterSelections(const int prey_color,
 
     assert(num_libs == libs);
 #ifdef NDEBUG
-    (void) num_libs;
+    (void)num_libs;
 #endif
 
     const int move_1 = buf[0];
     const int move_2 = buf[1];
-    //TODO: Avoid double-ko death.
+    // TODO: Avoid double-ko death.
 
     if (!IsNeighbor(move_1, move_2)) {
         const int hunter_color = (!prey_color);
@@ -656,8 +646,11 @@ LadderType Board::HunterSelections(const int prey_color,
 }
 
 LadderType Board::PreyMove(Board* board,
-                           const int hunter_vtx, const int prey_color,
-                           const int ladder_vtx, size_t& ladder_nodes, bool fork) const {
+                           const int hunter_vtx,
+                           const int prey_color,
+                           const int ladder_vtx,
+                           size_t& ladder_nodes,
+                           bool fork) const {
 
     if ((++ladder_nodes) >= kMaxLadderNodes) {
         // If hit the limit, assume prey have escaped.
@@ -678,7 +671,8 @@ LadderType Board::PreyMove(Board* board,
     }
     // Search possible move(s) for prey.
     auto selections = std::vector<int>{};
-    auto res = ladder_board->PreySelections(prey_color, ladder_vtx, selections, hunter_vtx != kNullVertex);
+    auto res =
+        ladder_board->PreySelections(prey_color, ladder_vtx, selections, hunter_vtx != kNullVertex);
 
     if (res != LadderType::kGoodForNeither) {
         if (fork) {
@@ -698,9 +692,8 @@ LadderType Board::PreyMove(Board* board,
 
     for (auto i = size_t{0}; i < selection_size; ++i) {
         const int vtx = selections[i];
-        auto next_res = HunterMove(ladder_board, vtx,
-                                   prey_color, ladder_vtx,
-                                   ladder_nodes, next_fork);
+        auto next_res =
+            HunterMove(ladder_board, vtx, prey_color, ladder_vtx, ladder_nodes, next_fork);
 
         assert(next_res != LadderType::kGoodForNeither);
 
@@ -717,8 +710,11 @@ LadderType Board::PreyMove(Board* board,
 }
 
 LadderType Board::HunterMove(Board* board,
-                             const int prey_vtx, const int prey_color,
-                             const int ladder_vtx, size_t& ladder_nodes, bool fork) const {
+                             const int prey_vtx,
+                             const int prey_color,
+                             const int ladder_vtx,
+                             size_t& ladder_nodes,
+                             bool fork) const {
     if ((++ladder_nodes) >= kMaxLadderNodes) {
         // If hit the limit, assume prey have escaped.
         return LadderType::kGoodForPrey;
@@ -759,9 +755,8 @@ LadderType Board::HunterMove(Board* board,
 
     for (auto i = size_t{0}; i < selection_size; ++i) {
         const int vtx = selections[i];
-        auto next_res = PreyMove(ladder_board, vtx,
-                                 prey_color, ladder_vtx,
-                                 ladder_nodes, next_fork);
+        auto next_res =
+            PreyMove(ladder_board, vtx, prey_color, ladder_vtx, ladder_nodes, next_fork);
 
         assert(next_res != LadderType::kGoodForNeither);
 
@@ -777,7 +772,7 @@ LadderType Board::HunterMove(Board* board,
     return best;
 }
 
-bool Board::IsLadder(const int vtx, std::vector<int> &vital_moves) const {
+bool Board::IsLadder(const int vtx, std::vector<int>& vital_moves) const {
     if (vtx == kPass) {
         return false;
     }
@@ -797,23 +792,19 @@ bool Board::IsLadder(const int vtx, std::vector<int> &vital_moves) const {
 
     if (libs == 1) {
         auto ladder_board = new Board(*this);
-        res = PreyMove(ladder_board,
-                       kNullVertex, prey_color,
-                       ladder_vtx, searched_nodes, false);
+        res = PreyMove(ladder_board, kNullVertex, prey_color, ladder_vtx, searched_nodes, false);
 
         if (res == LadderType::kGoodForHunter) {
             vital_moves.emplace_back(buf[0]);
         }
         delete ladder_board;
     } else if (libs == 2) {
-        for (auto vvtx: buf) {
+        for (auto vvtx : buf) {
             auto ladder_board = new Board(*this);
             if (ladder_board->IsLegalMove(vvtx, !prey_color)) {
 
                 // force the hunter do atari move first
-                res = PreyMove(ladder_board,
-                                 vvtx, prey_color,
-                                 ladder_vtx, searched_nodes, false);
+                res = PreyMove(ladder_board, vvtx, prey_color, ladder_vtx, searched_nodes, false);
                 if (res == LadderType::kGoodForHunter) {
                     vital_moves.emplace_back(vvtx);
                 }
@@ -836,7 +827,7 @@ bool Board::IsSelfAtariMove(const int vtx, const int color) const {
     for (int k = 0; k < 4; ++k) {
         const auto avtx = vtx + directions_[k];
         const auto aip = strings_.GetParent(avtx);
-        const auto libs =  strings_.GetLiberty(aip);
+        const auto libs = strings_.GetLiberty(aip);
         const auto state = GetState(avtx);
 
         if (state == color) {
@@ -953,7 +944,7 @@ bool Board::IsSuicide(const int vtx, const int color) const {
 
     for (auto k = 0; k < 4; ++k) {
         const auto avtx = vtx + directions_[k];
-        const auto libs =  strings_.GetLiberty(strings_.GetParent(avtx));
+        const auto libs = strings_.GetLiberty(strings_.GetParent(avtx));
         const auto state = GetState(avtx);
         if (state == color && libs > 1) {
             // Be sure that the string at least is one liberty.
@@ -1018,8 +1009,8 @@ bool Board::IsSeki(const int vtx) const {
 
     if (lib_buf.size() == 3) {
         // We simply think that it is seki in this case. It includes false-seki. The false-seki
-        // string is not alive. but in the most case, we don't need to play the move in the false-seki
-        // point to kill it.
+        // string is not alive. but in the most case, we don't need to play the move in the
+        // false-seki point to kill it.
         //
         // .x.ox..
         // oxoox..
@@ -1086,19 +1077,20 @@ bool Board::IsBorder(const int vtx) const {
 
 bool Board::IsNeighborColor(const int vtx, const int color) const {
     for (int k = 0; k < 4; ++k) {
-        if (state_[vtx + directions_[k]] == color) return true;
+        if (state_[vtx + directions_[k]] == color)
+            return true;
     }
     return false;
 }
 
 bool Board::IsKoMove(const int vtx, const int color) const {
-    (void) color;
+    (void)color;
     return vtx == ko_move_;
 }
 
 bool Board::IsKillableSekiEyeShape(const int vtx,
-                                       const int eye_size,
-                                       const std::vector<int> &eye_next) const {
+                                   const int eye_size,
+                                   const std::vector<int>& eye_next) const {
     if (eye_size <= 3) {
         // We can always kill it.
         return true;
@@ -1142,7 +1134,7 @@ bool Board::IsKillableSekiEyeShape(const int vtx,
 
         // The current position influences all empty points. It is nakade. Play the move
         // in it may kill the string. We will do search later.
-        if (influence_cnt+1 == eye_size && !p_eyes.empty()) {
+        if (influence_cnt + 1 == eye_size && !p_eyes.empty()) {
             nakade_vtx.emplace_back(pos);
             potential_eyes.emplace_back(p_eyes);
         }
@@ -1163,13 +1155,13 @@ bool Board::IsKillableSekiEyeShape(const int vtx,
         return false;
     }
 
-    for (const auto &e: potential_eyes) {
+    for (const auto& e : potential_eyes) {
         // No potential eyes. We can kill it.
-        if (e.empty()) return true;
+        if (e.empty())
+            return true;
     }
 
-    const auto GetEmptySideCount = [this](const int eye_vtx,
-                                          std::vector<bool> &eye_region) {
+    const auto GetEmptySideCount = [this](const int eye_vtx, std::vector<bool>& eye_region) {
         int side_cnt = 0;
         for (int k = 0; k < 4; ++k) {
             if (eye_region[eye_vtx + directions_[k]]) {
@@ -1301,8 +1293,7 @@ void Board::AddStone(const int vtx, const int color) {
 
     for (int k = 0; k < 4; ++k) {
         const auto avtx = vtx + directions_[k];
-        neighbours_[avtx] += ((1ULL << (kNeighborShift * color))
-                                 - (1ULL << kEmptyNeighborShift));
+        neighbours_[avtx] += ((1ULL << (kNeighborShift * color)) - (1ULL << kEmptyNeighborShift));
 
         bool found = false;
         const auto ip = strings_.GetParent(avtx);
@@ -1334,8 +1325,7 @@ void Board::RemoveStone(const int vtx, const int color) {
 
     for (int k = 0; k < 4; ++k) {
         const int avtx = vtx + directions_[k];
-        neighbours_[avtx] += ((1ULL << kEmptyNeighborShift)
-                                 - (1ULL << (kNeighborShift * color)));
+        neighbours_[avtx] += ((1ULL << kEmptyNeighborShift) - (1ULL << (kNeighborShift * color)));
 
         bool found = false;
         const int ip = strings_.GetParent(avtx);
@@ -1533,8 +1523,9 @@ std::vector<int> Board::GetStringList(const int vtx) const {
     return result;
 }
 
-int Board::ComputeScoreOnBoard(const int color, const int scoring,
-                               const std::vector<int> &territory_helper) const {
+int Board::ComputeScoreOnBoard(const int color,
+                               const int scoring,
+                               const std::vector<int>& territory_helper) const {
     int black_score_lead = 0;
 
     auto score_area = std::vector<int>(num_intersections_, kInvalid);
@@ -1553,16 +1544,14 @@ int Board::ComputeScoreOnBoard(const int color, const int scoring,
     return color == kBlack ? black_score_lead : -black_score_lead;
 }
 
-void Board::ComputeReachArea(std::vector<int> &result) const {
-    if (result.size() != (size_t) num_intersections_) {
+void Board::ComputeReachArea(std::vector<int>& result) const {
+    if (result.size() != (size_t)num_intersections_) {
         result.resize(num_intersections_);
     }
     auto black = std::vector<bool>(num_intersections_, false);
     auto white = std::vector<bool>(num_intersections_, false);
 
-    auto PeekState = [&](int vtx) -> int {
-        return state_[vtx];
-    };
+    auto PeekState = [&](int vtx) -> int { return state_[vtx]; };
 
     // Compute black area.
     ComputeReachColor(kBlack, kEmpty, black, PeekState);
@@ -1582,16 +1571,16 @@ void Board::ComputeReachArea(std::vector<int> &result) const {
                 // The white is white.
                 result[idx] = kWhite;
             } else {
-                //The point belongs to both.
+                // The point belongs to both.
                 result[idx] = kEmpty;
             }
         }
     }
 }
 
-void Board::ComputeScoreArea(std::vector<int> &result,
+void Board::ComputeScoreArea(std::vector<int>& result,
                              const int scoring,
-                             const std::vector<int> &territory_helper) const {
+                             const std::vector<int>& territory_helper) const {
     if (scoring == kTerritory) {
         auto fork_board = new Board(*this);
         auto dead_list = std::vector<int>{};
@@ -1600,21 +1589,20 @@ void Board::ComputeScoreArea(std::vector<int> &result,
                 const auto vtx = GetVertex(x, y);
                 const auto idx = GetIndex(x, y);
                 if ((territory_helper[idx] == kBlack && GetState(vtx) == kWhite) ||
-                        (territory_helper[idx] == kWhite && GetState(vtx) == kBlack)) {
+                    (territory_helper[idx] == kWhite && GetState(vtx) == kBlack)) {
                     dead_list.emplace_back(vtx);
                 }
             }
         }
         fork_board->RemoveMarkedStrings(dead_list);
-        fork_board->ComputeScoreArea(
-            result, kArea, territory_helper);
+        fork_board->ComputeScoreArea(result, kArea, territory_helper);
         delete fork_board;
         return;
     }
     ComputeReachArea(result);
     auto pass_alive = std::vector<bool>(num_intersections_);
 
-    for (int c: {kBlack, kWhite}) {
+    for (int c : {kBlack, kWhite}) {
 
         std::fill(std::begin(pass_alive), std::end(pass_alive), false);
         ComputePassAliveArea(pass_alive, c, true, true);
@@ -1632,7 +1620,7 @@ std::vector<LadderType> Board::GetLadderMap() const {
     auto ladder = std::vector<int>{};
     auto not_ladder = std::vector<int>{};
 
-    const auto VectorFind = [](std::vector<int> &arr, int element) -> bool {
+    const auto VectorFind = [](std::vector<int>& arr, int element) -> bool {
         auto begin = std::begin(arr);
         auto end = std::end(arr);
         return std::find(begin, end, element) != end;
@@ -1645,7 +1633,7 @@ std::vector<LadderType> Board::GetLadderMap() const {
 
             if (state_[vtx] == kEmpty) {
                 // It is not a string.
-                 continue;
+                continue;
             }
 
             auto first_found = false;
@@ -1683,7 +1671,7 @@ std::vector<LadderType> Board::GetLadderMap() const {
             }
 
             if (first_found) {
-                for (const auto &v : vital_moves) {
+                for (const auto& v : vital_moves) {
                     const auto ax = GetX(v);
                     const auto ay = GetY(v);
                     const auto aidx = GetIndex(ax, ay);
@@ -1702,7 +1690,7 @@ std::vector<LadderType> Board::GetLadderMap() const {
     return result;
 }
 
-void Board::ComputeSekiPoints(std::vector<bool> &result) const {
+void Board::ComputeSekiPoints(std::vector<bool>& result) const {
     for (int y = 0; y < board_size_; ++y) {
         for (int x = 0; x < board_size_; ++x) {
             const auto idx = GetIndex(x, y);
@@ -1715,8 +1703,8 @@ void Board::ComputeSekiPoints(std::vector<bool> &result) const {
     }
 }
 
-void Board::ComputeSafeArea(std::vector<bool> &result, bool mark_seki) const {
-    if (result.size() != (size_t) num_intersections_) {
+void Board::ComputeSafeArea(std::vector<bool>& result, bool mark_seki) const {
+    if (result.size() != (size_t)num_intersections_) {
         result.resize(num_intersections_);
     }
 
@@ -1729,7 +1717,7 @@ void Board::ComputeSafeArea(std::vector<bool> &result, bool mark_seki) const {
     }
 }
 
-void Board::ComputePassAliveArea(std::vector<bool> &result,
+void Board::ComputePassAliveArea(std::vector<bool>& result,
                                  const int color,
                                  bool mark_vitals,
                                  bool mark_pass_dead) const {
@@ -1791,15 +1779,14 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
                 break;
             }
             pos = regions_next[pos];
-        } while(pos != vtx);
-
+        } while (pos != vtx);
 
         if (success) {
             int pos = vtx;
             do {
                 vitals[pos] = true;
                 pos = regions_next[pos];
-            } while(pos != vtx);
+            } while (pos != vtx);
         }
     }
 
@@ -1812,14 +1799,20 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
 
     // Start the Benson's algorithm.
     // https://senseis.xmp.net/?BensonsAlgorithm
-    while(true) {
+    while (true) {
         auto change = false;
 
         for (int i = 0; i < group_cnt; ++i) {
             const auto vtx = strings_head[i];
 
-            if (!IsPassAliveString(vtx, allow_sucide, vitals, ocupied,
-                                       regions_index, regions_next, strings_index, strings_next)) {
+            if (!IsPassAliveString(vtx,
+                                   allow_sucide,
+                                   vitals,
+                                   ocupied,
+                                   regions_index,
+                                   regions_next,
+                                   strings_index,
+                                   strings_next)) {
                 // The string is not pass-alive. Remove the uncertainty life string.
 
                 int pos = vtx;
@@ -1837,14 +1830,13 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
                             do {
                                 vitals[rpos] = false;
                                 rpos = regions_next[rpos];
-                            } while(rpos != apos);
+                            } while (rpos != apos);
                         }
                     }
-                } while(pos != vtx);
+                } while (pos != vtx);
 
                 // Remove the linking.
-                std::remove(std::begin(strings_head),
-                                std::end(strings_head), vtx);
+                std::remove(std::begin(strings_head), std::end(strings_head), vtx);
                 group_cnt -= 1;
                 change = true;
                 break;
@@ -1852,7 +1844,8 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
         }
 
         // The algorithm is over if there is no removed string.
-        if (!change) break;
+        if (!change)
+            break;
     }
 
     // Fill the pass-alive groups.
@@ -1866,7 +1859,7 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
             result[index] = true;
 
             pos = strings_next[pos];
-        } while(pos != vtx);
+        } while (pos != vtx);
     }
 
     // Fill the pass-alive vitals.
@@ -1882,7 +1875,7 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
                     ocupied[pos] = color;
                 }
                 pos = regions_next[pos];
-            } while(pos != vtx);
+            } while (pos != vtx);
         }
     }
 
@@ -1901,7 +1894,7 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
                     result[index] = true;
 
                     pos = regions_next[pos];
-                } while(pos != vtx);
+                } while (pos != vtx);
             }
         }
     }
@@ -1909,12 +1902,12 @@ void Board::ComputePassAliveArea(std::vector<bool> &result,
 
 bool Board::IsPassAliveString(const int vtx,
                               bool allow_sucide,
-                              const std::vector<bool> &vitals,
-                              const std::vector<int> &features,
-                              const std::vector<int> &regions_index,
-                              const std::vector<int> &regions_next,
-                              const std::vector<int> &strings_index,
-                              const std::vector<int> &strings_next) const {
+                              const std::vector<bool>& vitals,
+                              const std::vector<int>& features,
+                              const std::vector<int>& regions_index,
+                              const std::vector<int>& regions_next,
+                              const std::vector<int>& strings_index,
+                              const std::vector<int>& strings_next) const {
     auto vitals_list = std::set<int>{};
     int my_index = strings_index[vtx];
     int pos = vtx;
@@ -1932,7 +1925,7 @@ bool Board::IsPassAliveString(const int vtx,
                         for (int k = 0; k < 4; ++k) {
                             // Check that points of adjacent are empty.
                             const auto aapos = directions_[k] + rpos;
-                            if(strings_index[aapos] == my_index) {
+                            if (strings_index[aapos] == my_index) {
                                 is_adjacent = true;
                                 break;
                             }
@@ -1947,13 +1940,14 @@ bool Board::IsPassAliveString(const int vtx,
                         break;
                     }
                     rpos = regions_next[rpos];
-                } while(rpos != apos);
+                } while (rpos != apos);
 
-                if (success) vitals_list.insert(regions_index[apos]);
+                if (success)
+                    vitals_list.insert(regions_index[apos]);
             }
         }
         pos = strings_next[pos];
-    } while(pos != vtx);
+    } while (pos != vtx);
 
     // We say a string is pass-alive. There must be two or more
     // vitals adjacent to it.
@@ -1963,13 +1957,13 @@ bool Board::IsPassAliveString(const int vtx,
 bool Board::IsPassDeadRegion(const int vtx,
                              const int color,
                              bool allow_sucide,
-                             std::vector<int> &features,
-                             const std::vector<int> &regions_next) const {
+                             std::vector<int>& features,
+                             const std::vector<int>& regions_next) const {
     const auto IsPotentialEye = [this](const int vertex,
                                        const int color,
                                        bool allow_sucide,
-                                       std::vector<int> &features,
-                                       std::vector<bool> &inner_regions) {
+                                       std::vector<int>& features,
+                                       std::vector<bool>& inner_regions) {
         // This is greedy algorithm, we only promise that the position is not
         // potential eye if it returns false. It is possible that the position
         // is fake eye even if it returns true.
@@ -2034,7 +2028,7 @@ bool Board::IsPassDeadRegion(const int vtx,
             potential_eyes.emplace_back(pos);
         }
         pos = regions_next[pos];
-    } while(pos != vtx);
+    } while (pos != vtx);
 
     int eyes_count = potential_eyes.size();
 
@@ -2058,8 +2052,8 @@ bool Board::IsPassDeadRegion(const int vtx,
 
 void Board::ComputeInnerRegions(const int vtx,
                                 const int color,
-                                const std::vector<int> &regions_next,
-                                std::vector<bool> &inner_regions) const {
+                                const std::vector<int>& regions_next,
+                                std::vector<bool>& inner_regions) const {
     auto surround = std::vector<int>(num_vertices_, kInvalid);
 
     std::fill(std::begin(inner_regions), std::end(inner_regions), false);
@@ -2074,14 +2068,14 @@ void Board::ComputeInnerRegions(const int vtx,
     do {
         surround[pos] = !color;
         pos = regions_next[pos];
-    } while(pos != vtx);
+    } while (pos != vtx);
 
     auto epmty_index = std::vector<int>(num_vertices_, -1);
     auto epmty_next = std::vector<int>(num_vertices_, kNullVertex);
     auto epmty_head = ClassifyGroups(kEmpty, surround, epmty_index, epmty_next);
 
     int cnt = epmty_head.size();
-    for (int i = 0 ; i < cnt; ++i) {
+    for (int i = 0; i < cnt; ++i) {
         int v = epmty_head[i];
         pos = v;
         do {
@@ -2094,29 +2088,28 @@ void Board::ComputeInnerRegions(const int vtx,
                 }
             }
             if (success) {
-                std::remove(std::begin(epmty_head),
-                                std::end(epmty_head), v);
+                std::remove(std::begin(epmty_head), std::end(epmty_head), v);
                 cnt -= 1;
                 break;
             }
             pos = epmty_next[pos];
-        } while(pos != v);
+        } while (pos != v);
     }
 
-    for (int i = 0 ; i < cnt; ++i) {
+    for (int i = 0; i < cnt; ++i) {
         int v = epmty_head[i];
         pos = v;
         do {
             inner_regions[pos] = true;
             pos = epmty_next[pos];
-        } while(pos != v);
+        } while (pos != v);
     }
 }
 
 std::vector<int> Board::ClassifyGroups(const int target,
-                                       std::vector<int> &features,
-                                       std::vector<int> &regions_index,
-                                       std::vector<int> &regions_next) const {
+                                       std::vector<int>& features,
+                                       std::vector<int>& regions_index,
+                                       std::vector<int>& regions_next) const {
     // Set out of border area as -1.
     std::fill(std::begin(regions_index), std::end(regions_index), -1);
 
@@ -2132,9 +2125,9 @@ std::vector<int> Board::ClassifyGroups(const int target,
         }
     }
 
-    auto head_list = std::vector<int>{}; // all string heads vertex postion
+    auto head_list = std::vector<int>{};                   // all string heads vertex postion
     auto marked = std::vector<bool>(num_vertices_, false); // true if the vertex is usesd
-    auto groups_index = 1; // valid index is from 1.
+    auto groups_index = 1;                                 // valid index is from 1.
 
     for (int y = 0; y < board_size_; ++y) {
         for (int x = 0; x < board_size_; ++x) {
@@ -2144,7 +2137,7 @@ std::vector<int> Board::ClassifyGroups(const int target,
                 auto buf = std::vector<bool>(num_vertices_, false);
 
                 // Gather all vertices which connect with head vertex.
-                ComputeReachGroup(vtx, target, buf, [&](int v){ return features[v]; });
+                ComputeReachGroup(vtx, target, buf, [&](int v) { return features[v]; });
 
                 auto vertices = GatherVertices(buf);
                 auto next_vertex = kNullVertex;
@@ -2169,7 +2162,7 @@ std::vector<int> Board::ClassifyGroups(const int target,
     return head_list;
 }
 
-std::vector<int> Board::GatherVertices(std::vector<bool> &buf) const {
+std::vector<int> Board::GatherVertices(std::vector<bool>& buf) const {
     auto result = std::vector<int>{};
 
     for (auto vtx = size_t{0}; vtx < buf.size(); ++vtx) {
@@ -2181,15 +2174,14 @@ std::vector<int> Board::GatherVertices(std::vector<bool> &buf) const {
     return result;
 }
 
-void Board::GenerateCandidateMoves(std::vector<int> &moves_set, int color) const {
+void Board::GenerateCandidateMoves(std::vector<int>& moves_set, int color) const {
     auto buf = std::vector<int>{};
 
     for (const auto vtx : {last_move_, last_move_2_}) {
         if (vtx != kPass && vtx != kNullVertex) {
             const auto center_color = state_[vtx];
 
-            if (center_color != kEmpty &&
-                    GetLiberties(vtx) <= 2) {
+            if (center_color != kEmpty && GetLiberties(vtx) <= 2) {
                 FindStringLiberties(vtx, buf);
             }
             for (int k = 0; k < 8; ++k) {
@@ -2197,8 +2189,7 @@ void Board::GenerateCandidateMoves(std::vector<int> &moves_set, int color) const
 
                 if (state_[avtx] == kEmpty) {
                     buf.emplace_back(avtx);
-                } else if (center_color != kEmpty &&
-                               state_[avtx] == !center_color) {
+                } else if (center_color != kEmpty && state_[avtx] == !center_color) {
                     if (GetLiberties(avtx) <= 2) {
                         FindStringLiberties(avtx, buf);
                     }
@@ -2209,14 +2200,11 @@ void Board::GenerateCandidateMoves(std::vector<int> &moves_set, int color) const
 
     // Remove the repetition vertices.
     std::sort(std::begin(buf), std::end(buf));
-    buf.erase(std::unique(std::begin(buf), std::end(buf)),
-                  std::end(buf));
+    buf.erase(std::unique(std::begin(buf), std::end(buf)), std::end(buf));
 
     for (const auto vtx : buf) {
         if (IsLegalMove(vtx, color) &&
-                !(IsSimpleEye(vtx, color) &&
-                     !IsCaptureMove(vtx, color)&&
-                     !IsEscapeMove(vtx, color))) {
+            !(IsSimpleEye(vtx, color) && !IsCaptureMove(vtx, color) && !IsEscapeMove(vtx, color))) {
             moves_set.emplace_back(vtx);
         }
     }
@@ -2230,31 +2218,38 @@ std::string Board::GetMoveDebugString(int vtx, int color) const {
     int i = 0;
 
     if (IsCaptureMove(vtx, color)) {
-        if (i++ != 0) out << ", ";
+        if (i++ != 0)
+            out << ", ";
         out << "Capture";
     }
     if (IsEscapeMove(vtx, color)) {
-        if (i++ != 0) out << ", ";
+        if (i++ != 0)
+            out << ", ";
         out << "Escape";
     }
     if (IsRealEye(vtx, color)) {
-        if (i++ != 0) out << ", ";
+        if (i++ != 0)
+            out << ", ";
         out << "Real Eye";
     }
     if (IsSimpleEye(vtx, color)) {
-        if (i++ != 0) out << ", ";
+        if (i++ != 0)
+            out << ", ";
         out << "Eye Shape";
     }
     if (IsSeki(vtx)) {
-        if (i++ != 0) out << ", ";
+        if (i++ != 0)
+            out << ", ";
         out << "Seki";
     }
     if (IsAtariMove(vtx, color)) {
-        if (i++ != 0) out << ", ";
+        if (i++ != 0)
+            out << ", ";
         out << "Atari";
     }
     if (IsSelfAtariMove(vtx, color)) {
-        if (i++ != 0) out << ", ";
+        if (i++ != 0)
+            out << ", ";
         out << "Self Atari";
     }
 
@@ -2265,16 +2260,20 @@ std::string Board::GetMoveDebugString(int vtx, int color) const {
         if (IsLadder(avtx, vital_moves)) {
             auto libs = GetLiberties(avtx);
             if (libs == 1 && state_[avtx] == color) {
-                if (i++ != 0) out << ", ";
+                if (i++ != 0)
+                    out << ", ";
                 out << "Ladder Dead";
             } else if (libs == 1 && state_[avtx] != color) {
-                if (i++ != 0) out << ", ";
+                if (i++ != 0)
+                    out << ", ";
                 out << "Ladder Capture";
             } else if (libs == 2 && state_[avtx] == color) {
-                if (i++ != 0) out << ", ";
+                if (i++ != 0)
+                    out << ", ";
                 out << "Ladder Atari";
             } else if (libs == 2 && state_[avtx] != color) {
-                if (i++ != 0) out << ", ";
+                if (i++ != 0)
+                    out << ", ";
                 out << "Ladder Escape";
             }
         }

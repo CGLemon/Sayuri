@@ -1,11 +1,11 @@
 #pragma once
 
-#include "game/types.h"
-#include "utils/option.h"
-#include "config.h"
-
 #include <array>
 #include <string>
+
+#include "config.h"
+#include "game/types.h"
+#include "utils/option.h"
 
 class Parameters {
 public:

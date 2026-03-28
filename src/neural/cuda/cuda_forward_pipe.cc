@@ -1,13 +1,14 @@
 #ifdef USE_CUDA
 
+#include "neural/cuda/cuda_forward_pipe.h"
+
 #include <sstream>
 #include <stdexcept>
 
-#include "neural/cuda/cuda_forward_pipe.h"
 #include "neural/cuda/cuda_kernels.h"
 #include "neural/encoder.h"
-#include "utils/log.h"
 #include "utils/format.h"
+#include "utils/log.h"
 #include "utils/option.h"
 
 void CudaForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
@@ -15,9 +16,9 @@ void CudaForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
 
     dump_gpu_info_ = true;
 
-    auto option = ForwardPipeOption::Get().
-                      SetBoardSize(GetOption<int>("defualt_boardsize")).
-                      SetBatchSize(GetOption<int>("batch_size"));
+    auto option = ForwardPipeOption::Get()
+                      .SetBoardSize(GetOption<int>("defualt_boardsize"))
+                      .SetBatchSize(GetOption<int>("batch_size"));
     Construct(option, weights);
 
     BatchForwardPipe::AssignWorkers(nngraphs_.size());
@@ -27,7 +28,8 @@ OutputResult CudaForwardPipe::Forward(const InputData& input) {
     return BatchForwardPipe::SendQueryAndWait(input);
 }
 
-std::vector<OutputResult> CudaForwardPipe::BatchForward(int gpu, const std::vector<InputData>& inputs) {
+std::vector<OutputResult> CudaForwardPipe::BatchForward(int gpu,
+                                                        const std::vector<InputData>& inputs) {
     return nngraphs_[gpu]->BatchForward(inputs);
 }
 
@@ -39,10 +41,9 @@ int CudaForwardPipe::GetNumWorkers() const {
     return static_cast<int>(nngraphs_.size());
 }
 
-void CudaForwardPipe::Construct(ForwardPipeOption option,
-                                std::shared_ptr<DNNWeights> weights) {
+void CudaForwardPipe::Construct(ForwardPipeOption option, std::shared_ptr<DNNWeights> weights) {
     // Construct the network with parameters (e.g., board_size) and weights.
-    // If the current parameters are the same as the new ones, exit the function 
+    // If the current parameters are the same as the new ones, exit the function
     // immediately.
     if (weights) {
         weights_ = weights;
@@ -52,10 +53,8 @@ void CudaForwardPipe::Construct(ForwardPipeOption option,
         return;
     }
 
-    int board_size = option.IsValidBoardSize() ?
-                         option.board_size : board_size_;
-    int batch_size = option.IsValidBatchSize() ?
-                         option.batch_size : max_batch_per_nn_;
+    int board_size = option.IsValidBoardSize() ? option.board_size : board_size_;
+    int batch_size = option.IsValidBatchSize() ? option.batch_size : max_batch_per_nn_;
     // Select the matched board size.
     board_size = std::max(board_size, GetOption<int>("fixed_nn_boardsize"));
 
@@ -69,8 +68,7 @@ void CudaForwardPipe::Construct(ForwardPipeOption option,
     // adjust the batch size used for the current forward pipe.
     BatchForwardPipe::SetForwardingSize(batch_size);
 
-    if (board_size_ == board_size &&
-            batch_size <= max_batch_per_nn_) {
+    if (board_size_ == board_size && batch_size <= max_batch_per_nn_) {
         // The current network already supports this configuration. No reinitialization is
         // required.
         return;
@@ -121,7 +119,7 @@ void CudaForwardPipe::Construct(ForwardPipeOption option,
 }
 
 void CudaForwardPipe::Release() {
-    for (auto &g : nngraphs_) {
+    for (auto& g : nngraphs_) {
         g->DestroyGraph();
     }
     nngraphs_.clear();
@@ -162,14 +160,13 @@ void CudaForwardPipe::NNGraph::ConstructGraph(bool dump_gpu_info,
     const auto default_act = weights_->default_act;
 
     // input layer
-    graph_->input_conv = cuda::Convolution(
-        &handles_,
-        max_batch_,          // max batch size
-        board_size_,         // board size
-        3,                   // kernel size
-        input_channels,      // input channels
-        output_channels,     // output channels
-        default_act          // activation
+    graph_->input_conv = cuda::Convolution(&handles_,
+                                           max_batch_,      // max batch size
+                                           board_size_,     // board size
+                                           3,               // kernel size
+                                           input_channels,  // input channels
+                                           output_channels, // output channels
+                                           default_act      // activation
     );
 
     // block tower
@@ -185,23 +182,21 @@ void CudaForwardPipe::NNGraph::ConstructGraph(bool dump_gpu_info,
             const auto channels = weights_->residual_channels;
             const auto last_act = tower_ptr->apply_se ? Activation::kIdentity : default_act;
 
-            graph_->tower[i].conv1 = cuda::Convolution(
-                &handles_,
-                max_batch_,   // max batch size
-                board_size_,  // board size
-                3,            // kernel size
-                channels,     // input channels
-                channels,     // output channels
-                default_act   // activation
+            graph_->tower[i].conv1 = cuda::Convolution(&handles_,
+                                                       max_batch_,  // max batch size
+                                                       board_size_, // board size
+                                                       3,           // kernel size
+                                                       channels,    // input channels
+                                                       channels,    // output channels
+                                                       default_act  // activation
             );
-            graph_->tower[i].conv2 = cuda::Convolution(
-                &handles_,
-                max_batch_,   // max batch size
-                board_size_,  // board size
-                3,            // kernel size
-                channels,     // input channels
-                channels,     // output channels
-                last_act      // activation
+            graph_->tower[i].conv2 = cuda::Convolution(&handles_,
+                                                       max_batch_,  // max batch size
+                                                       board_size_, // board size
+                                                       3,           // kernel size
+                                                       channels,    // input channels
+                                                       channels,    // output channels
+                                                       last_act     // activation
             );
             peak_channels = std::max(peak_channels, channels);
         } else if (tower_ptr->IsBottleneckBlock()) {
@@ -209,41 +204,37 @@ void CudaForwardPipe::NNGraph::ConstructGraph(bool dump_gpu_info,
             const auto inner_channels = tower_ptr->bottleneck_channels;
             const auto last_act = tower_ptr->apply_se ? Activation::kIdentity : default_act;
 
-            graph_->tower[i].pre_btl_conv = cuda::Convolution(
-                &handles_,
-                max_batch_,     // max batch size
-                board_size_,    // board size
-                1,              // kernel size
-                outer_channels, // input channels
-                inner_channels, // output channels
-                default_act     // activation
+            graph_->tower[i].pre_btl_conv = cuda::Convolution(&handles_,
+                                                              max_batch_,     // max batch size
+                                                              board_size_,    // board size
+                                                              1,              // kernel size
+                                                              outer_channels, // input channels
+                                                              inner_channels, // output channels
+                                                              default_act     // activation
             );
-            graph_->tower[i].conv1 = cuda::Convolution(
-                &handles_,
-                max_batch_,     // max batch size
-                board_size_,    // board size
-                3,              // kernel size
-                inner_channels, // input channels
-                inner_channels, // output channels
-                default_act     // activation
+            graph_->tower[i].conv1 = cuda::Convolution(&handles_,
+                                                       max_batch_,     // max batch size
+                                                       board_size_,    // board size
+                                                       3,              // kernel size
+                                                       inner_channels, // input channels
+                                                       inner_channels, // output channels
+                                                       default_act     // activation
             );
-            graph_->tower[i].conv2 = cuda::Convolution(
-                &handles_,
-                max_batch_,     // max batch size
-                board_size_,    // board size
-                3,              // kernel size
-                inner_channels, // input channels
-                inner_channels, // output channels
-                default_act     // activation
+            graph_->tower[i].conv2 = cuda::Convolution(&handles_,
+                                                       max_batch_,     // max batch size
+                                                       board_size_,    // board size
+                                                       3,              // kernel size
+                                                       inner_channels, // input channels
+                                                       inner_channels, // output channels
+                                                       default_act     // activation
             );
-            graph_->tower[i].post_btl_conv = cuda::Convolution(
-                &handles_,
-                max_batch_,     // max batch size
-                board_size_,    // board size
-                1,              // kernel size
-                inner_channels, // input channels
-                outer_channels, // output channels
-                last_act        // activation
+            graph_->tower[i].post_btl_conv = cuda::Convolution(&handles_,
+                                                               max_batch_,     // max batch size
+                                                               board_size_,    // board size
+                                                               1,              // kernel size
+                                                               inner_channels, // input channels
+                                                               outer_channels, // output channels
+                                                               last_act        // activation
             );
             peak_channels = std::max({peak_channels, inner_channels, outer_channels});
         } else if (tower_ptr->IsNestedBottleneckBlock()) {
@@ -251,59 +242,53 @@ void CudaForwardPipe::NNGraph::ConstructGraph(bool dump_gpu_info,
             const auto inner_channels = tower_ptr->bottleneck_channels;
             const auto last_act = tower_ptr->apply_se ? Activation::kIdentity : default_act;
 
-            graph_->tower[i].pre_btl_conv = cuda::Convolution(
-                &handles_,
-                max_batch_,     // max batch size
-                board_size_,    // board size
-                1,              // kernel size
-                outer_channels, // input channels
-                inner_channels, // output channels
-                default_act     // activation
+            graph_->tower[i].pre_btl_conv = cuda::Convolution(&handles_,
+                                                              max_batch_,     // max batch size
+                                                              board_size_,    // board size
+                                                              1,              // kernel size
+                                                              outer_channels, // input channels
+                                                              inner_channels, // output channels
+                                                              default_act     // activation
             );
-            graph_->tower[i].conv1 = cuda::Convolution(
-                &handles_,
-                max_batch_,     // max batch size
-                board_size_,    // board size
-                3,              // kernel size
-                inner_channels, // input channels
-                inner_channels, // output channels
-                default_act     // activation
+            graph_->tower[i].conv1 = cuda::Convolution(&handles_,
+                                                       max_batch_,     // max batch size
+                                                       board_size_,    // board size
+                                                       3,              // kernel size
+                                                       inner_channels, // input channels
+                                                       inner_channels, // output channels
+                                                       default_act     // activation
             );
-            graph_->tower[i].conv2 = cuda::Convolution(
-                &handles_,
-                max_batch_,     // max batch size
-                board_size_,    // board size
-                3,              // kernel size
-                inner_channels, // input channels
-                inner_channels, // output channels
-                default_act     // activation
+            graph_->tower[i].conv2 = cuda::Convolution(&handles_,
+                                                       max_batch_,     // max batch size
+                                                       board_size_,    // board size
+                                                       3,              // kernel size
+                                                       inner_channels, // input channels
+                                                       inner_channels, // output channels
+                                                       default_act     // activation
             );
-            graph_->tower[i].conv3 = cuda::Convolution(
-                &handles_,
-                max_batch_,     // max batch size
-                board_size_,    // board size
-                3,              // kernel size
-                inner_channels, // input channels
-                inner_channels, // output channels
-                default_act     // activation
+            graph_->tower[i].conv3 = cuda::Convolution(&handles_,
+                                                       max_batch_,     // max batch size
+                                                       board_size_,    // board size
+                                                       3,              // kernel size
+                                                       inner_channels, // input channels
+                                                       inner_channels, // output channels
+                                                       default_act     // activation
             );
-            graph_->tower[i].conv4 = cuda::Convolution(
-                &handles_,
-                max_batch_,     // max batch size
-                board_size_,    // board size
-                3,              // kernel size
-                inner_channels, // input channels
-                inner_channels, // output channels
-                default_act     // activation
+            graph_->tower[i].conv4 = cuda::Convolution(&handles_,
+                                                       max_batch_,     // max batch size
+                                                       board_size_,    // board size
+                                                       3,              // kernel size
+                                                       inner_channels, // input channels
+                                                       inner_channels, // output channels
+                                                       default_act     // activation
             );
-            graph_->tower[i].post_btl_conv = cuda::Convolution(
-                &handles_,
-                max_batch_,     // max batch size
-                board_size_,    // board size
-                1,              // kernel size
-                inner_channels, // input channels
-                outer_channels, // output channels
-                last_act        // activation
+            graph_->tower[i].post_btl_conv = cuda::Convolution(&handles_,
+                                                               max_batch_,     // max batch size
+                                                               board_size_,    // board size
+                                                               1,              // kernel size
+                                                               inner_channels, // input channels
+                                                               outer_channels, // output channels
+                                                               last_act        // activation
             );
             peak_channels = std::max({peak_channels, inner_channels, outer_channels});
         } else if (tower_ptr->IsMixerBlock()) {
@@ -312,31 +297,28 @@ void CudaForwardPipe::NNGraph::ConstructGraph(bool dump_gpu_info,
             const auto filters = tower_ptr->dw_conv.GetFilter();
             const auto last_act = tower_ptr->apply_se ? Activation::kIdentity : default_act;
 
-            graph_->tower[i].dw_conv = cuda::DepthwiseConvolution(
-                &handles_,
-                max_batch_,   // max batch size
-                board_size_,  // board size
-                filters,      // kernel size
-                channels,     // input channels
-                default_act   // activation
+            graph_->tower[i].dw_conv = cuda::DepthwiseConvolution(&handles_,
+                                                                  max_batch_,  // max batch size
+                                                                  board_size_, // board size
+                                                                  filters,     // kernel size
+                                                                  channels,    // input channels
+                                                                  default_act  // activation
             );
-            graph_->tower[i].conv1 = cuda::Convolution(
-                &handles_,
-                max_batch_,   // max batch size
-                board_size_,  // board size
-                1,            // kernel size
-                channels,     // input channels
-                feedforwards, // output channels
-                default_act   // activation
+            graph_->tower[i].conv1 = cuda::Convolution(&handles_,
+                                                       max_batch_,   // max batch size
+                                                       board_size_,  // board size
+                                                       1,            // kernel size
+                                                       channels,     // input channels
+                                                       feedforwards, // output channels
+                                                       default_act   // activation
             );
-            graph_->tower[i].conv2 = cuda::Convolution(
-                &handles_,
-                max_batch_,   // max batch size
-                board_size_,  // board size
-                1,            // kernel size
-                feedforwards, // input channels
-                channels,     // output channels
-                last_act      // activation
+            graph_->tower[i].conv2 = cuda::Convolution(&handles_,
+                                                       max_batch_,   // max batch size
+                                                       board_size_,  // board size
+                                                       1,            // kernel size
+                                                       feedforwards, // input channels
+                                                       channels,     // output channels
+                                                       last_act      // activation
             );
             peak_channels = std::max({peak_channels, channels, feedforwards});
         }
@@ -344,13 +326,12 @@ void CudaForwardPipe::NNGraph::ConstructGraph(bool dump_gpu_info,
             const auto channels = weights_->residual_channels;
             const size_t se_size = tower_ptr->se_size;
 
-            graph_->tower[i].se_module = cuda::SEUnit(
-                &handles_,
-                max_batch_,  // max batch size
-                board_size_, // board size
-                channels,    // channels
-                se_size,     // SE size
-                default_act  // activation
+            graph_->tower[i].se_module = cuda::SEUnit(&handles_,
+                                                      max_batch_,  // max batch size
+                                                      board_size_, // board size
+                                                      channels,    // channels
+                                                      se_size,     // SE size
+                                                      default_act  // activation
             );
         }
     }
@@ -359,108 +340,96 @@ void CudaForwardPipe::NNGraph::ConstructGraph(bool dump_gpu_info,
     const auto policy_head_channels = weights_->policy_head_channels;
     const auto probabilities_channels = weights_->probabilities_channels;
     const auto pass_probability_outputs = weights_->pass_probability_outputs;
-    graph_->p_hd_conv = cuda::Convolution(
-        &handles_,
-        max_batch_,              // max batch size
-        board_size_,             // board size
-        1,                       // kernel size
-        output_channels,         // input channels
-        policy_head_channels,    // output channels
-        default_act              // activation
+    graph_->p_hd_conv = cuda::Convolution(&handles_,
+                                          max_batch_,           // max batch size
+                                          board_size_,          // board size
+                                          1,                    // kernel size
+                                          output_channels,      // input channels
+                                          policy_head_channels, // output channels
+                                          default_act           // activation
     );
     if (weights_->policy_head_type == PolicyHeadType::kRepLK) {
         const auto filters = weights_->p_dw_conv.GetFilter();
-        graph_->p_dw_conv = cuda::DepthwiseConvolution(
-            &handles_,
-            max_batch_,              // max batch size
-            board_size_,             // board size
-            filters,                 // kernel size
-            policy_head_channels,    // input channels
-            default_act              // activation
+        graph_->p_dw_conv = cuda::DepthwiseConvolution(&handles_,
+                                                       max_batch_,           // max batch size
+                                                       board_size_,          // board size
+                                                       filters,              // kernel size
+                                                       policy_head_channels, // input channels
+                                                       default_act           // activation
         );
-        graph_->p_pt_conv = cuda::Convolution(
-            &handles_,
-            max_batch_,              // max batch size
-            board_size_,             // board size
-            1,                       // kernel size
-            policy_head_channels,    // input channels
-            policy_head_channels,    // output channels
-            default_act              // activation
+        graph_->p_pt_conv = cuda::Convolution(&handles_,
+                                              max_batch_,           // max batch size
+                                              board_size_,          // board size
+                                              1,                    // kernel size
+                                              policy_head_channels, // input channels
+                                              policy_head_channels, // output channels
+                                              default_act           // activation
         );
     }
-    graph_->p_pool = cuda::GlobalPooling(
-        &handles_,
-        false,
-        max_batch_,               // max batch size
-        board_size_,              // board size
-        policy_head_channels      // input channels
+    graph_->p_pool = cuda::GlobalPooling(&handles_,
+                                         false,
+                                         max_batch_,          // max batch size
+                                         board_size_,         // board size
+                                         policy_head_channels // input channels
     );
-    graph_->p_inter = cuda::FullyConnect(
-        &handles_,
-        max_batch_,               // max batch size
-        3*policy_head_channels,   // input sizes
-        policy_head_channels,     // outpur size
-        default_act               // activation
+    graph_->p_inter = cuda::FullyConnect(&handles_,
+                                         max_batch_,               // max batch size
+                                         3 * policy_head_channels, // input sizes
+                                         policy_head_channels,     // outpur size
+                                         default_act               // activation
     );
-    graph_->p_prob = cuda::Convolution(
-        &handles_,
-        max_batch_,               // max batch size
-        board_size_,              // board size
-        1,                        // kernel size
-        policy_head_channels,     // input channels
-        probabilities_channels,   // output channels
-        Activation::kIdentity     // activation
+    graph_->p_prob = cuda::Convolution(&handles_,
+                                       max_batch_,             // max batch size
+                                       board_size_,            // board size
+                                       1,                      // kernel size
+                                       policy_head_channels,   // input channels
+                                       probabilities_channels, // output channels
+                                       Activation::kIdentity   // activation
     );
-    graph_->p_prob_pass = cuda::FullyConnect(
-        &handles_,
-        max_batch_,               // max batch size
-        policy_head_channels,     // input sizes
-        pass_probability_outputs, // outpur size
-        Activation::kIdentity     // activation
+    graph_->p_prob_pass = cuda::FullyConnect(&handles_,
+                                             max_batch_,               // max batch size
+                                             policy_head_channels,     // input sizes
+                                             pass_probability_outputs, // outpur size
+                                             Activation::kIdentity     // activation
     );
 
     // value head
     const auto value_head_channels = weights_->value_head_channels;
     const auto ownership_channels = weights_->ownership_channels;
     const auto value_misc_outputs = weights_->value_misc_outputs;
-    graph_->v_hd_conv = cuda::Convolution(
-        &handles_,
-        max_batch_,               // max batch size
-        board_size_,              // board size
-        1,                        // kernel size
-        output_channels,          // input channels
-        value_head_channels,      // output channels
-        default_act               // activation
+    graph_->v_hd_conv = cuda::Convolution(&handles_,
+                                          max_batch_,          // max batch size
+                                          board_size_,         // board size
+                                          1,                   // kernel size
+                                          output_channels,     // input channels
+                                          value_head_channels, // output channels
+                                          default_act          // activation
     );
-    graph_->v_pool = cuda::GlobalPooling(
-        &handles_,
-        true,
-        max_batch_,               // max batch size
-        board_size_,              // board size
-        value_head_channels       // input channels
+    graph_->v_pool = cuda::GlobalPooling(&handles_,
+                                         true,
+                                         max_batch_,         // max batch size
+                                         board_size_,        // board size
+                                         value_head_channels // input channels
     );
-    graph_->v_inter = cuda::FullyConnect(
-        &handles_,
-        max_batch_,               // max batch size
-        3*value_head_channels,    // input sizes
-        3*value_head_channels,    // outpur size
-        default_act               // activation
+    graph_->v_inter = cuda::FullyConnect(&handles_,
+                                         max_batch_,              // max batch size
+                                         3 * value_head_channels, // input sizes
+                                         3 * value_head_channels, // outpur size
+                                         default_act              // activation
     );
-    graph_->v_ownership = cuda::Convolution(
-        &handles_,
-        max_batch_,               // max batch size
-        board_size_,              // board size
-        1,                        // kernel size
-        value_head_channels,      // input channels
-        ownership_channels,       // output channels
-        Activation::kIdentity     // activation
+    graph_->v_ownership = cuda::Convolution(&handles_,
+                                            max_batch_,           // max batch size
+                                            board_size_,          // board size
+                                            1,                    // kernel size
+                                            value_head_channels,  // input channels
+                                            ownership_channels,   // output channels
+                                            Activation::kIdentity // activation
     );
-    graph_->v_misc = cuda::FullyConnect(
-        &handles_,
-        max_batch_,               // max batch size
-        3*value_head_channels,    // input size
-        value_misc_outputs,       // output size
-        Activation::kIdentity     // relu
+    graph_->v_misc = cuda::FullyConnect(&handles_,
+                                        max_batch_,              // max batch size
+                                        3 * value_head_channels, // input size
+                                        value_misc_outputs,      // output size
+                                        Activation::kIdentity    // relu
     );
 
     // Now push the weights.
@@ -468,130 +437,119 @@ void CudaForwardPipe::NNGraph::ConstructGraph(bool dump_gpu_info,
     const bool winograd = weights_->winograd;
 
     // input layer
-    graph_->input_conv.LoadWeights(
-        weights_->input_conv.GetWeights(),
-        weights_->input_conv.GetBiases(),
-        scratch_size_, winograd);
+    graph_->input_conv.LoadWeights(weights_->input_conv.GetWeights(),
+                                   weights_->input_conv.GetBiases(),
+                                   scratch_size_,
+                                   winograd);
 
     // block tower
     for (int i = 0; i < blocks; ++i) {
         const auto tower_ptr = weights_->tower[i].get();
         if (tower_ptr->IsResidualBlock()) {
-            graph_->tower[i].conv1.LoadWeights(
-                tower_ptr->conv1.GetWeights(),
-                tower_ptr->conv1.GetBiases(),
-                scratch_size_, winograd);
-            graph_->tower[i].conv2.LoadWeights(
-                tower_ptr->conv2.GetWeights(),
-                tower_ptr->conv2.GetBiases(),
-                scratch_size_, winograd);
+            graph_->tower[i].conv1.LoadWeights(tower_ptr->conv1.GetWeights(),
+                                               tower_ptr->conv1.GetBiases(),
+                                               scratch_size_,
+                                               winograd);
+            graph_->tower[i].conv2.LoadWeights(tower_ptr->conv2.GetWeights(),
+                                               tower_ptr->conv2.GetBiases(),
+                                               scratch_size_,
+                                               winograd);
         } else if (tower_ptr->IsBottleneckBlock()) {
-            graph_->tower[i].pre_btl_conv.LoadWeights(
-                tower_ptr->pre_btl_conv.GetWeights(),
-                tower_ptr->pre_btl_conv.GetBiases(),
-                scratch_size_, winograd);
-            graph_->tower[i].conv1.LoadWeights(
-                tower_ptr->conv1.GetWeights(),
-                tower_ptr->conv1.GetBiases(),
-                scratch_size_, winograd);
-            graph_->tower[i].conv2.LoadWeights(
-                tower_ptr->conv2.GetWeights(),
-                tower_ptr->conv2.GetBiases(),
-                scratch_size_, winograd);
-            graph_->tower[i].post_btl_conv.LoadWeights(
-                tower_ptr->post_btl_conv.GetWeights(),
-                tower_ptr->post_btl_conv.GetBiases(),
-                scratch_size_, winograd);
+            graph_->tower[i].pre_btl_conv.LoadWeights(tower_ptr->pre_btl_conv.GetWeights(),
+                                                      tower_ptr->pre_btl_conv.GetBiases(),
+                                                      scratch_size_,
+                                                      winograd);
+            graph_->tower[i].conv1.LoadWeights(tower_ptr->conv1.GetWeights(),
+                                               tower_ptr->conv1.GetBiases(),
+                                               scratch_size_,
+                                               winograd);
+            graph_->tower[i].conv2.LoadWeights(tower_ptr->conv2.GetWeights(),
+                                               tower_ptr->conv2.GetBiases(),
+                                               scratch_size_,
+                                               winograd);
+            graph_->tower[i].post_btl_conv.LoadWeights(tower_ptr->post_btl_conv.GetWeights(),
+                                                       tower_ptr->post_btl_conv.GetBiases(),
+                                                       scratch_size_,
+                                                       winograd);
         } else if (tower_ptr->IsNestedBottleneckBlock()) {
-            graph_->tower[i].pre_btl_conv.LoadWeights(
-                tower_ptr->pre_btl_conv.GetWeights(),
-                tower_ptr->pre_btl_conv.GetBiases(),
-                scratch_size_, winograd);
-            graph_->tower[i].conv1.LoadWeights(
-                tower_ptr->conv1.GetWeights(),
-                tower_ptr->conv1.GetBiases(),
-                scratch_size_, winograd);
-            graph_->tower[i].conv2.LoadWeights(
-                tower_ptr->conv2.GetWeights(),
-                tower_ptr->conv2.GetBiases(),
-                scratch_size_, winograd);
-            graph_->tower[i].conv3.LoadWeights(
-                tower_ptr->conv3.GetWeights(),
-                tower_ptr->conv3.GetBiases(),
-                scratch_size_, winograd);
-            graph_->tower[i].conv4.LoadWeights(
-                tower_ptr->conv4.GetWeights(),
-                tower_ptr->conv4.GetBiases(),
-                scratch_size_, winograd);
-            graph_->tower[i].post_btl_conv.LoadWeights(
-                tower_ptr->post_btl_conv.GetWeights(),
-                tower_ptr->post_btl_conv.GetBiases(),
-                scratch_size_, winograd);
+            graph_->tower[i].pre_btl_conv.LoadWeights(tower_ptr->pre_btl_conv.GetWeights(),
+                                                      tower_ptr->pre_btl_conv.GetBiases(),
+                                                      scratch_size_,
+                                                      winograd);
+            graph_->tower[i].conv1.LoadWeights(tower_ptr->conv1.GetWeights(),
+                                               tower_ptr->conv1.GetBiases(),
+                                               scratch_size_,
+                                               winograd);
+            graph_->tower[i].conv2.LoadWeights(tower_ptr->conv2.GetWeights(),
+                                               tower_ptr->conv2.GetBiases(),
+                                               scratch_size_,
+                                               winograd);
+            graph_->tower[i].conv3.LoadWeights(tower_ptr->conv3.GetWeights(),
+                                               tower_ptr->conv3.GetBiases(),
+                                               scratch_size_,
+                                               winograd);
+            graph_->tower[i].conv4.LoadWeights(tower_ptr->conv4.GetWeights(),
+                                               tower_ptr->conv4.GetBiases(),
+                                               scratch_size_,
+                                               winograd);
+            graph_->tower[i].post_btl_conv.LoadWeights(tower_ptr->post_btl_conv.GetWeights(),
+                                                       tower_ptr->post_btl_conv.GetBiases(),
+                                                       scratch_size_,
+                                                       winograd);
         } else if (tower_ptr->IsMixerBlock()) {
-            graph_->tower[i].dw_conv.LoadWeights(
-                tower_ptr->dw_conv.GetWeights(),
-                tower_ptr->dw_conv.GetBiases());
-            graph_->tower[i].conv1.LoadWeights(
-                tower_ptr->conv1.GetWeights(),
-                tower_ptr->conv1.GetBiases(),
-                scratch_size_, winograd);
-            graph_->tower[i].conv2.LoadWeights(
-                tower_ptr->conv2.GetWeights(),
-                tower_ptr->conv2.GetBiases(),
-                scratch_size_, winograd);
+            graph_->tower[i].dw_conv.LoadWeights(tower_ptr->dw_conv.GetWeights(),
+                                                 tower_ptr->dw_conv.GetBiases());
+            graph_->tower[i].conv1.LoadWeights(tower_ptr->conv1.GetWeights(),
+                                               tower_ptr->conv1.GetBiases(),
+                                               scratch_size_,
+                                               winograd);
+            graph_->tower[i].conv2.LoadWeights(tower_ptr->conv2.GetWeights(),
+                                               tower_ptr->conv2.GetBiases(),
+                                               scratch_size_,
+                                               winograd);
         }
         if (tower_ptr->apply_se) {
-            graph_->tower[i].se_module.LoadWeights(
-                tower_ptr->squeeze.GetWeights(),
-                tower_ptr->squeeze.GetBiases(),
-                tower_ptr->excite.GetWeights(),
-                tower_ptr->excite.GetBiases());
+            graph_->tower[i].se_module.LoadWeights(tower_ptr->squeeze.GetWeights(),
+                                                   tower_ptr->squeeze.GetBiases(),
+                                                   tower_ptr->excite.GetWeights(),
+                                                   tower_ptr->excite.GetBiases());
         }
     }
 
     // policy head
     graph_->p_hd_conv.LoadWeights(
-        weights->p_hd_conv.GetWeights(),
-        weights->p_hd_conv.GetBiases(),
-        scratch_size_, winograd);
+        weights->p_hd_conv.GetWeights(), weights->p_hd_conv.GetBiases(), scratch_size_, winograd);
 
     if (weights_->policy_head_type == PolicyHeadType::kRepLK) {
-        graph_->p_dw_conv.LoadWeights(
-            weights->p_dw_conv.GetWeights(),
-            weights->p_dw_conv.GetBiases());
-        graph_->p_pt_conv.LoadWeights(
-            weights->p_pt_conv.GetWeights(),
-            weights->p_pt_conv.GetBiases(),
-            scratch_size_, winograd);
+        graph_->p_dw_conv.LoadWeights(weights->p_dw_conv.GetWeights(),
+                                      weights->p_dw_conv.GetBiases());
+        graph_->p_pt_conv.LoadWeights(weights->p_pt_conv.GetWeights(),
+                                      weights->p_pt_conv.GetBiases(),
+                                      scratch_size_,
+                                      winograd);
     }
 
-    graph_->p_inter.LoadWeights(
-        weights_->p_inter_fc.GetWeights(), weights_->p_inter_fc.GetBiases());
+    graph_->p_inter.LoadWeights(weights_->p_inter_fc.GetWeights(),
+                                weights_->p_inter_fc.GetBiases());
 
     graph_->p_prob.LoadWeights(
-        weights->prob_conv.GetWeights(),
-        weights_->prob_conv.GetBiases(),
-        scratch_size_, winograd);
+        weights->prob_conv.GetWeights(), weights_->prob_conv.GetBiases(), scratch_size_, winograd);
 
-    graph_->p_prob_pass.LoadWeights(
-        weights_->pass_fc.GetWeights(), weights_->pass_fc.GetBiases());
+    graph_->p_prob_pass.LoadWeights(weights_->pass_fc.GetWeights(), weights_->pass_fc.GetBiases());
 
     // value head
     graph_->v_hd_conv.LoadWeights(
-        weights->v_hd_conv.GetWeights(),
-        weights->v_hd_conv.GetBiases(),
-        scratch_size_, winograd);
+        weights->v_hd_conv.GetWeights(), weights->v_hd_conv.GetBiases(), scratch_size_, winograd);
 
-    graph_->v_inter.LoadWeights(
-        weights_->v_inter_fc.GetWeights(), weights_->v_inter_fc.GetBiases());
+    graph_->v_inter.LoadWeights(weights_->v_inter_fc.GetWeights(),
+                                weights_->v_inter_fc.GetBiases());
 
-    graph_->v_ownership.LoadWeights(
-        weights->v_ownership.GetWeights(),
-        weights_->v_ownership.GetBiases(),
-        scratch_size_, winograd);
+    graph_->v_ownership.LoadWeights(weights->v_ownership.GetWeights(),
+                                    weights_->v_ownership.GetBiases(),
+                                    scratch_size_,
+                                    winograd);
 
-    graph_->v_misc.LoadWeights(
-        weights_->v_misc.GetWeights(), weights_->v_misc.GetBiases());
+    graph_->v_misc.LoadWeights(weights_->v_misc.GetWeights(), weights_->v_misc.GetBiases());
 
     // Allocate all buffers.
     const size_t factor = max_batch_ * cuda::GetCudaTypeSize(handles_.fp16);
@@ -657,8 +615,7 @@ void CudaForwardPipe::NNGraph::ConstructGraph(bool dump_gpu_info,
 void CudaForwardPipe::NNGraph::SetComputationMode(cuda::CudaHandles* handles) {
     cudaDeviceProp dev_prop = cuda::GetDeviceProp();
 
-    if (dev_prop.major <= 6 ||
-            !GetOption<bool>("fp16")) {
+    if (dev_prop.major <= 6 || !GetOption<bool>("fp16")) {
         // The compute capability is too low. The 5 is Maxwell,
         // such as GTX 980 Ti. The 6 is Pascal, such as GTX 1080 Ti.
         // As fair as I know, the FP16 can work on these devices,
@@ -672,9 +629,7 @@ void CudaForwardPipe::NNGraph::SetComputationMode(cuda::CudaHandles* handles) {
     }
 
     if (handles->has_tensor_cores) {
-        cuda::ReportCUBLASErrors(cublasSetMathMode(
-            handles->cublas_handle,
-            CUBLAS_TENSOR_OP_MATH));
+        cuda::ReportCUBLASErrors(cublasSetMathMode(handles->cublas_handle, CUBLAS_TENSOR_OP_MATH));
     }
 }
 
@@ -718,17 +673,16 @@ bool CudaForwardPipe::NNGraph::ApplyMask(const std::vector<InputData>& batch_inp
         // Copy masks on this graph's stream, so each worker thread/GPU
         // can run independently without a global lock.
         cuda::CopyToCudaOpAsync(
-            handles_.fp16, &(cuda_mask_op_[0]), spat_mask,
-            handles_.stream, &(host_mask_op_[0]));
+            handles_.fp16, &(cuda_mask_op_[0]), spat_mask, handles_.stream, &(host_mask_op_[0]));
         cuda::CopyToCudaOpAsync(
-            handles_.fp16, &(cuda_mask_op_[1]), sqrt_mask,
-            handles_.stream, &(host_mask_op_[1]));
+            handles_.fp16, &(cuda_mask_op_[1]), sqrt_mask, handles_.stream, &(host_mask_op_[1]));
     }
 
     return should_apply_mask;
 }
 
-std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vector<InputData>& batch_input) {
+std::vector<OutputResult>
+CudaForwardPipe::NNGraph::BatchForward(const std::vector<InputData>& batch_input) {
     const auto batch_size = (int)batch_input.size();
 
     assert(max_batch_ >= batch_size);
@@ -746,7 +700,7 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         }
     }
 
-    std::array<void *, 2> mask_buf = cuda_mask_op_;
+    std::array<void*, 2> mask_buf = cuda_mask_op_;
     if (!should_apply_mask) {
         // Disable the mask.
         mask_buf[0] = mask_buf[1] = nullptr;
@@ -754,15 +708,17 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
     // copy the inputs data from host memory to device
     cuda::CopyToCudaOpAsync(
-        handles_.fp16, &cuda_input_planes_, batch_planes,
-        handles_.stream, &host_input_planes_);
+        handles_.fp16, &cuda_input_planes_, batch_planes, handles_.stream, &host_input_planes_);
 
     // input layer
-    graph_->input_conv.Forward(
-        batch_size,
-        cuda_conv_op_[0], cuda_input_planes_,
-        nullptr, mask_buf[0],
-        cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+    graph_->input_conv.Forward(batch_size,
+                               cuda_conv_op_[0],
+                               cuda_input_planes_,
+                               nullptr,
+                               mask_buf[0],
+                               cuda_scratch_op_[0],
+                               cuda_scratch_op_[1],
+                               scratch_size_);
 
     // block tower
     const auto blocks = weights_->residual_blocks;
@@ -774,136 +730,170 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
         const auto tower_ptr = weights_->tower[i].get();
         if (tower_ptr->IsResidualBlock()) {
             // 1st conv layer
-            graph_->tower[i].conv1.Forward(
-                batch_size,
-                cuda_conv_op_[1], cuda_conv_op_[0],
-                nullptr, mask_buf[0],
-                cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+            graph_->tower[i].conv1.Forward(batch_size,
+                                           cuda_conv_op_[1],
+                                           cuda_conv_op_[0],
+                                           nullptr,
+                                           mask_buf[0],
+                                           cuda_scratch_op_[0],
+                                           cuda_scratch_op_[1],
+                                           scratch_size_);
 
             // 2nd conv layer
-            void *second_skip = tower_ptr->apply_se ?
-                                    nullptr : cuda_conv_op_[0];
-            graph_->tower[i].conv2.Forward(
-                batch_size,
-                cuda_conv_op_[3], cuda_conv_op_[1],
-                second_skip, mask_buf[0],
-                cuda_scratch_op_[0],  cuda_scratch_op_[1], scratch_size_);
+            void* second_skip = tower_ptr->apply_se ? nullptr : cuda_conv_op_[0];
+            graph_->tower[i].conv2.Forward(batch_size,
+                                           cuda_conv_op_[3],
+                                           cuda_conv_op_[1],
+                                           second_skip,
+                                           mask_buf[0],
+                                           cuda_scratch_op_[0],
+                                           cuda_scratch_op_[1],
+                                           scratch_size_);
         } else if (tower_ptr->IsBottleneckBlock()) {
             // pre-bottleneck
-            graph_->tower[i].pre_btl_conv.Forward(
-                batch_size,
-                cuda_conv_op_[1], cuda_conv_op_[0],
-                nullptr, mask_buf[0],
-                cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+            graph_->tower[i].pre_btl_conv.Forward(batch_size,
+                                                  cuda_conv_op_[1],
+                                                  cuda_conv_op_[0],
+                                                  nullptr,
+                                                  mask_buf[0],
+                                                  cuda_scratch_op_[0],
+                                                  cuda_scratch_op_[1],
+                                                  scratch_size_);
 
             // 1st conv layer
-            graph_->tower[i].conv1.Forward(
-                batch_size,
-                cuda_conv_op_[2], cuda_conv_op_[1],
-                nullptr, mask_buf[0],
-                cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+            graph_->tower[i].conv1.Forward(batch_size,
+                                           cuda_conv_op_[2],
+                                           cuda_conv_op_[1],
+                                           nullptr,
+                                           mask_buf[0],
+                                           cuda_scratch_op_[0],
+                                           cuda_scratch_op_[1],
+                                           scratch_size_);
 
             // 2nd conv layer
-            graph_->tower[i].conv2.Forward(
-                batch_size,
-                cuda_conv_op_[1], cuda_conv_op_[2],
-                nullptr, mask_buf[0],
-                cuda_scratch_op_[0],  cuda_scratch_op_[1], scratch_size_);
+            graph_->tower[i].conv2.Forward(batch_size,
+                                           cuda_conv_op_[1],
+                                           cuda_conv_op_[2],
+                                           nullptr,
+                                           mask_buf[0],
+                                           cuda_scratch_op_[0],
+                                           cuda_scratch_op_[1],
+                                           scratch_size_);
 
             // post-bottleneck
-            void *btl_skip = tower_ptr->apply_se ?
-                                     nullptr : cuda_conv_op_[0];
-            graph_->tower[i].post_btl_conv.Forward(
-                batch_size,
-                cuda_conv_op_[3], cuda_conv_op_[1],
-                btl_skip, mask_buf[0],
-                cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+            void* btl_skip = tower_ptr->apply_se ? nullptr : cuda_conv_op_[0];
+            graph_->tower[i].post_btl_conv.Forward(batch_size,
+                                                   cuda_conv_op_[3],
+                                                   cuda_conv_op_[1],
+                                                   btl_skip,
+                                                   mask_buf[0],
+                                                   cuda_scratch_op_[0],
+                                                   cuda_scratch_op_[1],
+                                                   scratch_size_);
         } else if (tower_ptr->IsNestedBottleneckBlock()) {
             // pre-bottleneck
-            graph_->tower[i].pre_btl_conv.Forward(
-                batch_size,
-                cuda_conv_op_[1], cuda_conv_op_[0],
-                nullptr, mask_buf[0],
-                cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+            graph_->tower[i].pre_btl_conv.Forward(batch_size,
+                                                  cuda_conv_op_[1],
+                                                  cuda_conv_op_[0],
+                                                  nullptr,
+                                                  mask_buf[0],
+                                                  cuda_scratch_op_[0],
+                                                  cuda_scratch_op_[1],
+                                                  scratch_size_);
 
             // 1st conv layer (1st block)
-            graph_->tower[i].conv1.Forward(
-                batch_size,
-                cuda_conv_op_[2], cuda_conv_op_[1],
-                nullptr, mask_buf[0],
-                cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+            graph_->tower[i].conv1.Forward(batch_size,
+                                           cuda_conv_op_[2],
+                                           cuda_conv_op_[1],
+                                           nullptr,
+                                           mask_buf[0],
+                                           cuda_scratch_op_[0],
+                                           cuda_scratch_op_[1],
+                                           scratch_size_);
 
             // 2nd conv layer (1st block)
-            void *block1_skip = cuda_conv_op_[1];
-            graph_->tower[i].conv2.Forward(
-                batch_size,
-                cuda_conv_op_[3], cuda_conv_op_[2],
-                block1_skip, mask_buf[0],
-                cuda_scratch_op_[0],  cuda_scratch_op_[1], scratch_size_);
+            void* block1_skip = cuda_conv_op_[1];
+            graph_->tower[i].conv2.Forward(batch_size,
+                                           cuda_conv_op_[3],
+                                           cuda_conv_op_[2],
+                                           block1_skip,
+                                           mask_buf[0],
+                                           cuda_scratch_op_[0],
+                                           cuda_scratch_op_[1],
+                                           scratch_size_);
 
             std::swap(cuda_conv_op_[3], cuda_conv_op_[1]);
 
             // 3rd conv layer (2nd block)
-            graph_->tower[i].conv3.Forward(
-                batch_size,
-                cuda_conv_op_[2], cuda_conv_op_[1],
-                nullptr, mask_buf[0],
-                cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+            graph_->tower[i].conv3.Forward(batch_size,
+                                           cuda_conv_op_[2],
+                                           cuda_conv_op_[1],
+                                           nullptr,
+                                           mask_buf[0],
+                                           cuda_scratch_op_[0],
+                                           cuda_scratch_op_[1],
+                                           scratch_size_);
 
             // 4th conv layer (2nd block)
-            void *block2_skip = cuda_conv_op_[1];
-            graph_->tower[i].conv4.Forward(
-                batch_size,
-                cuda_conv_op_[3], cuda_conv_op_[2],
-                block2_skip, mask_buf[0],
-                cuda_scratch_op_[0],  cuda_scratch_op_[1], scratch_size_);
+            void* block2_skip = cuda_conv_op_[1];
+            graph_->tower[i].conv4.Forward(batch_size,
+                                           cuda_conv_op_[3],
+                                           cuda_conv_op_[2],
+                                           block2_skip,
+                                           mask_buf[0],
+                                           cuda_scratch_op_[0],
+                                           cuda_scratch_op_[1],
+                                           scratch_size_);
 
             std::swap(cuda_conv_op_[3], cuda_conv_op_[1]);
 
             // post-bottleneck
-            void *btl_skip = tower_ptr->apply_se ?
-                                     nullptr : cuda_conv_op_[0];
-            graph_->tower[i].post_btl_conv.Forward(
-                batch_size,
-                cuda_conv_op_[3], cuda_conv_op_[1],
-                btl_skip, mask_buf[0],
-                cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+            void* btl_skip = tower_ptr->apply_se ? nullptr : cuda_conv_op_[0];
+            graph_->tower[i].post_btl_conv.Forward(batch_size,
+                                                   cuda_conv_op_[3],
+                                                   cuda_conv_op_[1],
+                                                   btl_skip,
+                                                   mask_buf[0],
+                                                   cuda_scratch_op_[0],
+                                                   cuda_scratch_op_[1],
+                                                   scratch_size_);
         } else if (tower_ptr->IsMixerBlock()) {
             // dw conv layer
             graph_->tower[i].dw_conv.Forward(
-                batch_size,
-                cuda_conv_op_[3], cuda_conv_op_[0],
-                cuda_conv_op_[0], mask_buf[0]);
+                batch_size, cuda_conv_op_[3], cuda_conv_op_[0], cuda_conv_op_[0], mask_buf[0]);
 
             std::swap(cuda_conv_op_[3], cuda_conv_op_[0]);
 
             // 1st ffn conv layer
-            graph_->tower[i].conv1.Forward(
-                batch_size,
-                cuda_conv_op_[1], cuda_conv_op_[0],
-                nullptr, mask_buf[0],
-                cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+            graph_->tower[i].conv1.Forward(batch_size,
+                                           cuda_conv_op_[1],
+                                           cuda_conv_op_[0],
+                                           nullptr,
+                                           mask_buf[0],
+                                           cuda_scratch_op_[0],
+                                           cuda_scratch_op_[1],
+                                           scratch_size_);
 
             // 2nd ffn conv layer
-            void *ffn_skip = tower_ptr->apply_se ?
-                                     nullptr : cuda_conv_op_[0];
-            graph_->tower[i].conv2.Forward(
-                batch_size,
-                cuda_conv_op_[3], cuda_conv_op_[1],
-                ffn_skip, mask_buf[0],
-                cuda_scratch_op_[0],  cuda_scratch_op_[1], scratch_size_);
+            void* ffn_skip = tower_ptr->apply_se ? nullptr : cuda_conv_op_[0];
+            graph_->tower[i].conv2.Forward(batch_size,
+                                           cuda_conv_op_[3],
+                                           cuda_conv_op_[1],
+                                           ffn_skip,
+                                           mask_buf[0],
+                                           cuda_scratch_op_[0],
+                                           cuda_scratch_op_[1],
+                                           scratch_size_);
         }
 
         bool module_skip = false;
         if (tower_ptr->apply_se) {
             // squeeze-and-excitation module
-            void *se_skip = cuda_conv_op_[0];
-            void *se_outs = cuda_conv_op_[0];
+            void* se_skip = cuda_conv_op_[0];
+            void* se_outs = cuda_conv_op_[0];
 
             graph_->tower[i].se_module.Forward(
-                batch_size,
-                se_outs, cuda_conv_op_[3],
-                se_skip, mask_buf[0], mask_buf[1]);
+                batch_size, se_outs, cuda_conv_op_[3], se_skip, mask_buf[0], mask_buf[1]);
             module_skip = true;
         }
 
@@ -915,72 +905,80 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
     // policy head
     const auto policy_head_channels = weights_->policy_head_channels;
 
-    graph_->p_hd_conv.Forward(
-        batch_size,
-        cuda_pol_op_[0], cuda_conv_op_[0],
-        nullptr, mask_buf[0],
-        cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+    graph_->p_hd_conv.Forward(batch_size,
+                              cuda_pol_op_[0],
+                              cuda_conv_op_[0],
+                              nullptr,
+                              mask_buf[0],
+                              cuda_scratch_op_[0],
+                              cuda_scratch_op_[1],
+                              scratch_size_);
 
     if (weights_->policy_head_type == PolicyHeadType::kRepLK) {
         graph_->p_dw_conv.Forward(
-            batch_size,
-            cuda_pol_op_[1], cuda_pol_op_[0],
-            nullptr, mask_buf[0]);
-        graph_->p_pt_conv.Forward(
-            batch_size,
-            cuda_pol_op_[0], cuda_pol_op_[1],
-            nullptr, mask_buf[0],
-            cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+            batch_size, cuda_pol_op_[1], cuda_pol_op_[0], nullptr, mask_buf[0]);
+        graph_->p_pt_conv.Forward(batch_size,
+                                  cuda_pol_op_[0],
+                                  cuda_pol_op_[1],
+                                  nullptr,
+                                  mask_buf[0],
+                                  cuda_scratch_op_[0],
+                                  cuda_scratch_op_[1],
+                                  scratch_size_);
     }
 
-    graph_->p_pool.Forward(
-        batch_size,
-        cuda_pol_op_[1], cuda_pol_op_[0],
-        mask_buf[0], mask_buf[1]);
+    graph_->p_pool.Forward(batch_size, cuda_pol_op_[1], cuda_pol_op_[0], mask_buf[0], mask_buf[1]);
 
-    graph_->p_inter.Forward(
-        batch_size, cuda_pol_op_[2], cuda_pol_op_[1]);
+    graph_->p_inter.Forward(batch_size, cuda_pol_op_[2], cuda_pol_op_[1]);
 
-    void *null_op = nullptr;
-    cuda::AddSpatial(
-        handles_.fp16, cuda_pol_op_[0], cuda_pol_op_[2],
-        null_op, mask_buf[0],
-        batch_size * policy_head_channels,
-        batch_size, policy_head_channels, num_intersections,
-        Activation::kIdentity, handles_.stream);
+    void* null_op = nullptr;
+    cuda::AddSpatial(handles_.fp16,
+                     cuda_pol_op_[0],
+                     cuda_pol_op_[2],
+                     null_op,
+                     mask_buf[0],
+                     batch_size * policy_head_channels,
+                     batch_size,
+                     policy_head_channels,
+                     num_intersections,
+                     Activation::kIdentity,
+                     handles_.stream);
 
-    graph_->p_prob.Forward(
-        batch_size,
-        cuda_output_prob_, cuda_pol_op_[0],
-        nullptr, nullptr,
-        cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+    graph_->p_prob.Forward(batch_size,
+                           cuda_output_prob_,
+                           cuda_pol_op_[0],
+                           nullptr,
+                           nullptr,
+                           cuda_scratch_op_[0],
+                           cuda_scratch_op_[1],
+                           scratch_size_);
 
-    graph_->p_prob_pass.Forward(
-        batch_size, cuda_output_prob_pass_, cuda_pol_op_[2]);
+    graph_->p_prob_pass.Forward(batch_size, cuda_output_prob_pass_, cuda_pol_op_[2]);
 
     // value head
-    graph_->v_hd_conv.Forward(
-        batch_size,
-        cuda_val_op_[0], cuda_conv_op_[0],
-        nullptr, mask_buf[0],
-        cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+    graph_->v_hd_conv.Forward(batch_size,
+                              cuda_val_op_[0],
+                              cuda_conv_op_[0],
+                              nullptr,
+                              mask_buf[0],
+                              cuda_scratch_op_[0],
+                              cuda_scratch_op_[1],
+                              scratch_size_);
 
-    graph_->v_pool.Forward(
-        batch_size,
-        cuda_val_op_[1], cuda_val_op_[0],
-        mask_buf[0], mask_buf[1]);
+    graph_->v_pool.Forward(batch_size, cuda_val_op_[1], cuda_val_op_[0], mask_buf[0], mask_buf[1]);
 
-    graph_->v_inter.Forward(
-        batch_size, cuda_val_op_[2], cuda_val_op_[1]);
+    graph_->v_inter.Forward(batch_size, cuda_val_op_[2], cuda_val_op_[1]);
 
-    graph_->v_ownership.Forward(
-        batch_size,
-        cuda_output_ownership_, cuda_val_op_[0],
-        nullptr, nullptr,
-        cuda_scratch_op_[0], cuda_scratch_op_[1], scratch_size_);
+    graph_->v_ownership.Forward(batch_size,
+                                cuda_output_ownership_,
+                                cuda_val_op_[0],
+                                nullptr,
+                                nullptr,
+                                cuda_scratch_op_[0],
+                                cuda_scratch_op_[1],
+                                scratch_size_);
 
-    graph_->v_misc.Forward(
-        batch_size, cuda_output_val_, cuda_val_op_[2]);
+    graph_->v_misc.Forward(batch_size, cuda_output_val_, cuda_val_op_[2]);
 
     const auto probabilities_channels = weights_->probabilities_channels;
     const auto pass_probability_outputs = weights_->pass_probability_outputs;
@@ -994,17 +992,19 @@ std::vector<OutputResult> CudaForwardPipe::NNGraph::BatchForward(const std::vect
 
     // Copy results on this graph's stream, then wait once before decoding.
     cuda::CopyToHostOpAsync(
-        handles_.fp16, batch_prob,
-        &cuda_output_prob_, handles_.stream, &host_output_prob_);
+        handles_.fp16, batch_prob, &cuda_output_prob_, handles_.stream, &host_output_prob_);
+    cuda::CopyToHostOpAsync(handles_.fp16,
+                            batch_prob_pass,
+                            &cuda_output_prob_pass_,
+                            handles_.stream,
+                            &host_output_prob_pass_);
     cuda::CopyToHostOpAsync(
-        handles_.fp16, batch_prob_pass,
-        &cuda_output_prob_pass_, handles_.stream, &host_output_prob_pass_);
-    cuda::CopyToHostOpAsync(
-        handles_.fp16, batch_value_misc,
-        &cuda_output_val_, handles_.stream, &host_output_val_);
-    cuda::CopyToHostOpAsync(
-        handles_.fp16, batch_ownership,
-        &cuda_output_ownership_, handles_.stream, &host_output_ownership_);
+        handles_.fp16, batch_value_misc, &cuda_output_val_, handles_.stream, &host_output_val_);
+    cuda::CopyToHostOpAsync(handles_.fp16,
+                            batch_ownership,
+                            &cuda_output_ownership_,
+                            handles_.stream,
+                            &host_output_ownership_);
 
     auto batch_output_result = std::vector<OutputResult>(batch_size);
 
@@ -1025,7 +1025,7 @@ void CudaForwardPipe::NNGraph::FillOutputs(const std::vector<float>& batch_prob,
                                            std::vector<OutputResult>& batch_output_result) {
     const int batch_size = batch_output_result.size();
     const auto num_intersections = board_size_ * board_size_;
-    const auto encoder_version = Encoder::GetEncoderVersion(weights_->version); 
+    const auto encoder_version = Encoder::GetEncoderVersion(weights_->version);
     const auto probabilities_channels = weights_->probabilities_channels;
     const auto pass_probability_outputs = weights_->pass_probability_outputs;
     const auto value_misc_outputs = weights_->value_misc_outputs;
@@ -1033,24 +1033,25 @@ void CudaForwardPipe::NNGraph::FillOutputs(const std::vector<float>& batch_prob,
 
     if (encoder_version == 1) {
         for (int b = 0; b < batch_size; ++b) {
-            auto &output_result = batch_output_result[b];
-            const auto &input = batch_input[b];
+            auto& output_result = batch_output_result[b];
+            const auto& input = batch_input[b];
             const int pol_offset = probabilities_channels * num_intersections;
             const int own_offset = ownership_channels * num_intersections;
             for (int idx = 0; idx < num_intersections; ++idx) {
-                int pol_index = b * pol_offset + (int)PolicyBufferOffset::kNormal * num_intersections + idx;
+                int pol_index =
+                    b * pol_offset + (int)PolicyBufferOffset::kNormal * num_intersections + idx;
                 int own_index = b * own_offset + 0 * num_intersections + idx;
                 output_result.probabilities[idx] = batch_prob[pol_index];
                 output_result.ownership[idx] = batch_ownership[own_index];
             }
             output_result.pass_probability = batch_prob_pass[b * pass_probability_outputs + 0];
 
-            output_result.wdl[0]      = batch_value_misc[b * value_misc_outputs + 0];
-            output_result.wdl[1]      = batch_value_misc[b * value_misc_outputs + 1];
-            output_result.wdl[2]      = batch_value_misc[b * value_misc_outputs + 2];
+            output_result.wdl[0] = batch_value_misc[b * value_misc_outputs + 0];
+            output_result.wdl[1] = batch_value_misc[b * value_misc_outputs + 1];
+            output_result.wdl[2] = batch_value_misc[b * value_misc_outputs + 2];
             output_result.stm_winrate = batch_value_misc[b * value_misc_outputs + 3];
             output_result.final_score = batch_value_misc[b * value_misc_outputs + 4];
-            output_result.q_error     = 0.0f;
+            output_result.q_error = 0.0f;
             output_result.score_error = 0.0f;
 
             output_result.offset = PolicyBufferOffset::kNormal;
@@ -1060,8 +1061,8 @@ void CudaForwardPipe::NNGraph::FillOutputs(const std::vector<float>& batch_prob,
         }
     } else if (encoder_version == 2) {
         for (int b = 0; b < batch_size; ++b) {
-            auto &output_result = batch_output_result[b];
-            const auto &input = batch_input[b];
+            auto& output_result = batch_output_result[b];
+            const auto& input = batch_input[b];
             const int pol_offset = probabilities_channels * num_intersections;
             const int own_offset = ownership_channels * num_intersections;
             for (int idx = 0; idx < num_intersections; ++idx) {
@@ -1072,12 +1073,12 @@ void CudaForwardPipe::NNGraph::FillOutputs(const std::vector<float>& batch_prob,
             }
             output_result.pass_probability = batch_prob_pass[b * pass_probability_outputs + 0];
 
-            output_result.wdl[0]      = batch_value_misc[b * value_misc_outputs + 0];
-            output_result.wdl[1]      = batch_value_misc[b * value_misc_outputs + 1];
-            output_result.wdl[2]      = batch_value_misc[b * value_misc_outputs + 2];
+            output_result.wdl[0] = batch_value_misc[b * value_misc_outputs + 0];
+            output_result.wdl[1] = batch_value_misc[b * value_misc_outputs + 1];
+            output_result.wdl[2] = batch_value_misc[b * value_misc_outputs + 2];
             output_result.stm_winrate = batch_value_misc[b * value_misc_outputs + 3];
             output_result.final_score = batch_value_misc[b * value_misc_outputs + 8];
-            output_result.q_error     = batch_value_misc[b * value_misc_outputs + 13];
+            output_result.q_error = batch_value_misc[b * value_misc_outputs + 13];
             output_result.score_error = batch_value_misc[b * value_misc_outputs + 14];
 
             output_result.offset = input.offset;

@@ -1,18 +1,18 @@
 #include "neural/encoder.h"
-#include "utils/format.h"
 
-#include <sstream>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
+
+#include "utils/format.h"
 
 Encoder& Encoder::Get() {
     static Encoder encoder;
     return encoder;
 }
 
-InputData Encoder::GetInputs(const GameState &state,
-                             const int symmetry,
-                             const int weights_version) const {
+InputData
+Encoder::GetInputs(const GameState& state, const int symmetry, const int weights_version) const {
     auto data = InputData{};
 
     data.board_size = state.GetBoardSize();
@@ -23,15 +23,13 @@ InputData Encoder::GetInputs(const GameState &state,
     auto plane_size = planes.size();
     auto it = std::begin(planes);
 
-    std::copy(it, it + plane_size,
-                  std::begin(data.planes));
+    std::copy(it, it + plane_size, std::begin(data.planes));
 
     return data;
 }
 
-std::vector<float> Encoder::GetPlanes(const GameState &state,
-                                      const int symmetry,
-                                      const int weights_version) const {
+std::vector<float>
+Encoder::GetPlanes(const GameState& state, const int symmetry, const int weights_version) const {
 
     auto num_intersections = state.GetNumIntersections();
     auto plane_size = num_intersections * GetInputChannels(weights_version);
@@ -51,7 +49,7 @@ std::vector<float> Encoder::GetPlanes(const GameState &state,
     return planes;
 }
 
-std::string Encoder::GetPlanesString(const GameState &state,
+std::string Encoder::GetPlanesString(const GameState& state,
                                      const int symmetry,
                                      const int weights_version) const {
     auto out = std::ostringstream{};
@@ -62,7 +60,7 @@ std::string Encoder::GetPlanesString(const GameState &state,
     auto planes = GetPlanes(state, symmetry, weights_version);
     out << "encoder version: " << GetEncoderVersion(weights_version) << std::endl;
     for (int p = 0; p < input_channels; ++p) {
-        out << "plane: " << (p+1) << std::endl;
+        out << "plane: " << (p + 1) << std::endl;
         for (int y = 0; y < boardsize; ++y) {
             for (int x = 0; x < boardsize; ++x) {
                 auto idx = state.GetIndex(x, y);
@@ -79,8 +77,10 @@ std::string Encoder::GetPlanesString(const GameState &state,
     return out.str();
 }
 
-void Encoder::SymmetryPlanes(const GameState &state, std::vector<float> &planes,
-                             const int symmetry, const int weights_version) const {
+void Encoder::SymmetryPlanes(const GameState& state,
+                             std::vector<float>& planes,
+                             const int symmetry,
+                             const int weights_version) const {
     const auto boardsize = state.GetBoardSize();
     const auto num_intersections = state.GetNumIntersections();
     const auto input_channels = GetInputChannels(weights_version);
@@ -116,8 +116,7 @@ void Encoder::FillColorStones(const Board* board,
     }
 }
 
-void Encoder::FillMove(const Board* board,
-                       std::vector<float>::iterator move_it) const {
+void Encoder::FillMove(const Board* board, std::vector<float>::iterator move_it) const {
     const auto num_intersections = board->GetNumIntersections();
     const auto last_move = board->GetLastMove();
 
@@ -134,11 +133,11 @@ void Encoder::FillMove(const Board* board,
     }
 }
 
-void Encoder::EncoderHistoryMove(const GameState &state,
+void Encoder::EncoderHistoryMove(const GameState& state,
                                  std::vector<float>::iterator it,
                                  const int weights_version) const {
     auto move_num = state.GetMoveNumber();
-    auto past = std::min(move_num+1, GetHistoryMoves(weights_version));
+    auto past = std::min(move_num + 1, GetHistoryMoves(weights_version));
 
     auto num_intersections = state.GetNumIntersections();
 
@@ -146,23 +145,22 @@ void Encoder::EncoderHistoryMove(const GameState &state,
 
     auto black_it = it + (black_to_move ? 0 : num_intersections);
     auto white_it = it + (black_to_move ? num_intersections : 0);
-    auto move_it  = it + 2 * num_intersections;
+    auto move_it = it + 2 * num_intersections;
 
     for (auto p = 0; p < past; ++p) {
         auto board = state.GetPastBoard(p);
         FillColorStones(board.get(), black_it, white_it);
         FillMove(board.get(), move_it);
 
-        if (p != past-1) {
+        if (p != past - 1) {
             black_it += 3 * num_intersections;
             white_it += 3 * num_intersections;
-            move_it  += 3 * num_intersections;
+            move_it += 3 * num_intersections;
         }
     }
 }
 
-void Encoder::FillKoMove(const Board* board,
-                         std::vector<float>::iterator ko_it) const {
+void Encoder::FillKoMove(const Board* board, std::vector<float>::iterator ko_it) const {
     auto ko_move = board->GetKoMove();
 
     if (ko_move == kNullVertex) {
@@ -224,8 +222,7 @@ void Encoder::FillArea(const Board* board,
     }
 }
 
-void Encoder::FillLiberties(const Board* board,
-                            std::vector<float>::iterator liberties_it) const {
+void Encoder::FillLiberties(const Board* board, std::vector<float>::iterator liberties_it) const {
     const auto num_intersections = board->GetNumIntersections();
 
     for (int index = 0; index < num_intersections; ++index) {
@@ -248,8 +245,7 @@ void Encoder::FillLiberties(const Board* board,
     }
 }
 
-void Encoder::FillLadder(const Board* board,
-                         std::vector<float>::iterator ladder_it) const {
+void Encoder::FillLadder(const Board* board, std::vector<float>::iterator ladder_it) const {
     const auto num_intersections = board->GetNumIntersections();
     const auto ladders = board->GetLadderMap();
 
@@ -270,7 +266,9 @@ void Encoder::FillLadder(const Board* board,
 
 void Encoder::FillMisc(const Board* board,
                        const int to_move,
-                       const int scoring, float wave, float komi,
+                       const int scoring,
+                       float wave,
+                       float komi,
                        std::vector<float>::iterator misc_it,
                        const int weights_version) const {
     const auto num_intersections = board->GetNumIntersections();
@@ -281,49 +279,47 @@ void Encoder::FillMisc(const Board* board,
     }
     if (encoder_version == 1) {
         // komi
-        std::fill(misc_it+ 0 * num_intersections,
-                      misc_it+ 1 * num_intersections, komi/20.f);
+        std::fill(misc_it + 0 * num_intersections, misc_it + 1 * num_intersections, komi / 20.f);
 
         // negative komi
-        std::fill(misc_it+ 1 * num_intersections,
-                      misc_it+ 2 * num_intersections, -komi/20.f);
+        std::fill(misc_it + 1 * num_intersections, misc_it + 2 * num_intersections, -komi / 20.f);
 
         // number of intersections
-        std::fill(misc_it+ 2 * num_intersections,
-                      misc_it+ 3 * num_intersections, static_cast<float>(num_intersections)/361.f);
+        std::fill(misc_it + 2 * num_intersections,
+                  misc_it + 3 * num_intersections,
+                  static_cast<float>(num_intersections) / 361.f);
 
         // ones
-        std::fill(misc_it+ 3 * num_intersections,
-                      misc_it+ 4 * num_intersections, static_cast<float>(true));
+        std::fill(misc_it + 3 * num_intersections,
+                  misc_it + 4 * num_intersections,
+                  static_cast<float>(true));
     } else if (encoder_version == 2) {
         // scoring rule
         float scoring_val = scoring == kArea ? 0.f : 1.f;
-        std::fill(misc_it+ 0 * num_intersections,
-                      misc_it+ 1 * num_intersections, scoring_val);
+        std::fill(misc_it + 0 * num_intersections, misc_it + 1 * num_intersections, scoring_val);
 
         // wave
-        std::fill(misc_it+ 1 * num_intersections,
-                      misc_it+ 2 * num_intersections, wave);
+        std::fill(misc_it + 1 * num_intersections, misc_it + 2 * num_intersections, wave);
 
         // komi
-        std::fill(misc_it+ 2 * num_intersections,
-                      misc_it+ 3 * num_intersections, komi/20.f);
+        std::fill(misc_it + 2 * num_intersections, misc_it + 3 * num_intersections, komi / 20.f);
 
         // negative komi
-        std::fill(misc_it+ 3 * num_intersections,
-                      misc_it+ 4 * num_intersections, -komi/20.f);
+        std::fill(misc_it + 3 * num_intersections, misc_it + 4 * num_intersections, -komi / 20.f);
 
         // number of intersections
-        std::fill(misc_it+ 4 * num_intersections,
-                      misc_it+ 5 * num_intersections, static_cast<float>(num_intersections)/361.f);
+        std::fill(misc_it + 4 * num_intersections,
+                  misc_it + 5 * num_intersections,
+                  static_cast<float>(num_intersections) / 361.f);
 
         // ones
-        std::fill(misc_it+ 5 * num_intersections,
-                      misc_it+ 6 * num_intersections, static_cast<float>(true));
+        std::fill(misc_it + 5 * num_intersections,
+                  misc_it + 6 * num_intersections,
+                  static_cast<float>(true));
     }
 }
 
-void Encoder::EncoderFeatures(const GameState &state,
+void Encoder::EncoderFeatures(const GameState& state,
                               std::vector<float>::iterator it,
                               const int weights_version) const {
     auto board = state.GetPastBoard(0);
@@ -333,41 +329,41 @@ void Encoder::EncoderFeatures(const GameState &state,
     const auto encoder_version = GetEncoderVersion(weights_version);
 
     if (encoder_version == 1) {
-        auto ko_it        = it +  0 * shift; // 1p, ko move
-        auto area_it      = it +  1 * shift; // 1p, pass-alive and pass-dead area
-        auto liberties_it = it +  2 * shift; // 4p, strings with 1, 2, 3 and 4 liberties
-        auto ladder_it    = it +  6 * shift; // 4p, ladder features
-        auto misc_it      = it + 10 * shift; // 4p, others
+        auto ko_it = it + 0 * shift;        // 1p, ko move
+        auto area_it = it + 1 * shift;      // 1p, pass-alive and pass-dead area
+        auto liberties_it = it + 2 * shift; // 4p, strings with 1, 2, 3 and 4 liberties
+        auto ladder_it = it + 6 * shift;    // 4p, ladder features
+        auto misc_it = it + 10 * shift;     // 4p, others
 
         FillKoMove(board.get(), ko_it);
         FillArea(board.get(), color, scoring, area_it, weights_version);
         FillLiberties(board.get(), liberties_it);
         FillLadder(board.get(), ladder_it);
         FillMisc(board.get(),
-                     color,
-                     scoring,
-                     state.GetWave(),
-                     state.GetKomiWithPenalty(),
-                     misc_it,
-                     weights_version);
+                 color,
+                 scoring,
+                 state.GetWave(),
+                 state.GetKomiWithPenalty(),
+                 misc_it,
+                 weights_version);
 
     } else if (encoder_version == 2) {
-        auto ko_it        = it +  0 * shift; // 1p, ko move
-        auto area_it      = it +  1 * shift; // 4p, pass-alive and pass-dead area
-        auto liberties_it = it +  5 * shift; // 4p, strings with 1, 2, 3 and 4 liberties
-        auto ladder_it    = it +  9 * shift; // 4p, ladder features
-        auto misc_it      = it + 13 * shift; // 6p, others
+        auto ko_it = it + 0 * shift;        // 1p, ko move
+        auto area_it = it + 1 * shift;      // 4p, pass-alive and pass-dead area
+        auto liberties_it = it + 5 * shift; // 4p, strings with 1, 2, 3 and 4 liberties
+        auto ladder_it = it + 9 * shift;    // 4p, ladder features
+        auto misc_it = it + 13 * shift;     // 6p, others
 
         FillKoMove(board.get(), ko_it);
         FillArea(board.get(), color, scoring, area_it, weights_version);
         FillLiberties(board.get(), liberties_it);
         FillLadder(board.get(), ladder_it);
         FillMisc(board.get(),
-                     color,
-                     scoring,
-                     state.GetWave(),
-                     state.GetKomiWithPenalty(),
-                     misc_it,
-                     weights_version);
+                 color,
+                 scoring,
+                 state.GetWave(),
+                 state.GetKomiWithPenalty(),
+                 misc_it,
+                 weights_version);
     }
 }

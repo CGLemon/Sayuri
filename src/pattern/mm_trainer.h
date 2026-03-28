@@ -1,13 +1,13 @@
 #pragma once
 
-#include <string>
-#include <vector>
-#include <unordered_map>
 #include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include "game/board.h"
-#include "pattern/pattern.h"
 #include "pattern/mm.h"
+#include "pattern/pattern.h"
 
 class MmTrainer {
 public:
@@ -23,8 +23,11 @@ private:
     using FeatureConuter = std::vector<int>;
 
     bool PatternMatch(const Board& board,
-                      int feature, int dist,
-                      int vertex, int color, std::uint64_t &mhash) const;
+                      int feature,
+                      int dist,
+                      int vertex,
+                      int color,
+                      std::uint64_t& mhash) const;
 
     bool FillPatterns(std::string sgfstring);
     void FillMmParticipant(std::string sgfstring);

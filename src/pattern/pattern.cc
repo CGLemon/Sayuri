@@ -1,9 +1,10 @@
-#include <array>
+#include "pattern/pattern.h"
+
 #include <algorithm>
+#include <array>
 #include <iostream>
 
 #include "game/types.h"
-#include "pattern/pattern.h"
 
 /* Mapping from point sequence to coordinate offsets (to determine
  * coordinates relative to pattern center). The array is ordered
@@ -20,10 +21,14 @@ std::uint64_t PatternHash[8][4][kMaxPatternArea];
 
 int CharToColor(char s) {
     switch (s) {
-        case '.': return kEmpty;
-        case 'X': return kBlack;
-        case 'O': return kWhite;
-        case '#': return kInvalid;
+        case '.':
+            return kEmpty;
+        case 'X':
+            return kBlack;
+        case 'O':
+            return kWhite;
+        case '#':
+            return kInvalid;
     }
     return kEmpty; // XXX
 }
@@ -32,7 +37,8 @@ void PtcoordsInit() {
     int i = 0; /* Indexing ptcoords[] */
 
     kPointIndex[0] = kPointIndex[1] = 0;
-    kPointCoords[i].x = kPointCoords[i].y = 0; i++;
+    kPointCoords[i].x = kPointCoords[i].y = 0;
+    i++;
 
     for (int d = 2; d <= kMaxPatternDist; d++) {
         kPointIndex[d] = i;
@@ -46,18 +52,34 @@ void PtcoordsInit() {
             if (y > d / 3) {
                 /* max(|x|, |y|) = |y|, non-zero x */
                 x = d - y * 2;
-                if (x + y * 2 != d) continue;
+                if (x + y * 2 != d)
+                    continue;
             } else {
                 /* max(|x|, |y|) = |x| */
                 /* Or, max(|x|, |y|) = |y| and x is zero */
                 x = (d - y) / 2;
-                if (x * 2 + y != d) continue;
+                if (x * 2 + y != d)
+                    continue;
             }
 
-            kPointCoords[i].x = x; kPointCoords[i].y = y; i++;
-            if (x != 0) { kPointCoords[i].x = -x; kPointCoords[i].y = y; i++; }
-            if (y != 0) { kPointCoords[i].x = x; kPointCoords[i].y = -y; i++; }
-            if (x != 0 && y != 0) { kPointCoords[i].x = -x; kPointCoords[i].y = -y; i++; }
+            kPointCoords[i].x = x;
+            kPointCoords[i].y = y;
+            i++;
+            if (x != 0) {
+                kPointCoords[i].x = -x;
+                kPointCoords[i].y = y;
+                i++;
+            }
+            if (y != 0) {
+                kPointCoords[i].x = x;
+                kPointCoords[i].y = -y;
+                i++;
+            }
+            if (x != 0 && y != 0) {
+                kPointCoords[i].x = -x;
+                kPointCoords[i].y = -y;
+                i++;
+            }
         }
     }
     kPointIndex[kMaxPatternDist + 1] = i;
@@ -87,7 +109,7 @@ void PtcoordsInit() {
 }
 
 void PatternHashInit() {
-    constexpr int kMaxPatternBoardSize = (kMaxPatternDist+1) * (kMaxPatternDist+1);
+    constexpr int kMaxPatternBoardSize = (kMaxPatternDist + 1) * (kMaxPatternDist + 1);
 
     std::uint64_t pthboard[4][kMaxPatternBoardSize];
     int pthbc = kMaxPatternBoardSize / 2; // tengen coord
@@ -97,9 +119,9 @@ void PatternHashInit() {
     std::uint64_t h3 = 0xd6d6d6d3;
     std::uint64_t h4 = 0xd6d6d6d4;
     for (int i = 0; i < kMaxPatternBoardSize; i++) {
-        pthboard[kEmpty][i]   = (h1 = h1 * 16787);
-        pthboard[kBlack][i]   = (h2 = h2 * 16823);
-        pthboard[kWhite][i]   = (h3 = h3 * 16811 - 13);
+        pthboard[kEmpty][i] = (h1 = h1 * 16787);
+        pthboard[kBlack][i] = (h2 = h2 * 16823);
+        pthboard[kWhite][i] = (h3 = h3 * 16811 - 13);
         pthboard[kInvalid][i] = (h4 = h4 * 16811);
     }
 
@@ -108,16 +130,20 @@ void PatternHashInit() {
      * sequences, also considering various rotations. */
 #define PTH_VMIRROR 1
 #define PTH_HMIRROR 2
-#define PTH_90ROT   4
+#define PTH_90ROT 4
     for (int r = 0; r < 8; r++) {
         for (int i = 0; i < kMaxPatternArea; i++) {
             /* Rotate appropriately. */
             int rx = kPointCoords[i].x;
             int ry = kPointCoords[i].y;
-            if (r & PTH_VMIRROR) ry = -ry;
-            if (r & PTH_HMIRROR) rx = -rx;
+            if (r & PTH_VMIRROR)
+                ry = -ry;
+            if (r & PTH_HMIRROR)
+                rx = -rx;
             if (r & PTH_90ROT) {
-                int rs = rx; rx = -ry; ry = rs;
+                int rs = rx;
+                rx = -ry;
+                ry = rs;
             }
             int bi = pthbc + ry * (kMaxPatternDist + 1) + rx;
 

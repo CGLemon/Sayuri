@@ -4,17 +4,17 @@
 
 void Batchnorm::Forward(const size_t board_size,
                         const size_t channels,
-                        std::vector<float> &input,
-                        const std::vector<float> &means,
-                        const std::vector<float> &stddevs,
-                        const float *const eltwise,
+                        std::vector<float>& input,
+                        const std::vector<float>& means,
+                        const std::vector<float>& stddevs,
+                        const float* const eltwise,
                         const Activation act) {
     const auto width = board_size;
     const auto height = board_size;
     const auto spatial_size = width * height;
 
-    float *input_ptr = input.data();
-    const float *residual = eltwise;
+    float* input_ptr = input.data();
+    const float* residual = eltwise;
 
     for (auto c = size_t{0}; c < channels; ++c) {
         const auto mean = means[c];

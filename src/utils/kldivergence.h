@@ -1,18 +1,13 @@
 #pragma once
 
-#include <vector>
 #include <type_traits>
+#include <vector>
 
-template<
-    typename T,
-    typename = std::enable_if_t<
-                   std::is_floating_point<T>::value
-               >
->
-bool ComputeKlDivergence(const std::vector<T> &p,
-                         const std::vector<T> &q,
+template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
+bool ComputeKlDivergence(const std::vector<T>& p,
+                         const std::vector<T>& q,
                          T& kld_result,
-                         double buff=1e-8) {
+                         double buff = 1e-8) {
     const size_t psize = p.size();
     const size_t qsize = q.size();
     kld_result = 0.f;
@@ -30,15 +25,8 @@ bool ComputeKlDivergence(const std::vector<T> &p,
     return true;
 }
 
-template<
-    typename T,
-    typename = std::enable_if_t<
-                   std::is_floating_point<T>::value
-               >
->
-T GetKlDivergence(const std::vector<T> &p,
-                  const std::vector<T> &q,
-                  double buff=1e-8) {
+template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
+T GetKlDivergence(const std::vector<T>& p, const std::vector<T>& q, double buff = 1e-8) {
     T kld_result;
     ComputeKlDivergence(p, q, kld_result, buff);
     return kld_result;

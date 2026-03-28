@@ -1,11 +1,12 @@
 #include "mcts/time_control.h"
-#include "game/types.h"
 
-#include <iomanip>
-#include <cassert>
 #include <algorithm>
-#include <sstream>
+#include <cassert>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
+
+#include "game/types.h"
 
 static_assert(sizeof(int) == 4, "");
 
@@ -21,13 +22,12 @@ void TimeControl::TimeSettings(const int main_time,
     // We store the time as centisecond. If the input seconds is greater
     // than 248 days, we set infinite time.
     int max_value = 248 * 24 * 60 * 60;
-    if (main_time > max_value ||
-            byo_yomi_time > max_value) {
+    if (main_time > max_value || byo_yomi_time > max_value) {
         TimeSettings(0, 0, 0, 0);
         return;
     }
 
-    main_time_ = 100 * main_time; // max time about 248 days
+    main_time_ = 100 * main_time;    // max time about 248 days
     byo_time_ = 100 * byo_yomi_time; // max time about 248 days
 
     byo_stones_ = byo_yomi_stones;
@@ -37,8 +37,7 @@ void TimeControl::TimeSettings(const int main_time,
         main_time_ = 0;
     }
 
-    if ((byo_stones_ <= 0 && byo_periods_ <= 0) ||
-            (byo_stones_ > 0 && byo_periods_ > 0)) {
+    if ((byo_stones_ <= 0 && byo_periods_ <= 0) || (byo_stones_ > 0 && byo_periods_ > 0)) {
         // The byo yomi stones and byo periods should not be greater or
         // smaller than zero at the same time.
         byo_time_ = byo_periods_ = 0;
@@ -60,7 +59,7 @@ void TimeControl::TimeLeft(const int color, const int time, const int stones) {
     } else if (stones <= 0) {
         maintime_left_[color] = 100 * time; // second to centisecond
     } else {
-        maintime_left_[color] = 0; // no time
+        maintime_left_[color] = 0;         // no time
         byotime_left_[color] = 100 * time; // second to centisecond
 
         if (byo_periods_) {
@@ -87,7 +86,7 @@ void TimeControl::TookTime(int color) {
     }
 
     assert(!IsTimeOver(color));
-    int remaining_took_time = timer_.GetDurationMilliseconds()/10;
+    int remaining_took_time = timer_.GetDurationMilliseconds() / 10;
 
     if (!in_byo_[color]) {
         if (maintime_left_[color] >= remaining_took_time) {
@@ -154,14 +153,14 @@ std::string TimeControl::ToString() const {
     return out.str();
 }
 
-void TimeControl::TimeStream(std::ostream &out) const {
+void TimeControl::TimeStream(std::ostream& out) const {
     TimeStream(out, kBlack);
     out << " | ";
     TimeStream(out, kWhite);
     out << std::endl;
 }
 
-void TimeControl::TimeStream(std::ostream &out, int color) const {
+void TimeControl::TimeStream(std::ostream& out, int color) const {
     assert(color == kBlack || kWhite);
 
     if (color == kBlack) {
@@ -173,22 +172,22 @@ void TimeControl::TimeStream(std::ostream &out, int color) const {
     if (IsInfiniteTime(color)) {
         out << "infinite";
     } else if (!in_byo_[color]) {
-       const int remaining = maintime_left_[color]/100; // centisecond to second
-       const int hours = remaining / 3600;
-       const int minutes = (remaining % 3600) / 60;
-       const int seconds = remaining % 60;
-       out << std::setw(2) << hours << ":";
-       out << std::setw(2) << std::setfill('0') << minutes << ":";
-       out << std::setw(2) << std::setfill('0') << seconds;
+        const int remaining = maintime_left_[color] / 100; // centisecond to second
+        const int hours = remaining / 3600;
+        const int minutes = (remaining % 3600) / 60;
+        const int seconds = remaining % 60;
+        out << std::setw(2) << hours << ":";
+        out << std::setw(2) << std::setfill('0') << minutes << ":";
+        out << std::setw(2) << std::setfill('0') << seconds;
     } else {
-       const int remaining = byotime_left_[color]/100; // centisecond to second
-       const int hours = remaining / 3600;
-       const int minutes = (remaining % 3600) / 60;
-       const int seconds = remaining % 60;
+        const int remaining = byotime_left_[color] / 100; // centisecond to second
+        const int hours = remaining / 3600;
+        const int minutes = (remaining % 3600) / 60;
+        const int seconds = remaining % 60;
 
-       out << std::setw(2) << hours << ":";
-       out << std::setw(2) << std::setfill('0') << minutes << ":";
-       out << std::setw(2) << std::setfill('0') << seconds << ", ";
+        out << std::setw(2) << hours << ":";
+        out << std::setw(2) << std::setfill('0') << minutes << ":";
+        out << std::setw(2) << std::setfill('0') << seconds << ", ";
 
         if (byo_periods_) {
             // Japanese byo yomi style type
@@ -205,15 +204,15 @@ float TimeControl::GetBufferEffect(int color, int boardsize, int move_num) const
     if (IsInfiniteTime(color)) {
         return 0.f;
     }
-    float t1 = GetThinkingTime(
-                   color, boardsize, move_num, true);
-    float t2 = GetThinkingTime(
-                   color, boardsize, move_num, false);
+    float t1 = GetThinkingTime(color, boardsize, move_num, true);
+    float t2 = GetThinkingTime(color, boardsize, move_num, false);
     return std::max(t2 - t1, 0.f);
 }
 
-float TimeControl::GetThinkingTime(int color, int boardsize,
-                                   int move_num, bool use_lag_buffer) const {
+float TimeControl::GetThinkingTime(int color,
+                                   int boardsize,
+                                   int move_num,
+                                   bool use_lag_buffer) const {
     assert(color == kBlack || color == kWhite);
 
     if (IsInfiniteTime(color)) {
@@ -252,10 +251,8 @@ float TimeControl::GetThinkingTime(int color, int boardsize,
         time_remaining = maintime_left_[color] + byo_extra;
     }
 
-    int lag_buffer_cs = use_lag_buffer ?
-                            lag_buffer_ : 0;
-    int base_time = std::max(time_remaining - lag_buffer_cs, 0) /
-                        std::max(moves_remaining, 1);
+    int lag_buffer_cs = use_lag_buffer ? lag_buffer_ : 0;
+    int base_time = std::max(time_remaining - lag_buffer_cs, 0) / std::max(moves_remaining, 1);
     int inc_time = std::max(extra_time_per_move - lag_buffer_cs, 0);
 
     return static_cast<double>(base_time + inc_time) / 100.f; // centisecond to second
@@ -292,18 +289,14 @@ bool TimeControl::InByo(int color) const {
 }
 
 bool TimeControl::IsTimeOver(int color) const {
-    if (maintime_left_[color] > 0 ||
-            byotime_left_[color] > 0) {
+    if (maintime_left_[color] > 0 || byotime_left_[color] > 0) {
         return false;
     }
     return true;
 }
 
 bool TimeControl::IsInfiniteTime(int /* color */) const {
-    return main_time_ == 0 &&
-               byo_time_ == 0 &&
-               byo_stones_ == 0 &&
-               byo_periods_ == 0;
+    return main_time_ == 0 && byo_time_ == 0 && byo_stones_ == 0 && byo_periods_ == 0;
 }
 
 float TimeControl::GetInfiniteTime() const {
@@ -316,13 +309,13 @@ float TimeControl::GetDuration() const {
 
 int TimeControl::EstimateMovesExpected(int boardsize, int move_num) const {
     const int num_intersections = boardsize * boardsize;
-    const int side_move_num = move_num/2;
+    const int side_move_num = move_num / 2;
 
     // The 'base_move_num' is 153 on 19x19.
     // The 'base_move_num' is  71 on 13x13.
     // The 'base_move_num' is  32 on 9x9.
-    const int base_move_num = (0.8f * num_intersections + 1.75f * (boardsize - 9))/2;
-    const int base_remaining = base_move_num- side_move_num;
+    const int base_move_num = (0.8f * num_intersections + 1.75f * (boardsize - 9)) / 2;
+    const int base_remaining = base_move_num - side_move_num;
     const int opening_move_num = (0.2f * num_intersections) / 2;
 
     // The formula is base from this
@@ -334,14 +327,12 @@ int TimeControl::EstimateMovesExpected(int boardsize, int move_num) const {
     // conditions.
     float opening_factor = 2.5f;
     int estimated_moves =
-        base_remaining +
-        opening_factor * std::max(opening_move_num - side_move_num, 0);
+        base_remaining + opening_factor * std::max(opening_move_num - side_move_num, 0);
 
     // Be sure that the moves left is not too low.
     // Minimal moves left is 43 on 19x19.
     // Minimal moves left is 21 on 13x13.
     // Minimal moves left is 15 on 9x9.
-    estimated_moves = std::max(estimated_moves,
-                          std::max((int)(0.3f * base_move_num), 15));
+    estimated_moves = std::max(estimated_moves, std::max((int)(0.3f * base_move_num), 15));
     return estimated_moves;
 }

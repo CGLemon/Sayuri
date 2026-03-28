@@ -4,34 +4,26 @@
 
 void AddSpatialBiases::Forward(const size_t board_size,
                                const size_t channels,
-                               std::vector<float> &input,
-                               const std::vector<float> &biases,
+                               std::vector<float>& input,
+                               const std::vector<float>& biases,
                                const Activation act) {
     auto zero_vec = std::vector<float>{};
-    Forward(
-        board_size,
-        channels,
-        input,
-        biases,
-        zero_vec,
-        act);
+    Forward(board_size, channels, input, biases, zero_vec, act);
 }
 
 void AddSpatialBiases::Forward(const size_t board_size,
                                const size_t channels,
-                               std::vector<float> &input,
-                               const std::vector<float> &biases,
-                               const std::vector<float> &residual,
+                               std::vector<float>& input,
+                               const std::vector<float>& biases,
+                               const std::vector<float>& residual,
                                const Activation act) {
     const auto width = board_size;
     const auto height = board_size;
     const auto spatial_size = width * height;
 
-    float *input_ptr = input.data();
-    const float *biases_ptr = biases.empty() ?
-                                  nullptr : biases.data();
-    const float *residual_ptr = residual.empty() ?
-                                    nullptr : residual.data();
+    float* input_ptr = input.data();
+    const float* biases_ptr = biases.empty() ? nullptr : biases.data();
+    const float* residual_ptr = residual.empty() ? nullptr : residual.data();
     for (auto c = size_t{0}; c < channels; ++c) {
         float bias = 0.0f;
         if (biases_ptr) {
@@ -54,19 +46,17 @@ void AddSpatialBiases::Forward(const size_t board_size,
 
 void AddSpatialBiasesPost::Forward(const size_t board_size,
                                    const size_t channels,
-                                   std::vector<float> &input,
-                                   const std::vector<float> &biases,
+                                   std::vector<float>& input,
+                                   const std::vector<float>& biases,
                                    const Activation act,
-                                   const std::vector<float> &residual) {
+                                   const std::vector<float>& residual) {
     const auto width = board_size;
     const auto height = board_size;
     const auto spatial_size = width * height;
 
-    float *input_ptr = input.data();
-    const float *biases_ptr = biases.empty() ?
-                                  nullptr : biases.data();
-    const float *residual_ptr = residual.empty() ?
-                                    nullptr : residual.data();
+    float* input_ptr = input.data();
+    const float* biases_ptr = biases.empty() ? nullptr : biases.data();
+    const float* residual_ptr = residual.empty() ? nullptr : residual.data();
     for (auto c = size_t{0}; c < channels; ++c) {
         float bias = 0.0f;
         if (biases_ptr) {
@@ -87,8 +77,8 @@ void AddSpatialBiasesPost::Forward(const size_t board_size,
 }
 
 void AddVectorBiases::Forward(const size_t size,
-                              std::vector<float> &input,
-                              const std::vector<float> &biases,
+                              std::vector<float>& input,
+                              const std::vector<float>& biases,
                               const Activation act) {
     assert(size == biases.size());
     for (auto o = size_t{0}; o < size; ++o) {

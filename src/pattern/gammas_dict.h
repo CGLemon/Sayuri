@@ -1,8 +1,8 @@
 #pragma once
 
-#include <unordered_map>
-#include <string>
 #include <cstdint>
+#include <string>
+#include <unordered_map>
 
 class GammasDict {
 public:
@@ -10,8 +10,8 @@ public:
 
     void LoadPatterns(std::string filename);
 
-    bool ProbePattern(std::uint64_t hash, float &val) const;
-    bool ProbeFeature(std::uint64_t hash, float &val) const;
+    bool ProbePattern(std::uint64_t hash, float& val) const;
+    bool ProbeFeature(std::uint64_t hash, float& val) const;
     std::string GetInformation() const;
     bool Valid() const;
 

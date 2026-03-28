@@ -1,12 +1,12 @@
 #pragma once
 
-#include "neural/description.h"
-#include "utils/splitter.h"
-
 #include <fstream>
 #include <memory>
 #include <string>
 #include <unordered_map>
+
+#include "neural/description.h"
+#include "utils/splitter.h"
 
 class DNNLoader {
 public:
@@ -31,10 +31,7 @@ private:
                      NetStack& netstack,
                      NetStruct& netstruct,
                      std::istream& buffer) const;
-    int FillBlock(int offset,
-                  Splitter block_spt,
-                  NetStruct& netstruct,
-                  std::istream& buffer) const;
+    int FillBlock(int offset, Splitter block_spt, NetStruct& netstruct, std::istream& buffer) const;
 
     void ProcessWeights() const;
     void GetWeightsFromBuffer(std::vector<float>& weights, std::istream& buffer) const;
@@ -44,15 +41,13 @@ private:
                                const int in_size,
                                const int out_size) const;
 
-    void FillBatchnormLayer(BatchNormLayer& layer,
-                            std::istream& buffer,
-                            const int channels) const;
+    void FillBatchnormLayer(BatchNormLayer& layer, std::istream& buffer, const int channels) const;
 
     void FillConvolutionLayer(ConvLayer& layer,
                               std::istream& buffer,
                               const int in_channels,
                               const int out_channels,
                               const int kernel_size) const;
-    DNNWeights * weights_;
+    DNNWeights* weights_;
     bool use_binary_;
 };

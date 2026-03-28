@@ -1,17 +1,17 @@
 #pragma once
 
-#include "neural/activation.h"
-#include <vector>
 #include <cstddef>
+#include <vector>
 
-template<bool kIsValueHead>
-class GlobalPooling {
+#include "neural/activation.h"
+
+template <bool kIsValueHead> class GlobalPooling {
 public:
     GlobalPooling() = delete;
     static void Forward(const size_t board_size,
                         const size_t channels,
-                        const std::vector<float> &input,
-                        std::vector<float> &output);
+                        const std::vector<float>& input,
+                        std::vector<float>& output);
 
 private:
     static constexpr size_t kMaxBSize = 19;
@@ -26,20 +26,19 @@ public:
     static void Forward(const size_t board_size,
                         const size_t channels,
                         const size_t se_size,
-                        std::vector<float> &input,
-                        const std::vector<float> &residual,
-                        const std::vector<float> &weights_w1,
-                        const std::vector<float> &weights_b1,
-                        const std::vector<float> &weights_w2,
-                        const std::vector<float> &weights_b2,
+                        std::vector<float>& input,
+                        const std::vector<float>& residual,
+                        const std::vector<float>& weights_w1,
+                        const std::vector<float>& weights_b1,
+                        const std::vector<float>& weights_w2,
+                        const std::vector<float>& weights_b2,
                         const Activation act);
 
 private:
     static void SEProcess(const size_t board_size,
                           const size_t channels,
-                          std::vector<float> &input,
-                          const std::vector<float> &residual,
-                          const std::vector<float> &scale,
+                          std::vector<float>& input,
+                          const std::vector<float>& residual,
+                          const std::vector<float>& scale,
                           const Activation act);
-
 };

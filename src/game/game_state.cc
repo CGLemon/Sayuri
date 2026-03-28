@@ -1,19 +1,18 @@
 #include "game/game_state.h"
-#include "game/types.h"
-#include "utils/splitter.h"
-#include "utils/log.h"
-#include "utils/random.h"
-#include "utils/komi.h"
-#include "utils/logits.h"
-#include "pattern/pattern.h"
-#include "pattern/gammas_dict.h"
 
-#include <random>
 #include <cmath>
+#include <random>
 
-void GameState::Reset(const int boardsize,
-                      const float komi,
-                      const int scoring) {
+#include "game/types.h"
+#include "pattern/gammas_dict.h"
+#include "pattern/pattern.h"
+#include "utils/komi.h"
+#include "utils/log.h"
+#include "utils/logits.h"
+#include "utils/random.h"
+#include "utils/splitter.h"
+
+void GameState::Reset(const int boardsize, const float komi, const int scoring) {
     board_.Reset(boardsize);
     SetKomi(komi);
     SetRule(scoring);
@@ -126,7 +125,7 @@ bool GameState::UndoMove() {
         game_history_.resize(move_number_);
         comments_.resize(move_number_);
 
-        board_ = *game_history_[move_number_-1];
+        board_ = *game_history_[move_number_ - 1];
 
         winner_ = kUndecide;
         move_number_--;
@@ -160,18 +159,17 @@ int GameState::TextToVertex(std::string text) const {
     }
     auto y_str = std::string{};
     auto skip = bool{false};
-    std::for_each(std::next(std::begin(text), 1), std::end(text),
-                      [&](const auto in) -> void {
-                          if (skip) {
-                              return;
-                          }
-                          if (in >= '0' && in <= '9') {
-                              y_str += in;
-                          } else {
-                              y_str = std::string{};
-                              skip = true;
-                          }
-                      });
+    std::for_each(std::next(std::begin(text), 1), std::end(text), [&](const auto in) -> void {
+        if (skip) {
+            return;
+        }
+        if (in >= '0' && in <= '9') {
+            y_str += in;
+        } else {
+            y_str = std::string{};
+            skip = true;
+        }
+    });
     if (!y_str.empty()) {
         y = std::stoi(y_str) - 1;
     }
@@ -184,7 +182,7 @@ int GameState::TextToVertex(std::string text) const {
 
 int GameState::TextToColor(std::string text) const {
     auto lower = text;
-    for (auto & c: lower) {
+    for (auto& c : lower) {
         c = std::tolower(c);
     }
 
@@ -242,7 +240,7 @@ std::string GameState::VertexToText(const int vtx) const {
     }
 
     out << static_cast<char>(x + offset + 'A');
-    out << y+1;
+    out << y + 1;
 
     return out.str();
 }
@@ -277,9 +275,7 @@ void GameState::ShowMoveTypes(int vtx, int color) const {
     } else {
         LOGGING << "White ";
     }
-    LOGGING << VertexToText(vtx) << ' '
-                << board_.GetMoveDebugString(vtx, color)
-                << std::endl;
+    LOGGING << VertexToText(vtx) << ' ' << board_.GetMoveDebugString(vtx, color) << std::endl;
 }
 
 std::string GameState::GetStateString() const {
@@ -360,8 +356,8 @@ void GameState::SetRule(const int scoring) {
     }
 }
 
-void GameState::SetTerritoryHelper(const std::vector<int> &ownership) {
-     territory_helper_ = ownership;
+void GameState::SetTerritoryHelper(const std::vector<int>& ownership) {
+    territory_helper_ = ownership;
 }
 
 bool GameState::IsGameOver() const {
@@ -385,7 +381,8 @@ bool GameState::IsLegalMove(const int vertex, const int color) const {
     return board_.IsLegalMove(vertex, color);
 }
 
-bool GameState::IsLegalMove(const int vertex, const int color,
+bool GameState::IsLegalMove(const int vertex,
+                            const int color,
                             std::function<bool(int, int)> AvoidToMove) const {
     return board_.IsLegalMove(vertex, color, AvoidToMove);
 }
@@ -453,11 +450,10 @@ bool GameState::SetFixdHandicap(int handicap) {
 
 bool GameState::SetFreeHandicap(std::vector<std::string> movelist) {
     auto movelist_vertex = std::vector<int>(movelist.size());
-    std::transform(std::begin(movelist), std::end(movelist), std::begin(movelist_vertex),
-                       [this](auto text){
-                           return TextToVertex(text);
-                       }
-                   );
+    std::transform(std::begin(movelist),
+                   std::end(movelist),
+                   std::begin(movelist_vertex),
+                   [this](auto text) { return TextToVertex(text); });
     return PlayHandicapStones(movelist_vertex, true);
 }
 
@@ -487,7 +483,7 @@ bool GameState::PlayHandicapStones(std::vector<int> movelist_vertex,
     for (int i = 0; i < size; ++i) {
         const auto vtx = movelist_vertex[i];
         if (fork_state.IsLegalMove(vtx, kBlack)) {
-            if (i == size-1 && kata_like_handicap_style) {
+            if (i == size - 1 && kata_like_handicap_style) {
                 // The last handicap move is not appending move
                 // in the KataGo's SGF.
                 fork_state.PlayMove(vtx, kBlack);
@@ -511,8 +507,7 @@ bool GameState::PlayHandicapStones(std::vector<int> movelist_vertex,
 std::vector<int> GameState::GetOwnership() const {
     auto res = std::vector<int>(GetNumIntersections(), kInvalid);
 
-    board_.ComputeScoreArea(
-        res, scoring_rule_, territory_helper_);
+    board_.ComputeScoreArea(res, scoring_rule_, territory_helper_);
 
     return res;
 }
@@ -530,9 +525,7 @@ void GameState::PlayRandomMove() {
     const int color = GetToMove();
 
     board_.GenerateCandidateMoves(candidate_moves, color);
-    std::shuffle(std::begin(candidate_moves),
-                     std::end(candidate_moves),
-                     Random<>::Get());
+    std::shuffle(std::begin(candidate_moves), std::end(candidate_moves), Random<>::Get());
 
     if (Random<>::Get().Roulette(0.90)) {
         // ~90%: capture
@@ -546,8 +539,7 @@ void GameState::PlayRandomMove() {
     if (Random<>::Get().Roulette(0.95)) {
         // ~95%: pattern3
         for (const auto vtx : candidate_moves) {
-            if (board_.MatchPattern3(vtx) &&
-                    !board_.IsSelfAtariMove(vtx, color)) {
+            if (board_.MatchPattern3(vtx) && !board_.IsSelfAtariMove(vtx, color)) {
                 PlayMoveFast(vtx, color);
                 return;
             }
@@ -556,8 +548,7 @@ void GameState::PlayRandomMove() {
     if (Random<>::Get().Roulette(0.90)) {
         // ~90%: atari
         for (const auto vtx : candidate_moves) {
-            if (board_.IsAtariMove(vtx, color) &&
-                    !board_.IsSelfAtariMove(vtx, color)) {
+            if (board_.IsAtariMove(vtx, color) && !board_.IsSelfAtariMove(vtx, color)) {
                 PlayMoveFast(vtx, color);
                 return;
             }
@@ -566,8 +557,7 @@ void GameState::PlayRandomMove() {
     if (Random<>::Get().Roulette(0.90)) {
         // ~90%: escape
         for (const auto vtx : candidate_moves) {
-            if (board_.IsEscapeMove(vtx, color) &&
-                    !board_.IsSelfAtariMove(vtx, color)) {
+            if (board_.IsEscapeMove(vtx, color) && !board_.IsSelfAtariMove(vtx, color)) {
                 PlayMoveFast(vtx, color);
                 return;
             }
@@ -582,9 +572,8 @@ void GameState::PlayRandomMove() {
         const auto vtx = board_.GetEmpty(i);
 
         if (IsLegalMove(vtx, color) &&
-                !(board_.IsSimpleEye(vtx, color) &&
-                     !board_.IsCaptureMove(vtx, color)&&
-                     !board_.IsEscapeMove(vtx, color))) {
+            !(board_.IsSimpleEye(vtx, color) && !board_.IsCaptureMove(vtx, color) &&
+              !board_.IsEscapeMove(vtx, color))) {
             legal_moves.emplace_back(vtx);
         }
     }
@@ -600,8 +589,7 @@ void GameState::PlayRandomMove() {
 }
 
 float GameState::GetGammaValue(const int vtx, const int color) const {
-    if (board_.GetState(vtx) != kEmpty ||
-            !board_.IsLegalMove(vtx, color)) {
+    if (board_.GetState(vtx) != kEmpty || !board_.IsLegalMove(vtx, color)) {
         return 0.f;
     }
 
@@ -610,7 +598,7 @@ float GameState::GetGammaValue(const int vtx, const int color) const {
     std::uint64_t hash = 0ULL;
     float gamma = 0.f;
 
-    for (int d = 2; d < kMaxPatternDist+1; ++d) {
+    for (int d = 2; d < kMaxPatternDist + 1; ++d) {
         hash = board_.GetSurroundPatternHash(hash, vtx, color, d);
 
         if (GammasDict::Get().ProbePattern(hash, gamma)) {
@@ -629,21 +617,13 @@ float GameState::GetGammaValue(const int vtx, const int color) const {
     return val;
 }
 
-std::vector<float> GameState::GetGammasPolicy(const int color, const float * ownership) const {
+std::vector<float> GameState::GetGammasPolicy(const int color, const float* ownership) const {
     auto num_intersections = GetNumIntersections();
     auto policy = std::vector<float>(num_intersections, 0);
 
     // imported from Pachi
     constexpr float kMcOwnerGammas[] = {
-        0.130817f,
-        0.67241f,
-        1.0993f,
-        1.22413f,
-        1.18569f,
-        1.05496f,
-        0.800636f,
-        0.406365f
-    };
+        0.130817f, 0.67241f, 1.0993f, 1.22413f, 1.18569f, 1.05496f, 0.800636f, 0.406365f};
     if (GammasDict::Get().Valid()) {
         for (int idx = 0; idx < num_intersections; ++idx) {
             auto gval = GetGammaValue(IndexToVertex(idx), color);
@@ -659,7 +639,7 @@ std::vector<float> GameState::GetGammasPolicy(const int color, const float * own
     return Softmax(policy, 1.f);
 }
 
-void GameState::RemoveDeadStrings(std::vector<int> &dead_list) {
+void GameState::RemoveDeadStrings(std::vector<int>& dead_list) {
     board_.RemoveMarkedStrings(dead_list);
 }
 
@@ -667,11 +647,11 @@ float GameState::GetFinalScore(const int color) const {
     return GetFinalScore(color, territory_helper_);
 }
 
-float GameState::GetFinalScore(const int color,
-                               const std::vector<int> &territory_helper) const {
+float GameState::GetFinalScore(const int color, const std::vector<int>& territory_helper) const {
     float komi = GetKomiWithPenalty();
-    float black_score = static_cast<float>(
-       board_.ComputeScoreOnBoard(kBlack, scoring_rule_, territory_helper)) - komi;
+    float black_score =
+        static_cast<float>(board_.ComputeScoreOnBoard(kBlack, scoring_rule_, territory_helper)) -
+        komi;
     return color == kBlack ? black_score : -black_score;
 }
 
@@ -701,7 +681,7 @@ int GameState::IndexToVertexIncludingPass(int idx) const {
 
 int GameState::IndexToRowMajorIndex(int idx) const {
     return board_.IndexToRowMajorIndex(idx);
-} 
+}
 
 int GameState::VertexToIndex(int vtx) const {
     return board_.VertexToIndex(vtx);
@@ -738,8 +718,7 @@ float GameState::GetPenaltyOffset(int new_scoring_rule, int old_scoring_rule) co
     // 4.    P_s = P_o - P_n
 
     if (new_scoring_rule != old_scoring_rule) {
-        return GetPenalty(old_scoring_rule) -
-                   GetPenalty(new_scoring_rule);
+        return GetPenalty(old_scoring_rule) - GetPenalty(new_scoring_rule);
     }
     return GetPenalty(new_scoring_rule);
 }
@@ -749,8 +728,7 @@ float GameState::GetKomiWithPenalty() const {
 }
 
 float GameState::GetKomi() const {
-    float komi = static_cast<float>(komi_integer_) +
-                     static_cast<float>(komi_half_) * 0.5f;
+    float komi = static_cast<float>(komi_integer_) + static_cast<float>(komi_half_) * 0.5f;
     if (komi_negative_) {
         komi = -komi;
     }
@@ -827,8 +805,9 @@ int GameState::GetLiberties(const int vtx) const {
 
 std::vector<int> GameState::GetAppendMoves(int color) const {
     auto move_list = std::vector<int>{};
-    for (const auto &m : append_moves_) {
-        if (m.second == color) move_list.emplace_back(m.first);
+    for (const auto& m : append_moves_) {
+        if (m.second == color)
+            move_list.emplace_back(m.first);
     }
     return move_list;
 }
@@ -904,7 +883,7 @@ float GameState::GetWave() const {
     if (is_board_area_even) {
         komi_floor = std::floor(curr_komi / 2.0f) * 2.0f;
     } else {
-        komi_floor = std::floor((curr_komi-1.0f) / 2.0f) * 2.0f + 1.0f;
+        komi_floor = std::floor((curr_komi - 1.0f) / 2.0f) * 2.0f + 1.0f;
     }
 
     // Cap just in case we have floating point weirdness.

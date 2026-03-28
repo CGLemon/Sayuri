@@ -1,4 +1,5 @@
 #include "utils/random.h"
+
 #include <chrono>
 
 namespace random_utils {
@@ -33,29 +34,23 @@ std::uint64_t ResolveSeed(std::uint64_t seed) {
 
 } // namespace random_utils
 
+#define RANDOM_INIT__(TYPE__, CNT__)                                                               \
+    template <> void Random<TYPE__>::InitSeed(std::uint64_t seed) {                                \
+        seed = random_utils::ResolveSeed(seed);                                                    \
+        static_assert(kMaxSeedSize >= CNT__, "The number of seeds is not enough?\n");              \
+        for (auto i = size_t{0}; i < kMaxSeedSize; ++i) {                                          \
+            seed = random_utils::SplitMix64(seed);                                                 \
+            seeds_[i] = seed;                                                                      \
+        }                                                                                          \
+    }
 
-#define RANDOM_INIT__(TYPE__, CNT__)                   \
-template<>                                             \
-void Random<TYPE__>::InitSeed(std::uint64_t seed) {    \
-    seed = random_utils::ResolveSeed(seed);            \
-    static_assert(kMaxSeedSize >= CNT__,               \
-        "The number of seeds is not enough?\n");       \
-    for (auto i = size_t{0}; i < kMaxSeedSize; ++i) {  \
-        seed = random_utils::SplitMix64(seed);         \
-        seeds_[i] = seed;                              \
-    }                                                  \
-}
-
-template<RandomMethod R>
-thread_local std::uint64_t
-    Random<R>::seeds_[Random<R>::kMaxSeedSize];
+template <RandomMethod R> thread_local std::uint64_t Random<R>::seeds_[Random<R>::kMaxSeedSize];
 
 RANDOM_INIT__(RandomMethod::kSplitMix64, 1);
 
 RANDOM_INIT__(RandomMethod::kXoroShiro128Plus, 2);
 
-template<>
-std::uint64_t Random<RandomMethod::kSplitMix64>::Generate() {
+template <> std::uint64_t Random<RandomMethod::kSplitMix64>::Generate() {
     // Please see the details from:
     // https://github.com/lemire/testingRNG/blob/master/source/splitmix64.h
 
@@ -68,8 +63,7 @@ std::uint64_t Random<RandomMethod::kSplitMix64>::Generate() {
     return z ^ (z >> 31);
 }
 
-template<>
-std::uint64_t Random<RandomMethod::kXoroShiro128Plus>::Generate() {
+template <> std::uint64_t Random<RandomMethod::kXoroShiro128Plus>::Generate() {
     // Please see the details from:
     // https://github.com/lemire/testingRNG/blob/master/source/xoroshiro128plus.h
 

@@ -14,7 +14,7 @@ class BatchForwardPipe : public NetworkForwardPipe {
 public:
     virtual void Initialize(std::shared_ptr<DNNWeights> weights) = 0;
 
-    virtual OutputResult Forward(const InputData &input) = 0;
+    virtual OutputResult Forward(const InputData& input) = 0;
 
     virtual bool Valid() const = 0;
 
@@ -24,7 +24,8 @@ public:
 
     virtual void Destroy() = 0;
 
-    virtual std::vector<OutputResult> BatchForward(int gpu, const std::vector<InputData>& inputs) = 0;
+    virtual std::vector<OutputResult> BatchForward(int gpu,
+                                                   const std::vector<InputData>& inputs) = 0;
 
 protected:
     OutputResult SendQueryAndWait(const InputData& input);
@@ -35,15 +36,13 @@ protected:
 
 private:
     struct ForwardEntry {
-	    const InputData& input;
+        const InputData& input;
         OutputResult& output;
 
         std::condition_variable cv;
         std::mutex mutex;
 
-        ForwardEntry(const InputData &in,
-                     OutputResult &out) :
-                     input(in), output(out) {}
+        ForwardEntry(const InputData& in, OutputResult& out) : input(in), output(out) {}
     };
 
     void Worker(int gpu);

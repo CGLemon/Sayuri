@@ -1,10 +1,5 @@
 #pragma once
 
-#include "game/game_state.h"
-#include "neural/description.h"
-#include "neural/network_basic.h"
-#include "utils/cache.h"
-
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -12,11 +7,14 @@
 #include <memory>
 #include <string>
 
+#include "game/game_state.h"
+#include "neural/description.h"
+#include "neural/network_basic.h"
+#include "utils/cache.h"
+
 class Network {
 public:
-    enum Ensemble {
-        kDirect, kRandom, kAverage
-    };
+    enum Ensemble { kDirect, kRandom, kAverage };
 
     using Inputs = InputData;
     using Result = OutputResult;
@@ -29,17 +27,12 @@ public:
     void Destroy();
     bool Valid() const;
 
-    int GetVertexWithPolicy(const GameState& state,
-                            const float temperature,
-                            const bool allow_pass);
+    int GetVertexWithPolicy(const GameState& state, const float temperature, const bool allow_pass);
 
-    Network::Result GetOutput(const GameState& state,
-                              const Ensemble ensemble,
-                              Network::Query = {});
+    Network::Result GetOutput(const GameState& state, const Ensemble ensemble, Network::Query = {});
 
-    std::string GetOutputString(const GameState& state,
-                                const Ensemble ensemble,
-                                Network::Query = {});
+    std::string
+    GetOutputString(const GameState& state, const Ensemble ensemble, Network::Query = {});
 
     void Reconstruct(const Network::Option option);
 
@@ -48,7 +41,7 @@ public:
     void ClearCache();
 
     std::string GetName() const;
-    void ResetNumQueries(size_t q=0);
+    void ResetNumQueries(size_t q = 0);
     size_t GetNumQueries() const;
 
     PolicyBufferOffset GetDefaultPolicyOffset() const;
@@ -62,9 +55,8 @@ private:
 
     bool ProbeCache(const GameState& state, Network::Result& result);
 
-    Network::Result GetOutputInternal(const GameState& state,
-                                      const int symmetry,
-                                      PolicyBufferOffset offset);
+    Network::Result
+    GetOutputInternal(const GameState& state, const int symmetry, PolicyBufferOffset offset);
 
     Network::Result DummyForward(const Network::Inputs& inputs) const;
 

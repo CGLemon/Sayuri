@@ -9,12 +9,12 @@
 #include <memory>
 #include <vector>
 
-#include "neural/cuda/cuda_common.h"
-#include "neural/cuda/cuda_layers.h"
 #include "neural/activation.h"
 #include "neural/batch_forward_pipe.h"
-#include "neural/network_basic.h"
+#include "neural/cuda/cuda_common.h"
+#include "neural/cuda/cuda_layers.h"
 #include "neural/description.h"
+#include "neural/network_basic.h"
 #include "utils/threadpool.h"
 
 class CudaForwardPipe : public BatchForwardPipe {
@@ -25,8 +25,7 @@ public:
 
     virtual bool Valid() const;
 
-    virtual void Construct(ForwardPipeOption option,
-                           std::shared_ptr<DNNWeights> weights);
+    virtual void Construct(ForwardPipeOption option, std::shared_ptr<DNNWeights> weights);
 
     virtual void Release();
 
@@ -37,7 +36,6 @@ public:
     virtual std::vector<OutputResult> BatchForward(int gpu, const std::vector<InputData>& inputs);
 
 private:
-
     class NNGraph {
         struct Block {
             // TODO: Use list to store all conv.
@@ -109,17 +107,17 @@ private:
 
         std::unique_ptr<Graph> graph_{nullptr};
 
-        void *host_input_planes_;
-        void *host_output_prob_;
-        void *host_output_prob_pass_;
-        void *host_output_val_;
-        void *host_output_ownership_;
+        void* host_input_planes_;
+        void* host_output_prob_;
+        void* host_output_prob_pass_;
+        void* host_output_val_;
+        void* host_output_ownership_;
 
-        void *cuda_input_planes_;
-        void *cuda_output_prob_;
-        void *cuda_output_prob_pass_;
-        void *cuda_output_val_;
-        void *cuda_output_ownership_;
+        void* cuda_input_planes_;
+        void* cuda_output_prob_;
+        void* cuda_output_prob_pass_;
+        void* cuda_output_val_;
+        void* cuda_output_ownership_;
 
         std::array<void*, 2> host_mask_op_;
 
