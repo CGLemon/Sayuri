@@ -1,7 +1,7 @@
 ---
 BasedOnStyle: LLVM
 Language: Cpp
-Standard: c++14
+Standard: c++17
 
 IndentWidth: 4
 ContinuationIndentWidth: 4

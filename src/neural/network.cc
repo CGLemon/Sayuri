@@ -4,6 +4,10 @@
 #include "neural/cuda/cuda_forward_pipe.h"
 #endif
 
+#ifdef USE_TENSORRT
+#include "neural/trt/trt_forward_pipe.h"
+#endif
+
 #ifdef USE_EIGEN
 #include <Eigen/Dense>
 #endif
@@ -54,7 +58,9 @@ void Network::Initialize(const std::string& weightsfile) {
             << EIGEN_MINOR_VERSION << ' ' << "library." << std::endl;
 #endif
 
-#ifdef USE_CUDA
+#ifdef USE_TENSORRT
+    using Backend = TrtForwardPipe;
+#elif defined(USE_CUDA)
     using Backend = CudaForwardPipe;
 #else
     using Backend = BlasForwardPipe;
