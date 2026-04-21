@@ -5,11 +5,12 @@ Document for building the program from source.
 ## Requirements
 
 * Ubuntu, MacOS or Windows
-* GCC, Clang, must support C++14 or higher
+* GCC, Clang, must support C++17 or higher
 * CMake 3.15 or higher
 * Optional: Eigen or OpenBLAS library
 * Optional: CUDA 10.x - 12.x library
 * Optional: cuDNN 7.x or 8.x library
+* Optional: TensorRT 8.5 or higher library
 * Optional: zlib library
 
 ## Default Compiling (Ubuntu or MacOS)
@@ -40,13 +41,19 @@ To use Eigen:
 
 ### Accelerate with GPUs
 
-To accelerate the network forwarding pipeline using GPUs, CUDA is required. This backend is typically the fastest option.
+To accelerate the neural network forwarding pipeline with GPUs, you can choose the CUDA, cuDNN, or TensorRT backend, with the corresponding libraries installed. Please refer to the Requirements section for details. For general use, we recommend the CUDA backend because it only requires CUDA and is simpler to set up. If you want the best possible performance, you can use the TensorRT backend.
+
+To use CUDA:
 
     $ cmake .. -DBLAS_BACKEND=CUDA
 
-For a more stable experience with GPU acceleration, both CUDA and cuDNN are required.
+To use cuDNN:
 
     $ cmake .. -DBLAS_BACKEND=CUDNN
+
+To use TensorRT:
+
+    $ cmake .. -DBLAS_BACKEND=TENSORRT
 
 ### Compile with a Larger Board Size
 

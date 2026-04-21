@@ -57,9 +57,9 @@ For details on how to run the self-play loop, please refer to this [guide](./bas
 
 ![sayuri-vs-kata](./img/sayurivskata-v7.png)
 
-## Other Version
+## Acknowledge
 
-* [Sayuri-TensoRT](https://github.com/MAOmao000/Sayuri-TensorRT): Replaces the original CUDA inference backend with TensorRT, delivering a significant boost in model inference performance.
+TensorRT Backend: The TensorRT backend has now been implemented in this project. Special thanks to [MAOmao000](https://github.com/MAOmao000) for providing a fully functional [TensorRT version](https://github.com/MAOmao000/Sayuri-TensorRT) and verifying that it delivers approximately 1.5x the performance of the original CUDA backend. Much of the TensorRT backend implementation in this project was adapted from that version and integrated to match the coding style of Sayuri.
 
 ## Other Resources
 
