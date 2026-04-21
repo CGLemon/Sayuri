@@ -124,7 +124,7 @@ inline void Final(Context* ctx, SHA256_BYTE* hash) {
     }
 }
 
-inline std::string GetDigest(const char * text, size_t len) {
+inline std::string GetDigest(const char* text, size_t len) {
     Context ctx;
     SHA256_BYTE digest[SHA256_BLOCK_SIZE];
 
@@ -141,6 +141,10 @@ inline std::string GetDigest(const char * text, size_t len) {
 
 inline std::string GetDigest(std::string& text) {
     return GetDigest(text.data(), text.size());
+}
+
+constexpr size_t GetHexDigestLength() {
+    return 2 * SHA256_BLOCK_SIZE;
 }
 
 #undef ROTLEFT

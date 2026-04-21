@@ -9,6 +9,10 @@
 #include <sstream>
 #include <stdexcept>
 
+#ifdef USE_TENSORRT
+#include <NvInferVersion.h>
+#endif
+
 #include "utils/half.h"
 
 namespace cuda {
@@ -170,16 +174,17 @@ std::string GetBackendInfo() {
     }
 
     {
-        out << "Use cuDNN: ";
-#ifdef USE_CUDNN
-        out << "Yes\n";
-        const auto cudnn_version = cudnnGetVersion();
-        const auto major = cudnn_version / 1000;
-        const auto minor = (cudnn_version - major * 1000) / 100;
-        out << "cuDNN version:"
-            << " Major " << major << ", Minor " << minor << '\n';
+        out << "Blas backend: ";
+#ifdef USE_TENSORRT
+        out << "TensorRT\n";
+        out << "TensorRT version: " << NV_TENSORRT_MAJOR << '.' << NV_TENSORRT_MINOR << '.'
+            << NV_TENSORRT_PATCH << '\n';
+#elif defined(USE_CUDNN)
+        out << "cuDNN\n";
+        out << "cuDNN version: " << CUDNN_MAJOR << '.' << CUDNN_MINOR << '.' << CUDNN_PATCHLEVEL
+            << '\n';
 #else
-        out << "No\n";
+        out << "CUDA\n";
 #endif
     }
 

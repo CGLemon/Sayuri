@@ -23,7 +23,6 @@
 #include "utils/log.h"
 #include "utils/option.h"
 #include "utils/sha256.h"
-#include "version.h"
 
 std::mutex TrtForwardPipe::TrtEngine::tune_mutex_;
 
@@ -76,7 +75,10 @@ void TrtForwardPipe::Construct(ForwardPipeOption option, std::shared_ptr<DNNWeig
 
     BatchForwardPipe::SetForwardingSize(batch_size);
 
-    if (board_size_ == board_size && batch_size <= max_batch_per_nn_) {
+    if (board_size_ >= board_size && batch_size <= max_batch_per_nn_) {
+        // TensorRT batches already carry an input mask, and BatchForwardPipe
+        // can reorder between the requested board size and the constructed NN
+        // board size. Reuse an existing larger engine instead of rebuilding it.
         return;
     }
     Release();
@@ -256,6 +258,15 @@ bool TrtForwardPipe::TrtEngine::CreatePlan(trt::InferPtr<nvinfer1::INetworkDefin
                                            trt::InferPtr<nvinfer1::IBuilder>& builder,
                                            int max_batch_size,
                                            trt::Logger& logger) {
+    auto GetNetworkCacheName = [](const std::filesystem::path& filepath) {
+        auto network_name = filepath.filename().string();
+        const auto dot_pos = network_name.find('.');
+        if (dot_pos != std::string::npos) {
+            network_name.erase(dot_pos);
+        }
+        return network_name;
+    };
+
     std::string model_data;
     if (!ReadFileBinary(weights_file_, model_data)) {
         LOGGING << "Unable to read weights file for TensorRT plan cache.\n";
@@ -266,23 +277,20 @@ bool TrtForwardPipe::TrtEngine::CreatePlan(trt::InferPtr<nvinfer1::INetworkDefin
     const auto dev_prop = cuda::GetDeviceProp();
     const std::string device_ident = GetDeviceIdent(dev_prop.name);
     const std::string precision = handles_.fp16 ? "half" : "single";
-    const auto filepath = std::filesystem::path(network->getName());
+    const auto network_name = GetNetworkCacheName(std::filesystem::path(network->getName()));
     const auto trt_version = getInferLibVersion();
-    const auto program_version = GetProgramVersion();
 
-    const std::string plan_cache_file = Format("trt-%d_gpu-%s_net-%s_%s_%dx%d_batch%d_%s",
+    const std::string plan_cache_file = Format("trt-%d_gpu-%s_net-%s_%dx%d_batch%d_%s",
                                                trt_version,
                                                device_ident.c_str(),
-                                               filepath.filename().string().c_str(),
-                                               program_version.c_str(),
+                                               network_name.c_str(),
                                                board_size_,
                                                board_size_,
                                                max_batch_size,
                                                precision.c_str());
-    const std::string param_str = Format("_%d_%s_%s_%d_%d_%d_%s",
+    const std::string param_str = Format("_%d_%s_%d_%d_%d_%s",
                                          trt_version,
                                          device_ident.c_str(),
-                                         program_version.c_str(),
                                          board_size_,
                                          board_size_,
                                          max_batch_size,
@@ -294,14 +302,15 @@ bool TrtForwardPipe::TrtEngine::CreatePlan(trt::InferPtr<nvinfer1::INetworkDefin
 
         std::string cache_file_data;
         if (ReadFileBinary(plan_cache_file, cache_file_data)) {
-            if (cache_file_data.size() < 64 + param_str.size()) {
+            const auto model_hash_len = sha256::GetHexDigestLength();
+            if (cache_file_data.size() < model_hash_len + param_str.size()) {
                 LOGGING << "Could not parse plan, unexpected size in " << plan_cache_file << ".\n";
                 cache_file_data.clear();
             } else {
                 const auto cached_param =
                     cache_file_data.substr(cache_file_data.size() - param_str.size());
-                const auto cached_model_hash =
-                    cache_file_data.substr(cache_file_data.size() - 64 - param_str.size(), 64);
+                const auto cached_model_hash = cache_file_data.substr(
+                    cache_file_data.size() - model_hash_len - param_str.size(), model_hash_len);
 
                 if (cached_model_hash != model_hash) {
                     LOGGING << "Plan cache is corrupted or is for the wrong model in "
@@ -312,8 +321,8 @@ bool TrtForwardPipe::TrtEngine::CreatePlan(trt::InferPtr<nvinfer1::INetworkDefin
                             << plan_cache_file << ".\n";
                     cache_file_data.clear();
                 } else {
-                    plan =
-                        cache_file_data.substr(0, cache_file_data.size() - 64 - param_str.size());
+                    plan = cache_file_data.substr(
+                        0, cache_file_data.size() - model_hash_len - param_str.size());
                     LOGGING << "Using existing plan cache at " << plan_cache_file << ".\n";
                 }
             }
