@@ -39,6 +39,7 @@ void ArgsParser::InitOptionsMap() const {
     kOptionsMap["fixed_nn_boardsize"] << Option::SetOption(0);
     kOptionsMap["defualt_boardsize"] << Option::SetOption(kDefaultBoardSize);
     kOptionsMap["defualt_komi"] << Option::SetOption(kDefaultKomi);
+    kOptionsMap["cache_tensorrt_plan"] << Option::SetOption(true);
 
     kOptionsMap["cache_memory_mib"] << Option::SetOption(400);
     kOptionsMap["playouts"] << Option::SetOption(-1);
@@ -524,6 +525,11 @@ void ArgsParser::Parse(Splitter& spt) {
 
     if (const auto res = spt.Find("--capture-all-dead")) {
         SetOption("capture_all_dead", true);
+        spt.RemoveWord(res->Index());
+    }
+
+    if (const auto res = spt.Find("--no-cache-tensorrt-plan")) {
+        SetOption("cache_tensorrt_plan", false);
         spt.RemoveWord(res->Index());
     }
 

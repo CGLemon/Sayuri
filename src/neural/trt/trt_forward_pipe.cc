@@ -346,10 +346,13 @@ bool TrtForwardPipe::TrtEngine::CreatePlan(trt::InferPtr<nvinfer1::INetworkDefin
             cache_payload.append(param_str);
 
 #ifdef NDEBUG
-            if (!WriteFileBinary(plan_cache_file, cache_payload)) {
-                LOGGING << "Unable to save TensorRT plan cache to " << plan_cache_file << ".\n";
-            } else {
-                LOGGING << "Saved new plan cache to " << plan_cache_file << ".\n";
+            bool cache_tensorrt_plan = GetOption<bool>("cache_tensorrt_plan");
+            if (cache_tensorrt_plan) {
+                if (!WriteFileBinary(plan_cache_file, cache_payload)) {
+                    LOGGING << "Unable to save TensorRT plan cache to " << plan_cache_file << ".\n";
+                } else {
+                    LOGGING << "Saved new plan cache to " << plan_cache_file << ".\n";
+                }
             }
 #endif
         }
