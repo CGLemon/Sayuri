@@ -157,7 +157,6 @@ bool TrtForwardPipe::TrtEngine::Build(bool dump_gpu_info,
 
     board_size_ = board_size;
     max_batch_ = max_batch_size;
-    weights_file_ = GetOption<std::string>("weights_file");
 
     cuda::SetDevice(gpu);
     handles_.ApplyOnCurrentDevice();
@@ -228,7 +227,7 @@ bool TrtForwardPipe::TrtEngine::Build(bool dump_gpu_info,
         return false;
     }
 
-    network->setName(weights_file_.c_str());
+    network->setName(weights_->name.c_str());
     if (!BuildNetwork(network)) {
         LOGGING << "TensorRT backend: failed to build network.\n";
         return false;
@@ -268,7 +267,7 @@ bool TrtForwardPipe::TrtEngine::CreatePlan(trt::InferPtr<nvinfer1::INetworkDefin
     };
 
     std::string model_data;
-    if (!ReadFileBinary(weights_file_, model_data)) {
+    if (!ReadFileBinary(weights_->path, model_data)) {
         LOGGING << "Unable to read weights file for TensorRT plan cache.\n";
         return false;
     }

@@ -153,6 +153,10 @@ public:
         return Valid() ? weights_->name : "random";
     }
 
+    inline std::string GetPath() const {
+        return Valid() ? weights_->path : "";
+    }
+
     inline int GetVersion() const {
         return Valid() ? weights_->version : -1;
     }

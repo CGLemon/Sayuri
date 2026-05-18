@@ -114,7 +114,6 @@ private:
         trt::InferPtr<nvinfer1::ICudaEngine> cuda_engine_{nullptr};
         std::unique_ptr<BackendContext> context_{nullptr};
 
-        std::string weights_file_;
         int board_size_{0};
         int max_batch_{0};
 

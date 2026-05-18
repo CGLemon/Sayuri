@@ -55,8 +55,10 @@ void DNNLoader::FromFile(std::shared_ptr<DNNWeights> weights, std::string filena
         auto pathvec = SplitPath(filename);
         if (!pathvec.empty()) {
             weights->name = *std::rbegin(pathvec);
+            weights_->path = filename;
         } else {
             weights->name = "network";
+            weights_->path = std::string{};
         }
     } catch (const std::exception& e) {
         LOGGING << "Fail to load the network file!" << std::endl
