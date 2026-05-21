@@ -39,8 +39,8 @@ void Engine::Initialize() {
     game_pool_.clear();
     for (int i = 0; i < parallel_games_; ++i) {
         game_pool_.emplace_back(GameState{});
-        game_pool_[i].Reset(GetOption<int>("defualt_boardsize"),
-                            GetOption<float>("defualt_komi"),
+        game_pool_[i].Reset(GetOption<int>("default_boardsize"),
+                            GetOption<float>("default_komi"),
                             GetOption<int>("scoring_rule"));
     }
 
@@ -146,8 +146,8 @@ void Engine::ParseQueries() {
     int max_bsize = -1;
     if (board_queries_.empty()) {
         BoardQuery q;
-        q.board_size = GetOption<int>("defualt_boardsize");
-        q.komi = GetOption<float>("defualt_komi");
+        q.board_size = GetOption<int>("default_boardsize");
+        q.komi = GetOption<float>("default_komi");
         q.prob = 1.f;
         board_queries_.emplace_back(q);
         max_bsize = q.board_size;

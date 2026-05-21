@@ -1,292 +1,443 @@
 #pragma once
 
-#include <cassert>
-#include <iostream>
+#include <algorithm>
+#include <any>
+#include <functional>
+#include <initializer_list>
+#include <iterator>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <type_traits>
+#include <typeindex>
+#include <typeinfo>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
-#define IS_SAME_ALL                                                                                \
-    std::is_same<T, int>::value || std::is_same<T, float>::value ||                                \
-        std::is_same<T, double>::value || std::is_same<T, bool>::value ||                          \
-        std::is_same<T, std::string>::value
+namespace option_detail {
 
-#define IS_SAME_NUMERIC                                                                            \
-    std::is_same<T, int>::value || std::is_same<T, float>::value || std::is_same<T, double>::value
+template <typename T> inline constexpr bool IsEnum() {
+    return std::is_enum_v<T>;
+}
 
-#define IS_SAME_EXCEPT_STRING                                                                      \
-    std::is_same<T, int>::value || std::is_same<T, float>::value ||                                \
-        std::is_same<T, double>::value || std::is_same<T, bool>::value
+template <typename T>
+inline constexpr bool kIsSupported =
+    std::is_same_v<T, int> || std::is_same_v<T, float> || std::is_same_v<T, double> ||
+    std::is_same_v<T, bool> || std::is_same_v<T, std::string> || IsEnum<T>();
+
+template <typename T>
+using OptionValueTypeT = std::conditional_t<std::is_same_v<std::decay_t<T>, char*> ||
+                                                std::is_same_v<std::decay_t<T>, const char*>,
+                                            std::string,
+                                            std::decay_t<T>>;
+
+template <typename T>
+inline constexpr bool kIsNumeric =
+    std::is_same_v<T, int> || std::is_same_v<T, float> || std::is_same_v<T, double>;
+
+inline bool IsNumeric(std::type_index t) {
+    return t == typeid(int) || t == typeid(float) || t == typeid(double);
+}
+
+inline bool IsBoolean(std::type_index t) {
+    return t == typeid(bool);
+}
+
+inline bool IsString(std::type_index t) {
+    return t == typeid(std::string);
+}
+
+std::string TypeName(std::type_index t);
+std::string AnyToString(const std::any& a);
+std::any ParseFromString(std::type_index t, std::string_view raw);
+
+} // namespace option_detail
 
 class Option {
-private:
-    enum class Type {
-        kInvalid,
-        kString,   // std::string
-        kBoolean,  // bool
-        kInteger,  // int
-        kFloating, // single-precision floating-point
-        kDouble    // double-precision floating-point
-    };
-
-    Type type_{Type::kInvalid};
-    std::vector<std::string> val_list_{};
-
-    bool use_max_{false};
-    std::string max_{};
-
-    bool use_min_{false};
-    std::string min_{};
-
-    bool default_{false};
-
-    void Adjust();
-
-    std::string GetCurrentVal() const;
-    std::string TypeToString(Type type) const;
-
-    template <typename T, typename = std::enable_if_t<IS_SAME_ALL>>
-    Option(Type t, T val, bool use_max, std::string max, bool use_min, std::string min)
-        : type_(t), use_max_(use_max), max_(max), use_min_(use_min), min_(min) {
-        FancyPush(val);
-    }
-
-    template <typename T, typename = std::enable_if_t<IS_SAME_ALL>>
-    Option(Type t, T val) : type_(t) {
-        FancyPush(val);
-    }
-
-    operator int() const {
-        if (type_ != Type::kInteger) {
-            auto err = std::ostringstream{};
-            err << "Incorrect option type for \"" << GetCurrentVal() << "\"."
-                << " Expect " << TypeToString(Type::kInteger) << " but option is "
-                << TypeToString(type_) << ".";
-            throw std::runtime_error(err.str());
-        }
-        return std::stoi(GetCurrentVal());
-    }
-
-    operator bool() const {
-        if (type_ != Type::kBoolean) {
-            auto err = std::ostringstream{};
-            err << "Incorrect option type for \"" << GetCurrentVal() << "\"."
-                << " Expect " << TypeToString(Type::kBoolean) << " but option is "
-                << TypeToString(type_) << ".";
-            throw std::runtime_error(err.str());
-        }
-        return (GetCurrentVal() == "true");
-    }
-
-    operator float() const {
-        if (type_ != Type::kFloating) {
-            auto err = std::ostringstream{};
-            err << "Incorrect option type for \"" << GetCurrentVal() << "\"."
-                << " Expect " << TypeToString(Type::kFloating) << " but option is "
-                << TypeToString(type_) << ".";
-            throw std::runtime_error(err.str());
-        }
-        return std::stof(GetCurrentVal());
-    }
-
-    operator double() const {
-        if (type_ != Type::kDouble) {
-            auto err = std::ostringstream{};
-            err << "Incorrect option type for \"" << GetCurrentVal() << "\"."
-                << " Expect " << TypeToString(Type::kDouble) << " but option is "
-                << TypeToString(type_) << ".";
-            throw std::runtime_error(err.str());
-        }
-        return std::stod(GetCurrentVal());
-    }
-
-    operator std::string() const {
-        if (type_ != Type::kString) {
-            auto err = std::ostringstream{};
-            err << "Incorrect option type for \"" << GetCurrentVal() << "\"."
-                << " Expect " << TypeToString(Type::kString) << " but option is "
-                << TypeToString(type_) << ".";
-            throw std::runtime_error(err.str());
-        }
-        return GetCurrentVal();
-    }
-
-    template <typename T, typename = std::enable_if_t<IS_SAME_ALL>> T FancyGet(int idx = -1) {
-        std::string val;
-        if (idx >= (int)val_list_.size()) {
-            throw std::runtime_error("FancyGet() is overflow.");
-        }
-        if (idx >= 0) {
-            val = val_list_[idx];
-        } else {
-            val = GetCurrentVal();
-        }
-        Option res(type_, val);
-        return (T)res;
-    }
-
-    template <typename T, typename = std::enable_if_t<IS_SAME_EXCEPT_STRING>>
-    std::string FancyCast(T val) {
-        auto out = std::string{};
-        if (std::is_same<T, int>::value || std::is_same<T, float>::value ||
-            std::is_same<T, double>::value) {
-            out = std::to_string(val);
-        } else if (std::is_same<T, bool>::value) {
-            if (val) {
-                out = std::string{"true"};
-            } else {
-                out = std::string{"false"};
-            }
-        }
-        return out;
-    }
-    std::string FancyCast(std::string val) {
-        return val;
-    }
-    std::string FancyCast(const char* val) {
-        return std::string{val};
-    }
-
-    template <typename T, typename = std::enable_if_t<IS_SAME_ALL>> void FancyPush(T val) {
-        if (default_) {
-            val_list_.clear();
-            default_ = false;
-        }
-
-        val_list_.emplace_back(FancyCast(val));
-
-        HandleInvalid();
-        Adjust();
-    }
-
-    void HandleInvalid() const;
-
 public:
+    using SetterFn = std::function<void(Option&, std::string_view)>;
+
     Option() = default;
 
-    void operator<<(const Option&& o) {
-        *this = std::forward<decltype(o)>(o);
+    template <typename T> static Option Make(T value) {
+        using ValueT = option_detail::OptionValueTypeT<T>;
+        static_assert(option_detail::kIsSupported<ValueT>, "Unsupported option type.");
+        Option o;
+        o.type_ = typeid(ValueT);
+        o.is_enum_ = std::is_enum_v<ValueT>;
+        o.Push(std::any(ValueT(std::move(value))));
+        o.is_default_ = true;
+        return o;
     }
 
-    template <typename T> T Get(int idx = -1) {
-        return FancyGet<T>(idx);
+    template <typename T> T Get(int idx = -1) const {
+        static_assert(option_detail::kIsSupported<T>, "Unsupported option type.");
+        RequireType<T>();
+        if (history_.empty()) {
+            throw std::runtime_error("Option has no value.");
+        }
+        if (idx >= static_cast<int>(history_.size())) {
+            throw std::runtime_error("Option::Get index out of range.");
+        }
+        const std::any& slot = (idx < 0) ? history_.back() : history_[idx];
+        return std::any_cast<T>(slot);
     }
 
-    template <typename T> void Set(T val) {
-        FancyPush(val);
+    template <typename T> void Set(T value) {
+        using ValueT = option_detail::OptionValueTypeT<T>;
+        static_assert(option_detail::kIsSupported<ValueT>, "Unsupported option type.");
+        RequireType<ValueT>();
+        Push(std::any(ValueT(std::move(value))));
     }
 
+    template <typename T> void SetRange(T min, T max) {
+        static_assert(option_detail::kIsNumeric<T>, "Bounds only valid for numeric types.");
+        RequireInitialized();
+        if (has_choices_) {
+            throw std::runtime_error("Option Error: range cannot be combined with choices.");
+        }
+        if (type_ != typeid(T)) {
+            throw std::runtime_error("Option Error: bounds type does not match option value type.");
+        }
+        if (max < min) {
+            throw std::runtime_error("Option Error: max < min.");
+        }
+        min_ = std::any(std::move(min));
+        max_ = std::any(std::move(max));
+        has_range_ = true;
+        ClampLast();
+    }
+
+    template <typename T>
+    void SetChoices(std::initializer_list<std::string> names, std::initializer_list<T> values) {
+        static_assert(option_detail::kIsSupported<T>, "Unsupported choice type.");
+        RequireInitialized();
+        if (has_range_) {
+            throw std::runtime_error("Option Error: choices cannot be combined with range.");
+        }
+        if (type_ != typeid(T)) {
+            throw std::runtime_error(
+                "Option Error: choices type does not match option value type.");
+        }
+        if (names.size() != values.size()) {
+            throw std::runtime_error("Option Error: choices names/values size mismatch.");
+        }
+        if (names.size() == 0) {
+            throw std::runtime_error("Option Error: choices list is empty.");
+        }
+
+        std::vector<std::string> name_vec(std::begin(names), std::end(names));
+        for (size_t i = 0; i < name_vec.size(); ++i) {
+            for (size_t j = i + 1; j < name_vec.size(); ++j) {
+                if (name_vec[i] == name_vec[j]) {
+                    throw std::runtime_error("Option Error: duplicate choice name: " + name_vec[i]);
+                }
+            }
+        }
+
+        std::vector<std::any> value_vec;
+        value_vec.reserve(values.size());
+        for (const auto& v : values) {
+            value_vec.emplace_back(std::any(v));
+        }
+
+        choice_names_ = std::move(name_vec);
+        choice_values_ = std::move(value_vec);
+        choice_equals_ = [](const std::any& a, const std::any& b) {
+            return std::any_cast<T>(a) == std::any_cast<T>(b);
+        };
+        choice_to_string_ = [](const std::any& a) -> std::string {
+            if constexpr (std::is_enum_v<T>) {
+                return std::to_string(static_cast<long long>(std::any_cast<T>(a)));
+            } else {
+                return option_detail::AnyToString(a);
+            }
+        };
+        has_choices_ = true;
+
+        if (!history_.empty()) {
+            EnsureValueHasChoice(history_.back());
+        }
+    }
+
+    void SetFromString(std::string_view raw);
+
+    void SetSetter(SetterFn fn) {
+        setter_ = std::move(fn);
+    }
+    bool HasSetter() const {
+        return static_cast<bool>(setter_);
+    }
+    void SetNoValue(bool v = true) {
+        no_value_ = v;
+    }
+    bool AllowsNoValue() const {
+        return no_value_;
+    }
+
+    void SetHelper(std::string helper) {
+        helper_ = std::move(helper);
+    }
+    void SetGroup(std::string group) {
+        group_ = std::move(group);
+    }
+    const std::string& Helper() const {
+        return helper_;
+    }
+    const std::string& Group() const {
+        return group_;
+    }
+
+    const std::vector<std::string>& ChoiceNames() const {
+        return choice_names_;
+    }
+    bool HasChoices() const {
+        return has_choices_;
+    }
     bool IsDefault() const {
-        return default_;
-    };
-
-    void SetAsDefault(bool v = true) {
-        default_ = v;
+        return is_default_;
     }
-
+    bool IsBoolean() const {
+        return option_detail::IsBoolean(type_);
+    }
+    void MarkDefault(bool v = true) {
+        is_default_ = v;
+        if (v && !history_.empty()) {
+            default_ = history_.back();
+        }
+    }
     int Count() const {
-        return val_list_.size();
+        return static_cast<int>(history_.size());
     }
 
     void Unique();
-
     std::string ToString() const;
+    std::string HelpMetadata() const;
 
-    // Get Option object.
-    template <typename T, typename = std::enable_if_t<IS_SAME_ALL>>
-    static Option::Type GetOptionType(T /* val */) {
-        if (std::is_same<T, int>::value) {
-            return Type::kInteger;
+private:
+    std::vector<std::any> history_;
+    std::any default_;
+
+    std::any min_;
+    std::any max_;
+
+    std::vector<std::string> choice_names_;
+    std::vector<std::any> choice_values_;
+    std::function<bool(const std::any&, const std::any&)> choice_equals_;
+    std::function<std::string(const std::any&)> choice_to_string_;
+
+    SetterFn setter_;
+
+    std::string helper_;
+    std::string group_;
+
+    std::type_index type_ = typeid(void);
+    bool is_enum_ = false;
+    bool has_range_ = false;
+    bool has_choices_ = false;
+    bool is_default_ = false;
+    bool no_value_ = false;
+
+    static std::string HelpTypePlaceholder(std::type_index t, bool is_enum);
+    std::string ChoiceNameOfCurrent() const;
+    void EnsureValueHasChoice(const std::any& v) const;
+    void Push(std::any v);
+
+    template <typename T> bool TryClampLastAs() {
+        if (type_ != typeid(T)) {
+            return false;
         }
-        if (std::is_same<T, float>::value) {
-            return Type::kFloating;
+        std::any& slot = history_.back();
+        T value = std::any_cast<T>(slot);
+        if (has_range_) {
+            value = std::max(value, std::any_cast<T>(min_));
+            value = std::min(value, std::any_cast<T>(max_));
         }
-        if (std::is_same<T, double>::value) {
-            return Type::kDouble;
-        }
-        if (std::is_same<T, bool>::value) {
-            return Type::kBoolean;
-        }
-        if (std::is_same<T, std::string>::value) {
-            return Type::kString;
-        }
-        return Type::kInvalid;
+        slot = value;
+        return true;
     }
 
-    template <typename T, typename = std::enable_if_t<IS_SAME_NUMERIC>>
-    static Option SetOption(T val, T max, T min) {
-        auto out =
-            Option(GetOptionType(val), val, true, std::to_string(max), true, std::to_string(min));
-        out.SetAsDefault();
-        return out;
-    }
+    void ClampLast();
+    void RequireInitialized() const;
 
-    template <typename T, typename = std::enable_if_t<IS_SAME_ALL>> static Option SetOption(T val) {
-        auto out = Option(GetOptionType(val), val, false, std::string{}, false, std::string{});
-        out.SetAsDefault();
-        return out;
+    template <typename T> void RequireType() const {
+        RequireInitialized();
+        if (type_ != typeid(T)) {
+            std::ostringstream err;
+            err << "Incorrect option type. Expect " << option_detail::TypeName(typeid(T))
+                << " but option is " << option_detail::TypeName(type_) << ".";
+            throw std::runtime_error(err.str());
+        }
     }
 };
 
-extern std::unordered_map<std::string, Option> kOptionsMap;
+struct OptionRegistration {
+    std::vector<std::string> flags;
+    std::string key;
+    Option option;
 
-template <typename T, typename = std::enable_if_t<IS_SAME_ALL>>
-inline T GetOption(std::string key, int idx = -1) {
-    auto it = kOptionsMap.find(key);
-    T val = it->second.Get<T>(idx);
-    return val;
-}
-
-template <typename T, typename = std::enable_if_t<IS_SAME_EXCEPT_STRING>>
-inline bool SetOption(std::string key, T val, bool as_default = false) {
-    auto it = kOptionsMap.find(key);
-    if (it != std::end(kOptionsMap)) {
-        it->second.Set<T>(val);
-        if (as_default) {
-            it->second.SetAsDefault();
-        }
-        return true;
+    template <typename T> OptionRegistration&& Range(T min, T max) && {
+        option.SetRange(std::move(min), std::move(max));
+        return std::move(*this);
     }
-    return false;
-}
 
-inline bool SetOption(std::string key, std::string val, bool as_default = false) {
-    auto it = kOptionsMap.find(key);
-    if (it != std::end(kOptionsMap)) {
-        it->second.Set<std::string>(val);
-        if (as_default) {
-            it->second.SetAsDefault();
-        }
-        return true;
+    template <typename T>
+    OptionRegistration&& Choices(std::initializer_list<std::string> names,
+                                 std::initializer_list<T> values) && {
+        option.SetChoices<T>(names, values);
+        return std::move(*this);
     }
-    return false;
-}
 
-inline int GetOptionCount(std::string key) {
-    auto it = kOptionsMap.find(key);
-    return it->second.Count();
-}
-
-inline bool IsOptionDefault(std::string key) {
-    auto it = kOptionsMap.find(key);
-    return it->second.IsDefault();
-}
-
-inline void UniqueOption(std::string key) {
-    auto it = kOptionsMap.find(key);
-    it->second.Unique();
-}
-
-inline std::string OptionsToString() {
-    auto out = std::ostringstream{};
-    for (auto& it : kOptionsMap) {
-        const auto& name = it.first;
-        const auto& option = it.second;
-        out << name << ": " << option.ToString() << "\n";
+    OptionRegistration&& Helper(std::string helper) && {
+        option.SetHelper(std::move(helper));
+        return std::move(*this);
     }
-    return out.str();
+
+    OptionRegistration&& Group(std::string group) && {
+        option.SetGroup(std::move(group));
+        return std::move(*this);
+    }
+
+    OptionRegistration&& Setter(Option::SetterFn fn) && {
+        option.SetSetter(std::move(fn));
+        return std::move(*this);
+    }
+
+    OptionRegistration&& NoValue() && {
+        option.SetNoValue();
+        return std::move(*this);
+    }
+};
+
+template <typename T>
+inline OptionRegistration
+RegisterOption(std::initializer_list<std::string> flags, std::string key, T default_val) {
+    return OptionRegistration{
+        std::vector<std::string>(flags), std::move(key), Option::Make<T>(std::move(default_val))};
+}
+
+inline OptionRegistration
+RegisterOption(std::initializer_list<std::string> flags, std::string key, const char* default_val) {
+    return RegisterOption<std::string>(flags, std::move(key), std::string(default_val));
+}
+
+class OptionsMap {
+public:
+    explicit OptionsMap(std::string initial_profile = "default");
+
+    OptionsMap& operator<<(OptionRegistration reg);
+    const std::string& GetProfile() const {
+        return current_profile_;
+    }
+    const std::string& GetDefaultProfile() const;
+    std::vector<std::string> GetProfiles() const;
+    void SetProfile(std::string name);
+    void AddProfile(std::string name);
+    void RemoveProfile(const std::string& name);
+
+    Option& operator[](const std::string& key) {
+        return Current()[key];
+    }
+    const Option& at(const std::string& key) const {
+        return Current().at(key);
+    }
+    Option& at(const std::string& key) {
+        return Current().at(key);
+    }
+    auto find(const std::string& key) {
+        return Current().find(key);
+    }
+    auto find(const std::string& key) const {
+        return Current().find(key);
+    }
+    auto begin() {
+        return Current().begin();
+    }
+    auto begin() const {
+        return Current().begin();
+    }
+    auto end() {
+        return Current().end();
+    }
+    auto end() const {
+        return Current().end();
+    }
+    void clear();
+
+    void ParseArgs(int argc, char** argv);
+    std::string HelpersToString(std::string_view group = "") const;
+
+private:
+    using ProfileMap = std::unordered_map<std::string, Option>;
+    struct ParsedArg {
+        std::string base_flag;
+        std::string profile_name;
+        std::string value;
+    };
+
+    std::vector<ParsedArg> TokenizeArgs(int argc, char** argv) const;
+    std::vector<std::string> FlagsOf(const std::string& key) const;
+
+    ProfileMap& Current() {
+        return profiles_.at(current_profile_);
+    }
+    const ProfileMap& Current() const {
+        return profiles_.at(current_profile_);
+    }
+
+    std::unordered_map<std::string, ProfileMap> profiles_;
+    std::string base_profile_;
+    std::string current_profile_;
+    std::vector<std::string> seen_profiles_;
+    std::vector<std::string> insertion_order_;
+    std::unordered_map<std::string, std::string> flags_;
+};
+
+extern OptionsMap kOptionsMap;
+
+template <typename T> inline T GetOption(const std::string& key, int idx = -1) {
+    auto it = kOptionsMap.find(key);
+    if (it == std::end(kOptionsMap)) {
+        throw std::runtime_error("Unknown option: " + key);
+    }
+    return it->second.Get<T>(idx);
+}
+
+template <typename T>
+inline bool SetOption(const std::string& key, T value, bool as_default = false) {
+    auto it = kOptionsMap.find(key);
+    if (it == std::end(kOptionsMap)) {
+        return false;
+    }
+    it->second.Set<T>(std::move(value));
+    if (as_default) {
+        it->second.MarkDefault();
+    }
+    return true;
+}
+
+inline bool SetOption(const std::string& key, const char* value, bool as_default = false) {
+    return SetOption<std::string>(key, std::string(value), as_default);
+}
+
+inline int GetOptionCount(const std::string& key) {
+    return kOptionsMap.at(key).Count();
+}
+
+inline bool IsOptionDefault(const std::string& key) {
+    return kOptionsMap.at(key).IsDefault();
+}
+
+inline void UniqueOption(const std::string& key) {
+    kOptionsMap.at(key).Unique();
+}
+
+inline std::string OptionHelpersToString(std::string_view group = "") {
+    return kOptionsMap.HelpersToString(group);
+}
+
+inline void ParseArgs(int argc, char** argv) {
+    kOptionsMap.ParseArgs(argc, argv);
 }

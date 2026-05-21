@@ -36,8 +36,8 @@ public:
             if (search_) {
                 return;
             }
-            main_state_.Reset(GetOption<int>("defualt_boardsize"),
-                              GetOption<float>("defualt_komi"),
+            main_state_.Reset(GetOption<int>("default_boardsize"),
+                              GetOption<float>("default_komi"),
                               GetOption<int>("scoring_rule"));
             network_.Initialize(GetOption<std::string>("weights_file"));
             search_ = std::make_unique<Search>(main_state_, network_);

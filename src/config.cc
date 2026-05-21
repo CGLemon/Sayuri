@@ -1,8 +1,13 @@
 #include "config.h"
 
+#include <algorithm>
+#include <cstdlib>
 #include <fstream>
 #include <limits>
 #include <sstream>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #include "game/board.h"
 #include "game/symmetry.h"
@@ -19,118 +24,358 @@
 #include "utils/probe_gpu.h"
 
 void ArgsParser::InitOptionsMap() const {
-    kOptionsMap["help"] << Option::SetOption(false);
-    kOptionsMap["mode"] << Option::SetOption(std::string{"gtp"});
-    kOptionsMap["inputs"] << Option::SetOption(std::string{});
+    kOptionsMap.clear();
 
-    // engine options
-    kOptionsMap["ponder"] << Option::SetOption(false);
-    kOptionsMap["reuse_tree"] << Option::SetOption(false);
-    kOptionsMap["friendly_pass"] << Option::SetOption(false);
-    kOptionsMap["analysis_verbose"] << Option::SetOption(false);
-    kOptionsMap["quiet"] << Option::SetOption(false);
-    kOptionsMap["winograd"] << Option::SetOption(true);
-    kOptionsMap["fp16"] << Option::SetOption(true);
-    kOptionsMap["capture_all_dead"] << Option::SetOption(false);
+    const auto SetFalse = [](Option& option, std::string_view) { option.Set(false); };
 
-    kOptionsMap["timemanage"] << Option::SetOption(
-        static_cast<int>(TimeControl::TimeManagement::kOff));
+    // generic options
+    kOptionsMap << RegisterOption({"--help", "-h"}, "help", false)
+                       .Group("generic")
+                       .Helper("Print command-line help.");
+    kOptionsMap << RegisterOption({"--mode", "-m"}, "mode", std::string{"gtp"})
+                       .Group("generic")
+                       .Choices<std::string>({"gtp", "selfplay", "benchmark"},
+                                             {"gtp", "selfplay", "benchmark"})
+                       .Helper("Select the execution mode.");
+    kOptionsMap << RegisterOption({"--ponder"}, "ponder", false)
+                       .Group("generic")
+                       .Helper("Enable thinking on opponent's time.");
+    kOptionsMap << RegisterOption({"--reuse-tree"}, "reuse_tree", false)
+                       .Group("generic")
+                       .Helper("Reuse part of the previous search tree for the next move.");
+    kOptionsMap << RegisterOption({"--friendly-pass"}, "friendly_pass", false)
+                       .Group("generic")
+                       .Helper("Pass after the opponent passes under area scoring when safely "
+                               "winning.");
+    kOptionsMap << RegisterOption({"--analysis-verbose", "-a"}, "analysis_verbose", false)
+                       .Group("generic")
+                       .Helper("Print detailed search information.");
+    kOptionsMap << RegisterOption({"--quiet", "-q"}, "quiet", false)
+                       .Group("generic")
+                       .Helper("Disable all diagnostic output.");
+    kOptionsMap << RegisterOption({"--capture-all-dead"}, "capture_all_dead", false)
+                       .Group("generic")
+                       .Helper("Try to remove all dead strings before pass, only effective with "
+                               "area scoring.");
 
-    kOptionsMap["fixed_nn_boardsize"] << Option::SetOption(0);
-    kOptionsMap["defualt_boardsize"] << Option::SetOption(kDefaultBoardSize);
-    kOptionsMap["defualt_komi"] << Option::SetOption(kDefaultKomi);
-    kOptionsMap["cache_tensorrt_plan"] << Option::SetOption(true);
+    kOptionsMap << RegisterOption({"--timemanage"},
+                                  "timemanage",
+                                  static_cast<int>(TimeControl::TimeManagement::kOff))
+                       .Group("generic")
+                       .Choices<int>({"off", "on", "fast", "keep"},
+                                     {static_cast<int>(TimeControl::TimeManagement::kOff),
+                                      static_cast<int>(TimeControl::TimeManagement::kOn),
+                                      static_cast<int>(TimeControl::TimeManagement::kFast),
+                                      static_cast<int>(TimeControl::TimeManagement::kKeep)})
+                       .Helper("Control search time management behavior.");
 
-    kOptionsMap["cache_memory_mib"] << Option::SetOption(400);
-    kOptionsMap["playouts"] << Option::SetOption(-1);
-    kOptionsMap["ponder_factor"] << Option::SetOption(100);
-    kOptionsMap["const_time"] << Option::SetOption(0);
-    kOptionsMap["batch_size"] << Option::SetOption(0);
-    kOptionsMap["threads"] << Option::SetOption(0);
-    kOptionsMap["virtual_loss_count"] << Option::SetOption(1);
+    kOptionsMap << RegisterOption({"--board-size", "-s"}, "default_boardsize", kDefaultBoardSize)
+                       .Group("generic")
+                       .Helper("Set the default board size.");
+    kOptionsMap << RegisterOption({"--komi", "-k"}, "default_komi", kDefaultKomi)
+                       .Group("generic")
+                       .Helper("Set the default komi.");
 
-    kOptionsMap["kgs_hint"] << Option::SetOption(std::string{});
-    kOptionsMap["weights_file"] << Option::SetOption(std::string{});
-    kOptionsMap["weights_dir"] << Option::SetOption(std::string{});
-    kOptionsMap["book_file"] << Option::SetOption(std::string{});
-    kOptionsMap["patterns_file"] << Option::SetOption(std::string{});
+    kOptionsMap << RegisterOption({"--cache-memory-mib"}, "cache_memory_mib", 400)
+                       .Group("generic")
+                       .Helper("Set the NN cache size in MiB.");
+    kOptionsMap << RegisterOption({"--playouts", "-p"}, "playouts", -1)
+                       .Group("generic")
+                       .Helper("Set the maximum number of playouts.");
+    kOptionsMap << RegisterOption({"--ponder-factor"}, "ponder_factor", 100)
+                       .Group("generic")
+                       .Helper("Set the ponder search playout multiplier.");
+    kOptionsMap << RegisterOption({"--const-time"}, "const_time", 0)
+                       .Group("generic")
+                       .Helper("Set constant search time per move in seconds.");
+    kOptionsMap << RegisterOption({"--threads", "-t"}, "threads", 0)
+                       .Group("generic")
+                       .Helper("Set the number of search threads.");
+    kOptionsMap << RegisterOption({"--virtual-loss-count"}, "virtual_loss_count", 1)
+                       .Group("generic")
+                       .Helper("Set the virtual loss count used by parallel search.");
 
-    kOptionsMap["use_gpu"] << Option::SetOption(false);
-    kOptionsMap["gpus"] << Option::SetOption(-1);
-    kOptionsMap["gpu_waittime"] << Option::SetOption(2);
+    kOptionsMap << RegisterOption({"--kgs-hint"}, "kgs_hint", std::string{})
+                       .Group("generic")
+                       .Setter([](Option& option, std::string_view raw) {
+                           std::string hint(raw);
+                           std::replace(hint.begin(), hint.end(), '+', ' ');
+                           option.Set(hint);
+                       })
+                       .Helper("Pass a KGS-compatible hint string to the engine.");
+    kOptionsMap << RegisterOption({"--weights", "-w"}, "weights_file", std::string{})
+                       .Group("generic")
+                       .Helper("Set the network weights file.");
+    kOptionsMap << RegisterOption({"--weights-dir"}, "weights_dir", std::string{})
+                       .Group("generic")
+                       .Helper("Set the directory used to find network weights.");
+    kOptionsMap << RegisterOption({"--book"}, "book_file", std::string{})
+                       .Group("generic")
+                       .Helper("Set the opening book file.");
+    kOptionsMap << RegisterOption({"--patterns"}, "patterns_file", std::string{})
+                       .Group("generic")
+                       .Helper("Set the pattern file.");
+    kOptionsMap << RegisterOption({"--logfile", "-l"}, "logfile", std::string{})
+                       .Group("generic")
+                       .Setter([](Option& option, std::string_view raw) {
+                           auto filename = std::string(raw);
+                           option.Set(filename);
+                           LogWriter::Get().SetFilename(std::move(filename));
+                       })
+                       .Helper("Set the file used to log input and output.");
 
-    kOptionsMap["resign_threshold"] << Option::SetOption(0.1f, 1.f, 0.f);
+    kOptionsMap << RegisterOption({"--resign-threshold", "-r"}, "resign_threshold", 0.1f)
+                       .Group("generic")
+                       .Range(0.f, 1.f)
+                       .Helper("Resign when winrate is below the threshold.");
 
-    kOptionsMap["ci_alpha"] << Option::SetOption(1e-5f, 1.f, 0.f);
-    kOptionsMap["lcb_reduction"] << Option::SetOption(0.02f, 1.f, 0.f);
-    kOptionsMap["fpu_reduction"] << Option::SetOption(0.25f);
-    kOptionsMap["root_fpu_reduction"] << Option::SetOption(0.25f);
-    kOptionsMap["cpuct_init"] << Option::SetOption(0.5f);
-    kOptionsMap["cpuct_base_factor"] << Option::SetOption(1.0f);
-    kOptionsMap["cpuct_base"] << Option::SetOption(19652.f);
-    kOptionsMap["cpuct_dynamic"] << Option::SetOption(true);
-    kOptionsMap["cpuct_dynamic_k_factor"] << Option::SetOption(4.f);
-    kOptionsMap["cpuct_dynamic_k_base"] << Option::SetOption(10000.f);
-    kOptionsMap["score_utility_factor"] << Option::SetOption(0.4f);
-    kOptionsMap["score_utility_div"] << Option::SetOption(1.f);
-    kOptionsMap["forced_playouts_k"] << Option::SetOption(0.f);
-    kOptionsMap["suppress_pass_factor"] << Option::SetOption(0.1667f, 1.f, 0.f);
-    kOptionsMap["gammas_policy_factor"] << Option::SetOption(0.f, 1.f, 0.f);
+    kOptionsMap << RegisterOption({"--ci-alpha"}, "ci_alpha", 1e-5f)
+                       .Group("generic")
+                       .Range(0.f, 1.f)
+                       .Helper("Set the confidence interval alpha for LCB.");
+    kOptionsMap << RegisterOption({"--lcb-reduction"}, "lcb_reduction", 0.02f)
+                       .Group("generic")
+                       .Range(0.f, 1.f)
+                       .Helper("Reduce the LCB weights during move selection.");
+    kOptionsMap << RegisterOption({"--fpu-reduction"}, "fpu_reduction", 0.25f)
+                       .Group("generic")
+                       .Helper("Set the FPU reduction.");
+    kOptionsMap << RegisterOption({"--root-fpu-reduction"}, "root_fpu_reduction", 0.25f)
+                       .Group("generic")
+                       .Helper("Set the root FPU reduction.");
+    kOptionsMap << RegisterOption({"--cpuct-init"}, "cpuct_init", 0.5f)
+                       .Group("generic")
+                       .Helper("Set the initial cPUCT value for MCTS exploration.");
+    kOptionsMap << RegisterOption({"--cpuct-base-factor"}, "cpuct_base_factor", 1.0f)
+                       .Group("generic")
+                       .Helper("Set the cPUCT base scaling factor.");
+    kOptionsMap << RegisterOption({"--cpuct-base"}, "cpuct_base", 19652.f)
+                       .Group("generic")
+                       .Helper("Set the cPUCT base value.");
+    kOptionsMap << RegisterOption({"--no-cpuct-dynamic"}, "cpuct_dynamic", true)
+                       .Group("generic")
+                       .Setter(SetFalse)
+                       .NoValue()
+                       .Helper("Disable dynamic cPUCT adjustment.");
+    kOptionsMap << RegisterOption({"--cpuct-dynamic-k-factor"}, "cpuct_dynamic_k_factor", 4.f)
+                       .Group("generic")
+                       .Helper("Set the dynamic cPUCT k factor.");
+    kOptionsMap << RegisterOption({"--cpuct-dynamic-k-base"}, "cpuct_dynamic_k_base", 10000.f)
+                       .Group("generic")
+                       .Helper("Set the dynamic cPUCT k base.");
+    kOptionsMap << RegisterOption({"--score-utility-factor"}, "score_utility_factor", 0.4f)
+                       .Group("generic")
+                       .Helper("Set the score-based utility factor for MCTS.");
+    kOptionsMap << RegisterOption({"--score-utility-div"}, "score_utility_div", 1.f)
+                       .Group("generic")
+                       .Helper("Set the score utility divisor.");
+    kOptionsMap << RegisterOption({"--gammas-policy-factor"}, "gammas_policy_factor", 0.f)
+                       .Group("generic")
+                       .Range(0.f, 1.f)
+                       .Helper("Set the gamma policy mixing factor.");
 
-    kOptionsMap["root_policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
-    kOptionsMap["policy_temp"] << Option::SetOption(1.f, 100.f, 0.f);
-    kOptionsMap["lag_buffer"] << Option::SetOption(0.f);
-    kOptionsMap["no_cache"] << Option::SetOption(false);
-    kOptionsMap["early_symm_cache"] << Option::SetOption(false);
-    kOptionsMap["symm_pruning"] << Option::SetOption(false);
-    kOptionsMap["use_stm_winrate"] << Option::SetOption(false);
-    kOptionsMap["policy_buffer_offset"]
-        << Option::SetOption(static_cast<int>(PolicyBufferOffset::kNormal));
-    kOptionsMap["use_rollout"] << Option::SetOption(false);
-    kOptionsMap["scoring_rule"] << Option::SetOption(static_cast<int>(kArea));
+    kOptionsMap << RegisterOption({"--root-policy-temp"}, "root_policy_temp", 1.f)
+                       .Group("generic")
+                       .Range(0.f, 100.f)
+                       .Helper("Set the root policy temperature.");
+    kOptionsMap << RegisterOption({"--policy-temp"}, "policy_temp", 1.f)
+                       .Group("generic")
+                       .Range(0.f, 100.f)
+                       .Helper("Set the policy temperature.");
+    kOptionsMap << RegisterOption({"--no-cache"}, "no_cache", false)
+                       .Group("generic")
+                       .Helper("Disable neural network cache usage.");
+    kOptionsMap << RegisterOption({"--early-symm-cache"}, "early_symm_cache", false)
+                       .Group("generic")
+                       .Helper("Use symmetry-equivalent NN cache hits during the opening stage.");
+    kOptionsMap << RegisterOption({"--symm-pruning"}, "symm_pruning", false)
+                       .Group("generic")
+                       .Helper("Prune symmetry-equivalent moves during the opening stage.");
+    kOptionsMap << RegisterOption({"--use-stm-winrate"}, "use_stm_winrate", false)
+                       .Group("generic")
+                       .Helper("Use side-to-move winrate values.");
+    kOptionsMap << RegisterOption({"--use-optimistic-policy"},
+                                  "policy_buffer_offset",
+                                  static_cast<int>(PolicyBufferOffset::kNormal))
+                       .Group("generic")
+                       .Setter([](Option& option, std::string_view) {
+                           option.Set(static_cast<int>(PolicyBufferOffset::kOptimistic));
+                       })
+                       .NoValue()
+                       .Helper("Use the optimistic policy instead of the normal policy.");
+    kOptionsMap << RegisterOption({"--use-rollout"}, "use_rollout", false)
+                       .Group("generic")
+                       .Helper("Use random rollout ownership instead of neural network ownership.");
+    kOptionsMap << RegisterOption({"--scoring-rule"}, "scoring_rule", static_cast<int>(kArea))
+                       .Group("generic")
+                       .Choices<int>({"area", "territory"},
+                                     {static_cast<int>(kArea), static_cast<int>(kTerritory)})
+                       .Helper("Select the scoring rule.");
+
+    // gpu options
+    kOptionsMap << RegisterOption({"--no-winograd"}, "winograd", true)
+                       .Group("gpu")
+                       .Setter(SetFalse)
+                       .NoValue()
+                       .Helper("Disable Winograd convolution optimizations.");
+    kOptionsMap << RegisterOption({"--no-fp16"}, "fp16", true)
+                       .Group("gpu")
+                       .Setter(SetFalse)
+                       .NoValue()
+                       .Helper("Disable FP16 neural network inference.");
+    kOptionsMap << RegisterOption({"--fixed-nn-boardsize"}, "fixed_nn_boardsize", 0)
+                       .Group("gpu")
+                       .Helper("Set the minimum neural network board size for GPU backends.");
+    kOptionsMap << RegisterOption({"--no-cache-tensorrt-plan"}, "cache_tensorrt_plan", true)
+                       .Group("gpu")
+                       .Setter(SetFalse)
+                       .NoValue()
+                       .Helper("Disable TensorRT plan caching.");
+    kOptionsMap << RegisterOption({"--batch-size", "-b"}, "batch_size", 0)
+                       .Group("gpu")
+                       .Helper("Set the neural network evaluation batch size.");
+    kOptionsMap << RegisterOption({"--gpu", "-g"}, "gpus", -1)
+                       .Group("gpu")
+                       .Helper("Add a GPU device to use.");
+    kOptionsMap << RegisterOption({"--gpu-waittime"}, "gpu_waittime", 2)
+                       .Group("gpu")
+                       .Helper("Set the maximum wait time (in milliseconds) for the batched worker "
+                               "before evaluation.");
+    kOptionsMap << RegisterOption({"--lag-buffer"}, "lag_buffer", 0.f)
+                       .Group("gpu")
+                       .Helper("Set the safety margin for time usage in seconds.");
 
     // self-play options
-    kOptionsMap["selfplay_query"] << Option::SetOption(std::string{});
-    kOptionsMap["random_min_visits"] << Option::SetOption(1);
-    kOptionsMap["random_min_ratio"] << Option::SetOption(0.f, 1.f, 0.f);
-    kOptionsMap["random_moves_factor"] << Option::SetOption(0.f);
-    kOptionsMap["random_moves_temp"] << Option::SetOption(1.f, 100.f, 0.f);
-    kOptionsMap["random_opening_prob"] << Option::SetOption(0.f, 1.f, 0.f);
-    kOptionsMap["random_opening_temp"] << Option::SetOption(1.f, 100.f, 0.f);
+    kOptionsMap << RegisterOption({"--selfplay-query"}, "selfplay_query", std::string{})
+                       .Group("selfplay")
+                       .Helper("Add a self-play setup query.");
+    kOptionsMap << RegisterOption({"--forced-playouts-k"}, "forced_playouts_k", 0.f)
+                       .Group("selfplay")
+                       .Helper("Set the forced playouts coefficient.");
+    kOptionsMap << RegisterOption({"--suppress-pass-factor"}, "suppress_pass_factor", 0.1667f)
+                       .Group("selfplay")
+                       .Range(0.f, 1.f)
+                       .Helper("Set the board-fill threshold factor for suppressing pass during "
+                               "expansion.");
+    kOptionsMap << RegisterOption({"--random-min-visits"}, "random_min_visits", 1)
+                       .Group("selfplay")
+                       .Helper("Set the minimum visit count for random move selection.");
+    kOptionsMap << RegisterOption({"--random-min-ratio"}, "random_min_ratio", 0.f)
+                       .Group("selfplay")
+                       .Range(0.f, 1.f)
+                       .Helper("Set the minimum visit ratio for random move selection.");
+    kOptionsMap << RegisterOption({"--random-moves-factor"}, "random_moves_factor", 0.f)
+                       .Group("selfplay")
+                       .Helper("Set the opening random-move phase length as a board-area factor.");
+    kOptionsMap << RegisterOption({"--random-moves-temp"}, "random_moves_temp", 1.f)
+                       .Group("selfplay")
+                       .Range(0.f, 100.f)
+                       .Helper("Set the random move temperature.");
+    kOptionsMap << RegisterOption({"--random-opening-prob"}, "random_opening_prob", 0.f)
+                       .Group("selfplay")
+                       .Range(0.f, 1.f)
+                       .Helper("Set the probability of starting self-play with a random opening "
+                               "sequence.");
+    kOptionsMap << RegisterOption({"--random-opening-temp"}, "random_opening_temp", 1.f)
+                       .Group("selfplay")
+                       .Range(0.f, 100.f)
+                       .Helper("Set the random opening temperature.");
 
-    kOptionsMap["gumbel_c_visit"] << Option::SetOption(50.f);
-    kOptionsMap["gumbel_c_scale"] << Option::SetOption(1.f);
-    kOptionsMap["gumbel_prom_visits"] << Option::SetOption(1);
-    kOptionsMap["gumbel_considered_moves"] << Option::SetOption(16);
-    kOptionsMap["gumbel_playouts_threshold"] << Option::SetOption(400);
-    kOptionsMap["gumbel"] << Option::SetOption(false);
-    kOptionsMap["always_completed_q_policy"] << Option::SetOption(false);
+    kOptionsMap << RegisterOption({"--gumbel-c-visit"}, "gumbel_c_visit", 50.f)
+                       .Group("selfplay")
+                       .Helper("Set the Gumbel visit constant.");
+    kOptionsMap << RegisterOption({"--gumbel-c-scale"}, "gumbel_c_scale", 1.f)
+                       .Group("selfplay")
+                       .Helper("Set the Gumbel scale constant.");
+    kOptionsMap << RegisterOption({"--gumbel-prom-visits"}, "gumbel_prom_visits", 1)
+                       .Group("selfplay")
+                       .Helper("Set the promoted visit count for Gumbel search.");
+    kOptionsMap << RegisterOption({"--gumbel-considered-moves"}, "gumbel_considered_moves", 16)
+                       .Group("selfplay")
+                       .Helper("Set the number of moves considered by Gumbel search.");
+    kOptionsMap << RegisterOption({"--gumbel-playouts-threshold"}, "gumbel_playouts_threshold", 400)
+                       .Group("selfplay")
+                       .Helper("Set the playout threshold for Gumbel search.");
+    kOptionsMap << RegisterOption({"--gumbel"}, "gumbel", false)
+                       .Group("selfplay")
+                       .Helper("Enable Gumbel search.");
+    kOptionsMap << RegisterOption(
+                       {"--always-completed-q-policy"}, "always_completed_q_policy", false)
+                       .Group("selfplay")
+                       .Helper("Always use completed-Q policy values.");
 
-    kOptionsMap["dirichlet_noise"] << Option::SetOption(false);
-    kOptionsMap["dirichlet_epsilon"] << Option::SetOption(0.25f);
-    kOptionsMap["dirichlet_init"] << Option::SetOption(0.03f);
-    kOptionsMap["dirichlet_factor"] << Option::SetOption(361.f);
+    kOptionsMap << RegisterOption({"--dirichlet-noise", "--noise", "-n"}, "dirichlet_noise", false)
+                       .Group("selfplay")
+                       .Helper("Enable Dirichlet noise at the root.");
+    kOptionsMap << RegisterOption({"--dirichlet-epsilon"}, "dirichlet_epsilon", 0.25f)
+                       .Group("selfplay")
+                       .Helper("Set the Dirichlet noise mixing weight.");
+    kOptionsMap << RegisterOption({"--dirichlet-init"}, "dirichlet_init", 0.03f)
+                       .Group("selfplay")
+                       .Helper("Set the initial Dirichlet alpha value.");
+    kOptionsMap << RegisterOption({"--dirichlet-factor"}, "dirichlet_factor", 361.f)
+                       .Group("selfplay")
+                       .Helper("Set the Dirichlet alpha scaling factor.");
 
-    kOptionsMap["kldgain_per_node"] << Option::SetOption(0.0, 100.0, 0.0);
-    kOptionsMap["kldgain_interval"] << Option::SetOption(0);
+    kOptionsMap << RegisterOption({"--kldgain-per-node"}, "kldgain_per_node", 0.0)
+                       .Group("selfplay")
+                       .Range(0.0, 100.0)
+                       .Helper("Set the KLD gain-per-visit threshold for early stopping.");
+    kOptionsMap << RegisterOption({"--kldgain-interval"}, "kldgain_interval", 0)
+                       .Group("selfplay")
+                       .Helper("Set the interval for KLD gain updates.");
 
-    kOptionsMap["resign_playouts"] << Option::SetOption(0);
-    kOptionsMap["fastsearch_playouts"] << Option::SetOption(0);
-    kOptionsMap["fastsearch_playouts_prob"] << Option::SetOption(0.f, 1.f, 0.f);
-    kOptionsMap["random_fastsearch_prob"] << Option::SetOption(0.f, 1.f, 0.f);
-    kOptionsMap["first_pass_bonus"] << Option::SetOption(false);
-    kOptionsMap["resign_discard_prob"] << Option::SetOption(0.f, 1.f, 0.f);
+    kOptionsMap << RegisterOption({"--resign-playouts"}, "resign_playouts", 0)
+                       .Group("selfplay")
+                       .Helper("Set the fast-search playout cap after the resign threshold is "
+                               "reached.");
+    kOptionsMap << RegisterOption({"--fastsearch-playouts"}, "fastsearch_playouts", 0)
+                       .Group("selfplay")
+                       .Helper("Set the reduced playout count for fast search.");
+    kOptionsMap << RegisterOption({"--fastsearch-playouts-prob"}, "fastsearch_playouts_prob", 0.f)
+                       .Group("selfplay")
+                       .Range(0.f, 1.f)
+                       .Helper("Set the probability of using reduced playouts.");
+    kOptionsMap << RegisterOption({"--random-fastsearch-prob"}, "random_fastsearch_prob", 0.f)
+                       .Group("selfplay")
+                       .Range(0.f, 1.f)
+                       .Helper("Set the probability of choosing a random move during fast search.");
+    kOptionsMap << RegisterOption({"--first-pass-bonus"}, "first_pass_bonus", false)
+                       .Group("selfplay")
+                       .Helper("Enable endgame score bonuses for pass and cleanup moves.");
+    kOptionsMap << RegisterOption({"--resign-discard-prob"}, "resign_discard_prob", 0.f)
+                       .Group("selfplay")
+                       .Range(0.f, 1.f)
+                       .Helper("Set the probability of discarding resigned self-play games.");
 
-    kOptionsMap["num_games"] << Option::SetOption(0);
-    kOptionsMap["parallel_games"] << Option::SetOption(1);
-    kOptionsMap["komi_stddev"] << Option::SetOption(0.f);
-    kOptionsMap["komi_big_stddev"] << Option::SetOption(0.f);
-    kOptionsMap["komi_big_stddev_prob"] << Option::SetOption(0.f, 1.f, 0.f);
-    kOptionsMap["handicap_fair_komi_prob"] << Option::SetOption(0.f, 1.f, 0.f);
-    kOptionsMap["target_directory"] << Option::SetOption(std::string{});
+    kOptionsMap << RegisterOption({"--num-games"}, "num_games", 0)
+                       .Group("selfplay")
+                       .Helper("Set the number of self-play games to generate.");
+    kOptionsMap << RegisterOption({"--parallel-games"}, "parallel_games", 1)
+                       .Group("selfplay")
+                       .Helper("Set the number of self-play games to run in parallel.");
+    kOptionsMap << RegisterOption({"--komi-stddev"}, "komi_stddev", 0.f)
+                       .Group("selfplay")
+                       .Helper("Set the standard deviation for random komi.");
+    kOptionsMap << RegisterOption({"--komi-big-stddev"}, "komi_big_stddev", 0.f)
+                       .Group("selfplay")
+                       .Helper("Set the larger standard deviation for random komi.");
+    kOptionsMap << RegisterOption({"--komi-big-stddev-prob"}, "komi_big_stddev_prob", 0.f)
+                       .Group("selfplay")
+                       .Range(0.f, 1.f)
+                       .Helper("Set the probability of using the larger random komi deviation.");
+    kOptionsMap << RegisterOption({"--handicap-fair-komi-prob"}, "handicap_fair_komi_prob", 0.f)
+                       .Group("selfplay")
+                       .Range(0.f, 1.f)
+                       .Helper("Set the probability of using handicap fair komi.");
+    kOptionsMap << RegisterOption({"--target-directory"}, "target_directory", std::string{})
+                       .Group("selfplay")
+                       .Helper("Set the target directory for generated output.");
 
     // benchmark options
-    kOptionsMap["benchmark_query"] << Option::SetOption(std::string{});
+    kOptionsMap << RegisterOption({"--benchmark-query"}, "benchmark_query", std::string{})
+                       .Group("benchmark")
+                       .Helper("Add a benchmark setup query.");
 }
 
 void ArgsParser::InitBasicParameters() const {
@@ -156,9 +401,7 @@ void ArgsParser::InitBasicParameters() const {
     // If the threads/batchsize are zero, program will select a reasonable
     // number based on your device and others setting.
     bool already_set_specific_gpus = !IsOptionDefault("gpus");
-    const bool use_gpu = IsOptionDefault("use_gpu") ? IsGpuAvailable()
-                       : IsGpuAvailable()           ? GetOption<bool>("use_gpu")
-                                                    : false;
+    const bool use_gpu = IsGpuAvailable();
     const int num_gpus = !use_gpu                  ? 0
                        : already_set_specific_gpus ? GetOptionCount("gpus")
                                                    : GetGpuCount();
@@ -317,19 +560,10 @@ bool IsParameter(const std::string& param) {
 std::string RemoveComment(std::string line) {
     auto out = std::string{};
     for (auto c : line) {
-        if (c == '#')
+        if (c == '#') {
             break;
+        }
         out += c;
-    }
-    return out;
-}
-
-std::string SplitterToString(Splitter& spt) {
-    auto out = std::string{};
-    const auto cnt = spt.GetCount();
-    for (auto i = size_t{0}; i < cnt; ++i) {
-        const auto res = spt.GetWord(i)->Get<>();
-        out += (res + " \0"[i + 1 == cnt]);
     }
     return out;
 }
@@ -338,7 +572,6 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     auto spt = Splitter(argc, argv);
 
     InitOptionsMap();
-    inputs_ = std::string{};
 
     // Remove the name.
     const auto name = spt.RemoveWord(0);
@@ -375,736 +608,43 @@ ArgsParser::ArgsParser(int argc, char** argv) {
     }
 
     Parse(spt);
-    SetOption("inputs", inputs_);
 
     DumpWarning();
     InitBasicParameters();
 }
 
 void ArgsParser::Parse(Splitter& spt) {
-    const auto ErrorCommands = [](Splitter& spt) -> bool {
-        const auto cnt = spt.GetCount();
-        if (cnt == 0) {
-            return false;
-        }
-
-        LOGGING << "Command(s) Error:" << std::endl;
-        for (auto i = size_t{0}; i < cnt; ++i) {
-            const auto command = spt.GetWord(i)->Get<>();
-            if (!IsParameter(command)) {
-                LOGGING << " " << i + 1 << ". " << command << std::endl;
-            }
-        }
-        LOGGING << " are not understood." << std::endl;
-        return true;
-    };
-
-    const auto TransferHint = [](std::string hint) {
-        for (auto& c : hint) {
-            if (c == '+') {
-                c = ' ';
-            }
-        }
-        return hint;
-    };
-
-    const auto AcceptSet = [](std::string in, const std::initializer_list<std::string> list) {
-        bool accept = false;
-        for (auto& v : list) {
-            if (in == v)
-                accept = true;
-        }
-        return accept;
-    };
-
-    inputs_ += (SplitterToString(spt) + ' ');
-
-    if (const auto res = spt.FindNext({"--mode", "-m"})) {
-        if (IsParameter(res->Get<>()) &&
-            AcceptSet(res->Get<>(), {"gtp", "selfplay", "benchmark"})) {
-            SetOption("mode", res->Get<>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--timemanage")) {
-        if (IsParameter(res->Get<>()) && AcceptSet(res->Get<>(), {"off", "on", "fast", "keep"})) {
-            if (res->Get<>() == "off") {
-                SetOption("timemanage", static_cast<int>(TimeControl::TimeManagement::kOff));
-            } else if (res->Get<>() == "on") {
-                SetOption("timemanage", static_cast<int>(TimeControl::TimeManagement::kOn));
-            } else if (res->Get<>() == "fast") {
-                SetOption("timemanage", static_cast<int>(TimeControl::TimeManagement::kFast));
-            } else if (res->Get<>() == "keep") {
-                SetOption("timemanage", static_cast<int>(TimeControl::TimeManagement::kKeep));
-            }
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--scoring-rule")) {
-        if (IsParameter(res->Get<>()) && AcceptSet(res->Get<>(), {"area", "territory"})) {
-            if (res->Get<>() == "area") {
-                SetOption("scoring_rule", static_cast<int>(kArea));
-            } else if (res->Get<>() == "territory") {
-                SetOption("scoring_rule", static_cast<int>(kTerritory));
-            }
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.Find({"--help", "-h"})) {
-        SetOption("help", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find({"--quiet", "-q"})) {
-        SetOption("quiet", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--ponder")) {
-        SetOption("ponder", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--reuse-tree")) {
-        SetOption("reuse_tree", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--friendly-pass")) {
-        SetOption("friendly_pass", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--no-cache")) {
-        SetOption("no_cache", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--early-symm-cache")) {
-        SetOption("early_symm_cache", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--symm-pruning")) {
-        SetOption("symm_pruning", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--first-pass-bonus")) {
-        SetOption("first_pass_bonus", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--use-stm-winrate")) {
-        SetOption("use_stm_winrate", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--use-optimistic-policy")) {
-        SetOption("policy_buffer_offset", static_cast<int>(PolicyBufferOffset::kOptimistic));
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--use-rollout")) {
-        SetOption("use_rollout", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--no-winograd")) {
-        SetOption("winograd", false);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--no-fp16")) {
-        SetOption("fp16", false);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--capture-all-dead")) {
-        SetOption("capture_all_dead", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--no-cache-tensorrt-plan")) {
-        SetOption("cache_tensorrt_plan", false);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.FindNext({"--resign-threshold", "-r"})) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("resign_threshold", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--kgs-hint")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("kgs_hint", TransferHint(res->Get<>()));
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.Find({"--analysis-verbose", "-a"})) {
-        SetOption("analysis_verbose", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find({"--dirichlet-noise", "--noise", "-n"})) {
-        SetOption("dirichlet_noise", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.FindNext("--gumbel-c-visit")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("gumbel_c_visit", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--gumbel-c-scale")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("gumbel_c_scale", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--gumbel-prom-visits")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("gumbel_prom_visits", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--gumbel-considered-moves")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("gumbel_considered_moves", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--gumbel-playouts-threshold")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("gumbel_playouts_threshold", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.Find("--gumbel")) {
-        SetOption("gumbel", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--always-completed-q-policy")) {
-        SetOption("always_completed_q_policy", true);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.Find("--no-cpuct-dynamic")) {
-        SetOption("cpuct_dynamic", false);
-        spt.RemoveWord(res->Index());
-    }
-
-    if (const auto res = spt.FindNext("--dirichlet-epsilon")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("dirichlet_epsilon", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--dirichlet-init")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("dirichlet_init", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--dirichlet-factor")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("dirichlet_factor", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--kldgain-per-node")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("kldgain_per_node", res->Get<double>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--kldgain-interval")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("kldgain_interval", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--random-min-visits")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("random_min_visits", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--random-min-ratio")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("random_min_ratio", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--random-moves-factor")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("random_moves_factor", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--random-moves-temp")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("random_moves_temp", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--random-opening-prob")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("random_opening_prob", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--random-opening-temp")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("random_opening_temp", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--gpu-waittime")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("gpu_waittime", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
+    std::vector<std::string> args;
+    args.reserve(spt.GetCount() + 1);
+    args.emplace_back("sayuri");
+    for (auto i = size_t{0}; i < spt.GetCount(); ++i) {
+        args.emplace_back(spt.GetWord(i)->Get<>());
     }
 
-    while (const auto res = spt.FindNext({"--gpu", "-g"})) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("gpus", res->Get<int>());
-            UniqueOption("gpus");
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
+    std::vector<char*> argv;
+    argv.reserve(args.size());
+    for (auto& arg : args) {
+        argv.emplace_back(arg.data());
     }
 
-    if (const auto res = spt.FindNext({"--threads", "-t"})) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("threads", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
+    try {
+        kOptionsMap.ParseArgs(static_cast<int>(argv.size()), argv.data());
+    } catch (const std::exception& e) {
+        LOGGING << "Command Error: " << e.what() << std::endl;
+        DumpHelper();
     }
 
-    if (const auto res = spt.FindNext({"--batch-size", "-b"})) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("batch_size", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--cache-memory-mib")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("cache_memory_mib", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext({"--playouts", "-p"})) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("playouts", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--ponder-factor")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("ponder_factor", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--const-time")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("const_time", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--virtual-loss-count")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("virtual_loss_count", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext({"--logfile", "-l"})) {
-        if (IsParameter(res->Get<>())) {
-            auto fname = res->Get<>();
-            LogWriter::Get().SetFilename(fname);
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--fixed-nn-boardsize")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("fixed_nn_boardsize", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext({"--board-size", "-s"})) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("defualt_boardsize", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext({"--komi", "-k"})) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("defualt_komi", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--ci-alpha")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("ci_alpha", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext({"--weights", "-w"})) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("weights_file", res->Get<>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--weights-dir")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("weights_dir", res->Get<>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--book")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("book_file", res->Get<>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--patterns")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("patterns_file", res->Get<>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--score-utility-factor")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("score_utility_factor", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--score-utility-div")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("score_utility_div", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--forced-playouts-k")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("forced_playouts_k", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--suppress-pass-factor")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("suppress_pass_factor", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--gammas-policy-factor")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("gammas_policy_factor", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--lcb-reduction")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("lcb_reduction", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--fpu-reduction")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("fpu_reduction", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--root-fpu-reduction")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("root_fpu_reduction", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--cpuct-init")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("cpuct_init", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--cpuct-base-factor")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("cpuct_base_factor", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--cpuct-base")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("cpuct_base", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--cpuct-dynamic-k-factor")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("cpuct_dynamic_k_factor", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--cpuct-dynamic-k-base")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("cpuct_dynamic_k_base", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--root-policy-temp")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("root_policy_temp", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--policy-temp")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("policy_temp", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--resign-discard-prob")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("resign_discard_prob", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--resign-playouts")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("resign_playouts", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext({"--reduce-playouts", "--fastsearch-playouts"})) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("fastsearch_playouts", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext({"--reduce-playouts-prob", "--fastsearch-playouts-prob"})) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("fastsearch_playouts_prob", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--random-fastsearch-prob")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("random_fastsearch_prob", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--lag-buffer")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("lag_buffer", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--num-games")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("num_games", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--parallel-games")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("parallel_games", res->Get<int>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--komi-stddev")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("komi_stddev", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--komi-big-stddev")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("komi_big_stddev", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--komi-big-stddev-prob")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("komi_big_stddev_prob", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--handicap-fair-komi-prob")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("handicap_fair_komi_prob", res->Get<float>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    if (const auto res = spt.FindNext("--target-directory")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("target_directory", res->Get<>());
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    while (const auto res = spt.FindNext("--selfplay-query")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("selfplay_query", res->Get<>());
-            UniqueOption("selfplay_query");
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
-
-    while (const auto res = spt.FindNext("--benchmark-query")) {
-        if (IsParameter(res->Get<>())) {
-            SetOption("benchmark_query", res->Get<>());
-            UniqueOption("benchmark_query");
-            spt.RemoveSlice(res->Index() - 1, res->Index() + 1);
-        }
-    }
+    UniqueOption("gpus");
+    UniqueOption("selfplay_query");
+    UniqueOption("benchmark_query");
 
-    if (ErrorCommands(spt) || GetOption<bool>("help")) {
+    if (GetOption<bool>("help")) {
         DumpHelper();
     }
 }
 
 void ArgsParser::DumpHelper() const {
-    LOGGING
-        << "Arguments:" << std::endl
-        << "\t--quiet, -q\n"
-        << "\t\tDisable all diagnostic output.\n\n"
-
-        << "\t--analysis-verbose, -a\n"
-        << "\t\tPrint detailed search information.\n\n"
-
-        << "\t--ponder\n"
-        << "\t\tEnable thinking on opponent's time.\n\n"
-
-        << "\t--reuse-tree\n"
-        << "\t\tReuse part of the previous search tree for the next move.\n\n"
-
-        << "\t--early-symm-cache\n"
-        << "\t\tAccelerate the search on the opening stage.\n\n"
-
-        << "\t--friendly-pass\n"
-        << "\t\tPass when the engine believes it is winning.\n\n"
-
-        << "\t--capture-all-dead\n"
-        << "\t\tTry to remove all dead strings before pass. Only effective with area scoring.\n\n"
-
-        << "\t--use-optimistic-policy\n"
-        << "\t\tUse the optimistic policy insteal of normal policy.\n\n"
-
-        << "\t--cache-memory-mib <integer>\n"
-        << "\t\tSet the NN cache size in MiB.\n\n"
-
-        << "\t--playouts, -p <integer>\n"
-        << "\t\tThe number of maximum playouts.\n\n"
-
-        << "\t--const-time <integer>\n"
-        << "\t\tConst time of search per move in seconds.\n\n"
-
-        << "\t--gpu, -g <integer>\n"
-        << "\t\tSelect a specific GPU device. Default is all devices.\n\n"
-
-        << "\t--threads, -t <integer>\n"
-        << "\t\tThe number of threads used. Select 0 to let engine pick a reasonable default.\n\n"
-
-        << "\t--batch-size, -b <integer>\n"
-        << "\t\tThe number of batches for a single evaluation. Select 0 to let engine pick a "
-           "reasonable default.\n\n"
-
-        << "\t--lag-buffer <float>\n"
-        << "\t\tSafety margin for time usage in seconds.\n\n"
-
-        << "\t--cpuct-init <float>\n"
-        << "\t\tcPUCT value for MCTS exploration.\n\n"
-
-        << "\t--score-utility-factor <float>\n"
-        << "\t\tScore-based utility factor for MCTS.\n\n"
-
-        << "\t--lcb-reduction <float>\n"
-        << "\t\tReduce the LCB weights. Select 1 to let the most visits node as the best move in "
-           "MCTS.\n\n"
-
-        << "\t--resign-threshold, -r <float>\n"
-        << "\t\tResign when winrate is less than x. Default is 0.1.\n\n"
-
-        << "\t--timemanage [off/on/fast/keep]\n"
-        << "\t\tWill save the thinking time if we enable the option.\n\n"
-
-        << "\t--scoring-rule [area/territory]\n"
-        << "\t\tSelect a specific scoring rule.\n\n"
-
-        << "\t--weights, -w <weight file name>\n"
-        << "\t\tFile with network weights.\n\n"
-
-        << "\t--book <book file name>\n"
-        << "\t\tFile with opening book.\n\n"
-
-        << "\t--logfile, -l <log file name>\n"
-        << "\t\tFile to log input/output to.\n\n";
+    LOGGING << OptionHelpersToString();
     exit(0);
 }
 

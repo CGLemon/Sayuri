@@ -32,7 +32,7 @@ void TrtForwardPipe::Initialize(std::shared_ptr<DNNWeights> weights) {
     dump_gpu_info_ = true;
 
     auto option = ForwardPipeOption::Get()
-                      .SetBoardSize(GetOption<int>("defualt_boardsize"))
+                      .SetBoardSize(GetOption<int>("default_boardsize"))
                       .SetBatchSize(GetOption<int>("batch_size"));
     Construct(option, weights);
 

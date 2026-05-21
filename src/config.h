@@ -17,6 +17,4 @@ private:
     void DumpWarning() const;
     void InitBasicParameters() const;
     void InitOptionsMap() const;
-
-    std::string inputs_;
 };
