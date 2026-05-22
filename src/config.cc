@@ -34,8 +34,8 @@ void ArgsParser::InitOptionsMap() const {
                        .Helper("Print command-line help.");
     kOptionsMap << RegisterOption({"--mode", "-m"}, "mode", std::string{"gtp"})
                        .Group("generic")
-                       .Choices<std::string>({"gtp", "selfplay", "benchmark"},
-                                             {"gtp", "selfplay", "benchmark"})
+                       .Choices<std::string>({"gtp", "selfplay", "benchmark", "test"},
+                                             {"gtp", "selfplay", "benchmark", "test"})
                        .Helper("Select the execution mode.");
     kOptionsMap << RegisterOption({"--ponder"}, "ponder", false)
                        .Group("generic")

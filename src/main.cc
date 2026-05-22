@@ -1,6 +1,7 @@
 #include <memory>
 
 #include "include.h"
+#include "tests/unitest.h"
 
 void DumpLicense() {
     auto name_ver = Format("%s %s (%s)",
@@ -39,19 +40,26 @@ void StartBenchmarkLoop() {
     }
 }
 
+void StartUniTest() {
+    exit(unitest::RunAllTests());
+}
+
 int main(int argc, char** argv) {
     ArgsParser(argc, argv);
+    const auto mode = GetOption<std::string>("mode");
 
     DumpLicense();
 
     ThreadPool::Get(0);
 
-    if (GetOption<std::string>("mode") == "gtp") {
+    if (mode == "gtp") {
         StartGtpLoop();
-    } else if (GetOption<std::string>("mode") == "selfplay") {
+    } else if (mode == "selfplay") {
         StartSelfplayLoop();
-    } else if (GetOption<std::string>("mode") == "benchmark") {
+    } else if (mode == "benchmark") {
         StartBenchmarkLoop();
+    } else if (mode == "test") {
+        StartUniTest();
     }
     return 0;
 }

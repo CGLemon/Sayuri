@@ -11,6 +11,7 @@ set "NEURAL_CUDA_DIR=%SRC_DIR%\neural\cuda"
 set "PATTERN_DIR=%SRC_DIR%\pattern"
 set "MCTS_DIR=%SRC_DIR%\mcts"
 set "SELFPLAY_DIR=%SRC_DIR%\selfplay"
+set "TESTS_DIR=%SRC_DIR%\tests"
 set "UTILS_DIR=%SRC_DIR%\utils"
 
 REM --- Compiler Selection ---
@@ -112,6 +113,7 @@ if /I "%COMPILER_CHOICE%"=="nvcc" (
         "%PATTERN_DIR%\*.cc"
         "%MCTS_DIR%\*.cc"
         "%SELFPLAY_DIR%\*.cc"
+        "%TESTS_DIR%\*.cc"
         "%UTILS_DIR%\*.cc"
     ) do (
         for %%g in (%%f) do (
@@ -133,6 +135,7 @@ if /I "%COMPILER_CHOICE%"=="nvcc" (
         "%PATTERN_DIR%\*.cc"
         "%MCTS_DIR%\*.cc"
         "%SELFPLAY_DIR%\*.cc"
+        "%TESTS_DIR%\*.cc"
         "%UTILS_DIR%\*.cc"
     ) do (
         for %%g in (%%f) do (
