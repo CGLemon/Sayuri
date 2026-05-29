@@ -14,6 +14,7 @@
 #include <typeinfo>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace option_detail {
@@ -67,8 +68,7 @@ public:
         Option o;
         o.type_ = typeid(ValueT);
         o.is_enum_ = std::is_enum_v<ValueT>;
-        o.Push(std::any(ValueT(std::move(value))));
-        o.is_default_ = true;
+        o.PushDefault(std::any(ValueT(std::move(value))));
         return o;
     }
 
@@ -157,8 +157,8 @@ public:
         };
         has_choices_ = true;
 
-        if (!history_.empty()) {
-            EnsureValueHasChoice(history_.back());
+        for (const auto& v : history_) {
+            EnsureValueHasChoice(v);
         }
     }
 
@@ -202,18 +202,23 @@ public:
     bool IsBoolean() const {
         return option_detail::IsBoolean(type_);
     }
-    void MarkDefault(bool v = true) {
-        is_default_ = v;
-        if (v && !history_.empty()) {
-            default_ = history_.back();
+    void SetCurrentAsDefault() {
+        if (history_.empty()) {
+            throw std::runtime_error(
+                "Option Error: cannot set current value as default on empty history.");
         }
+
+        is_default_ = true;
+        default_ = history_.back();
+        history_.clear();
+        history_.emplace_back(default_);
     }
     int Count() const {
         return static_cast<int>(history_.size());
     }
 
     void Unique();
-    std::string ToString() const;
+    std::string ToDebugString() const;
     std::string HelpMetadata() const;
 
 private:
@@ -241,9 +246,9 @@ private:
     bool no_value_ = false;
 
     static std::string HelpTypePlaceholder(std::type_index t, bool is_enum);
-    std::string ChoiceNameOfCurrent() const;
     void EnsureValueHasChoice(const std::any& v) const;
     void Push(std::any v);
+    void PushDefault(std::any v);
 
     template <typename T> bool TryClampLastAs() {
         if (type_ != typeid(T)) {
@@ -413,7 +418,7 @@ inline bool SetOption(const std::string& key, T value, bool as_default = false) 
     }
     it->second.Set<T>(std::move(value));
     if (as_default) {
-        it->second.MarkDefault();
+        it->second.SetCurrentAsDefault();
     }
     return true;
 }

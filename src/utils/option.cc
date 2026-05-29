@@ -164,19 +164,25 @@ void Option::Unique() {
     history_ = std::move(dest);
 }
 
-std::string Option::ToString() const {
+std::string Option::ToDebugString() const {
     std::ostringstream out;
-    if (history_.empty()) {
-        out << "<empty>";
-    } else if (has_choices_) {
-        std::string name = ChoiceNameOfCurrent();
-        if (name.empty()) {
-            name = "<unmatched>";
+
+    const auto CurrentValueString = [&]() {
+        if (history_.empty()) {
+            return std::string("<empty>");
         }
-        out << name;
-    } else {
-        out << option_detail::AnyToString(history_.back());
-    }
+        if (!has_choices_) {
+            return option_detail::AnyToString(history_.back());
+        }
+        for (size_t i = 0; i < choice_values_.size(); ++i) {
+            if (choice_equals_(history_.back(), choice_values_[i])) {
+                return choice_names_[i];
+            }
+        }
+        return std::string("<unmatched>");
+    };
+
+    out << CurrentValueString();
     if (has_range_) {
         out << ", Max: " << option_detail::AnyToString(max_);
         out << ", Min: " << option_detail::AnyToString(min_);
@@ -184,10 +190,7 @@ std::string Option::ToString() const {
     if (has_choices_) {
         out << ", Choices: {";
         for (size_t i = 0; i < choice_names_.size(); ++i) {
-            if (i != 0) {
-                out << ", ";
-            }
-            out << choice_names_[i];
+            out << (i == 0 ? "" : ", ") << choice_names_[i];
         }
         out << "}";
     } else {
@@ -197,74 +200,61 @@ std::string Option::ToString() const {
 }
 
 std::string Option::HelpMetadata() const {
-    std::ostringstream out;
-    bool has_content = false;
-    const auto Sep = [&]() {
-        if (has_content) {
-            out << " ";
-        }
-        has_content = true;
-    };
+    std::vector<std::string> parts;
 
-    std::string placeholder = HelpTypePlaceholder(type_, is_enum_);
-    if (has_choices_) {
-        placeholder.clear();
-    }
-    if (!placeholder.empty()) {
-        Sep();
-        out << placeholder;
-    }
-    if (has_range_) {
-        Sep();
-        out << "[" << option_detail::AnyToString(min_) << ", " << option_detail::AnyToString(max_)
-            << "]";
-    }
-    if (has_choices_) {
-        Sep();
+    const auto ChoicesLabel = [&]() {
+        std::ostringstream out;
         out << "{";
         for (size_t i = 0; i < choice_names_.size(); ++i) {
-            if (i != 0) {
-                out << ", ";
-            }
-            out << choice_names_[i];
+            out << (i == 0 ? "" : ", ") << choice_names_[i];
         }
         out << "}";
+        return out.str();
+    };
+
+    const auto DefaultLabel = [&]() -> std::string {
+        if (!default_.has_value()) {
+            return {};
+        }
+        if (!has_choices_) {
+            return option_detail::AnyToString(default_);
+        }
+        for (size_t i = 0; i < choice_values_.size(); ++i) {
+            if (choice_equals_(default_, choice_values_[i])) {
+                return choice_names_[i];
+            }
+        }
+        return {};
+    };
+
+    if (!has_choices_) {
+        std::string placeholder = HelpTypePlaceholder(type_, is_enum_);
+        if (!placeholder.empty()) {
+            parts.emplace_back(std::move(placeholder));
+        }
+    }
+    if (has_range_) {
+        std::ostringstream range;
+        range << "[" << option_detail::AnyToString(min_) << ", " << option_detail::AnyToString(max_)
+              << "]";
+        parts.emplace_back(range.str());
+    }
+    if (has_choices_) {
+        parts.emplace_back(ChoicesLabel());
     }
 
-    std::any d = default_;
-    if (!d.has_value() && is_default_ && !history_.empty()) {
-        d = history_.back();
+    if (std::string label = DefaultLabel(); !label.empty()) {
+        parts.emplace_back("(default: " + label + ")");
     }
-    if (d.has_value()) {
-        std::string label;
-        if (has_choices_) {
-            for (size_t i = 0; i < choice_values_.size(); ++i) {
-                if (choice_equals_(d, choice_values_[i])) {
-                    label = choice_names_[i];
-                    break;
-                }
-            }
-        } else {
-            label = option_detail::AnyToString(d);
+
+    std::ostringstream out;
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (i != 0) {
+            out << " ";
         }
-        if (!label.empty()) {
-            Sep();
-            out << "(default: " << label << ")";
-        }
+        out << parts[i];
     }
     return out.str();
-}
-
-std::string Option::ChoiceNameOfCurrent() const {
-    if (!has_choices_ || history_.empty()) {
-        return {};
-    }
-    for (size_t i = 0; i < choice_values_.size(); ++i) {
-        if (choice_equals_(history_.back(), choice_values_[i])) {
-            return choice_names_[i];
-        }
-    }
-    return {};
 }
 
 void Option::EnsureValueHasChoice(const std::any& v) const {
@@ -287,14 +277,16 @@ void Option::EnsureValueHasChoice(const std::any& v) const {
 void Option::Push(std::any v) {
     EnsureValueHasChoice(v);
     if (is_default_) {
-        if (!history_.empty()) {
-            default_ = history_.back();
-        }
         history_.clear();
         is_default_ = false;
     }
     history_.emplace_back(std::move(v));
     ClampLast();
+}
+
+void Option::PushDefault(std::any v) {
+    Push(v);
+    SetCurrentAsDefault();
 }
 
 void Option::ClampLast() {
@@ -476,18 +468,24 @@ void OptionsMap::ParseArgs(int argc, char** argv) {
         }
     }
 
+    std::string ctx = base_profile_;
     for (const auto& r : records) {
         if (r.base_flag.empty()) {
+            if (!r.profile_name.empty()) {
+                ctx = r.profile_name;
+            }
             continue;
         }
         const std::string& key = flags_.at(r.base_flag);
-        if (r.profile_name.empty()) {
+        if (!r.profile_name.empty()) {
+            profiles_.at(r.profile_name).at(key).SetFromString(r.value);
+        } else if (ctx == base_profile_) {
             for (auto& [profile_name, options] : profiles_) {
                 (void)profile_name;
                 options.at(key).SetFromString(r.value);
             }
         } else {
-            profiles_.at(r.profile_name).at(key).SetFromString(r.value);
+            profiles_.at(ctx).at(key).SetFromString(r.value);
         }
     }
 
