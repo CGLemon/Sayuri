@@ -111,7 +111,7 @@ std::string Option::HelpTypePlaceholder(std::type_index t, bool is_enum) {
         return "<double>";
     }
     if (option_detail::IsBoolean(t)) {
-        return {};
+        return "<bool>";
     }
     if (option_detail::IsString(t)) {
         return "<string>";
@@ -200,6 +200,10 @@ std::string Option::ToDebugString() const {
 }
 
 std::string Option::HelpMetadata() const {
+    if (no_value_) {
+        return {};
+    }
+
     std::vector<std::string> parts;
 
     const auto ChoicesLabel = [&]() {
