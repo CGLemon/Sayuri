@@ -6,12 +6,92 @@
 
 #include "config.h"
 #include "game/sgf.h"
-#include "utils/filesystem.h"
 #include "utils/komi.h"
 #include "utils/log.h"
 #include "utils/random.h"
 #include "utils/splitter.h"
 #include "utils/threadpool.h"
+
+void BotProfile::GenerateSelfPlayMove() {
+    state->PlayMove(search->GetSelfPlayMove());
+}
+
+void Engine::Initialize(std::vector<std::unique_ptr<GameState>>& games) {
+    if (!network_) {
+        network_ = std::make_unique<Network>();
+    }
+    curr_weights_ = SelectWeights();
+    network_->Initialize(curr_weights_.filename);
+
+    parallel_games_ = games.size();
+    search_pool_.clear();
+    for (int i = 0; i < parallel_games_; ++i) {
+        search_pool_.emplace_back(std::make_unique<Search>(*games[i], *network_));
+    }
+    for (int i = 0; i < parallel_games_; ++i) {
+        BotProfile bot;
+        bot.network = network_.get();
+        bot.search = search_pool_[i].get();
+        bot.state = games[i].get();
+        bots_.emplace_back(bot);
+    }
+}
+
+Engine::FileMetadata Engine::SelectWeights() const {
+    // default weights
+    auto default_weights = GetOption<std::string>("weights_file");
+    if (!default_weights.empty()) {
+        FileMetadata fmeta;
+        if (fmeta.Load(default_weights)) {
+            return fmeta;
+        }
+    }
+
+    auto weights_dir = GetOption<std::string>("weights_dir");
+    auto weights_list = GetFileList(weights_dir);
+    auto fmeta_list = std::vector<FileMetadata>{};
+
+    if (!weights_list.empty()) {
+        for (auto w : weights_list) {
+            FileMetadata fmeta;
+            if (fmeta.Load(ConcatPath(weights_dir, w))) {
+                fmeta_list.emplace_back(fmeta);
+            }
+        }
+
+        // Seletet the last weights in this directory.
+        std::sort(std::begin(fmeta_list),
+                  std::end(fmeta_list),
+                  [&weights_dir](FileMetadata a, FileMetadata b) {
+                      return difftime(a.time, b.time) > 0.f;
+                  });
+        if (fmeta_list.empty()) {
+            return fmeta_list.front();
+        }
+    }
+    return FileMetadata{};
+}
+
+void Engine::Abort() {
+    network_->Destroy();
+    search_pool_.clear();
+}
+BotProfile Engine::GetBot(const int idx) {
+    if (idx < 0 || idx >= parallel_games_) {
+        throw std::runtime_error("The game index is out of array.");
+    }
+    return bots_[idx];
+}
+
+bool Engine::FileMetadata::Load(const std::string& filename) {
+    if (IsFileExist(filename)) {
+        return false;
+    }
+    this->filename = filename;
+    this->time = GetFileTime(filename);
+    return true;
+}
+/*
 
 void Engine::Initialize() {
     default_playouts_ = GetOption<int>("playouts");
@@ -354,3 +434,4 @@ void Engine::Handel(int g) {
         throw std::runtime_error("The game index is out of array.");
     }
 }
+ */

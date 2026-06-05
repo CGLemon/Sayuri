@@ -84,6 +84,23 @@ bool IsDirectoryExist(const std::string& directory) {
     return true;
 }
 
+bool IsFileExist(const std::string& filename) {
+#ifdef WIN32
+    const DWORD attr = GetFileAttributesA(filename.c_str());
+    if (attr == INVALID_FILE_ATTRIBUTES) {
+        return false;
+    }
+    return !(attr & FILE_ATTRIBUTE_DIRECTORY);
+#else
+    struct stat s;
+    if (stat(filename.c_str(), &s) < 0) {
+        return false;
+    }
+    return S_ISREG(s.st_mode);
+#endif
+    return false;
+}
+
 std::vector<std::string> GetFileList(const std::string& directory) {
     std::vector<std::string> result;
 #ifdef WIN32

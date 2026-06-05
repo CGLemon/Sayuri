@@ -8,7 +8,40 @@
 #include "game/types.h"
 #include "mcts/search.h"
 #include "neural/training_data.h"
+#include "utils/filesystem.h"
 
+struct BotProfile {
+    Network* network;
+    Search* search;
+    GameState* state;
+
+    void GenerateSelfPlayMove();
+};
+
+class Engine {
+public:
+    void Initialize(std::vector<std::unique_ptr<GameState>>& games);
+    void Abort();
+    BotProfile GetBot(const int idx);
+
+private:
+    struct FileMetadata {
+        std::string filename;
+        time_t time;
+
+        bool Load(const std::string& filename);
+    };
+    FileMetadata SelectWeights() const;
+
+    std::unique_ptr<Network> network_{nullptr};
+    std::vector<std::unique_ptr<Search>> search_pool_;
+    std::vector<BotProfile> bots_;
+
+    FileMetadata curr_weights_;
+    int parallel_games_;
+};
+
+/*
 class Engine {
 public:
     void Initialize();
@@ -67,3 +100,4 @@ private:
     std::vector<GameState> game_pool_;
     std::string curr_weights_name_;
 };
+ */

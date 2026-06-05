@@ -20,6 +20,9 @@ void TryCreateDirectory(const std::string& path);
 // Returns true if the directory already exists.
 bool IsDirectoryExist(const std::string& directory);
 
+// Returns true if the file exists and is a regular file (not a directory).
+bool IsFileExist(const std::string& filename);
+
 // Returns list of full paths of regular files in this directory.
 // Silently returns empty vector on error.
 std::vector<std::string> GetFileList(const std::string& directory);

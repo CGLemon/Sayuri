@@ -12,11 +12,11 @@
 #include "utils/time.h"
 
 SelfPlayPipe::SelfPlayPipe() {
-    Initialize();
-    Loop();
-    Finish();
+    // Initialize();
+    // Loop();
+    // Finish();
 }
-
+/*
 void SelfPlayPipe::Initialize() {
     // Close search verbose.
     SetOption("analysis_verbose", false);
@@ -339,3 +339,4 @@ void SelfPlayPipe::Loop() {
 void SelfPlayPipe::Finish() {
     engine_.Abort();
 }
+ */
