@@ -1453,7 +1453,6 @@ bool GtpLoop::ParseOption(Splitter& spt, std::string& rep) {
             agent_->SetThreads(std::stoi(value));
         } else if (name == "batch size") {
             agent_->SetBatchSize(std::stoi(value));
-        } else if (name == "batch size") {
         } else {
             rep = "invalid option name";
             return false;
