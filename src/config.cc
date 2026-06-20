@@ -550,35 +550,29 @@ void ArgsParser::InitBasicParameters() const {
     }
 }
 
-bool IsParameter(const std::string& param) {
-    if (param.empty()) {
-        return false;
-    }
-    return param[0] != '-';
-};
-
-std::string RemoveComment(std::string line) {
-    auto out = std::string{};
-    for (auto c : line) {
-        if (c == '#') {
-            break;
-        }
-        out += c;
-    }
-    return out;
-}
-
 ArgsParser::ArgsParser(int argc, char** argv) {
     auto spt = Splitter(argc, argv);
 
     InitOptionsMap();
 
-    // Remove the name.
-    const auto name = spt.RemoveWord(0);
-    (void)name;
+    auto lines = TryLoadConfig(spt);
+    auto config_spt = Splitter(lines);
+    spt.Merge(config_spt);
+    Parse(spt);
+
+    DumpWarning();
+    InitBasicParameters();
+}
+
+std::string ArgsParser::TryLoadConfig(Splitter& spt) const {
+    const auto IsParameter = [](const std::string& param) {
+        return !param.empty() && param[0] != '-';
+    };
+    const auto RemoveComment = [](const std::string& line) {
+        return line.substr(0, line.find('#'));
+    };
 
     auto config = std::string{};
-
     if (const auto res = spt.FindNext({"--config", "-config"})) {
         if (IsParameter(res->Get<>())) {
             config = res->Get<>();
@@ -586,49 +580,35 @@ ArgsParser::ArgsParser(int argc, char** argv) {
         }
     }
 
-    if (!config.empty()) {
-        auto file = std::ifstream{};
-
-        file.open(config);
-        if (file.is_open()) {
-            auto lines = std::string{};
-            auto line = std::string{};
-
-            while (std::getline(file, line)) {
-                line = RemoveComment(line);
-                if (!line.empty()) {
-                    lines += (line + ' ');
-                }
-            }
-            file.close();
-
-            auto cspt = Splitter(lines);
-            Parse(cspt);
-        }
+    auto lines = std::string{};
+    if (config.empty()) {
+        return lines;
     }
 
-    Parse(spt);
-
-    DumpWarning();
-    InitBasicParameters();
+    auto file = std::ifstream{};
+    file.open(config);
+    if (file.is_open()) {
+        auto line = std::string{};
+        while (std::getline(file, line)) {
+            line = RemoveComment(line);
+            if (!line.empty()) {
+                lines += (line + ' ');
+            }
+        }
+        file.close();
+    }
+    return lines;
 }
 
 void ArgsParser::Parse(Splitter& spt) {
-    std::vector<std::string> args;
-    args.reserve(spt.GetCount() + 1);
-    args.emplace_back("sayuri");
+    auto args = std::vector<std::string>();
+    args.reserve(spt.GetCount());
     for (auto i = size_t{0}; i < spt.GetCount(); ++i) {
         args.emplace_back(spt.GetWord(i)->Get<>());
     }
 
-    std::vector<char*> argv;
-    argv.reserve(args.size());
-    for (auto& arg : args) {
-        argv.emplace_back(arg.data());
-    }
-
     try {
-        kOptionsMap.ParseArgs(static_cast<int>(argv.size()), argv.data());
+        OptionParseArgs(args);
     } catch (const std::exception& e) {
         LOGGING << "Command Error: " << e.what() << std::endl;
         DumpHelper();

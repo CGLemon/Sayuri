@@ -11,6 +11,7 @@ public:
     ArgsParser(int argc, char** argv);
 
 private:
+    std::string TryLoadConfig(Splitter& splitter) const;
     void Parse(Splitter& splitter);
 
     void DumpHelper() const;

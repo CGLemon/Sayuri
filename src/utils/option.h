@@ -443,6 +443,16 @@ inline std::string OptionHelpersToString(std::string_view group = "") {
     return kOptionsMap.HelpersToString(group);
 }
 
-inline void ParseArgs(int argc, char** argv) {
+inline void OptionParseArgs(int argc, char** argv) {
     kOptionsMap.ParseArgs(argc, argv);
+}
+
+inline void OptionParseArgs(std::vector<std::string> args) {
+    const int argc = args.size();
+    auto argv = std::vector<char*>{};
+    argv.reserve(argc);
+    for (auto& arg : args) {
+        argv.emplace_back(arg.data());
+    }
+    kOptionsMap.ParseArgs(argc, argv.data());
 }

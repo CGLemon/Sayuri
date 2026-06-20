@@ -65,6 +65,7 @@ public:
     std::shared_ptr<Reuslt> FindDigit(int id = -1) const;
     std::shared_ptr<Reuslt> RemoveWord(size_t id);
     std::shared_ptr<Reuslt> RemoveSlice(size_t begin, size_t end);
+    Splitter& Merge(const Splitter& other);
 
 private:
     std::vector<std::shared_ptr<const std::string>> buffer_;

@@ -18,6 +18,12 @@ bool Splitter::Valid() const {
     return count_ != 0;
 }
 
+Splitter& Splitter::Merge(const Splitter& other) {
+    buffer_.insert(std::end(buffer_), std::begin(other.buffer_), std::end(other.buffer_));
+    count_ += other.count_;
+    return *this;
+}
+
 void Splitter::Parse(std::string& input, const size_t max) {
     count_ = 0;
     auto stream = std::istringstream{input};
