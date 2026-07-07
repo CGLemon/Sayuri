@@ -133,10 +133,15 @@ void ArgsParser::InitOptionsMap() const {
                        .Group("generic")
                        .Range(0.f, 1.f)
                        .Helper("Set the confidence interval alpha for LCB.");
-    kOptionsMap << RegisterOption({"--lcb-reduction"}, "lcb_reduction", 0.02f)
+    kOptionsMap << RegisterOption({"--lcb-reduction"}, "lcb_reduction", 0.f)
                        .Group("generic")
                        .Range(0.f, 1.f)
                        .Helper("Reduce the LCB weights during move selection.");
+    kOptionsMap << RegisterOption({"--lcb-min-visit-ratio"}, "lcb_min_visit_ratio", 0.1f)
+                       .Group("generic")
+                       .Range(0.f, 1.f)
+                       .Helper("Set the minimum ratio of visits, relative to the most-visited "
+                               "child, required for LCB move selection.");
     kOptionsMap << RegisterOption({"--fpu-reduction"}, "fpu_reduction", 0.25f)
                        .Group("generic")
                        .Helper("Set the FPU reduction.");

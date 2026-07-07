@@ -1151,10 +1151,13 @@ std::vector<std::pair<float, int>> Node::GetSortedLcbUtilityList(const int color
     WaitExpanded();
     assert(HasChildren());
 
-    // Clamp lcb_reduction parameter to the [0, 1] range.
+    // Clamp the LCB parameters to the [0, 1] range.
     const auto lcb_reduction = std::min(std::max(0.f, param_->lcb_reduction), 1.f);
-    auto lcblist = std::vector<std::pair<float, int>>{};
+    const auto lcb_min_visit_ratio = std::min(std::max(0.f, param_->lcb_min_visit_ratio), 1.f);
+    auto lcbinfo = std::vector<std::tuple<float, int, int>>{};
 
+    int max_visits = 0;
+    float min_lcb = std::numeric_limits<float>::max();
     for (const auto& child : children_) {
         const auto node = child.GetPointer();
         const bool is_pointer = node != nullptr;
@@ -1171,14 +1174,29 @@ std::vector<std::pair<float, int>> Node::GetSortedLcbUtilityList(const int color
             // in the PUCT phase.
             const auto mixed_lcb = node->GetLcb(color) + node->GetScoreEval(color);
 
-            // Adjust the mixed LCB to penalize moves with fewer visits.
-            // For example, a node with 100 visits and 90% LCB might be less stable
-            // than a node with 1,000,000 visits and 89% LCB. This adjustment
-            // favors more stable nodes with higher visit counts.
+            // Optionally blend the mixed LCB with the visit ratio. This softly
+            // biases the ranking toward more-visited children. At
+            // lcb_reduction = 1, the ranking degenerates to picking the
+            // most-visited child.
             const auto rlcb = mixed_lcb * (1.0f - lcb_reduction) +
-                              lcb_reduction * ((float)visits / children_visits);
-            lcblist.emplace_back(rlcb, node->GetVertex());
+                              lcb_reduction * (static_cast<float>(visits) / children_visits);
+            lcbinfo.emplace_back(rlcb, visits, node->GetVertex());
+            max_visits = std::max(max_visits, visits);
+            min_lcb = std::min(min_lcb, rlcb);
         }
+    }
+    // Demote children whose visit count is below lcb_min_visit_ratio of
+    // the most-visited child. A low-visit node can report a spuriously
+    // high LCB (e.g., 100 visits with 90% LCB is less reliable than
+    // 1,000,000 visits with 89%), so such nodes are assigned the minimum
+    // LCB to prevent them from outranking well-searched moves.
+    const auto lcb_min_visit = std::round(lcb_min_visit_ratio * max_visits);
+    auto lcblist = std::vector<std::pair<float, int>>{};
+    for (auto [rlcb, visits, vertex] : lcbinfo) {
+        if (visits < lcb_min_visit) {
+            rlcb = min_lcb;
+        }
+        lcblist.emplace_back(rlcb, vertex);
     }
 
     std::stable_sort(std::rbegin(lcblist), std::rend(lcblist));
@@ -1516,7 +1534,6 @@ void Node::MixLogitsCompletedQ(GameState& state, std::vector<float>& prob) {
 
     int max_visits = 0;
     int children_visits = 0;
-    ;
     float weighted_q = 0.f;
     float weighted_pi = 0.f;
 
