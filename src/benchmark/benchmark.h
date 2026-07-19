@@ -3,20 +3,17 @@
 #include <memory>
 #include <vector>
 
-#include "game/gtp.h"
+#include "game/agents.h"
 
 class Benchmark {
 public:
-    using Agent = GtpLoop::Agent;
-
     Benchmark() {
-        agent_ = std::make_unique<Benchmark::Agent>();
-        agent_->Apply();
+        agent_ = std::make_unique<GptAgent>();
         Initialize();
         Run();
     }
     ~Benchmark() {
-        agent_->Quit();
+        agent_->Shutdown();
     }
 
 private:
@@ -31,5 +28,5 @@ private:
     };
 
     std::vector<Query> queries_list_;
-    std::unique_ptr<Benchmark::Agent> agent_;
+    std::unique_ptr<GptAgent> agent_{nullptr};
 };

@@ -4,10 +4,10 @@
 #include <atomic>
 #include <iomanip>
 #include <iostream>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
+#include "game/book.h"
 #include "game/commands_list.h"
 #include "game/sgf.h"
 #include "neural/encoder.h"
@@ -16,6 +16,7 @@
 #include "utils/gogui_helper.h"
 #include "utils/komi.h"
 #include "utils/log.h"
+#include "utils/threadpool.h"
 #include "utils/time.h"
 
 void GtpLoop::Loop() {
@@ -49,7 +50,7 @@ void GtpLoop::Loop() {
             auto try_ponder = false;
 
             if (spt.GetCount() == 1 && spt.Find("quit")) {
-                agent_->Quit();
+                agent_->Shutdown();
                 out = GtpSuccess("");
                 stop = true;
             }

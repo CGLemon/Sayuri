@@ -4,6 +4,8 @@
 #include <cmath>
 
 #include "game/sgf.h"
+#include "mcts/search.h"
+#include "utils/format.h"
 #include "utils/log.h"
 #include "utils/option.h"
 #include "utils/random.h"
