@@ -8,6 +8,7 @@
 #include "utils/filesystem.h"
 #include "utils/gzip_helper.h"
 #include "utils/log.h"
+#include "utils/option.h"
 #include "utils/random.h"
 #include "utils/time.h"
 

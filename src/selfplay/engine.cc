@@ -5,13 +5,13 @@
 #include <sstream>
 
 #include "config.h"
+#include "game/game_state.h"
 #include "game/sgf.h"
-#include "utils/filesystem.h"
+#include "mcts/search.h"
 #include "utils/komi.h"
 #include "utils/log.h"
 #include "utils/random.h"
 #include "utils/splitter.h"
-#include "utils/threadpool.h"
 
 void Engine::Initialize() {
     default_playouts_ = GetOption<int>("playouts");
@@ -22,71 +22,17 @@ void Engine::Initialize() {
     random_opening_prob_ = GetOption<float>("random_opening_prob");
     random_moves_factor_ = GetOption<float>("random_moves_factor");
     random_opening_temp_ = GetOption<float>("random_opening_temp");
-    parallel_games_ = GetOption<int>("parallel_games");
-
-    if (!network_) {
-        network_ = std::make_unique<Network>();
-    }
-    curr_weights_name_ = SelectWeights();
-    network_->Initialize(curr_weights_name_);
-
-    if (network_->GetName().find("random") != std::string::npos) {
-        // Will be CPU-bound so reducing number of threads.
-        parallel_games_ =
-            std::min(static_cast<int>(std::thread::hardware_concurrency()) - 1, parallel_games_);
-    }
-
-    game_pool_.clear();
-    for (int i = 0; i < parallel_games_; ++i) {
-        game_pool_.emplace_back(GameState{});
-        game_pool_[i].Reset(GetOption<int>("default_boardsize"),
-                            GetOption<float>("default_komi"),
-                            GetOption<int>("scoring_rule"));
-    }
-
-    search_pool_.clear();
-    for (int i = 0; i < parallel_games_; ++i) {
-        search_pool_.emplace_back(std::make_unique<Search>(game_pool_[i], *network_));
-    }
-
-    ThreadPool::Get("search", GetOption<int>("threads") * parallel_games_);
+    agents_ = std::make_unique<ParallelAgents>(GetOption<int>("parallel_games"));
 
     ParseQueries();
 }
 
 void Engine::Abort() {
-    network_->Destroy();
-    game_pool_.clear();
-    search_pool_.clear();
-}
-
-std::string Engine::SelectWeights() const {
-    // default weights
-    auto select_weights = GetOption<std::string>("weights_file");
-    if (!select_weights.empty()) {
-        return select_weights;
-    }
-
-    auto weights_dir = GetOption<std::string>("weights_dir");
-    auto weights_list = GetFileList(weights_dir);
-
-    if (!weights_list.empty()) {
-        // Seletet the last weights in this directory.
-        std::sort(std::begin(weights_list),
-                  std::end(weights_list),
-                  [weights_dir](std::string a, std::string b) {
-                      auto time_a = GetFileTime(ConcatPath(weights_dir, a));
-                      auto time_b = GetFileTime(ConcatPath(weights_dir, b));
-                      return difftime(time_a, time_b) > 0.f;
-                  });
-        select_weights = ConcatPath(weights_dir, weights_list[0]);
-    }
-
-    return select_weights;
+    agents_->Shutdown();
 }
 
 bool Engine::ShouldHalt() const {
-    return curr_weights_name_ != SelectWeights();
+    return agents_->ShouldHalt();
 }
 
 void Engine::ParseQueries() {
@@ -179,24 +125,21 @@ void Engine::ParseQueries() {
                        std::end(scoring_set_));
 
     // Adjust the matched NN size.
-    network_->Reconstruct(Network::Option::Get().SetBoardSize(max_bsize));
+    agents_->GetNetwork().Reconstruct(Network::Option::Get().SetBoardSize(max_bsize));
 }
 
 void Engine::GatherSgfString(std::string& sgf, int g) {
-    Handel(g);
-    auto& state = game_pool_[g];
+    auto& state = agents_->GetContext(g).GetState();
     state.RewriteComment(state.GetRuleString(), 0);
-    sgf = Sgf::Get().ToString(game_pool_[g]);
+    sgf = Sgf::Get().ToString(state);
 }
 
 void Engine::GatherTrainingData(std::vector<TrainingData>& chunk, int g) {
-    Handel(g);
-    search_pool_[g]->GatherTrainingBuffer(chunk);
+    agents_->GetContext(g).GetSearch().GatherTrainingBuffer(chunk);
 }
 
 void Engine::PrepareGame(int g) {
-    Handel(g);
-    auto& state = game_pool_[g];
+    auto& state = agents_->GetContext(g).GetState();
 
     state.ClearBoard();
     state.SetRule(kArea);
@@ -232,16 +175,15 @@ void Engine::PrepareGame(int g) {
 }
 
 void Engine::Selfplay(int g) {
-    Handel(g);
-    auto& state = game_pool_[g];
+    auto& ctx = agents_->GetContext(g);
+    auto& state = ctx.GetState();
     while (!state.IsGameOver()) {
-        state.PlayMove(search_pool_[g]->GetSelfPlayMove());
+        state.PlayMove(ctx.GetSearch().GetSelfPlayMove());
     }
-    search_pool_[g]->UpdateTerritoryHelper();
+    ctx.GetSearch().UpdateTerritoryHelper();
 }
 
 void Engine::SetNormalGame(int g) {
-    Handel(g);
     if (Random<>::Get().Roulette(random_opening_prob_)) {
         SetRandomOpeningGame(g);
     }
@@ -249,12 +191,12 @@ void Engine::SetNormalGame(int g) {
 }
 
 void Engine::SetHandicapGame(int g, int handicaps) {
-    Handel(g);
-    auto& state = game_pool_[g];
+    auto& ctx = agents_->GetContext(g);
+    auto& state = ctx.GetState();
 
     for (int i = 0; i < handicaps - 1; ++i) {
         state.SetToMove(kBlack);
-        int random_move = network_->GetVertexWithPolicy(state, 0.8f, false);
+        int random_move = ctx.GetNetwork().GetVertexWithPolicy(state, 0.8f, false);
         state.AppendMove(random_move, kBlack);
     }
     state.SetHandicap(handicaps);
@@ -269,8 +211,8 @@ void Engine::SetHandicapGame(int g, int handicaps) {
 }
 
 void Engine::SetRandomOpeningGame(int g) {
-    Handel(g);
-    auto& state = game_pool_[g];
+    auto& ctx = agents_->GetContext(g);
+    auto& state = ctx.GetState();
 
     const int board_size = state.GetBoardSize();
     const int random_moves_cnt = random_moves_factor_ * state.GetNumIntersections();
@@ -287,7 +229,7 @@ void Engine::SetRandomOpeningGame(int g) {
         }
         float curr_temp = std::max(init_temp * std::exp(-(lambda * times)), 0.8f);
 
-        int random_move = network_->GetVertexWithPolicy(state, curr_temp, false);
+        int random_move = ctx.GetNetwork().GetVertexWithPolicy(state, curr_temp, false);
         state.PlayMove(random_move);
         times += 1;
     }
@@ -295,8 +237,7 @@ void Engine::SetRandomOpeningGame(int g) {
 }
 
 void Engine::SetUnfairKomi(int g) {
-    Handel(g);
-    auto& state = game_pool_[g];
+    auto& state = agents_->GetContext(g).GetState();
     float komi = state.GetKomi();
 
     float stddev = komi_stddev_;
@@ -311,10 +252,10 @@ void Engine::SetUnfairKomi(int g) {
 }
 
 void Engine::SetFairKomi(int g) {
-    Handel(g);
-    auto& state = game_pool_[g];
+    auto& ctx = agents_->GetContext(g);
+    auto& state = ctx.GetState();
 
-    auto result = search_pool_[g]->Computation(default_playouts_, Search::kNoExploring);
+    auto result = ctx.GetSearch().Computation(default_playouts_, Search::kNoExploring);
     auto komi = state.GetKomi();
     auto score_lead = result.root_score_lead;
 
@@ -326,8 +267,7 @@ void Engine::SetFairKomi(int g) {
 }
 
 int Engine::GetHandicaps(int g) {
-    Handel(g);
-    auto& state = game_pool_[g];
+    auto& state = agents_->GetContext(g).GetState();
 
     for (auto& q : handicap_queries_) {
         if (state.GetBoardSize() == q.board_size) {
@@ -340,17 +280,11 @@ int Engine::GetHandicaps(int g) {
 }
 
 int Engine::GetParallelGames() const {
-    return parallel_games_;
+    return agents_->GetNumContexts();
 }
 
 std::string Engine::GetNetReportQueries() {
     auto oss = std::ostringstream{};
-    oss << network_->GetName() << " " << network_->GetNumQueries();
+    oss << agents_->GetNetwork().GetName() << " " << agents_->GetNetwork().GetNumQueries();
     return oss.str();
-}
-
-void Engine::Handel(int g) {
-    if (g < 0 || g >= parallel_games_) {
-        throw std::runtime_error("The game index is out of array.");
-    }
 }

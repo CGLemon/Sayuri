@@ -4,9 +4,8 @@
 #include <string>
 #include <vector>
 
-#include "game/game_state.h"
+#include "game/agents.h"
 #include "game/types.h"
-#include "mcts/search.h"
 #include "neural/training_data.h"
 
 class Engine {
@@ -35,8 +34,6 @@ private:
         float probabilities;
     };
 
-    std::string SelectWeights() const;
-
     void ParseQueries();
     void SetNormalGame(int g);
     void SetHandicapGame(int g, int handicaps);
@@ -46,8 +43,6 @@ private:
     void SetFairKomi(int g);
     int GetHandicaps(int g);
 
-    void Handel(int g);
-
     float komi_stddev_;
     float komi_big_stddev_;
     float komi_big_stddev_prob_;
@@ -56,14 +51,10 @@ private:
     float random_moves_factor_;
     float random_opening_temp_;
     int default_playouts_;
-    int parallel_games_;
 
     std::vector<BoardQuery> board_queries_;
     std::vector<HandicapQuery> handicap_queries_;
     std::vector<ScoringRuleType> scoring_set_;
 
-    std::unique_ptr<Network> network_{nullptr};
-    std::vector<std::unique_ptr<Search>> search_pool_;
-    std::vector<GameState> game_pool_;
-    std::string curr_weights_name_;
+    std::unique_ptr<ParallelAgents> agents_{nullptr};
 };
