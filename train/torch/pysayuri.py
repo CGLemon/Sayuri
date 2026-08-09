@@ -1503,7 +1503,7 @@ class Agent():
         net_cfg.boardsize = BOARD_SIZE
         net = self._load_network(net_cfg)
         stderr_write("Load the weights from: {}\n".format(self._checkpoint))
-        stderr_write(net.simple_info())
+        stderr_write(net.get_simple_info())
 
         if not self._checkpoint is None:
             status_dict = StatusDict()

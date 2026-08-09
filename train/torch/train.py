@@ -360,7 +360,7 @@ class TrainingPipe():
 
         info_file = os.path.join(self.store_path, "info.txt")
         with open(info_file, 'w') as f:
-            f.write(self.module.simple_info())
+            f.write(self.module.get_simple_info())
 
         self._loss_weight_dict = {
             "soft" : self.cfg.soft_loss_weight
