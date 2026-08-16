@@ -26,6 +26,7 @@ from network_core.module import (
     BottleneckBlock,
     NestedBottleneckBlock,
     MixerBlock,
+    TransformerBlock,
 )
 
 class Network(nn.Module):
@@ -166,6 +167,8 @@ class Network(nn.Module):
             elif component == "MixerBlockV2":
                 block = MixerBlock
                 blockargs["version"] = 2
+            elif component == "TransformerBlock":
+                block = TransformerBlock
             elif component == "SE":
                 blockargs["se_size"] = channels // self.se_ratio
                 assert channels % self.se_ratio == 0, ""

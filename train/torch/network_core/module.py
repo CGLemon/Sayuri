@@ -835,3 +835,164 @@ class MixerBlock(nn.Module):
             out = out + x
             out = self.act(out)
         return out
+
+class RMSNorm(nn.Module):
+    def __init__(self, dim, eps=1e-6):
+        super(RMSNorm, self).__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+
+    def _apply_norm(self, x):
+        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+
+    def forward(self, x):
+        output = self._apply_norm(x.float()).type_as(x)
+        return output * self.weight
+
+class RoPE(nn.Module):
+    # Learnable 2D rotary position embedding. One (omega_x, omega_y) frequency
+    # pair per head, per dimension pair; applied to a pair of (B, S, H, D)
+    # tensors (q, k) given the board's row-major sequence layout.
+    def __init__(self, head_dim, num_heads, pos_len):
+        super(RoPE, self).__init__()
+        assert head_dim % 4 == 0, ""
+
+        self.head_dim = head_dim
+        self.num_heads = num_heads
+        self.pos_len = pos_len
+
+        # Geometric init from 1 rad/square to 1/50 rad/square.
+        num_pairs = head_dim // 2
+        log_lo, log_hi = math.log(1.0 / 50.0), math.log(1.0)
+        init_freqs = (
+            torch.exp(torch.empty(num_heads, num_pairs, 2).uniform_(log_lo, log_hi))
+            * (torch.randint(0, 2, (num_heads, num_pairs, 2)) * 2 - 1).float()
+        )
+        self.rope_freqs = nn.Parameter(init_freqs)  # (num_heads, P, 2)
+
+    def _compute_cos_sin(self, s_x, s_y):
+        # s_x, s_y: (S,) column/row positions. Returns (cos, sin), both (S, H, P).
+        angles = s_x.unsqueeze(-1).unsqueeze(-1) * self.rope_freqs[:, :, 0] + \
+            s_y.unsqueeze(-1).unsqueeze(-1) * self.rope_freqs[:, :, 1]
+        return torch.cos(angles), torch.sin(angles)
+
+    def _rotate(self, x, cos, sin):
+        # x: (B, S, H, D); cos, sin: (S, H, D/2).
+        b, s, h, d = x.shape
+        p = d // 2
+        x0, x1 = x.view(b, s, h, p, 2).unbind(dim=-1)
+        cos = cos.unsqueeze(0)  # (1, S, H, P)
+        sin = sin.unsqueeze(0)
+        out = torch.stack([x0 * cos - x1 * sin, x0 * sin + x1 * cos], dim=-1)
+        return out.reshape(b, s, h, d).type_as(x)
+
+    def forward(self, xq, xk):
+        # xq, xk: (B, S, H, D)
+        seq_len = xq.shape[1]
+        s_idx = torch.arange(seq_len, device=xq.device)
+        s_y = (s_idx // self.pos_len).float()  # row
+        s_x = (s_idx % self.pos_len).float()   # col
+        cos, sin = self._compute_cos_sin(s_x, s_y)
+        return self._rotate(xq, cos, sin), self._rotate(xk, cos, sin)
+
+class MultiHeadAttention(nn.Module):
+    # Multi-head self-attention sublayer (pre-norm). Always uses learnable 2D
+    # RoPE with num_heads == num_kv_heads. Returns the attention output only,
+    # (B, C, H, W); caller is responsible for adding the residual.
+    def __init__(self, channels,
+                       pos_len,
+                       num_heads,
+                       collector=None):
+        super(MultiHeadAttention, self).__init__()
+
+        self.pos_len = pos_len
+        self.num_heads = num_heads
+        self.q_head_dim = channels // self.num_heads
+        self.v_head_dim = channels // self.num_heads
+
+        self.q_proj = FullyConnect(
+            channels, self.num_heads * self.q_head_dim, activation="identity", collector=collector)
+        self.k_proj = FullyConnect(
+            channels, self.num_heads * self.q_head_dim, activation="identity", collector=collector)
+        self.v_proj = FullyConnect(
+            channels, self.num_heads * self.v_head_dim, activation="identity", collector=collector)
+        self.out_proj = FullyConnect(
+            self.num_heads * self.v_head_dim, channels, activation="identity", collector=collector)
+
+        self.rope = RoPE(head_dim=self.q_head_dim, num_heads=self.num_heads, pos_len=self.pos_len)
+
+        self.norm1 = RMSNorm(channels, eps=1e-6)
+
+    def forward(self, x, mask):
+        # x: (B, C, H, W); mask: (B, 1, H, W).
+        b, c, h, w = x.shape
+        seq_len = h * w
+
+        x_in = x.view(b, c, -1).permute(0, 2, 1)  # NSC
+
+        x_norm = self.norm1(x_in)
+        q = self.q_proj(x_norm).view(b, seq_len, self.num_heads, self.q_head_dim)
+        k = self.k_proj(x_norm).view(b, seq_len, self.num_heads, self.q_head_dim)
+        v = self.v_proj(x_norm).view(b, seq_len, self.num_heads, self.v_head_dim)
+
+        q, k = self.rope(q, k)
+
+        q = q.permute(0, 2, 1, 3)  # (B, H, S, Dq)
+        k = k.permute(0, 2, 1, 3)
+        v = v.permute(0, 2, 1, 3)
+
+        mask_flat = mask.reshape(b, 1, 1, seq_len)
+        attn_mask = torch.zeros_like(mask_flat, dtype=q.dtype)
+        attn_mask.masked_fill_(mask_flat == 0, float("-inf"))
+
+        scale = 1.0 / math.sqrt(self.q_head_dim)
+        attn_output = F.scaled_dot_product_attention(
+            q, k, v, attn_mask=attn_mask, dropout_p=0.0, scale=scale)
+
+        attn_output = attn_output.permute(0, 2, 1, 3).contiguous()
+        attn_output = attn_output.view(b, seq_len, self.num_heads * self.v_head_dim)
+        attn_output = self.out_proj(attn_output)
+        return attn_output.permute(0, 2, 1).view(b, c, h, w)
+
+class TransformerBlock(nn.Module):
+    # A complete transformer block: a self-attention sublayer followed by a
+    # SwiGLU feed-forward sublayer, each pre-norm and wrapped with its own
+    # residual connection, so this already returns x + block(x).
+    def __init__(self, channels,
+                       *args,
+                       **kwargs):
+        super(TransformerBlock, self).__init__()
+        self.ffn_expansion_ratio = kwargs.get("ffn_expansion_ratio", 1.5)
+        self.pos_len = kwargs.get("pos_len", 19)
+        self.num_heads = kwargs.get("num_heads", 3)
+        self.activation = kwargs.get("activation", DEFAULT_ACTIVATION)
+        collector = None
+
+        self.mha = MultiHeadAttention(
+            channels, pos_len=self.pos_len, num_heads=self.num_heads, collector=collector)
+
+        self.ffn_dim = int(channels * self.ffn_expansion_ratio)
+        self.ffn_linear1 = FullyConnect(
+            channels, self.ffn_dim, activation=self.activation, collector=collector)
+        self.ffn_linear_gate = FullyConnect(
+            channels, self.ffn_dim, activation="identity", collector=collector)
+        self.ffn_linear2 = FullyConnect(
+            self.ffn_dim, channels, activation="identity", collector=collector)
+        self.norm2 = RMSNorm(channels, eps=1e-6)
+
+    def forward(self, x, mask_buffers):
+        mask, _, _ = mask_buffers
+
+        # Self-attention sublayer (pre-norm, residual).
+        x = x + self.mha(x, mask)
+
+        # Feed-forward sublayer (pre-norm, residual, gate).
+        b, c, h, w = x.shape
+        x_in = x.view(b, c, -1).permute(0, 2, 1)  # NSC
+
+        xn = self.norm2(x_in)
+        ffn_output = self.ffn_linear1(xn) * self.ffn_linear_gate(xn)
+        ffn_output = self.ffn_linear2(ffn_output)
+        ffn_output = ffn_output.permute(0, 2, 1).view(b, c, h, w)
+
+        return x + ffn_output
