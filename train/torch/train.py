@@ -322,8 +322,6 @@ class TrainingPipe():
 
         init_lr = self._get_lr_schedule(0)
 
-        # We may fail to load the optimizer. So initializing
-        # it before loading it.
         self.opt = None
         if self.opt_name == "Adam":
             self.opt = torch.optim.Adam(
@@ -331,9 +329,13 @@ class TrainingPipe():
                 lr=init_lr,
                 weight_decay=self.weight_decay,
             )
-        elif self.opt_name == "SGD" or not self.opt_name in ["Adam", "SGD"]:
-            # Recommanded optimizer, the SGD is better than Adam
-            # in this kind of training task.
+        elif self.opt_name == "AdamW":
+            self.opt = torch.optim.AdamW(
+                self.net.parameters(),
+                lr=init_lr,
+                weight_decay=self.weight_decay,
+            )
+        elif self.opt_name == "SGD":
             self.opt = torch.optim.SGD(
                 self.net.parameters(),
                 lr=init_lr,
@@ -341,6 +343,8 @@ class TrainingPipe():
                 nesterov=True,
                 weight_decay=self.weight_decay,
             )
+        else:
+            raise Exception("Invalid optimizer name.")
 
         # create workspace
         if not os.path.isdir(self.store_path):
