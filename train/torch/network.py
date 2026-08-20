@@ -162,11 +162,8 @@ class Network(nn.Module):
                 blockargs["bottleneck_channels"] = channels // 2
                 assert channels % 2 == 0, ""
                 block = NestedBottleneckBlock
-            elif component in ["MixerBlock", "MixerBlockV1"]:
+            elif component in "MixerBlock":
                 block = MixerBlock
-            elif component == "MixerBlockV2":
-                block = MixerBlock
-                blockargs["version"] = 2
             elif component == "TransformerBlock":
                 block = TransformerBlock
             elif component == "SE":
@@ -200,7 +197,6 @@ class Network(nn.Module):
             blockargs = {
                 "se_size" : None,
                 "bottleneck_channels" : None,
-                "version" : 1,
                 "activation" : self.activation,
                 "collector" : self.layers_collector
             }

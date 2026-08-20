@@ -769,12 +769,10 @@ class MixerBlock(nn.Module):
         self.se_size = kwargs.get("se_size", None)
         self.kernel_size = kwargs.get("kernel_size", 7)
         self.ffn_expansion_ratio = kwargs.get("ffn_expansion_ratio", 1.5)
-        self.version = kwargs.get("version", 1)
         collector = kwargs.get("collector", None)
 
         self.channels = channels
         self.use_se = self.se_size is not None
-        assert self.version in [1, 2], ""
 
         self.depthwise_conv = DepthwiseConvBlock(
             channels=self.channels,
@@ -816,24 +814,14 @@ class MixerBlock(nn.Module):
     def forward(self, x, mask_buffers):
         mask, _, _ = mask_buffers
 
-        if self.version == 1:
-            x = self.depthwise_conv(x, mask) + x
-            out = x
-            out = self.ffn1(out, mask)
-            out = self.ffn2(out, mask)
-            if self.use_se:
-                out = self.se_module(out, mask_buffers)
-            out = out + x
-            out = self.act(out)
-        elif self.version == 2:
-            out = x
-            out = self.depthwise_conv(out, mask)
-            out = self.ffn1(out, mask)
-            out = self.ffn2(out, mask)
-            if self.use_se:
-                out = self.se_module(out, mask_buffers)
-            out = out + x
-            out = self.act(out)
+        x = self.depthwise_conv(x, mask) + x
+        out = x
+        out = self.ffn1(out, mask)
+        out = self.ffn2(out, mask)
+        if self.use_se:
+            out = self.se_module(out, mask_buffers)
+        out = out + x
+        out = self.act(out)
         return out
 
 class RMSNorm(nn.Module):
