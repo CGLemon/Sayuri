@@ -162,9 +162,11 @@ class Network(nn.Module):
                 blockargs["bottleneck_channels"] = channels // 2
                 assert channels % 2 == 0, ""
                 block = NestedBottleneckBlock
-            elif component in "MixerBlock":
+            elif component == "MixerBlock":
                 block = MixerBlock
             elif component == "TransformerBlock":
+                blockargs["pos_len"] = max(self.xsize, self.ysize)
+                blockargs["num_heads"] = max(1, channels // 32)
                 block = TransformerBlock
             elif component == "SE":
                 blockargs["se_size"] = channels // self.se_ratio
@@ -186,6 +188,8 @@ class Network(nn.Module):
                 blockargs["kernel_size"] = value
             elif key == "FfnExpansionRatio":
                 blockargs["ffn_expansion_ratio"] = value
+            elif key == "NumHeads":
+                blockargs["num_heads"] = value
             else:
                 raise Exception("Invalid block setting.")
         return block, channels, blockargs
@@ -196,7 +200,6 @@ class Network(nn.Module):
         for blocksetting in self.stack:
             blockargs = {
                 "se_size" : None,
-                "bottleneck_channels" : None,
                 "activation" : self.activation,
                 "collector" : self.layers_collector
             }
