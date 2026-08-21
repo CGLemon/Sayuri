@@ -934,14 +934,14 @@ class MultiHeadAttention(nn.Module):
         attn_mask.masked_fill_(mask_flat == 0, float("-inf"))
 
         scale = 1.0 / math.sqrt(self.q_head_dim)
-        attn_output = F.scaled_dot_product_attention(
+        attn_out = F.scaled_dot_product_attention(
             q, k, v, attn_mask=attn_mask, dropout_p=0.0, scale=scale)
 
-        attn_output = attn_output.permute(0, 2, 1, 3).contiguous()
-        attn_output = attn_output.view(b, seq_len, self.num_heads * self.v_head_dim)
-        attn_output = self.out_proj(attn_output)
-        return attn_output.permute(0, 2, 1).view(b, c, h, w)
-
+        attn_out = attn_out.permute(0, 2, 1, 3).contiguous()
+        attn_out = attn_out.view(b, seq_len, self.num_heads * self.v_head_dim)
+        attn_out = self.out_proj(attn_out)
+        attn_out = attn_out.permute(0, 2, 1).view(b, c, h, w)
+        return attn_out * mask
 class TransformerBlock(nn.Module):
     # A complete transformer block: a self-attention sublayer followed by a
     # SwiGLU feed-forward sublayer, each pre-norm and wrapped with its own
@@ -982,5 +982,5 @@ class TransformerBlock(nn.Module):
         ffn_output = self.ffn_linear1(xn) * self.ffn_linear_gate(xn)
         ffn_output = self.ffn_linear2(ffn_output)
         ffn_output = ffn_output.permute(0, 2, 1).view(b, c, h, w)
-
-        return x + ffn_output
+        out = x + ffn_output
+        return out * mask
