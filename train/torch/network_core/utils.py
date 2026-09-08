@@ -67,8 +67,14 @@ def conv_to_text(in_channels, out_channels, kernel_size):
 def fullyconnect_to_text(in_size, out_size):
     return "FullyConnect {iS} {oS}\n".format(iS=in_size, oS=out_size)
 
-def bn_to_text(channels):
+def bnorm_to_text(channels):
     return "BatchNorm {C}\n".format(C=channels)
+
+def rmsnorm_to_text(channels):
+    return "RMSNorm {C}\n".format(C=channels)
+
+def rope_to_text(head_dim, num_heads):
+    return "RoPE {HD} {NH}\n".format(HD=head_dim, NH=num_heads)
 
 def float_to_bin(num, big_endian):
     fmt = 'f'

@@ -11,7 +11,9 @@ from .utils import (
     dwconv_to_text,
     conv_to_text,
     fullyconnect_to_text,
-    bn_to_text,
+    bnorm_to_text,
+    rmsnorm_to_text,
+    rope_to_text,
     tensor_to_text,
 )
 
@@ -443,7 +445,7 @@ class ConvBlock(nn.Module):
     def shape_to_text(self):
         out = str()
         out += conv_to_text(self.in_channels, self.out_channels, self.kernel_size)
-        out += bn_to_text(self.out_channels)
+        out += bnorm_to_text(self.out_channels)
         return out
 
     def tensors_to_text(self, use_bin):
@@ -541,7 +543,7 @@ class DepthwiseConvBlock(nn.Module):
     def shape_to_text(self):
         out = str()
         out += dwconv_to_text(self.channels // self.groups, self.channels, self.kernel_size)
-        out += bn_to_text(self.channels)
+        out += bnorm_to_text(self.channels)
         return out
 
     def forward(self, x, mask):
@@ -825,10 +827,29 @@ class MixerBlock(nn.Module):
         return out
 
 class RMSNorm(nn.Module):
-    def __init__(self, dim, eps=1e-6):
+    def __init__(self, dim,
+                       eps=1e-6,
+                       collector=None):
         super(RMSNorm, self).__init__()
+        self.dim = dim
         self.eps = eps
         self.weight = nn.Parameter(torch.ones(dim))
+        self._try_collect(collector)
+
+    def _try_collect(self, collector):
+        if collector is not None:
+            collector.append(self)
+
+    def shape_to_text(self):
+        return rmsnorm_to_text(self.dim)
+
+    def tensors_to_text(self, use_bin):
+        if use_bin:
+            out = bytes()
+        else:
+            out = str()
+        out += tensor_to_text(self.weight, use_bin)
+        return out
 
     def _apply_norm(self, x):
         return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
@@ -841,7 +862,10 @@ class RoPE(nn.Module):
     # Learnable 2D rotary position embedding. One (omega_x, omega_y) frequency
     # pair per head, per dimension pair; applied to a pair of (B, S, H, D)
     # tensors (q, k) given the board's row-major sequence layout.
-    def __init__(self, head_dim, num_heads, pos_len):
+    def __init__(self, head_dim,
+                       num_heads,
+                       pos_len,
+                       collector=None):
         super(RoPE, self).__init__()
         assert head_dim % 4 == 0, ""
 
@@ -857,6 +881,22 @@ class RoPE(nn.Module):
             * (torch.randint(0, 2, (num_heads, num_pairs, 2)) * 2 - 1).float()
         )
         self.rope_freqs = nn.Parameter(init_freqs)  # (num_heads, P, 2)
+        self._try_collect(collector)
+
+    def _try_collect(self, collector):
+        if collector is not None:
+            collector.append(self)
+
+    def shape_to_text(self):
+        return rope_to_text(self.head_dim, self.num_heads)
+
+    def tensors_to_text(self, use_bin):
+        if use_bin:
+            out = bytes()
+        else:
+            out = str()
+        out += tensor_to_text(self.rope_freqs, use_bin)
+        return out
 
     def _compute_cos_sin(self, s_x, s_y):
         # s_x, s_y: (S,) column/row positions. Returns (cos, sin), both (S, H, P).
@@ -907,9 +947,11 @@ class MultiHeadAttention(nn.Module):
         self.out_proj = FullyConnect(
             self.num_heads * self.v_head_dim, channels, activation="identity", collector=collector)
 
-        self.rope = RoPE(head_dim=self.q_head_dim, num_heads=self.num_heads, pos_len=self.pos_len)
+        self.rope = RoPE(
+            head_dim=self.q_head_dim, num_heads=self.num_heads, pos_len=self.pos_len,
+            collector=collector)
 
-        self.norm1 = RMSNorm(channels, eps=1e-6)
+        self.norm1 = RMSNorm(channels, eps=1e-6, collector=collector)
 
     def forward(self, x, mask):
         # x: (B, C, H, W); mask: (B, 1, H, W).
@@ -942,6 +984,7 @@ class MultiHeadAttention(nn.Module):
         attn_out = self.out_proj(attn_out)
         attn_out = attn_out.permute(0, 2, 1).view(b, c, h, w)
         return attn_out * mask
+
 class TransformerBlock(nn.Module):
     # A complete transformer block: a self-attention sublayer followed by a
     # SwiGLU feed-forward sublayer, each pre-norm and wrapped with its own
@@ -952,9 +995,9 @@ class TransformerBlock(nn.Module):
         super(TransformerBlock, self).__init__()
         self.ffn_expansion_ratio = kwargs.get("ffn_expansion_ratio", 1.5)
         self.pos_len = kwargs.get("pos_len", 19)
-        self.num_heads = kwargs.get("num_heads", 3)
+        self.num_heads = kwargs.get("num_heads", max(1, channels // 32))
         self.activation = kwargs.get("activation", DEFAULT_ACTIVATION)
-        collector = None
+        collector = kwargs.get("collector", None)
 
         self.mha = MultiHeadAttention(
             channels, pos_len=self.pos_len, num_heads=self.num_heads, collector=collector)
@@ -966,7 +1009,7 @@ class TransformerBlock(nn.Module):
             channels, self.ffn_dim, activation="identity", collector=collector)
         self.ffn_linear2 = FullyConnect(
             self.ffn_dim, channels, activation="identity", collector=collector)
-        self.norm2 = RMSNorm(channels, eps=1e-6)
+        self.norm2 = RMSNorm(channels, eps=1e-6, collector=collector)
 
     def forward(self, x, mask_buffers):
         mask, _, _ = mask_buffers
