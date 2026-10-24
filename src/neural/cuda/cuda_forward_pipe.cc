@@ -66,7 +66,8 @@ void CudaForwardPipe::Construct(ForwardPipeOption option, std::shared_ptr<DNNWei
     // Reject the unsupported blocks before allocating any GPU resource.
     for (auto& tower_ptr : weights_->tower) {
         if (!tower_ptr->IsResidualBlock() && !tower_ptr->IsBottleneckBlock() &&
-            !tower_ptr->IsNestedBottleneckBlock() && !tower_ptr->IsMixerBlock()) {
+            !tower_ptr->IsNestedBottleneckBlock() && !tower_ptr->IsMixerBlock() &&
+            !tower_ptr->IsTransformerBlock()) {
             throw std::runtime_error("Unknown block type for CUDA backend.");
         }
     }
@@ -184,6 +185,8 @@ void CudaForwardPipe::NNGraph::ConstructGraph(bool dump_gpu_info,
     }
 
     int peak_channels = 0;
+    int peak_attn_channels = 0;
+    int peak_attn_heads = 0;
     for (int i = 0; i < blocks; ++i) {
         const auto tower_ptr = weights_->tower[i].get();
         if (tower_ptr->IsResidualBlock()) {
@@ -329,6 +332,88 @@ void CudaForwardPipe::NNGraph::ConstructGraph(bool dump_gpu_info,
                                                        last_act      // activation
             );
             peak_channels = std::max({peak_channels, channels, feedforwards});
+        } else if (tower_ptr->IsTransformerBlock()) {
+            const auto channels = weights_->residual_channels;
+            const auto num_heads = tower_ptr->num_heads;
+            const auto head_dim = tower_ptr->head_dim;
+            const auto attn_channels = num_heads * head_dim;
+            const auto feedforwards = tower_ptr->feedforward_channels;
+
+            graph_->tower[i].attn_norm = cuda::RMSNorm(&handles_,
+                                                       max_batch_,  // max batch size
+                                                       board_size_, // board size
+                                                       channels     // channels
+            );
+            graph_->tower[i].q_proj = cuda::Convolution(&handles_,
+                                                        max_batch_,           // max batch size
+                                                        board_size_,          // board size
+                                                        1,                    // kernel size
+                                                        channels,             // input channels
+                                                        attn_channels,        // output channels
+                                                        Activation::kIdentity // activation
+            );
+            graph_->tower[i].k_proj = cuda::Convolution(&handles_,
+                                                        max_batch_,           // max batch size
+                                                        board_size_,          // board size
+                                                        1,                    // kernel size
+                                                        channels,             // input channels
+                                                        attn_channels,        // output channels
+                                                        Activation::kIdentity // activation
+            );
+            graph_->tower[i].v_proj = cuda::Convolution(&handles_,
+                                                        max_batch_,           // max batch size
+                                                        board_size_,          // board size
+                                                        1,                    // kernel size
+                                                        channels,             // input channels
+                                                        attn_channels,        // output channels
+                                                        Activation::kIdentity // activation
+            );
+            graph_->tower[i].attention = cuda::MultiHeadAttention(&handles_,
+                                                                  max_batch_,  // max batch size
+                                                                  board_size_, // board size
+                                                                  num_heads,   // number of heads
+                                                                  head_dim     // head size
+            );
+            graph_->tower[i].out_proj = cuda::Convolution(&handles_,
+                                                          max_batch_,           // max batch size
+                                                          board_size_,          // board size
+                                                          1,                    // kernel size
+                                                          attn_channels,        // input channels
+                                                          channels,             // output channels
+                                                          Activation::kIdentity // activation
+            );
+            graph_->tower[i].ffn_norm = cuda::RMSNorm(&handles_,
+                                                      max_batch_,  // max batch size
+                                                      board_size_, // board size
+                                                      channels     // channels
+            );
+            graph_->tower[i].ffn_fc1 = cuda::Convolution(&handles_,
+                                                         max_batch_,   // max batch size
+                                                         board_size_,  // board size
+                                                         1,            // kernel size
+                                                         channels,     // input channels
+                                                         feedforwards, // output channels
+                                                         default_act   // activation
+            );
+            graph_->tower[i].ffn_gate = cuda::Convolution(&handles_,
+                                                          max_batch_,           // max batch size
+                                                          board_size_,          // board size
+                                                          1,                    // kernel size
+                                                          channels,             // input channels
+                                                          feedforwards,         // output channels
+                                                          Activation::kIdentity // activation
+            );
+            graph_->tower[i].ffn_fc2 = cuda::Convolution(&handles_,
+                                                         max_batch_,           // max batch size
+                                                         board_size_,          // board size
+                                                         1,                    // kernel size
+                                                         feedforwards,         // input channels
+                                                         channels,             // output channels
+                                                         Activation::kIdentity // activation
+            );
+            peak_channels = std::max({peak_channels, channels, attn_channels, feedforwards});
+            peak_attn_channels = std::max(peak_attn_channels, attn_channels);
+            peak_attn_heads = std::max(peak_attn_heads, num_heads);
         }
         if (tower_ptr->apply_se) {
             const auto channels = weights_->residual_channels;
@@ -515,6 +600,38 @@ void CudaForwardPipe::NNGraph::ConstructGraph(bool dump_gpu_info,
                                                tower_ptr->conv2.GetBiases(),
                                                scratch_size_,
                                                winograd);
+        } else if (tower_ptr->IsTransformerBlock()) {
+            graph_->tower[i].attn_norm.LoadWeights(tower_ptr->attn_norm.GetGammas());
+            graph_->tower[i].q_proj.LoadWeights(tower_ptr->q_proj.GetWeights(),
+                                                tower_ptr->q_proj.GetBiases(),
+                                                scratch_size_,
+                                                winograd);
+            graph_->tower[i].k_proj.LoadWeights(tower_ptr->k_proj.GetWeights(),
+                                                tower_ptr->k_proj.GetBiases(),
+                                                scratch_size_,
+                                                winograd);
+            graph_->tower[i].v_proj.LoadWeights(tower_ptr->v_proj.GetWeights(),
+                                                tower_ptr->v_proj.GetBiases(),
+                                                scratch_size_,
+                                                winograd);
+            graph_->tower[i].attention.LoadWeights(tower_ptr->rope.GetFrequencies());
+            graph_->tower[i].out_proj.LoadWeights(tower_ptr->out_proj.GetWeights(),
+                                                  tower_ptr->out_proj.GetBiases(),
+                                                  scratch_size_,
+                                                  winograd);
+            graph_->tower[i].ffn_norm.LoadWeights(tower_ptr->ffn_norm.GetGammas());
+            graph_->tower[i].ffn_fc1.LoadWeights(tower_ptr->ffn_fc1.GetWeights(),
+                                                 tower_ptr->ffn_fc1.GetBiases(),
+                                                 scratch_size_,
+                                                 winograd);
+            graph_->tower[i].ffn_gate.LoadWeights(tower_ptr->ffn_gate.GetWeights(),
+                                                  tower_ptr->ffn_gate.GetBiases(),
+                                                  scratch_size_,
+                                                  winograd);
+            graph_->tower[i].ffn_fc2.LoadWeights(tower_ptr->ffn_fc2.GetWeights(),
+                                                 tower_ptr->ffn_fc2.GetBiases(),
+                                                 scratch_size_,
+                                                 winograd);
         }
         if (tower_ptr->apply_se) {
             graph_->tower[i].se_module.LoadWeights(tower_ptr->squeeze.GetWeights(),
@@ -602,6 +719,16 @@ void CudaForwardPipe::NNGraph::ConstructGraph(bool dump_gpu_info,
 
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_mask_op_[0], mask_op1_size));
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_mask_op_[1], mask_op2_size));
+
+    cuda_attn_op_ = {nullptr, nullptr};
+    if (peak_attn_channels > 0) {
+        const size_t attn_values_size = factor * peak_attn_channels * num_intersections;
+        const size_t attn_scores_size =
+            factor * peak_attn_heads * num_intersections * num_intersections;
+
+        cuda::ReportCUDAErrors(cudaMalloc(&cuda_attn_op_[0], attn_values_size));
+        cuda::ReportCUDAErrors(cudaMalloc(&cuda_attn_op_[1], attn_scores_size));
+    }
 
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_input_planes_, planes_size));
     cuda::ReportCUDAErrors(cudaMalloc(&cuda_output_prob_pass_, pass_size));
@@ -892,6 +1019,88 @@ CudaForwardPipe::NNGraph::BatchForward(const std::vector<InputData>& batch_input
                                            cuda_scratch_op_[0],
                                            cuda_scratch_op_[1],
                                            scratch_size_);
+        } else if (tower_ptr->IsTransformerBlock()) {
+            // self-attention sublayer
+            graph_->tower[i].attn_norm.Forward(batch_size, cuda_conv_op_[1], cuda_conv_op_[0]);
+
+            graph_->tower[i].q_proj.Forward(batch_size,
+                                            cuda_conv_op_[2],
+                                            cuda_conv_op_[1],
+                                            nullptr,
+                                            mask_buf[0],
+                                            cuda_scratch_op_[0],
+                                            cuda_scratch_op_[1],
+                                            scratch_size_);
+            graph_->tower[i].k_proj.Forward(batch_size,
+                                            cuda_conv_op_[3],
+                                            cuda_conv_op_[1],
+                                            nullptr,
+                                            mask_buf[0],
+                                            cuda_scratch_op_[0],
+                                            cuda_scratch_op_[1],
+                                            scratch_size_);
+            graph_->tower[i].v_proj.Forward(batch_size,
+                                            cuda_attn_op_[0],
+                                            cuda_conv_op_[1],
+                                            nullptr,
+                                            mask_buf[0],
+                                            cuda_scratch_op_[0],
+                                            cuda_scratch_op_[1],
+                                            scratch_size_);
+
+            graph_->tower[i].attention.Forward(batch_size,
+                                               cuda_conv_op_[2],
+                                               cuda_conv_op_[3],
+                                               cuda_attn_op_[0],
+                                               cuda_attn_op_[1],
+                                               mask_buf[0]);
+
+            graph_->tower[i].out_proj.Forward(batch_size,
+                                              cuda_conv_op_[3],
+                                              cuda_conv_op_[2],
+                                              cuda_conv_op_[0],
+                                              mask_buf[0],
+                                              cuda_scratch_op_[0],
+                                              cuda_scratch_op_[1],
+                                              scratch_size_);
+
+            std::swap(cuda_conv_op_[3], cuda_conv_op_[0]);
+
+            // gated feedforward sublayer
+            const auto feedforwards = tower_ptr->feedforward_channels;
+            graph_->tower[i].ffn_norm.Forward(batch_size, cuda_conv_op_[1], cuda_conv_op_[0]);
+
+            graph_->tower[i].ffn_fc1.Forward(batch_size,
+                                             cuda_conv_op_[2],
+                                             cuda_conv_op_[1],
+                                             nullptr,
+                                             mask_buf[0],
+                                             cuda_scratch_op_[0],
+                                             cuda_scratch_op_[1],
+                                             scratch_size_);
+            graph_->tower[i].ffn_gate.Forward(batch_size,
+                                              cuda_conv_op_[3],
+                                              cuda_conv_op_[1],
+                                              nullptr,
+                                              mask_buf[0],
+                                              cuda_scratch_op_[0],
+                                              cuda_scratch_op_[1],
+                                              scratch_size_);
+            cuda::MulVectors(handles_.fp16,
+                             cuda_conv_op_[2],
+                             cuda_conv_op_[2],
+                             cuda_conv_op_[3],
+                             batch_size * feedforwards * num_intersections,
+                             handles_.stream);
+
+            graph_->tower[i].ffn_fc2.Forward(batch_size,
+                                             cuda_conv_op_[3],
+                                             cuda_conv_op_[2],
+                                             cuda_conv_op_[0],
+                                             mask_buf[0],
+                                             cuda_scratch_op_[0],
+                                             cuda_scratch_op_[1],
+                                             scratch_size_);
         }
 
         bool module_skip = false;
@@ -1121,6 +1330,10 @@ void CudaForwardPipe::NNGraph::DestroyGraph() {
 
     cuda::ReportCUDAErrors(cudaFree(cuda_mask_op_[0]));
     cuda::ReportCUDAErrors(cudaFree(cuda_mask_op_[1]));
+
+    cuda::ReportCUDAErrors(cudaFree(cuda_attn_op_[0]));
+    cuda::ReportCUDAErrors(cudaFree(cuda_attn_op_[1]));
+    cuda_attn_op_ = {nullptr, nullptr};
 
     cuda::ReportCUDAErrors(cudaFree(cuda_input_planes_));
     cuda::ReportCUDAErrors(cudaFree(cuda_output_prob_));

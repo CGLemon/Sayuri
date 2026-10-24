@@ -21,6 +21,8 @@ void AddSpatial(bool fp16,
                 Activation act,
                 cudaStream_t stream);
 
+void MulVectors(bool fp16, void* c, const void* a, const void* b, int size, cudaStream_t stream);
+
 class LayerBasic {
 protected:
     CudaHandles* handles_{nullptr};
@@ -174,6 +176,50 @@ private:
     void* cuda_weights_b1_;
     void* cuda_weights_w2_;
     void* cuda_weights_b2_;
+};
+
+class RMSNorm : public LayerBasic {
+public:
+    RMSNorm() = default;
+    RMSNorm(CudaHandles* handles, const int batch, const int board_size, const int channels);
+    ~RMSNorm();
+
+    void Forward(const int batch, void* output, const void* input);
+
+    void LoadWeights(const std::vector<float>& gammas);
+
+private:
+    int channels_;
+
+    void* cuda_gammas_;
+};
+
+class MultiHeadAttention : public LayerBasic {
+public:
+    MultiHeadAttention() = default;
+    MultiHeadAttention(CudaHandles* handles,
+                       const int batch,
+                       const int board_size,
+                       const int num_heads,
+                       const int head_dim);
+    ~MultiHeadAttention();
+
+    // The attention output overwrites the queries.
+    void Forward(const int batch,
+                 void* queries,
+                 void* keys,
+                 const void* values,
+                 void* scores,
+                 const void* mask);
+
+    void LoadWeights(const std::vector<float>& frequencies);
+
+private:
+    int num_heads_;
+    int head_dim_;
+
+    // The RoPE frequencies always stay in FP32.
+    void* cuda_frequencies_;
 };
 
 } // namespace cuda

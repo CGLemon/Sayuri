@@ -47,6 +47,18 @@ private:
             cuda::Convolution conv4;
             cuda::Convolution post_btl_conv;
             cuda::SEUnit se_module;
+
+            // transformer block
+            cuda::RMSNorm attn_norm;
+            cuda::Convolution q_proj;
+            cuda::Convolution k_proj;
+            cuda::Convolution v_proj;
+            cuda::MultiHeadAttention attention;
+            cuda::Convolution out_proj;
+            cuda::RMSNorm ffn_norm;
+            cuda::Convolution ffn_fc1;
+            cuda::Convolution ffn_gate;
+            cuda::Convolution ffn_fc2;
         };
 
         struct Graph {
@@ -126,6 +138,10 @@ private:
         std::array<void*, 3> cuda_pol_op_;
         std::array<void*, 3> cuda_val_op_;
         std::array<void*, 2> cuda_mask_op_;
+
+        // The values and the scores of the transformer blocks. They are only
+        // allocated if there is any transformer block.
+        std::array<void*, 2> cuda_attn_op_{nullptr, nullptr};
 
         size_t scratch_size_;
         std::shared_ptr<DNNWeights> weights_{nullptr};

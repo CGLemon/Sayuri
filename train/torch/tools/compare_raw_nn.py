@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # Run the same positions on pysayuri (raw_nn, the .pt weights) and the C++
-# engines (sayuri-raw_nn 0, the .txt weights, fp32 without winograd), then
-# compare the network outputs.
+# engines (sayuri-raw_nn 0, the .txt weights, fp32 without winograd by
+# default), then compare the network outputs.
 import argparse
 import os
+import shlex
 import subprocess
 import sys
 
@@ -11,7 +12,7 @@ import numpy as np
 
 TORCH_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PYSAYURI = os.path.join(TORCH_DIR, "pysayuri.py")
-ENGINE_ARGS = ["--no-winograd", "--no-fp16", "-t", "1"]
+ENGINE_ARGS = "--no-winograd --no-fp16 -t 1"
 
 # The smaller boards check the padding and mask path of the python network,
 # which always runs on the 19x19 planes.
@@ -68,9 +69,9 @@ def run_python(pt, board_size, moves):
         raise Exception("the pysayuri output is broken:\n" + proc.stderr)
     return out
 
-def run_cpp(engine, txt, board_size, moves):
+def run_cpp(engine, txt, engine_args, board_size, moves):
     proc = subprocess.run(
-        [engine, "-w", txt] + ENGINE_ARGS,
+        [engine, "-w", txt] + shlex.split(engine_args),
         input=make_commands(board_size, moves, "sayuri-raw_nn 0"),
         capture_output=True, text=True, timeout=600)
 
@@ -135,7 +136,7 @@ def main(args):
             continue
 
         for name, engine in engines:
-            cc = run_cpp(engine, args.txt, board_size, moves)
+            cc = run_cpp(engine, args.txt, args.engine_args, board_size, moves)
             diffs = compute_diffs(py, cc)
             ok = all(v <= args.tol for v in diffs.values())
             all_pass &= ok
@@ -155,6 +156,8 @@ if __name__ == "__main__":
                         help="The .txt weights for the C++ engine.", type=str)
     parser.add_argument("--engine", metavar="<name=path>", action="append", required=True,
                         help="The C++ engine binary, can be repeated.", type=str)
+    parser.add_argument("--engine-args", metavar="<string>", default=ENGINE_ARGS,
+                        help="The arguments of the C++ engines.", type=str)
     parser.add_argument("--tol", metavar="<float>", default=1e-4,
                         help="The max acceptable difference.", type=float)
     parser.add_argument("--dump", default=False,

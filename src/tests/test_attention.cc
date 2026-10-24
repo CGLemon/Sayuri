@@ -7,6 +7,11 @@
 #include "neural/blas/blas.h"
 #include "tests/unitest.h"
 
+#ifdef USE_CUDA
+#include "neural/cuda/cuda_common.h"
+#include "neural/cuda/cuda_layers.h"
+#endif
+
 namespace {
 
 constexpr float kTolerance = 1e-4f;
@@ -66,6 +71,128 @@ std::vector<float> ReferenceAttention(const size_t board_size,
     }
     return output;
 }
+
+#ifdef USE_CUDA
+constexpr float kFp16Tolerance = 2e-2f;
+
+// Copy the board at the top-left corner of a [channels, graph_size, graph_size]
+// tensor which starts from 'offset'.
+std::vector<float> CropBoard(const std::vector<float>& tensor,
+                             const size_t offset,
+                             const int channels,
+                             const int graph_size,
+                             const int board_size) {
+    auto crop = std::vector<float>(channels * board_size * board_size);
+    for (int c = 0; c < channels; ++c) {
+        for (int y = 0; y < board_size; ++y) {
+            for (int x = 0; x < board_size; ++x) {
+                crop[(c * board_size + y) * board_size + x] =
+                    tensor[offset + (c * graph_size + y) * graph_size + x];
+            }
+        }
+    }
+    return crop;
+}
+
+std::vector<float> CopyToHost(cuda::CudaHandles* handles, void* cuda_op, const size_t size) {
+    auto output = std::vector<float>(size);
+    cuda::WaitToFinish(handles->stream);
+    cuda::CopyToHostOp(handles->fp16, output, &cuda_op);
+    return output;
+}
+
+// Run the test with FP32, then with FP16 if the device supports it. Skip it
+// if there is no GPU.
+template <typename TestFunc> void RunEachPrecision(TestFunc test) {
+    auto device_count = 0;
+    if (cudaGetDeviceCount(&device_count) != cudaSuccess || device_count == 0) {
+        return;
+    }
+    cuda::SetDevice(0);
+
+    auto handles = cuda::CudaHandles{};
+    handles.ApplyOnCurrentDevice();
+    const auto support_fp16 = handles.fp16;
+
+    handles.fp16 = false;
+    test(&handles, kTolerance);
+    if (support_fp16) {
+        handles.fp16 = true;
+        test(&handles, kFp16Tolerance);
+    }
+    handles.Release();
+}
+
+// The 'board_sizes' are the board sizes of each batch, placed at the top-left
+// corner of the graph.
+void CheckCudaAttention(cuda::CudaHandles* handles,
+                        const float tolerance,
+                        const int graph_size,
+                        const std::vector<int>& board_sizes,
+                        const bool use_mask) {
+    const int batch = board_sizes.size();
+    const int num_heads = 2;
+    const int head_dim = 4;
+    const int attn_channels = num_heads * head_dim;
+    const int spatial = graph_size * graph_size;
+    const auto tensor_size = (size_t)batch * attn_channels * spatial;
+
+    const auto queries = RandomTensor(tensor_size, 111);
+    const auto keys = RandomTensor(tensor_size, 222);
+    const auto values = RandomTensor(tensor_size, 333);
+    const auto frequencies = RandomTensor(num_heads * (head_dim / 2) * 2, 444);
+
+    auto mask = std::vector<float>(batch * spatial);
+    for (int b = 0; b < batch; ++b) {
+        for (int idx = 0; idx < spatial; ++idx) {
+            const auto inside =
+                idx % graph_size < board_sizes[b] && idx / graph_size < board_sizes[b];
+            mask[b * spatial + idx] = inside ? 1.f : 0.f;
+        }
+    }
+
+    void* cuda_queries;
+    void* cuda_keys;
+    void* cuda_values;
+    void* cuda_scores;
+    void* cuda_mask = nullptr;
+    cuda::MallocAndCopy(handles->fp16, &cuda_queries, queries);
+    cuda::MallocAndCopy(handles->fp16, &cuda_keys, keys);
+    cuda::MallocAndCopy(handles->fp16, &cuda_values, values);
+    cuda::MallocCudaOp(handles->fp16, &cuda_scores, (size_t)batch * num_heads * spatial * spatial);
+    if (use_mask) {
+        cuda::MallocAndCopy(handles->fp16, &cuda_mask, mask);
+    }
+
+    auto attention = cuda::MultiHeadAttention(handles, batch, graph_size, num_heads, head_dim);
+    attention.LoadWeights(frequencies);
+    attention.Forward(batch, cuda_queries, cuda_keys, cuda_values, cuda_scores, cuda_mask);
+    const auto output = CopyToHost(handles, cuda_queries, tensor_size);
+
+    for (int b = 0; b < batch; ++b) {
+        const int board_size = board_sizes[b];
+        const auto offset = (size_t)b * attn_channels * spatial;
+
+        auto q = CropBoard(queries, offset, attn_channels, graph_size, board_size);
+        auto k = CropBoard(keys, offset, attn_channels, graph_size, board_size);
+        const auto v = CropBoard(values, offset, attn_channels, graph_size, board_size);
+
+        RotaryEmbedding::Forward(board_size, num_heads, head_dim, frequencies, q, k);
+        const auto expected = ReferenceAttention(board_size, num_heads, head_dim, q, k, v);
+
+        const auto result = CropBoard(output, offset, attn_channels, graph_size, board_size);
+        for (auto i = size_t{0}; i < result.size(); ++i) {
+            EXPECT_NEAR(result[i], expected[i], tolerance);
+        }
+    }
+
+    cuda::ReportCUDAErrors(cudaFree(cuda_queries));
+    cuda::ReportCUDAErrors(cudaFree(cuda_keys));
+    cuda::ReportCUDAErrors(cudaFree(cuda_values));
+    cuda::ReportCUDAErrors(cudaFree(cuda_scores));
+    cuda::ReportCUDAErrors(cudaFree(cuda_mask));
+}
+#endif
 
 } // namespace
 
@@ -276,3 +403,53 @@ UNITEST(Attention, MultiHeadAttentionIsConvexCombination) {
         }
     }
 }
+
+#ifdef USE_CUDA
+UNITEST(CudaAttention, RMSNormMatchesBlas) {
+    RunEachPrecision([](cuda::CudaHandles* handles, const float tolerance) {
+        const int batch = 2;
+        const int board_size = 3;
+        const int channels = 6;
+        const auto plane_size = (size_t)channels * board_size * board_size;
+
+        const auto input = RandomTensor(batch * plane_size, 505);
+        const auto gammas = RandomTensor(channels, 606);
+
+        void* cuda_input;
+        void* cuda_output;
+        cuda::MallocAndCopy(handles->fp16, &cuda_input, input);
+        cuda::MallocCudaOp(handles->fp16, &cuda_output, input.size());
+
+        auto norm = cuda::RMSNorm(handles, batch, board_size, channels);
+        norm.LoadWeights(gammas);
+        norm.Forward(batch, cuda_output, cuda_input);
+        const auto output = CopyToHost(handles, cuda_output, input.size());
+
+        for (int b = 0; b < batch; ++b) {
+            const auto begin = std::begin(input) + b * plane_size;
+            const auto batch_input = std::vector<float>(begin, begin + plane_size);
+            auto expected = std::vector<float>(plane_size);
+            RMSNorm::Forward(board_size, channels, batch_input, gammas, expected);
+
+            for (auto i = size_t{0}; i < plane_size; ++i) {
+                EXPECT_NEAR(output[b * plane_size + i], expected[i], tolerance);
+            }
+        }
+
+        cuda::ReportCUDAErrors(cudaFree(cuda_input));
+        cuda::ReportCUDAErrors(cudaFree(cuda_output));
+    });
+}
+
+UNITEST(CudaAttention, MultiHeadAttentionMatchesReference) {
+    RunEachPrecision([](cuda::CudaHandles* handles, const float tolerance) {
+        CheckCudaAttention(handles, tolerance, 4, {4, 4}, false);
+    });
+}
+
+UNITEST(CudaAttention, MaskedAttentionMatchesSmallerBoard) {
+    RunEachPrecision([](cuda::CudaHandles* handles, const float tolerance) {
+        CheckCudaAttention(handles, tolerance, 4, {3, 4}, true);
+    });
+}
+#endif

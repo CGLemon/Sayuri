@@ -35,6 +35,24 @@ void add_vectors(T *c, const T *a, const T *b,
 }
 
 template <typename T>
+__global__ void mul_vectors_kernel(T *c, const T *a, const T *b, int size) {
+    int i = threadIdx.x + blockDim.x * blockIdx.x;
+    if (i < size) {
+        c[i] = (T)((float)(a[i]) * (float)(b[i]));
+    }
+}
+
+template <typename T>
+void mul_vectors(T *c, const T *a, const T *b, int size, cudaStream_t stream) {
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(size, block_size);
+
+    mul_vectors_kernel<<<blocks, block_size, 0, stream>>>(c, a, b, size);
+
+    ReportCUDAErrors(cudaGetLastError());
+}
+
+template <typename T>
 __global__ void add_spatial_kernel(T *data, const T *biases,
                                    const T *residual, const T *mask,
                                    int bsize, int N, int C, int spatial,
@@ -769,6 +787,143 @@ void depthwise_conv(T *output, const T *input, const T *weights,
     ReportCUDAErrors(cudaGetLastError());
 }
 
+template <typename T>
+__global__ void rms_norm_kernel(T *output, const T *input, const T *gammas,
+                                int N, int C, int spatial) {
+    int index = threadIdx.x + blockDim.x * blockIdx.x;
+    if (index < N * spatial) {
+        int n = index / spatial;
+        int s = index % spatial;
+        const T *input_ptr = input + n * C * spatial + s;
+        T *output_ptr = output + n * C * spatial + s;
+
+        float sq_sum = 0.f;
+        for (int c = 0; c < C; ++c) {
+            float val = (float)(input_ptr[c * spatial]);
+            sq_sum += val * val;
+        }
+        float scale = 1.0f / sqrtf(sq_sum / C + 1e-6f);
+
+        for (int c = 0; c < C; ++c) {
+            float val = (float)(gammas[c]) * scale * (float)(input_ptr[c * spatial]);
+            output_ptr[c * spatial] = (T)val;
+        }
+    }
+}
+
+template <typename T>
+void rms_norm(T *output, const T *input, const T *gammas,
+              int batch, int channels, int spatial, cudaStream_t stream) {
+    const int total_elements = batch * spatial;
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(total_elements, block_size);
+
+    rms_norm_kernel<<<blocks, block_size, 0, stream>>>(
+        output, input, gammas, batch, channels, spatial);
+
+    ReportCUDAErrors(cudaGetLastError());
+}
+
+template <typename T>
+__global__ void rotary_embedding_kernel(T *queries, T *keys, const float *frequencies,
+                                        int N, int heads, int head_dim, int board_size) {
+    int index = threadIdx.x + blockDim.x * blockIdx.x;
+    int spatial = board_size * board_size;
+    int num_pairs = head_dim / 2;
+    if (index < N * heads * num_pairs * spatial) {
+        int s = index % spatial;
+        int p = (index / spatial) % num_pairs;
+        int nh = index / (spatial * num_pairs);
+        int h = nh % heads;
+
+        float freq_x = frequencies[2 * (h * num_pairs + p) + 0];
+        float freq_y = frequencies[2 * (h * num_pairs + p) + 1];
+        float angle = (float)(s % board_size) * freq_x + (float)(s / board_size) * freq_y;
+        float sin_val, cos_val;
+        sincosf(angle, &sin_val, &cos_val);
+
+        int offset = (nh * head_dim + 2 * p) * spatial + s;
+        float q0 = (float)(queries[offset]);
+        float q1 = (float)(queries[offset + spatial]);
+        queries[offset] = (T)(q0 * cos_val - q1 * sin_val);
+        queries[offset + spatial] = (T)(q0 * sin_val + q1 * cos_val);
+
+        float k0 = (float)(keys[offset]);
+        float k1 = (float)(keys[offset + spatial]);
+        keys[offset] = (T)(k0 * cos_val - k1 * sin_val);
+        keys[offset + spatial] = (T)(k0 * sin_val + k1 * cos_val);
+    }
+}
+
+template <typename T>
+void rotary_embedding(T *queries, T *keys, const float *frequencies,
+                      int batch, int heads, int head_dim, int board_size,
+                      cudaStream_t stream) {
+    const int total_elements = batch * heads * (head_dim / 2) * board_size * board_size;
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(total_elements, block_size);
+
+    rotary_embedding_kernel<<<blocks, block_size, 0, stream>>>(
+        queries, keys, frequencies, batch, heads, head_dim, board_size);
+
+    ReportCUDAErrors(cudaGetLastError());
+}
+
+template <typename T>
+__global__ void attention_softmax_kernel(T *scores, const T *mask,
+                                         int rows, int heads, int spatial) {
+    // One warp normalizes one row of the scores.
+    int row = (threadIdx.x + blockDim.x * blockIdx.x) / warpSize;
+    int lane = threadIdx.x % warpSize;
+    if (row >= rows) {
+        return;
+    }
+    T *row_ptr = scores + (size_t)row * spatial;
+    const T *mask_ptr = mask ? mask + (row / (heads * spatial)) * spatial : nullptr;
+
+    float max_val = -1e30f;
+    for (int j = lane; j < spatial; j += warpSize) {
+        if (!mask_ptr || (float)(mask_ptr[j]) > 0.5f) {
+            max_val = fmaxf(max_val, (float)(row_ptr[j]));
+        }
+    }
+    for (int shift = warpSize / 2; shift > 0; shift >>= 1) {
+        max_val = fmaxf(max_val, __shfl_xor_sync(0xffffffff, max_val, shift));
+    }
+
+    float sum = 0.f;
+    for (int j = lane; j < spatial; j += warpSize) {
+        if (!mask_ptr || (float)(mask_ptr[j]) > 0.5f) {
+            sum += expf((float)(row_ptr[j]) - max_val);
+        }
+    }
+    for (int shift = warpSize / 2; shift > 0; shift >>= 1) {
+        sum += __shfl_xor_sync(0xffffffff, sum, shift);
+    }
+
+    float inv_sum = sum > 0.f ? 1.0f / sum : 0.f;
+    for (int j = lane; j < spatial; j += warpSize) {
+        float val = 0.f;
+        if (!mask_ptr || (float)(mask_ptr[j]) > 0.5f) {
+            val = expf((float)(row_ptr[j]) - max_val) * inv_sum;
+        }
+        row_ptr[j] = (T)val;
+    }
+}
+
+template <typename T>
+void attention_softmax(T *scores, const T *mask,
+                       int batch, int heads, int spatial, cudaStream_t stream) {
+    const int rows = batch * heads * spatial;
+    const int block_size = KBLOCKSIZE;
+    const int blocks = DivUp(rows, block_size / 32);
+
+    attention_softmax_kernel<<<blocks, block_size, 0, stream>>>(
+        scores, mask, rows, heads, spatial);
+
+    ReportCUDAErrors(cudaGetLastError());
+}
+
 template<>
 void gemm<float>(bool TA, bool TB, int M, int N, int K, float ALPHA,
                  const float *A_gpu, int lda, const float *B_gpu, int ldb,
@@ -840,6 +995,9 @@ void gemm_strided_batched<half>(bool TA, bool TB, int M, int N, int K, half ALPH
 template void add_vectors<float>(float *c, const float *a, const float *b, int size,
                                  int asize, int bsize, Activation act, cudaStream_t stream);
 
+template void mul_vectors<float>(float *c, const float *a, const float *b, int size,
+                                 cudaStream_t stream);
+
 template void add_spatial<float>(float *data, const float *biases,
                                  const float *residual, const float *mask,
                                  int bsize, int batch, int channels, int spatial,
@@ -874,9 +1032,22 @@ template void depthwise_conv<float>(float *output, const float *input, const flo
                                     int filter_size, int batch, int channels, int height, int width,
                                     Activation act, cudaStream_t stream);
 
+template void rms_norm<float>(float *output, const float *input, const float *gammas,
+                              int batch, int channels, int spatial, cudaStream_t stream);
+
+template void rotary_embedding<float>(float *queries, float *keys, const float *frequencies,
+                                      int batch, int heads, int head_dim, int board_size,
+                                      cudaStream_t stream);
+
+template void attention_softmax<float>(float *scores, const float *mask,
+                                       int batch, int heads, int spatial, cudaStream_t stream);
+
 #ifdef ENABLE_FP16
 template void add_vectors<half>(half *c, const  half *a, const half *b, int size,
                                 int asize, int bsize, Activation act, cudaStream_t stream);
+
+template void mul_vectors<half>(half *c, const half *a, const half *b, int size,
+                                cudaStream_t stream);
 
 template void add_spatial<half>(half *data, const half *biases,
                                 const half *residual, const half *mask,
@@ -911,6 +1082,16 @@ template void depthwise_conv<half>(half *output, const half *input, const half *
                                    const half *biases, const half *residual, const half *mask,
                                    int filter_size, int batch, int channels, int height, int width,
                                    Activation act, cudaStream_t stream);
+
+template void rms_norm<half>(half *output, const half *input, const half *gammas,
+                             int batch, int channels, int spatial, cudaStream_t stream);
+
+template void rotary_embedding<half>(half *queries, half *keys, const float *frequencies,
+                                     int batch, int heads, int head_dim, int board_size,
+                                     cudaStream_t stream);
+
+template void attention_softmax<half>(half *scores, const half *mask,
+                                      int batch, int heads, int spatial, cudaStream_t stream);
 #endif
 
 } // namespace cuda

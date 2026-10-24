@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <iostream>
 
 #include "neural/blas/winograd_convolution3.h"
@@ -66,6 +67,93 @@ void AddSpatial(bool fp16,
                     spatial,
                     act,
                     stream);
+    }
+}
+
+void MulVectors(bool fp16, void* c, const void* a, const void* b, int size, cudaStream_t stream) {
+    if (fp16) {
+#ifdef ENABLE_FP16
+        mul_vectors((half*)c, (const half*)a, (const half*)b, size, stream);
+#endif
+    } else {
+        mul_vectors((float*)c, (const float*)a, (const float*)b, size, stream);
+    }
+}
+
+void RMSNormalize(bool fp16,
+                  void* output,
+                  const void* input,
+                  const void* gammas,
+                  int batch,
+                  int channels,
+                  int spatial,
+                  cudaStream_t stream) {
+    if (fp16) {
+#ifdef ENABLE_FP16
+        rms_norm((half*)output,
+                 (const half*)input,
+                 (const half*)gammas,
+                 batch,
+                 channels,
+                 spatial,
+                 stream);
+#endif
+    } else {
+        rms_norm((float*)output,
+                 (const float*)input,
+                 (const float*)gammas,
+                 batch,
+                 channels,
+                 spatial,
+                 stream);
+    }
+}
+
+void RotaryEmbedding(bool fp16,
+                     void* queries,
+                     void* keys,
+                     const void* frequencies,
+                     int batch,
+                     int heads,
+                     int head_dim,
+                     int board_size,
+                     cudaStream_t stream) {
+    if (fp16) {
+#ifdef ENABLE_FP16
+        rotary_embedding((half*)queries,
+                         (half*)keys,
+                         (const float*)frequencies,
+                         batch,
+                         heads,
+                         head_dim,
+                         board_size,
+                         stream);
+#endif
+    } else {
+        rotary_embedding((float*)queries,
+                         (float*)keys,
+                         (const float*)frequencies,
+                         batch,
+                         heads,
+                         head_dim,
+                         board_size,
+                         stream);
+    }
+}
+
+void AttentionSoftmax(bool fp16,
+                      void* scores,
+                      const void* mask,
+                      int batch,
+                      int heads,
+                      int spatial,
+                      cudaStream_t stream) {
+    if (fp16) {
+#ifdef ENABLE_FP16
+        attention_softmax((half*)scores, (const half*)mask, batch, heads, spatial, stream);
+#endif
+    } else {
+        attention_softmax((float*)scores, (const float*)mask, batch, heads, spatial, stream);
     }
 }
 
@@ -463,13 +551,10 @@ void Convolution::Forward(const int batch,
     if (!loaded_) {
         return;
     }
-    if (!scratch || !scratch_other) {
-        return;
-    }
-
     assert(batch <= maxbatch_);
 
 #ifdef USE_CUDNN
+    (void)scratch_other;
     cudnnDataType_t cudnn_data_type = GetCudnnDataType(fp16_);
 
     ReportCUDNNErrors(cudnnSetStream(handles_->cudnn_handle, handles_->stream));
@@ -512,6 +597,9 @@ void Convolution::Forward(const int batch,
 
 #else
     (void)scratch_size;
+    if (!scratch || !scratch_other) {
+        return;
+    }
     auto scratch_op = reinterpret_cast<void*>(scratch);
 
     const int board_size = (width_ + height_) / 2;
@@ -1049,6 +1137,145 @@ SEUnit::~SEUnit() {
         ReportCUDAErrors(cudaFree(cuda_op_[1]));
         ReportCUDAErrors(cudaFree(cuda_op_[2]));
     }
+}
+
+RMSNorm::RMSNorm(CudaHandles* handles,
+                 const int max_batch,
+                 const int board_size,
+                 const int channels) {
+    width_ = board_size;
+    height_ = board_size;
+    spatial_size_ = width_ * height_;
+
+    fp16_ = handles->fp16;
+    maxbatch_ = max_batch;
+    channels_ = channels;
+    loaded_ = false;
+    handles_ = handles;
+}
+
+RMSNorm::~RMSNorm() {
+    if (loaded_) {
+        ReportCUDAErrors(cudaFree(cuda_gammas_));
+    }
+}
+
+void RMSNorm::Forward(const int batch, void* output, const void* input) {
+    if (!loaded_) {
+        return;
+    }
+    assert(batch <= maxbatch_);
+    RMSNormalize(
+        fp16_, output, input, cuda_gammas_, batch, channels_, spatial_size_, handles_->stream);
+}
+
+void RMSNorm::LoadWeights(const std::vector<float>& gammas) {
+    if (loaded_) {
+        return;
+    }
+    MallocAndCopy(fp16_, &cuda_gammas_, gammas);
+    loaded_ = true;
+}
+
+MultiHeadAttention::MultiHeadAttention(CudaHandles* handles,
+                                       const int max_batch,
+                                       const int board_size,
+                                       const int num_heads,
+                                       const int head_dim) {
+    width_ = board_size;
+    height_ = board_size;
+    spatial_size_ = width_ * height_;
+
+    fp16_ = handles->fp16;
+    maxbatch_ = max_batch;
+    num_heads_ = num_heads;
+    head_dim_ = head_dim;
+    loaded_ = false;
+    handles_ = handles;
+}
+
+MultiHeadAttention::~MultiHeadAttention() {
+    if (loaded_) {
+        ReportCUDAErrors(cudaFree(cuda_frequencies_));
+    }
+}
+
+void MultiHeadAttention::Forward(const int batch,
+                                 void* queries,
+                                 void* keys,
+                                 const void* values,
+                                 void* scores,
+                                 const void* mask) {
+    if (!loaded_) {
+        return;
+    }
+    assert(batch <= maxbatch_);
+
+    const int head_size = head_dim_ * spatial_size_;
+    const int scores_size = spatial_size_ * spatial_size_;
+    const int batch_heads = batch * num_heads_;
+    const float scale = 1.0f / std::sqrt((float)head_dim_);
+
+    RotaryEmbedding(fp16_,
+                    queries,
+                    keys,
+                    cuda_frequencies_,
+                    batch,
+                    num_heads_,
+                    head_dim_,
+                    width_,
+                    handles_->stream);
+
+    // scores[i, j] = scale * dot(queries[:, i], keys[:, j])
+    GemmStridedBatched(fp16_,
+                       true,
+                       false,
+                       spatial_size_,
+                       spatial_size_,
+                       head_dim_,
+                       scale,
+                       queries,
+                       spatial_size_,
+                       head_size,
+                       keys,
+                       spatial_size_,
+                       head_size,
+                       0.0f,
+                       scores,
+                       spatial_size_,
+                       scores_size,
+                       batch_heads,
+                       handles_->cublas_handle);
+    AttentionSoftmax(fp16_, scores, mask, batch, num_heads_, spatial_size_, handles_->stream);
+
+    // queries[:, i] = sum_j scores[i, j] * values[:, j]
+    GemmStridedBatched(fp16_,
+                       false,
+                       true,
+                       head_dim_,
+                       spatial_size_,
+                       spatial_size_,
+                       1.0f,
+                       values,
+                       spatial_size_,
+                       head_size,
+                       scores,
+                       spatial_size_,
+                       scores_size,
+                       0.0f,
+                       queries,
+                       spatial_size_,
+                       head_size,
+                       batch_heads,
+                       handles_->cublas_handle);
+}
+
+void MultiHeadAttention::LoadWeights(const std::vector<float>& frequencies) {
+    if (loaded_) {
+        return;
+    }
+    MallocAndCopy(false, &cuda_frequencies_, frequencies);
+    loaded_ = true;
 }
 
 } // namespace cuda

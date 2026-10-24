@@ -19,6 +19,8 @@ void add_vectors(T* c,
                  Activation act,
                  cudaStream_t stream);
 
+template <typename T> void mul_vectors(T* c, const T* a, const T* b, int size, cudaStream_t stream);
+
 template <typename T>
 void add_spatial(T* data,
                  const T* biases,
@@ -102,6 +104,29 @@ void depthwise_conv(T* output,
                     int width,
                     Activation act,
                     cudaStream_t stream);
+
+template <typename T>
+void rms_norm(T* output,
+              const T* input,
+              const T* gammas,
+              int batch,
+              int channels,
+              int spatial,
+              cudaStream_t stream);
+
+template <typename T>
+void rotary_embedding(T* queries,
+                      T* keys,
+                      const float* frequencies,
+                      int batch,
+                      int heads,
+                      int head_dim,
+                      int board_size,
+                      cudaStream_t stream);
+
+template <typename T>
+void attention_softmax(
+    T* scores, const T* mask, int batch, int heads, int spatial, cudaStream_t stream);
 
 template <typename T>
 void gemm(bool TA,

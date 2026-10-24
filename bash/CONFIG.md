@@ -25,7 +25,7 @@ The selfplay-setting.json file defines the key parameters for the neural network
                                       # NestedBottleneckBlock, MixerBlock,
                                       # TransformerBlock ]
                                       # The TransformerBlock does not support the
-                                      # SE module.
+                                      # SE module or the TensorRT backend.
 
             "ResidualBlock",          # The first residual block (standard).
             "ResidualBlock",          # The second residual block (standard).
