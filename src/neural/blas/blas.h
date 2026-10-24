@@ -47,6 +47,28 @@ public:
                               float* C,
                               const int ldc);
 
+    // This is interface for attention GEMM, not the normal GEMM. Some parameters
+    // will be invalid. It computes the C[M, N] = alpha * A^T x B. The A is a
+    // [K, M] row-major matrix and the B is a [K, N] row-major matrix.
+    static void AttentionSgemmTN(const int M,
+                                 const int N,
+                                 const int K,
+                                 const float alpha,
+                                 const float* A,
+                                 const float* B,
+                                 float* C);
+
+    // This is interface for attention GEMM, not the normal GEMM. Some parameters
+    // will be invalid. It computes the C[M, N] = alpha * A x B^T. The A is a
+    // [M, K] row-major matrix and the B is a [N, K] row-major matrix.
+    static void AttentionSgemmNT(const int M,
+                                 const int N,
+                                 const int K,
+                                 const float alpha,
+                                 const float* A,
+                                 const float* B,
+                                 float* C);
+
     // This is interface for fullyconnet GEMM, not the normal GEMM. Some parameters
     // will be invalid.
     static void DenseSgemm(const int inputs,

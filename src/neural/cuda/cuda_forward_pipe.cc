@@ -63,6 +63,14 @@ void CudaForwardPipe::Construct(ForwardPipeOption option, std::shared_ptr<DNNWei
         return;
     }
 
+    // Reject the unsupported blocks before allocating any GPU resource.
+    for (auto& tower_ptr : weights_->tower) {
+        if (!tower_ptr->IsResidualBlock() && !tower_ptr->IsBottleneckBlock() &&
+            !tower_ptr->IsNestedBottleneckBlock() && !tower_ptr->IsMixerBlock()) {
+            throw std::runtime_error("Unknown block type for CUDA backend.");
+        }
+    }
+
     // The actual inference batch size may be smaller than the maximum batch size
     // supported by the neural network. In this case, we only need to dynamically
     // adjust the batch size used for the current forward pipe.

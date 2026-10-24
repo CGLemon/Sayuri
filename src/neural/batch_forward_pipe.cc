@@ -195,5 +195,8 @@ void BatchForwardPipe::Worker(int gpu) {
 void BatchForwardPipe::QuitWorkers() {
     worker_running_.store(false);
     cv_.notify_all();
-    group_->WaitToJoin();
+
+    if (group_) {
+        group_->WaitToJoin();
+    }
 }

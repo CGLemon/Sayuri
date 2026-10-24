@@ -52,7 +52,7 @@ class Network(nn.Module):
         self.value_misc = 15
         self.policy_outs = 5
         self.stack = cfg.stack
-        self.version = 5
+        self.version = 6
 
         self.construct_layers()
 

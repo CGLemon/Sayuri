@@ -96,6 +96,63 @@ int BatchNormLayer::GetChannels() const {
     return channels_;
 }
 
+void RMSNormLayer::Set(int channels) {
+    channels_ = channels;
+}
+
+void RMSNormLayer::LoadGammas(std::vector<float>& load_weights) {
+    const int weights_size = load_weights.size();
+    const int expected_size = GetChannels();
+    if (weights_size != expected_size) {
+        throw std::runtime_error{Format("the gammas size of RMS normalization layer is not "
+                                        "acceptable, expect %d but we get %d",
+                                        expected_size,
+                                        weights_size)};
+    }
+    gammas_ = load_weights;
+}
+
+int RMSNormLayer::GetChannels() const {
+    return channels_;
+}
+
+std::vector<float>& RMSNormLayer::GetGammas() {
+    return gammas_;
+}
+
+void RoPELayer::Set(int head_dim, int num_heads) {
+    head_dim_ = head_dim;
+    num_heads_ = num_heads;
+}
+
+void RoPELayer::LoadFrequencies(std::vector<float>& load_weights) {
+    const int weights_size = load_weights.size();
+
+    // There is one (omega_x, omega_y) pair per head, per dimension pair.
+    const int expected_size = GetNumHeads() * (GetHeadDim() / 2) * 2;
+    if (weights_size != expected_size) {
+        throw std::runtime_error{
+            Format("the frequencies size of RoPE layer is not acceptable, expect [%d, %d, 2] but "
+                   "we get %d",
+                   GetNumHeads(),
+                   GetHeadDim() / 2,
+                   weights_size)};
+    }
+    frequencies_ = load_weights;
+}
+
+int RoPELayer::GetHeadDim() const {
+    return head_dim_;
+}
+
+int RoPELayer::GetNumHeads() const {
+    return num_heads_;
+}
+
+std::vector<float>& RoPELayer::GetFrequencies() {
+    return frequencies_;
+}
+
 void ConvLayer::Set(int inputs, int outputs, int filter) {
     inputs_ = inputs;
     outputs_ = outputs;

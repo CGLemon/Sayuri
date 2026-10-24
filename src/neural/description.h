@@ -59,6 +59,40 @@ private:
     int channels_{0};
 };
 
+class RMSNormLayer {
+public:
+    void Set(int channels);
+
+    void LoadGammas(std::vector<float>& load_weights);
+
+    int GetChannels() const;
+
+    std::vector<float>& GetGammas();
+
+private:
+    std::vector<float> gammas_;
+
+    int channels_{0};
+};
+
+class RoPELayer {
+public:
+    void Set(int head_dim, int num_heads);
+
+    void LoadFrequencies(std::vector<float>& load_weights);
+
+    int GetHeadDim() const;
+    int GetNumHeads() const;
+
+    std::vector<float>& GetFrequencies();
+
+private:
+    std::vector<float> frequencies_;
+
+    int head_dim_{0};
+    int num_heads_{0};
+};
+
 class ConvLayer {
 public:
     void Set(int inputs, int outputs, int filter);
@@ -87,7 +121,14 @@ private:
 
 class BlockBasic {
 public:
-    enum Type { kUnknown, kResidualBlock, kBottleneckBlock, kNestedBottleneckBlock, kMixerBlock };
+    enum Type {
+        kUnknown,
+        kResidualBlock,
+        kBottleneckBlock,
+        kNestedBottleneckBlock,
+        kMixerBlock,
+        kTransformerBlock
+    };
     BlockBasic() = default;
 
     bool IsResidualBlock() {
@@ -101,6 +142,9 @@ public:
     }
     bool IsMixerBlock() {
         return type == Type::kMixerBlock;
+    }
+    bool IsTransformerBlock() {
+        return type == Type::kTransformerBlock;
     }
 
     Type type{kUnknown};
@@ -124,6 +168,22 @@ public:
     ConvLayer dw_conv;
     BatchNormLayer dw_bn;
     int feedforward_channels{0};
+
+    // The self-attention sublayer.
+    RMSNormLayer attn_norm;
+    LinearLayer q_proj;
+    LinearLayer k_proj;
+    LinearLayer v_proj;
+    LinearLayer out_proj;
+    RoPELayer rope;
+    int num_heads{0};
+    int head_dim{0};
+
+    // The gated feedforward sublayer.
+    RMSNormLayer ffn_norm;
+    LinearLayer ffn_fc1;
+    LinearLayer ffn_gate;
+    LinearLayer ffn_fc2;
 
     LinearLayer squeeze;
     LinearLayer excite;
@@ -156,6 +216,13 @@ class MixerBlock : public BlockBasic {
 public:
     MixerBlock() {
         type = Type::kMixerBlock;
+    }
+};
+
+class TransformerBlock : public BlockBasic {
+public:
+    TransformerBlock() {
+        type = Type::kTransformerBlock;
     }
 };
 

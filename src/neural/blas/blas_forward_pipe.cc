@@ -1,7 +1,9 @@
 #include "neural/blas/blas_forward_pipe.h"
 
 #include <algorithm>
+#include <stdexcept>
 
+#include "neural/blas/attention.h"
 #include "neural/blas/batchnorm.h" // not used
 #include "neural/blas/biases.h"
 #include "neural/blas/convolution.h"
@@ -311,6 +313,127 @@ void BlasForwardPipe::MixerBlockForward(const int board_size,
         board_size, channels, conv_out, tower_ptr->conv2.GetBiases(), last_skip, last_act);
 }
 
+void BlasForwardPipe::TransformerBlockForward(const int board_size,
+                                              BlockBasic* tower_ptr,
+                                              std::vector<float>& conv_in,
+                                              std::vector<float>& conv_out) {
+    auto zero_vec = std::vector<float>{};
+    const auto channels = weights_->residual_channels;
+    const auto num_heads = tower_ptr->num_heads;
+    const auto head_dim = tower_ptr->head_dim;
+    const auto attn_channels = num_heads * head_dim;
+    const auto ffn_channels = tower_ptr->feedforward_channels;
+    const auto default_act = weights_->default_act;
+    const auto num_intersections = board_size * board_size;
+
+    auto norm_out = std::vector<float>(channels * num_intersections);
+    auto queries = std::vector<float>(attn_channels * num_intersections);
+    auto keys = std::vector<float>(attn_channels * num_intersections);
+    auto values = std::vector<float>(attn_channels * num_intersections);
+    auto attn_out = std::vector<float>(attn_channels * num_intersections);
+    auto scores = std::vector<float>(num_intersections * num_intersections);
+
+    // The self-attention sublayer. Every intersection is a token, so the
+    // fullyconnect layers are the 1x1 convolution in the NCHW layout.
+    RMSNorm::Forward(board_size, channels, conv_in, tower_ptr->attn_norm.GetGammas(), norm_out);
+
+    Convolution1::Forward(board_size,
+                          channels,
+                          attn_channels,
+                          norm_out,
+                          tower_ptr->q_proj.GetWeights(),
+                          zero_vec,
+                          queries);
+    AddSpatialBiases::Forward(
+        board_size, attn_channels, queries, tower_ptr->q_proj.GetBiases(), Activation::kIdentity);
+
+    Convolution1::Forward(board_size,
+                          channels,
+                          attn_channels,
+                          norm_out,
+                          tower_ptr->k_proj.GetWeights(),
+                          zero_vec,
+                          keys);
+    AddSpatialBiases::Forward(
+        board_size, attn_channels, keys, tower_ptr->k_proj.GetBiases(), Activation::kIdentity);
+
+    Convolution1::Forward(board_size,
+                          channels,
+                          attn_channels,
+                          norm_out,
+                          tower_ptr->v_proj.GetWeights(),
+                          zero_vec,
+                          values);
+    AddSpatialBiases::Forward(
+        board_size, attn_channels, values, tower_ptr->v_proj.GetBiases(), Activation::kIdentity);
+
+    RotaryEmbedding::Forward(
+        board_size, num_heads, head_dim, tower_ptr->rope.GetFrequencies(), queries, keys);
+    MultiHeadAttention::Forward(
+        board_size, num_heads, head_dim, queries, keys, values, scores, attn_out);
+
+    Convolution1::Forward(board_size,
+                          attn_channels,
+                          channels,
+                          attn_out,
+                          tower_ptr->out_proj.GetWeights(),
+                          zero_vec,
+                          conv_out);
+    AddSpatialBiases::Forward(board_size,
+                              channels,
+                              conv_out,
+                              tower_ptr->out_proj.GetBiases(),
+                              conv_in,
+                              Activation::kIdentity);
+
+    // The 'conv_in' is the sublayer input of the feedforward now.
+    std::swap(conv_out, conv_in);
+
+    // The gated feedforward sublayer.
+    RMSNorm::Forward(board_size, channels, conv_in, tower_ptr->ffn_norm.GetGammas(), norm_out);
+
+    auto ffn_hidden = std::vector<float>(ffn_channels * num_intersections);
+    auto ffn_gate = std::vector<float>(ffn_channels * num_intersections);
+
+    Convolution1::Forward(board_size,
+                          channels,
+                          ffn_channels,
+                          norm_out,
+                          tower_ptr->ffn_fc1.GetWeights(),
+                          zero_vec,
+                          ffn_hidden);
+    AddSpatialBiases::Forward(
+        board_size, ffn_channels, ffn_hidden, tower_ptr->ffn_fc1.GetBiases(), default_act);
+
+    Convolution1::Forward(board_size,
+                          channels,
+                          ffn_channels,
+                          norm_out,
+                          tower_ptr->ffn_gate.GetWeights(),
+                          zero_vec,
+                          ffn_gate);
+    AddSpatialBiases::Forward(
+        board_size, ffn_channels, ffn_gate, tower_ptr->ffn_gate.GetBiases(), Activation::kIdentity);
+
+    for (auto i = size_t{0}; i < ffn_hidden.size(); ++i) {
+        ffn_hidden[i] *= ffn_gate[i];
+    }
+
+    Convolution1::Forward(board_size,
+                          ffn_channels,
+                          channels,
+                          ffn_hidden,
+                          tower_ptr->ffn_fc2.GetWeights(),
+                          zero_vec,
+                          conv_out);
+    AddSpatialBiases::Forward(board_size,
+                              channels,
+                              conv_out,
+                              tower_ptr->ffn_fc2.GetBiases(),
+                              conv_in,
+                              Activation::kIdentity);
+}
+
 OutputResult BlasForwardPipe::Forward(const InputData& inpnts) {
     // Some useful information for network.
     int tower_peak_channels = weights_->residual_channels;
@@ -404,6 +527,10 @@ OutputResult BlasForwardPipe::Forward(const InputData& inpnts) {
                                          workspace1);
         } else if (tower_ptr->IsMixerBlock()) {
             MixerBlockForward(board_size, tower_ptr, residual0, conv_in, conv_out);
+        } else if (tower_ptr->IsTransformerBlock()) {
+            TransformerBlockForward(board_size, tower_ptr, conv_in, conv_out);
+        } else {
+            throw std::runtime_error{"unknown block type for the blas backend"};
         }
 
         // The SE process.

@@ -182,6 +182,14 @@ void DNNLoader::ParseStruct(NetStruct& netstruct, std::istream& buffer) const {
             if (netstruct[cnt].size() != 1) {
                 throw std::runtime_error{"BatchNorm layer shape is error"};
             }
+        } else if (layer_name == "RMSNorm") {
+            if (netstruct[cnt].size() != 1) {
+                throw std::runtime_error{"RMSNorm layer shape is error"};
+            }
+        } else if (layer_name == "RoPE") {
+            if (netstruct[cnt].size() != 2) {
+                throw std::runtime_error{"RoPE layer shape is error"};
+            }
         } else {
             throw std::runtime_error{"layer shape is error"};
         }
@@ -220,12 +228,14 @@ void DNNLoader::CheckMisc(NetInfo& netinfo, NetStack& netstack, NetStruct& netst
         //
         // v5: Add support for NestedBottleneckBlock and RepLK
         //     policy head.
+        //
+        // v6: Add support for TransformerBlock.
     }
 
-    if (weights_->version >= 6) {
+    if (weights_->version >= 7) {
         throw std::runtime_error{"do not support this version"};
     } else if (weights_->version >= 3) {
-        // v5 ~ v3
+        // v6 ~ v3
         weights_->input_channels = 43;
         weights_->probabilities_channels = 5;
         weights_->pass_probability_outputs = 5;
@@ -294,8 +304,13 @@ void DNNLoader::CheckMisc(NetInfo& netinfo, NetStack& netstack, NetStruct& netst
     }
 
     // Confirm all components is supported.
-    const auto supported_components = std::vector<std::string>{
-        "ResidualBlock", "BottleneckBlock", "NestedBottleneckBlock", "MixerBlock", "SE", "FixUp"};
+    const auto supported_components = std::vector<std::string>{"ResidualBlock",
+                                                               "BottleneckBlock",
+                                                               "NestedBottleneckBlock",
+                                                               "MixerBlock",
+                                                               "TransformerBlock",
+                                                               "SE",
+                                                               "FixUp"};
 
     for (auto& block_type : netstack) {
         for (auto& c : block_type) {
@@ -337,6 +352,8 @@ void DNNLoader::DumpInfo() const {
             out << "NestedBottleneckBlock";
         } else if (tower_ptr->IsMixerBlock()) {
             out << "MixerBlock";
+        } else if (tower_ptr->IsTransformerBlock()) {
+            out << "TransformerBlock";
         } else {
             continue; // unknown block
         }
@@ -377,12 +394,18 @@ int DNNLoader::FillBlock(int offset,
         weights_->tower.emplace_back(std::make_unique<NestedBottleneckBlock>());
     } else if (SplitterFound(block_spt, "MixerBlock")) {
         weights_->tower.emplace_back(std::make_unique<MixerBlock>());
+    } else if (SplitterFound(block_spt, "TransformerBlock")) {
+        weights_->tower.emplace_back(std::make_unique<TransformerBlock>());
     } else {
-        throw std::runtime_error{
-            "need the ResidualBlock, BottleneckBlock, NestedBottleneckBlock or MixerBlock"};
+        throw std::runtime_error{"need the ResidualBlock, BottleneckBlock, NestedBottleneckBlock, "
+                                 "MixerBlock or TransformerBlock"};
     }
     auto tower_ptr = std::rbegin(weights_->tower)->get();
     tower_ptr->apply_se = SplitterFound(block_spt, "SE");
+
+    if (tower_ptr->IsTransformerBlock() && tower_ptr->apply_se) {
+        throw std::runtime_error{"the transformer block does not support the SE module"};
+    }
 
     if (tower_ptr->IsResidualBlock()) {
         // residual block
@@ -605,6 +628,77 @@ int DNNLoader::FillBlock(int offset,
         }
         if (kernel != ffn_conv1_shape[2] || kernel != ffn_conv2_shape[2]) {
             throw std::runtime_error{"the kernel of mixer block is wrong"};
+        }
+    } else if (tower_ptr->IsTransformerBlock()) {
+        // transformer block
+        // ---- Self-Attention Sublayer ----
+        //     1). Fully connect layer (query projection)
+        //     2). Fully connect layer (key projection)
+        //     3). Fully connect layer (value projection)
+        //     4). Fully connect layer (output projection)
+        //     5). RoPE layer
+        //     6). RMS normalize layer (pre-norm)
+        // ---- Feedforward Sublayer ----
+        //     7).  Fully connect layer
+        //     8).  Fully connect layer (gate)
+        //     9).  Fully connect layer
+        //     10). RMS normalize layer (pre-norm)
+        //
+        // Both normalize layers are applied before the sublayer they belong to,
+        // but they are the last collected layer of the sublayer.
+
+        // attention layers.
+        const auto q_proj_shape = netstruct[offset++];
+        const auto k_proj_shape = netstruct[offset++];
+        const auto v_proj_shape = netstruct[offset++];
+        const auto out_proj_shape = netstruct[offset++];
+        const auto rope_shape = netstruct[offset++];
+        const auto attn_norm_shape = netstruct[offset++];
+
+        FillFullyconnectLayer(tower_ptr->q_proj, buffer, q_proj_shape[0], q_proj_shape[1]);
+        FillFullyconnectLayer(tower_ptr->k_proj, buffer, k_proj_shape[0], k_proj_shape[1]);
+        FillFullyconnectLayer(tower_ptr->v_proj, buffer, v_proj_shape[0], v_proj_shape[1]);
+        FillFullyconnectLayer(tower_ptr->out_proj, buffer, out_proj_shape[0], out_proj_shape[1]);
+        FillRopeLayer(tower_ptr->rope, buffer, rope_shape[0], rope_shape[1]);
+        FillRmsnormLayer(tower_ptr->attn_norm, buffer, attn_norm_shape[0]);
+
+        // feedforward layers.
+        const auto ffn_fc1_shape = netstruct[offset++];
+        const auto ffn_gate_shape = netstruct[offset++];
+        const auto ffn_fc2_shape = netstruct[offset++];
+        const auto ffn_norm_shape = netstruct[offset++];
+
+        FillFullyconnectLayer(tower_ptr->ffn_fc1, buffer, ffn_fc1_shape[0], ffn_fc1_shape[1]);
+        FillFullyconnectLayer(tower_ptr->ffn_gate, buffer, ffn_gate_shape[0], ffn_gate_shape[1]);
+        FillFullyconnectLayer(tower_ptr->ffn_fc2, buffer, ffn_fc2_shape[0], ffn_fc2_shape[1]);
+        FillRmsnormLayer(tower_ptr->ffn_norm, buffer, ffn_norm_shape[0]);
+
+        tower_ptr->head_dim = rope_shape[0];
+        tower_ptr->num_heads = rope_shape[1];
+        tower_ptr->feedforward_channels = ffn_fc1_shape[1];
+
+        const auto channels = weights_->residual_channels;
+        const auto head_dim = tower_ptr->head_dim;
+        const auto num_heads = tower_ptr->num_heads;
+        const auto attn_channels = num_heads * head_dim;
+        const auto ffn_channels = tower_ptr->feedforward_channels;
+
+        if (channels != q_proj_shape[0] || channels != k_proj_shape[0] ||
+            channels != v_proj_shape[0] || channels != out_proj_shape[1] ||
+            channels != attn_norm_shape[0] || channels != ffn_fc1_shape[0] ||
+            channels != ffn_gate_shape[0] || channels != ffn_fc2_shape[1] ||
+            channels != ffn_norm_shape[0]) {
+            throw std::runtime_error{"the channels of transformer block is wrong"};
+        }
+        if (num_heads <= 0 || head_dim <= 0 || head_dim % 4 != 0) {
+            throw std::runtime_error{"the head size of transformer block is wrong"};
+        }
+        if (attn_channels != q_proj_shape[1] || attn_channels != k_proj_shape[1] ||
+            attn_channels != v_proj_shape[1] || attn_channels != out_proj_shape[0]) {
+            throw std::runtime_error{"the attention channels of transformer block is wrong"};
+        }
+        if (ffn_channels != ffn_gate_shape[1] || ffn_channels != ffn_fc2_shape[0]) {
+            throw std::runtime_error{"the feedforward channels of transformer block is wrong"};
         }
     }
 
@@ -924,6 +1018,27 @@ void DNNLoader::FillBatchnormLayer(BatchNormLayer& layer,
 
     GetWeightsFromBuffer(weights, buffer);
     layer.LoadStddevs(weights, weights_->version == 1);
+}
+
+void DNNLoader::FillRmsnormLayer(RMSNormLayer& layer,
+                                 std::istream& buffer,
+                                 const int channels) const {
+    auto weights = std::vector<float>{};
+    layer.Set(channels);
+
+    GetWeightsFromBuffer(weights, buffer);
+    layer.LoadGammas(weights);
+}
+
+void DNNLoader::FillRopeLayer(RoPELayer& layer,
+                              std::istream& buffer,
+                              const int head_dim,
+                              const int num_heads) const {
+    auto weights = std::vector<float>{};
+    layer.Set(head_dim, num_heads);
+
+    GetWeightsFromBuffer(weights, buffer);
+    layer.LoadFrequencies(weights);
 }
 
 void DNNLoader::FillConvolutionLayer(ConvLayer& layer,

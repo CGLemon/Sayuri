@@ -22,7 +22,10 @@ The selfplay-setting.json file defines the key parameters for the neural network
 
         "Stack": [                    # Each block should be one of [
                                       # ResidualBlock, BottleneckBlock,
-                                      # NestedBottleneckBlock, MixerBlock ]
+                                      # NestedBottleneckBlock, MixerBlock,
+                                      # TransformerBlock ]
+                                      # The TransformerBlock does not support the
+                                      # SE module.
 
             "ResidualBlock",          # The first residual block (standard).
             "ResidualBlock",          # The second residual block (standard).

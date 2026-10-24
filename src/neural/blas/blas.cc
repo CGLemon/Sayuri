@@ -95,6 +95,52 @@ void Blas::WinogradSgemm(const int offset_u,
 #endif
 }
 
+void Blas::AttentionSgemmTN(const int M,
+                            const int N,
+                            const int K,
+                            const float alpha,
+                            const float* A,
+                            const float* B,
+                            float* C) {
+#ifndef USE_BLAS
+    Sgemm<true, false>::apply(M, N, K, alpha, A, M, B, N, 0.0f, C, N);
+#else
+#ifdef USE_OPENBLAS
+    cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans, M, N, K, alpha, A, M, B, N, 0.0f, C, N);
+
+#endif
+#ifdef USE_EIGEN
+    auto C_mat = EigenMatrixMap<float>(C, N, M);
+    C_mat.noalias() = alpha * ConstEigenMatrixMap<float>(B, N, K) *
+                      ConstEigenMatrixMap<float>(A, M, K).transpose();
+
+#endif
+#endif
+}
+
+void Blas::AttentionSgemmNT(const int M,
+                            const int N,
+                            const int K,
+                            const float alpha,
+                            const float* A,
+                            const float* B,
+                            float* C) {
+#ifndef USE_BLAS
+    Sgemm<false, true>::apply(M, N, K, alpha, A, K, B, K, 0.0f, C, N);
+#else
+#ifdef USE_OPENBLAS
+    cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, M, N, K, alpha, A, K, B, K, 0.0f, C, N);
+
+#endif
+#ifdef USE_EIGEN
+    auto C_mat = EigenMatrixMap<float>(C, N, M);
+    C_mat.noalias() = alpha * ConstEigenMatrixMap<float>(B, K, N).transpose() *
+                      ConstEigenMatrixMap<float>(A, K, M);
+
+#endif
+#endif
+}
+
 void Blas::DenseSgemm(const int input_size,
                       const int output_size,
                       const int batch_size,

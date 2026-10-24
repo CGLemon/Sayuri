@@ -43,6 +43,13 @@ private:
 
     void FillBatchnormLayer(BatchNormLayer& layer, std::istream& buffer, const int channels) const;
 
+    void FillRmsnormLayer(RMSNormLayer& layer, std::istream& buffer, const int channels) const;
+
+    void FillRopeLayer(RoPELayer& layer,
+                       std::istream& buffer,
+                       const int head_dim,
+                       const int num_heads) const;
+
     void FillConvolutionLayer(ConvLayer& layer,
                               std::istream& buffer,
                               const int in_channels,
