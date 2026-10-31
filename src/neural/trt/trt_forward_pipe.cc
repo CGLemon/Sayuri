@@ -6,6 +6,7 @@
 #include <array>
 #include <cassert>
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -182,6 +183,9 @@ bool TrtForwardPipe::TrtEngine::Build(bool dump_gpu_info,
 
     if (handles_.fp16) {
         config->setFlag(nvinfer1::BuilderFlag::kFP16);
+
+        // Honor the layers which are required to run in FP32.
+        config->setFlag(nvinfer1::BuilderFlag::kPREFER_PRECISION_CONSTRAINTS);
     }
 
     auto profile = builder->createOptimizationProfile();
@@ -504,6 +508,8 @@ bool TrtForwardPipe::TrtEngine::BuildNetwork(trt::InferPtr<nvinfer1::INetworkDef
             output_conv = BuildNestedBottleneckBlock(network, output_conv, tower_ptr)->getOutput(0);
         } else if (tower_ptr->IsMixerBlock()) {
             output_conv = BuildMixerBlock(network, output_conv, tower_ptr)->getOutput(0);
+        } else if (tower_ptr->IsTransformerBlock()) {
+            output_conv = BuildTransformerBlock(network, output_conv, tower_ptr)->getOutput(0);
         } else {
             throw std::runtime_error("Unknown block type for TensorRT backend.");
         }
@@ -728,6 +734,137 @@ TrtForwardPipe::TrtEngine::BuildMixerBlock(trt::InferPtr<nvinfer1::INetworkDefin
                                                *second_mask_layer->getOutput(0),
                                                nvinfer1::ElementWiseOperation::kSUM);
     return BuildActivationLayer(network, merge_layer->getOutput(0), weights_->default_act, false);
+}
+
+nvinfer1::ILayer* TrtForwardPipe::TrtEngine::BuildTransformerBlock(
+    trt::InferPtr<nvinfer1::INetworkDefinition>& network,
+    nvinfer1::ITensor* input,
+    BlockBasic* tower_ptr) {
+    const auto num_heads = tower_ptr->num_heads;
+    const auto head_dim = tower_ptr->head_dim;
+    const auto attn_channels = num_heads * head_dim;
+    const auto num_intersections = board_size_ * board_size_;
+
+    // The self-attention sublayer. Every intersection is a token, so the
+    // fullyconnect layers are the 1x1 convolution.
+    auto attn_norm_layer = BuildRMSNormLayer(network, input, tower_ptr->attn_norm.GetGammas());
+
+    // Fold the attention scale into the query projection. The RoPE is linear,
+    // so it is the same as scaling the scores.
+    const auto scale = 1.0f / std::sqrt(static_cast<float>(head_dim));
+    auto q_weights = tower_ptr->q_proj.GetWeights();
+    auto q_biases = tower_ptr->q_proj.GetBiases();
+    for (auto& w : q_weights) {
+        w *= scale;
+    }
+    for (auto& b : q_biases) {
+        b *= scale;
+    }
+
+    auto q_proj_layer = BuildConvLayer(network,
+                                       attn_norm_layer->getOutput(0),
+                                       1,
+                                       tower_ptr->q_proj.GetInputs(),
+                                       tower_ptr->q_proj.GetOutputs(),
+                                       q_weights,
+                                       q_biases);
+    auto k_proj_layer = BuildConvLayer(network,
+                                       attn_norm_layer->getOutput(0),
+                                       1,
+                                       tower_ptr->k_proj.GetInputs(),
+                                       tower_ptr->k_proj.GetOutputs(),
+                                       tower_ptr->k_proj.GetWeights(),
+                                       tower_ptr->k_proj.GetBiases());
+    auto v_proj_layer = BuildConvLayer(network,
+                                       attn_norm_layer->getOutput(0),
+                                       1,
+                                       tower_ptr->v_proj.GetInputs(),
+                                       tower_ptr->v_proj.GetOutputs(),
+                                       tower_ptr->v_proj.GetWeights(),
+                                       tower_ptr->v_proj.GetBiases());
+
+    // The queries, keys and values are [N, heads, head_dim, S].
+    auto rotary_matrix_layer = BuildRotaryMatrixLayer(network, tower_ptr->rope.GetFrequencies());
+    auto queries_layer = BuildRotaryEmbeddingLayer(network,
+                                                   q_proj_layer->getOutput(0),
+                                                   rotary_matrix_layer->getOutput(0),
+                                                   num_heads,
+                                                   head_dim);
+    auto keys_layer = BuildRotaryEmbeddingLayer(network,
+                                                k_proj_layer->getOutput(0),
+                                                rotary_matrix_layer->getOutput(0),
+                                                num_heads,
+                                                head_dim);
+    auto values_layer = network->addShuffle(*v_proj_layer->getOutput(0));
+    values_layer->setReshapeDimensions(nvinfer1::Dims4(0, num_heads, head_dim, num_intersections));
+
+    // scores[i, j] = dot(queries[:, i], keys[:, j])
+    auto scores_layer = network->addMatrixMultiply(*queries_layer->getOutput(0),
+                                                   nvinfer1::MatrixOperation::kTRANSPOSE,
+                                                   *keys_layer->getOutput(0),
+                                                   nvinfer1::MatrixOperation::kNONE);
+    auto scores_mask_layer =
+        network->addElementWise(*scores_layer->getOutput(0),
+                                *BuildAttentionMaskLayer(network)->getOutput(0),
+                                nvinfer1::ElementWiseOperation::kSUM);
+    auto softmax_layer = network->addSoftMax(*scores_mask_layer->getOutput(0));
+    softmax_layer->setAxes(1U << 3);
+
+    // attention[:, i] = sum_j scores[i, j] * values[:, j]
+    auto attention_layer = network->addMatrixMultiply(*values_layer->getOutput(0),
+                                                      nvinfer1::MatrixOperation::kNONE,
+                                                      *softmax_layer->getOutput(0),
+                                                      nvinfer1::MatrixOperation::kTRANSPOSE);
+    auto attention_merge_layer = network->addShuffle(*attention_layer->getOutput(0));
+    attention_merge_layer->setReshapeDimensions(
+        nvinfer1::Dims4(0, attn_channels, board_size_, board_size_));
+
+    auto out_proj_layer = BuildConvLayer(network,
+                                         attention_merge_layer->getOutput(0),
+                                         1,
+                                         tower_ptr->out_proj.GetInputs(),
+                                         tower_ptr->out_proj.GetOutputs(),
+                                         tower_ptr->out_proj.GetWeights(),
+                                         tower_ptr->out_proj.GetBiases());
+    auto out_proj_mask_layer = BuildMaskLayer(network, out_proj_layer->getOutput(0));
+    auto attn_merge_layer = network->addElementWise(
+        *input, *out_proj_mask_layer->getOutput(0), nvinfer1::ElementWiseOperation::kSUM);
+
+    // The gated feedforward sublayer.
+    auto ffn_norm_layer =
+        BuildRMSNormLayer(network, attn_merge_layer->getOutput(0), tower_ptr->ffn_norm.GetGammas());
+
+    auto ffn_fc1_layer = BuildConvLayer(network,
+                                        ffn_norm_layer->getOutput(0),
+                                        1,
+                                        tower_ptr->ffn_fc1.GetInputs(),
+                                        tower_ptr->ffn_fc1.GetOutputs(),
+                                        tower_ptr->ffn_fc1.GetWeights(),
+                                        tower_ptr->ffn_fc1.GetBiases());
+    auto ffn_fc1_activation =
+        BuildActivationLayer(network, ffn_fc1_layer->getOutput(0), weights_->default_act, false);
+    auto ffn_gate_layer = BuildConvLayer(network,
+                                         ffn_norm_layer->getOutput(0),
+                                         1,
+                                         tower_ptr->ffn_gate.GetInputs(),
+                                         tower_ptr->ffn_gate.GetOutputs(),
+                                         tower_ptr->ffn_gate.GetWeights(),
+                                         tower_ptr->ffn_gate.GetBiases());
+    auto ffn_glu_layer = network->addElementWise(*ffn_fc1_activation->getOutput(0),
+                                                 *ffn_gate_layer->getOutput(0),
+                                                 nvinfer1::ElementWiseOperation::kPROD);
+
+    auto ffn_fc2_layer = BuildConvLayer(network,
+                                        ffn_glu_layer->getOutput(0),
+                                        1,
+                                        tower_ptr->ffn_fc2.GetInputs(),
+                                        tower_ptr->ffn_fc2.GetOutputs(),
+                                        tower_ptr->ffn_fc2.GetWeights(),
+                                        tower_ptr->ffn_fc2.GetBiases());
+    auto ffn_fc2_mask_layer = BuildMaskLayer(network, ffn_fc2_layer->getOutput(0));
+    return network->addElementWise(*attn_merge_layer->getOutput(0),
+                                   *ffn_fc2_mask_layer->getOutput(0),
+                                   nvinfer1::ElementWiseOperation::kSUM);
 }
 
 nvinfer1::ILayer* TrtForwardPipe::TrtEngine::BuildSqueezeExcitationLayer(
@@ -1071,6 +1208,143 @@ TrtForwardPipe::TrtEngine::BuildMaskLayer(trt::InferPtr<nvinfer1::INetworkDefini
     return network->addElementWise(*input, *input_mask_, nvinfer1::ElementWiseOperation::kPROD);
 }
 
+nvinfer1::ILayer*
+TrtForwardPipe::TrtEngine::BuildRMSNormLayer(trt::InferPtr<nvinfer1::INetworkDefinition>& network,
+                                             nvinfer1::ITensor* input,
+                                             const std::vector<float>& gammas) {
+    const auto channels = gammas.size();
+
+    auto square_layer =
+        network->addElementWise(*input, *input, nvinfer1::ElementWiseOperation::kPROD);
+    auto mean_layer = network->addReduce(
+        *square_layer->getOutput(0), nvinfer1::ReduceOperation::kAVG, 1U << 1, true);
+
+    // (mean + epsilon)^(-0.5)
+    auto epsilon_shift = std::make_unique<float[]>(1);
+    auto rsqrt_power = std::make_unique<float[]>(1);
+    epsilon_shift[0] = 1e-6f;
+    rsqrt_power[0] = -0.5f;
+    auto rsqrt_layer = network->addScale(*mean_layer->getOutput(0),
+                                         nvinfer1::ScaleMode::kUNIFORM,
+                                         {nvinfer1::DataType::kFLOAT, epsilon_shift.get(), 1},
+                                         {nvinfer1::DataType::kFLOAT, nullptr, 0},
+                                         {nvinfer1::DataType::kFLOAT, rsqrt_power.get(), 1});
+    extra_weights_.push_back(std::move(epsilon_shift));
+    extra_weights_.push_back(std::move(rsqrt_power));
+
+    auto norm_layer = network->addElementWise(
+        *input, *rsqrt_layer->getOutput(0), nvinfer1::ElementWiseOperation::kPROD);
+
+    // The squares overflow easily in FP16, so keep the normalization in FP32
+    // like the Python and the CUDA implementations.
+    if (handles_.fp16) {
+        for (auto* layer :
+             std::array<nvinfer1::ILayer*, 4>{square_layer, mean_layer, rsqrt_layer, norm_layer}) {
+            layer->setPrecision(nvinfer1::DataType::kFLOAT);
+            layer->setOutputType(0, nvinfer1::DataType::kFLOAT);
+        }
+    }
+
+    auto gamma_weights = std::make_unique<float[]>(channels);
+    std::copy(std::begin(gammas), std::end(gammas), gamma_weights.get());
+    auto gamma_layer = network->addScale(
+        *norm_layer->getOutput(0),
+        nvinfer1::ScaleMode::kCHANNEL,
+        {nvinfer1::DataType::kFLOAT, nullptr, 0},
+        {nvinfer1::DataType::kFLOAT, gamma_weights.get(), static_cast<int64_t>(channels)},
+        {nvinfer1::DataType::kFLOAT, nullptr, 0});
+    extra_weights_.push_back(std::move(gamma_weights));
+    return gamma_layer;
+}
+
+nvinfer1::ILayer* TrtForwardPipe::TrtEngine::BuildRotaryMatrixLayer(
+    trt::InferPtr<nvinfer1::INetworkDefinition>& network, const std::vector<float>& frequencies) {
+    const auto num_pairs = static_cast<int>(frequencies.size()) / 2;
+    const auto num_intersections = board_size_ * board_size_;
+    const auto matrix_size = static_cast<int64_t>(num_pairs) * 4 * num_intersections;
+
+    // One 2x2 rotation matrix per element pair, per intersection. The layout is
+    // [1, pairs, 2 (output), 2 (input), S]. The angles only depend on the weights
+    // and the board size, so they are computed here.
+    auto matrix_weights = std::make_unique<float[]>(matrix_size);
+    for (int p = 0; p < num_pairs; ++p) {
+        const auto freq_x = frequencies[2 * p + 0];
+        const auto freq_y = frequencies[2 * p + 1];
+        float* matrix_ptr = matrix_weights.get() + static_cast<int64_t>(p) * 4 * num_intersections;
+
+        for (int idx = 0; idx < num_intersections; ++idx) {
+            const auto pos_x = static_cast<float>(idx % board_size_);
+            const auto pos_y = static_cast<float>(idx / board_size_);
+            const auto angle = pos_x * freq_x + pos_y * freq_y;
+            const auto cos_val = std::cos(angle);
+            const auto sin_val = std::sin(angle);
+
+            matrix_ptr[0 * num_intersections + idx] = cos_val;
+            matrix_ptr[1 * num_intersections + idx] = -sin_val;
+            matrix_ptr[2 * num_intersections + idx] = sin_val;
+            matrix_ptr[3 * num_intersections + idx] = cos_val;
+        }
+    }
+
+    auto matrix_layer =
+        network->addConstant(nvinfer1::Dims{5, {1, num_pairs, 2, 2, num_intersections}},
+                             {nvinfer1::DataType::kFLOAT, matrix_weights.get(), matrix_size});
+    extra_weights_.push_back(std::move(matrix_weights));
+    return matrix_layer;
+}
+
+nvinfer1::ILayer* TrtForwardPipe::TrtEngine::BuildRotaryEmbeddingLayer(
+    trt::InferPtr<nvinfer1::INetworkDefinition>& network,
+    nvinfer1::ITensor* input,
+    nvinfer1::ITensor* matrix,
+    int num_heads,
+    int head_dim) {
+    const auto num_pairs = num_heads * head_dim / 2;
+    const auto num_intersections = board_size_ * board_size_;
+
+    // Rotate the adjacent element pairs of the heads by broadcasting them over
+    // the rows of the matrices, [N, pairs, 1, 2, S] x [1, pairs, 2, 2, S], then
+    // summing the products of each row.
+    auto pair_layer = network->addShuffle(*input);
+    pair_layer->setReshapeDimensions(nvinfer1::Dims{5, {0, num_pairs, 1, 2, num_intersections}});
+    auto product_layer = network->addElementWise(
+        *pair_layer->getOutput(0), *matrix, nvinfer1::ElementWiseOperation::kPROD);
+    auto rotate_layer = network->addReduce(
+        *product_layer->getOutput(0), nvinfer1::ReduceOperation::kSUM, 1U << 3, false);
+
+    auto head_layer = network->addShuffle(*rotate_layer->getOutput(0));
+    head_layer->setReshapeDimensions(nvinfer1::Dims4(0, num_heads, head_dim, num_intersections));
+    return head_layer;
+}
+
+nvinfer1::ILayer* TrtForwardPipe::TrtEngine::BuildAttentionMaskLayer(
+    trt::InferPtr<nvinfer1::INetworkDefinition>& network) {
+    if (attn_mask_layer_ != nullptr) {
+        return attn_mask_layer_;
+    }
+    TRT_ASSERT(input_mask_ != nullptr);
+
+    // The bias is 0 on the board and the large negative value out of the board,
+    // so the softmax ignores the keys out of the board. The value is the same as
+    // the max pooling of the global pooling layer.
+    auto bias_shift = std::make_unique<float[]>(1);
+    auto bias_scale = std::make_unique<float[]>(1);
+    bias_shift[0] = -5000.0f;
+    bias_scale[0] = 5000.0f;
+    auto bias_layer = network->addScale(*input_mask_,
+                                        nvinfer1::ScaleMode::kUNIFORM,
+                                        {nvinfer1::DataType::kFLOAT, bias_shift.get(), 1},
+                                        {nvinfer1::DataType::kFLOAT, bias_scale.get(), 1},
+                                        {nvinfer1::DataType::kFLOAT, nullptr, 0});
+    extra_weights_.push_back(std::move(bias_shift));
+    extra_weights_.push_back(std::move(bias_scale));
+
+    auto keys_layer = network->addShuffle(*bias_layer->getOutput(0));
+    keys_layer->setReshapeDimensions(nvinfer1::Dims4(0, 1, 1, board_size_ * board_size_));
+    attn_mask_layer_ = keys_layer;
+    return attn_mask_layer_;
+}
+
 std::vector<OutputResult>
 TrtForwardPipe::TrtEngine::BatchForward(const std::vector<InputData>& batch_input) {
     const auto batch_size = static_cast<int>(batch_input.size());
@@ -1312,6 +1586,7 @@ void TrtForwardPipe::TrtEngine::Destroy() {
     mask_scale_layer_ = nullptr;
     mask_quad_layer_ = nullptr;
     shape_layer_ = nullptr;
+    attn_mask_layer_ = nullptr;
 
     handles_.Release();
 }

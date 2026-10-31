@@ -81,6 +81,10 @@ private:
                                           nvinfer1::ITensor* input,
                                           BlockBasic* tower_ptr);
         nvinfer1::ILayer*
+        BuildTransformerBlock(trt::InferPtr<nvinfer1::INetworkDefinition>& network,
+                              nvinfer1::ITensor* input,
+                              BlockBasic* tower_ptr);
+        nvinfer1::ILayer*
         BuildSqueezeExcitationLayer(trt::InferPtr<nvinfer1::INetworkDefinition>& network,
                                     nvinfer1::ITensor* residual,
                                     nvinfer1::ITensor* input,
@@ -107,6 +111,20 @@ private:
                                           bool is_value_head = false);
         nvinfer1::ILayer* BuildMaskLayer(trt::InferPtr<nvinfer1::INetworkDefinition>& network,
                                          nvinfer1::ITensor* input);
+        nvinfer1::ILayer* BuildRMSNormLayer(trt::InferPtr<nvinfer1::INetworkDefinition>& network,
+                                            nvinfer1::ITensor* input,
+                                            const std::vector<float>& gammas);
+        nvinfer1::ILayer*
+        BuildRotaryMatrixLayer(trt::InferPtr<nvinfer1::INetworkDefinition>& network,
+                               const std::vector<float>& frequencies);
+        nvinfer1::ILayer*
+        BuildRotaryEmbeddingLayer(trt::InferPtr<nvinfer1::INetworkDefinition>& network,
+                                  nvinfer1::ITensor* input,
+                                  nvinfer1::ITensor* matrix,
+                                  int num_heads,
+                                  int head_dim);
+        nvinfer1::ILayer*
+        BuildAttentionMaskLayer(trt::InferPtr<nvinfer1::INetworkDefinition>& network);
 
         cuda::CudaHandles handles_;
         std::shared_ptr<DNNWeights> weights_{nullptr};
@@ -122,6 +140,10 @@ private:
         nvinfer1::ILayer* mask_scale_layer_{nullptr};
         nvinfer1::ILayer* mask_quad_layer_{nullptr};
         nvinfer1::ICastLayer* shape_layer_{nullptr};
+
+        // The attention bias of the intersections out of the board. It is only
+        // built if there is any transformer block.
+        nvinfer1::ILayer* attn_mask_layer_{nullptr};
 
         std::vector<void*> cuda_weights_op_;
         std::vector<std::unique_ptr<float[]>> extra_weights_;
