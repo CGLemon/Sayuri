@@ -101,7 +101,50 @@ private:
         void DestroyGraph();
 
     private:
+        // The peak sizes of the block tower, which decide the buffer sizes.
+        struct PeakSizes {
+            int channels{0};
+            int attn_channels{0};
+            int attn_heads{0};
+        };
+
         void SetComputationMode(cuda::CudaHandles* handles);
+
+        // Build the layers of each block type and load their weights.
+        void ConstructResidualBlock(Block& block, BlockBasic* tower_ptr, PeakSizes& peaks);
+
+        void ConstructBottleneckBlock(Block& block, BlockBasic* tower_ptr, PeakSizes& peaks);
+
+        void ConstructNestedBottleneckBlock(Block& block, BlockBasic* tower_ptr, PeakSizes& peaks);
+
+        void ConstructMixerBlock(Block& block, BlockBasic* tower_ptr, PeakSizes& peaks);
+
+        void ConstructTransformerBlock(Block& block, BlockBasic* tower_ptr, PeakSizes& peaks);
+
+        void ConstructSEUnit(Block& block, BlockBasic* tower_ptr);
+
+        // The block input (also the residual) is in cuda_conv_op_[0], and the
+        // output before the SE module is written to cuda_conv_op_[3].
+        void
+        ResidualBlockForward(const int batch_size, Block& block, BlockBasic* tower_ptr, void* mask);
+
+        void BottleneckBlockForward(const int batch_size,
+                                    Block& block,
+                                    BlockBasic* tower_ptr,
+                                    void* mask);
+
+        void NestedBottleneckBlockForward(const int batch_size,
+                                          Block& block,
+                                          BlockBasic* tower_ptr,
+                                          void* mask);
+
+        void
+        MixerBlockForward(const int batch_size, Block& block, BlockBasic* tower_ptr, void* mask);
+
+        void TransformerBlockForward(const int batch_size,
+                                     Block& block,
+                                     BlockBasic* tower_ptr,
+                                     void* mask);
 
         bool ApplyMask(const std::vector<InputData>& input);
 
