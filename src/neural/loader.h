@@ -32,7 +32,24 @@ private:
                      NetStruct& netstruct,
                      std::istream& buffer) const;
     int FillBlock(int offset, Splitter block_spt, NetStruct& netstruct, std::istream& buffer) const;
-
+    int FillResidualBlock(int offset,
+                          ResidualBlock* block,
+                          NetStruct& netstruct,
+                          std::istream& buffer) const;
+    int FillBottleneckBlock(int offset,
+                            BottleneckBlock* block,
+                            NetStruct& netstruct,
+                            std::istream& buffer) const;
+    int FillNestedBottleneckBlock(int offset,
+                                  NestedBottleneckBlock* block,
+                                  NetStruct& netstruct,
+                                  std::istream& buffer) const;
+    int
+    FillMixerBlock(int offset, MixerBlock* block, NetStruct& netstruct, std::istream& buffer) const;
+    int FillTransformerBlock(int offset,
+                             TransformerBlock* block,
+                             NetStruct& netstruct,
+                             std::istream& buffer) const;
     void ProcessWeights() const;
     void GetWeightsFromBuffer(std::vector<float>& weights, std::istream& buffer) const;
 

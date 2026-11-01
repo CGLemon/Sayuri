@@ -15,15 +15,52 @@
 namespace cuda {
 
 class NNGraph {
-    struct Block {
-        std::vector<Convolution> convs;
-        std::vector<DepthwiseConvolution> dw_convs;
-        SEUnit se_module;
+    // The layers of a block on the GPU. Each block type declares only its own
+    // layers, and the SE module is the only exception kept on the base.
+    struct BlockLayers {
+        virtual ~BlockLayers() = default;
 
-        // transformer block
+        SEUnit se_module;
+    };
+
+    struct ResidualLayers : BlockLayers {
+        Convolution conv1;
+        Convolution conv2;
+    };
+
+    struct BottleneckLayers : BlockLayers {
+        Convolution pre_btl_conv;
+        Convolution conv1;
+        Convolution conv2;
+        Convolution post_btl_conv;
+    };
+
+    struct NestedBottleneckLayers : BlockLayers {
+        Convolution pre_btl_conv;
+        Convolution conv1;
+        Convolution conv2;
+        Convolution conv3;
+        Convolution conv4;
+        Convolution post_btl_conv;
+    };
+
+    struct MixerLayers : BlockLayers {
+        DepthwiseConvolution dw_conv;
+        Convolution conv1;
+        Convolution conv2;
+    };
+
+    struct TransformerLayers : BlockLayers {
         RMSNorm attn_norm;
+        Convolution q_proj;
+        Convolution k_proj;
+        Convolution v_proj;
         MultiHeadAttention attention;
+        Convolution out_proj;
         RMSNorm ffn_norm;
+        Convolution ffn_fc1;
+        Convolution ffn_gate;
+        Convolution ffn_fc2;
     };
 
     struct Graph {
@@ -31,7 +68,7 @@ class NNGraph {
         Convolution input_conv;
 
         // block tower
-        std::vector<NNGraph::Block> tower;
+        std::vector<std::unique_ptr<BlockLayers>> tower;
 
         // policy head
         Convolution p_hd_conv;
@@ -75,33 +112,43 @@ private:
     void SetComputationMode(CudaHandles* handles);
 
     // Build the layers of each block type and load their weights.
-    void ConstructResidualBlock(Block& block, BlockBasic* tower_ptr, PeakSizes& peaks);
+    std::unique_ptr<ResidualLayers> ConstructResidualBlock(ResidualBlock* block, PeakSizes& peaks);
 
-    void ConstructBottleneckBlock(Block& block, BlockBasic* tower_ptr, PeakSizes& peaks);
+    std::unique_ptr<BottleneckLayers> ConstructBottleneckBlock(BottleneckBlock* block,
+                                                               PeakSizes& peaks);
 
-    void ConstructNestedBottleneckBlock(Block& block, BlockBasic* tower_ptr, PeakSizes& peaks);
+    std::unique_ptr<NestedBottleneckLayers>
+    ConstructNestedBottleneckBlock(NestedBottleneckBlock* block, PeakSizes& peaks);
 
-    void ConstructMixerBlock(Block& block, BlockBasic* tower_ptr, PeakSizes& peaks);
+    std::unique_ptr<MixerLayers> ConstructMixerBlock(MixerBlock* block, PeakSizes& peaks);
 
-    void ConstructTransformerBlock(Block& block, BlockBasic* tower_ptr, PeakSizes& peaks);
+    std::unique_ptr<TransformerLayers> ConstructTransformerBlock(TransformerBlock* block,
+                                                                 PeakSizes& peaks);
 
-    void ConstructSEUnit(Block& block, BlockBasic* tower_ptr);
+    void ConstructSEUnit(BlockLayers& layers, BlockBasic* tower_ptr);
 
-    void
-    ResidualBlockForward(const int batch_size, Block& block, BlockBasic* tower_ptr, void* mask);
+    void ResidualBlockForward(const int batch_size,
+                              ResidualLayers& layers,
+                              ResidualBlock* block,
+                              void* mask);
 
-    void
-    BottleneckBlockForward(const int batch_size, Block& block, BlockBasic* tower_ptr, void* mask);
+    void BottleneckBlockForward(const int batch_size,
+                                BottleneckLayers& layers,
+                                BottleneckBlock* block,
+                                void* mask);
 
     void NestedBottleneckBlockForward(const int batch_size,
-                                      Block& block,
-                                      BlockBasic* tower_ptr,
+                                      NestedBottleneckLayers& layers,
+                                      NestedBottleneckBlock* block,
                                       void* mask);
 
-    void MixerBlockForward(const int batch_size, Block& block, BlockBasic* tower_ptr, void* mask);
-
     void
-    TransformerBlockForward(const int batch_size, Block& block, BlockBasic* tower_ptr, void* mask);
+    MixerBlockForward(const int batch_size, MixerLayers& layers, MixerBlock* block, void* mask);
+
+    void TransformerBlockForward(const int batch_size,
+                                 TransformerLayers& layers,
+                                 TransformerBlock* block,
+                                 void* mask);
 
     bool ApplyMask(const std::vector<InputData>& input);
 

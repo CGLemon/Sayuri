@@ -407,299 +407,16 @@ int DNNLoader::FillBlock(int offset,
         throw std::runtime_error{"the transformer block does not support the SE module"};
     }
 
-    if (tower_ptr->IsResidualBlock()) {
-        // residual block
-        // 1). Convolution layer with 3x3 kernel
-        // 2). Batch normalize layer
-        // 3). Convolution layer with 3x3 kernel
-        // 4). Batch normalize layer
-
-        // 1st layers.
-        const auto res_conv1_shape = netstruct[offset++];
-        const auto res_bn1_shape = netstruct[offset++];
-        FillConvolutionLayer(
-            tower_ptr->conv1, buffer, res_conv1_shape[0], res_conv1_shape[1], res_conv1_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn1, buffer, res_bn1_shape[0]);
-
-        // 2nd layers.
-        const auto res_conv2_shape = netstruct[offset++];
-        const auto res_bn2_shape = netstruct[offset++];
-        FillConvolutionLayer(
-            tower_ptr->conv2, buffer, res_conv2_shape[0], res_conv2_shape[1], res_conv2_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn2, buffer, res_bn2_shape[0]);
-
-        const auto channels = weights_->residual_channels;
-        const auto kernel = 3;
-        if (channels != res_conv1_shape[0] || channels != res_conv1_shape[1] ||
-            channels != res_bn1_shape[0] || channels != res_conv2_shape[0] ||
-            channels != res_conv2_shape[1] || channels != res_bn2_shape[0]) {
-            throw std::runtime_error{"the channels of residual block is wrong"};
-        }
-        if (kernel != res_conv1_shape[2] || kernel != res_conv2_shape[2]) {
-            throw std::runtime_error{"the kernel of residual block is wrong"};
-        }
-    } else if (tower_ptr->IsBottleneckBlock()) {
-        // bottleneck block
-        // 1). Convolution layer with 1x1 kernel
-        // 2). Batch normalize layer
-        // 3). Convolution layer with 3x3 kernel
-        // 4). Batch normalize layer
-        // 5). Convolution layer with 3x3 kernel
-        // 6). Batch normalize layer
-        // 7). Convolution layer with 1x1 kernel
-        // 8). Batch normalize layer
-
-        // pre-bottleneck layers
-        const auto pre_btl_conv_shape = netstruct[offset++];
-        const auto pre_btl_bn_shape = netstruct[offset++];
-        FillConvolutionLayer(tower_ptr->pre_btl_conv,
-                             buffer,
-                             pre_btl_conv_shape[0],
-                             pre_btl_conv_shape[1],
-                             pre_btl_conv_shape[2]);
-        FillBatchnormLayer(tower_ptr->pre_btl_bn, buffer, pre_btl_bn_shape[0]);
-
-        // 1st layers.
-        const auto res_conv1_shape = netstruct[offset++];
-        const auto res_bn1_shape = netstruct[offset++];
-        FillConvolutionLayer(
-            tower_ptr->conv1, buffer, res_conv1_shape[0], res_conv1_shape[1], res_conv1_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn1, buffer, res_bn1_shape[0]);
-
-        // 2nd layers.
-        const auto res_conv2_shape = netstruct[offset++];
-        const auto res_bn2_shape = netstruct[offset++];
-        FillConvolutionLayer(
-            tower_ptr->conv2, buffer, res_conv2_shape[0], res_conv2_shape[1], res_conv2_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn2, buffer, res_bn2_shape[0]);
-
-        // post-bottleneck layers
-        const auto post_btl_conv_shape = netstruct[offset++];
-        const auto post_btl_bn_shape = netstruct[offset++];
-        FillConvolutionLayer(tower_ptr->post_btl_conv,
-                             buffer,
-                             post_btl_conv_shape[0],
-                             post_btl_conv_shape[1],
-                             post_btl_conv_shape[2]);
-        FillBatchnormLayer(tower_ptr->post_btl_bn, buffer, post_btl_bn_shape[0]);
-
-        const auto outer_channels = weights_->residual_channels;
-        const auto inner_channels = pre_btl_conv_shape[1];
-        const auto kernel = 3;
-        tower_ptr->bottleneck_channels = inner_channels;
-        if (outer_channels != pre_btl_conv_shape[0] || outer_channels != post_btl_conv_shape[1] ||
-            outer_channels != post_btl_bn_shape[0]) {
-            throw std::runtime_error{"the outer channels of bottleneck block is wrong"};
-        }
-        if (inner_channels != pre_btl_bn_shape[0] || inner_channels != res_conv1_shape[0] ||
-            inner_channels != res_conv1_shape[1] || inner_channels != res_bn1_shape[0] ||
-            inner_channels != res_conv2_shape[0] || inner_channels != res_conv2_shape[1] ||
-            inner_channels != res_bn2_shape[0]) {
-            throw std::runtime_error{"the inner channels of bottleneck block is wrong"};
-        }
-        if (kernel != res_conv1_shape[2] || kernel != res_conv2_shape[2] ||
-            1 != pre_btl_conv_shape[2] || 1 != post_btl_conv_shape[2]) {
-            throw std::runtime_error{"the kernel of bottleneck block is wrong"};
-        }
-    } else if (tower_ptr->IsNestedBottleneckBlock()) {
-        // nested bottleneck block
-        // 1).  Convolution layer with 1x1 kernel
-        // 2).  Batch normalize layer
-        // ---- 1st Residual Block ----
-        //     3).  Convolution layer with 3x3 kernel
-        //     4).  Batch normalize layer
-        //     5).  Convolution layer with 3x3 kernel
-        //     6).  Batch normalize layer
-        // ---- 2nd Residual Block ----
-        //     7).  Convolution layer with 3x3 kernel
-        //     8).  Batch normalize layer
-        //     9).  Convolution layer with 3x3 kernel
-        //     10). Batch normalize layer
-        // 11). Convolution layer with 1x1 kernel
-        // 12). Batch normalize layer
-
-        // pre-bottleneck layers
-        const auto pre_btl_conv_shape = netstruct[offset++];
-        const auto pre_btl_bn_shape = netstruct[offset++];
-        FillConvolutionLayer(tower_ptr->pre_btl_conv,
-                             buffer,
-                             pre_btl_conv_shape[0],
-                             pre_btl_conv_shape[1],
-                             pre_btl_conv_shape[2]);
-        FillBatchnormLayer(tower_ptr->pre_btl_bn, buffer, pre_btl_bn_shape[0]);
-
-        // 1st layers.
-        const auto res_conv1_shape = netstruct[offset++];
-        const auto res_bn1_shape = netstruct[offset++];
-        FillConvolutionLayer(
-            tower_ptr->conv1, buffer, res_conv1_shape[0], res_conv1_shape[1], res_conv1_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn1, buffer, res_bn1_shape[0]);
-
-        // 2nd layers.
-        const auto res_conv2_shape = netstruct[offset++];
-        const auto res_bn2_shape = netstruct[offset++];
-        FillConvolutionLayer(
-            tower_ptr->conv2, buffer, res_conv2_shape[0], res_conv2_shape[1], res_conv2_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn2, buffer, res_bn2_shape[0]);
-
-        // 3rd layers.
-        const auto res_conv3_shape = netstruct[offset++];
-        const auto res_bn3_shape = netstruct[offset++];
-        FillConvolutionLayer(
-            tower_ptr->conv3, buffer, res_conv3_shape[0], res_conv3_shape[1], res_conv3_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn3, buffer, res_bn3_shape[0]);
-
-        // 4th layers.
-        const auto res_conv4_shape = netstruct[offset++];
-        const auto res_bn4_shape = netstruct[offset++];
-        FillConvolutionLayer(
-            tower_ptr->conv4, buffer, res_conv4_shape[0], res_conv4_shape[1], res_conv4_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn4, buffer, res_bn4_shape[0]);
-
-        // post-bottleneck layers
-        const auto post_btl_conv_shape = netstruct[offset++];
-        const auto post_btl_bn_shape = netstruct[offset++];
-        FillConvolutionLayer(tower_ptr->post_btl_conv,
-                             buffer,
-                             post_btl_conv_shape[0],
-                             post_btl_conv_shape[1],
-                             post_btl_conv_shape[2]);
-        FillBatchnormLayer(tower_ptr->post_btl_bn, buffer, post_btl_bn_shape[0]);
-
-        const auto outer_channels = weights_->residual_channels;
-        const auto inner_channels = pre_btl_conv_shape[1];
-        const auto kernel = 3;
-        tower_ptr->bottleneck_channels = inner_channels;
-        if (outer_channels != pre_btl_conv_shape[0] || outer_channels != post_btl_conv_shape[1] ||
-            outer_channels != post_btl_bn_shape[0]) {
-            throw std::runtime_error{"the outer channels of nested bottleneck block is wrong"};
-        }
-        if (inner_channels != pre_btl_bn_shape[0] || inner_channels != res_conv1_shape[0] ||
-            inner_channels != res_conv1_shape[1] || inner_channels != res_bn1_shape[0] ||
-            inner_channels != res_conv2_shape[0] || inner_channels != res_conv2_shape[1] ||
-            inner_channels != res_bn2_shape[0] || inner_channels != res_conv3_shape[0] ||
-            inner_channels != res_conv3_shape[1] || inner_channels != res_bn3_shape[0] ||
-            inner_channels != res_conv4_shape[0] || inner_channels != res_conv4_shape[1] ||
-            inner_channels != res_bn4_shape[0]) {
-            throw std::runtime_error{"the inner channels of nested bottleneck block is wrong"};
-        }
-        if (kernel != res_conv1_shape[2] || kernel != res_conv2_shape[2] ||
-            kernel != res_conv3_shape[2] || kernel != res_conv4_shape[2] ||
-            1 != pre_btl_conv_shape[2] || 1 != post_btl_conv_shape[2]) {
-            throw std::runtime_error{"the kernel of nested bottleneck block is wrong"};
-        }
-    } else if (tower_ptr->IsMixerBlock()) {
-        // mixer block
-        // 1). Depthwise convolution layer with NxN kernel
-        // 2). Batch normalize layer
-        // 3). Convolution layer with 1x1 kernel
-        // 4). Batch normalize layer
-        // 5). Convolution layer with 1x1 kernel
-        // 6). Batch normalize layer
-
-        // depthwise conv layers
-        const auto dw_conv_shape = netstruct[offset++];
-        const auto dw_bn_shape = netstruct[offset++];
-        FillConvolutionLayer(
-            tower_ptr->dw_conv, buffer, dw_conv_shape[0], dw_conv_shape[1], dw_conv_shape[2]);
-        FillBatchnormLayer(tower_ptr->dw_bn, buffer, dw_bn_shape[0]);
-
-        // 1st feedforward layers.
-        const auto ffn_conv1_shape = netstruct[offset++];
-        const auto ffn_bn1_shape = netstruct[offset++];
-        FillConvolutionLayer(
-            tower_ptr->conv1, buffer, ffn_conv1_shape[0], ffn_conv1_shape[1], ffn_conv1_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn1, buffer, ffn_bn1_shape[0]);
-
-        // 2nd feedforward layers.
-        const auto ffn_conv2_shape = netstruct[offset++];
-        const auto ffn_bn2_shape = netstruct[offset++];
-        FillConvolutionLayer(
-            tower_ptr->conv2, buffer, ffn_conv2_shape[0], ffn_conv2_shape[1], ffn_conv2_shape[2]);
-        FillBatchnormLayer(tower_ptr->bn2, buffer, ffn_bn2_shape[0]);
-
-        tower_ptr->feedforward_channels = ffn_conv1_shape[1];
-        const auto channels = weights_->residual_channels;
-        const auto kernel = 1;
-        if (channels != dw_conv_shape[1] || channels != dw_bn_shape[0] ||
-            channels != ffn_conv1_shape[0] || channels != ffn_conv2_shape[1] ||
-            channels != ffn_bn2_shape[0]) {
-            throw std::runtime_error{"the channels of mixer block is wrong"};
-        }
-        if (kernel != ffn_conv1_shape[2] || kernel != ffn_conv2_shape[2]) {
-            throw std::runtime_error{"the kernel of mixer block is wrong"};
-        }
-    } else if (tower_ptr->IsTransformerBlock()) {
-        // transformer block
-        // ---- Self-Attention Sublayer ----
-        //     1). Fully connect layer (query projection)
-        //     2). Fully connect layer (key projection)
-        //     3). Fully connect layer (value projection)
-        //     4). Fully connect layer (output projection)
-        //     5). RoPE layer
-        //     6). RMS normalize layer (pre-norm)
-        // ---- Feedforward Sublayer ----
-        //     7).  Fully connect layer
-        //     8).  Fully connect layer (gate)
-        //     9).  Fully connect layer
-        //     10). RMS normalize layer (pre-norm)
-        //
-        // Both normalize layers are applied before the sublayer they belong to,
-        // but they are the last collected layer of the sublayer.
-
-        // attention layers.
-        const auto q_proj_shape = netstruct[offset++];
-        const auto k_proj_shape = netstruct[offset++];
-        const auto v_proj_shape = netstruct[offset++];
-        const auto out_proj_shape = netstruct[offset++];
-        const auto rope_shape = netstruct[offset++];
-        const auto attn_norm_shape = netstruct[offset++];
-
-        FillFullyconnectLayer(tower_ptr->q_proj, buffer, q_proj_shape[0], q_proj_shape[1]);
-        FillFullyconnectLayer(tower_ptr->k_proj, buffer, k_proj_shape[0], k_proj_shape[1]);
-        FillFullyconnectLayer(tower_ptr->v_proj, buffer, v_proj_shape[0], v_proj_shape[1]);
-        FillFullyconnectLayer(tower_ptr->out_proj, buffer, out_proj_shape[0], out_proj_shape[1]);
-        FillRopeLayer(tower_ptr->rope, buffer, rope_shape[0], rope_shape[1]);
-        FillRmsnormLayer(tower_ptr->attn_norm, buffer, attn_norm_shape[0]);
-
-        // feedforward layers.
-        const auto ffn_fc1_shape = netstruct[offset++];
-        const auto ffn_gate_shape = netstruct[offset++];
-        const auto ffn_fc2_shape = netstruct[offset++];
-        const auto ffn_norm_shape = netstruct[offset++];
-
-        FillFullyconnectLayer(tower_ptr->ffn_fc1, buffer, ffn_fc1_shape[0], ffn_fc1_shape[1]);
-        FillFullyconnectLayer(tower_ptr->ffn_gate, buffer, ffn_gate_shape[0], ffn_gate_shape[1]);
-        FillFullyconnectLayer(tower_ptr->ffn_fc2, buffer, ffn_fc2_shape[0], ffn_fc2_shape[1]);
-        FillRmsnormLayer(tower_ptr->ffn_norm, buffer, ffn_norm_shape[0]);
-
-        tower_ptr->head_dim = rope_shape[0];
-        tower_ptr->num_heads = rope_shape[1];
-        tower_ptr->feedforward_channels = ffn_fc1_shape[1];
-
-        const auto channels = weights_->residual_channels;
-        const auto head_dim = tower_ptr->head_dim;
-        const auto num_heads = tower_ptr->num_heads;
-        const auto attn_channels = num_heads * head_dim;
-        const auto ffn_channels = tower_ptr->feedforward_channels;
-
-        if (channels != q_proj_shape[0] || channels != k_proj_shape[0] ||
-            channels != v_proj_shape[0] || channels != out_proj_shape[1] ||
-            channels != attn_norm_shape[0] || channels != ffn_fc1_shape[0] ||
-            channels != ffn_gate_shape[0] || channels != ffn_fc2_shape[1] ||
-            channels != ffn_norm_shape[0]) {
-            throw std::runtime_error{"the channels of transformer block is wrong"};
-        }
-        if (num_heads <= 0 || head_dim <= 0 || head_dim % 4 != 0) {
-            throw std::runtime_error{"the head size of transformer block is wrong"};
-        }
-        if (attn_channels != q_proj_shape[1] || attn_channels != k_proj_shape[1] ||
-            attn_channels != v_proj_shape[1] || attn_channels != out_proj_shape[0]) {
-            throw std::runtime_error{"the attention channels of transformer block is wrong"};
-        }
-        if (ffn_channels != ffn_gate_shape[1] || ffn_channels != ffn_fc2_shape[0]) {
-            throw std::runtime_error{"the feedforward channels of transformer block is wrong"};
-        }
+    if (auto* block = tower_ptr->Cast<ResidualBlock>()) {
+        offset = FillResidualBlock(offset, block, netstruct, buffer);
+    } else if (auto* block = tower_ptr->Cast<BottleneckBlock>()) {
+        offset = FillBottleneckBlock(offset, block, netstruct, buffer);
+    } else if (auto* block = tower_ptr->Cast<NestedBottleneckBlock>()) {
+        offset = FillNestedBottleneckBlock(offset, block, netstruct, buffer);
+    } else if (auto* block = tower_ptr->Cast<MixerBlock>()) {
+        offset = FillMixerBlock(offset, block, netstruct, buffer);
+    } else if (auto* block = tower_ptr->Cast<TransformerBlock>()) {
+        offset = FillTransformerBlock(offset, block, netstruct, buffer);
     }
 
     if (tower_ptr->apply_se) {
@@ -717,6 +434,328 @@ int DNNLoader::FillBlock(int offset,
         if (3 * channels != se_squeeze_shape[0] || 2 * channels != se_excite_shape[1]) {
             throw std::runtime_error{"the SE module size is wrong"};
         }
+    }
+    return offset;
+}
+
+int DNNLoader::FillResidualBlock(int offset,
+                                 ResidualBlock* block,
+                                 NetStruct& netstruct,
+                                 std::istream& buffer) const {
+    // residual block
+    // 1). Convolution layer with 3x3 kernel
+    // 2). Batch normalize layer
+    // 3). Convolution layer with 3x3 kernel
+    // 4). Batch normalize layer
+
+    // 1st layers.
+    const auto res_conv1_shape = netstruct[offset++];
+    const auto res_bn1_shape = netstruct[offset++];
+    FillConvolutionLayer(
+        block->conv1, buffer, res_conv1_shape[0], res_conv1_shape[1], res_conv1_shape[2]);
+    FillBatchnormLayer(block->bn1, buffer, res_bn1_shape[0]);
+
+    // 2nd layers.
+    const auto res_conv2_shape = netstruct[offset++];
+    const auto res_bn2_shape = netstruct[offset++];
+    FillConvolutionLayer(
+        block->conv2, buffer, res_conv2_shape[0], res_conv2_shape[1], res_conv2_shape[2]);
+    FillBatchnormLayer(block->bn2, buffer, res_bn2_shape[0]);
+
+    const auto channels = weights_->residual_channels;
+    const auto kernel = 3;
+    if (channels != res_conv1_shape[0] || channels != res_conv1_shape[1] ||
+        channels != res_bn1_shape[0] || channels != res_conv2_shape[0] ||
+        channels != res_conv2_shape[1] || channels != res_bn2_shape[0]) {
+        throw std::runtime_error{"the channels of residual block is wrong"};
+    }
+    if (kernel != res_conv1_shape[2] || kernel != res_conv2_shape[2]) {
+        throw std::runtime_error{"the kernel of residual block is wrong"};
+    }
+    return offset;
+}
+
+int DNNLoader::FillBottleneckBlock(int offset,
+                                   BottleneckBlock* block,
+                                   NetStruct& netstruct,
+                                   std::istream& buffer) const {
+    // bottleneck block
+    // 1). Convolution layer with 1x1 kernel
+    // 2). Batch normalize layer
+    // 3). Convolution layer with 3x3 kernel
+    // 4). Batch normalize layer
+    // 5). Convolution layer with 3x3 kernel
+    // 6). Batch normalize layer
+    // 7). Convolution layer with 1x1 kernel
+    // 8). Batch normalize layer
+
+    // pre-bottleneck layers
+    const auto pre_btl_conv_shape = netstruct[offset++];
+    const auto pre_btl_bn_shape = netstruct[offset++];
+    FillConvolutionLayer(block->pre_btl_conv,
+                         buffer,
+                         pre_btl_conv_shape[0],
+                         pre_btl_conv_shape[1],
+                         pre_btl_conv_shape[2]);
+    FillBatchnormLayer(block->pre_btl_bn, buffer, pre_btl_bn_shape[0]);
+
+    // 1st layers.
+    const auto res_conv1_shape = netstruct[offset++];
+    const auto res_bn1_shape = netstruct[offset++];
+    FillConvolutionLayer(
+        block->conv1, buffer, res_conv1_shape[0], res_conv1_shape[1], res_conv1_shape[2]);
+    FillBatchnormLayer(block->bn1, buffer, res_bn1_shape[0]);
+
+    // 2nd layers.
+    const auto res_conv2_shape = netstruct[offset++];
+    const auto res_bn2_shape = netstruct[offset++];
+    FillConvolutionLayer(
+        block->conv2, buffer, res_conv2_shape[0], res_conv2_shape[1], res_conv2_shape[2]);
+    FillBatchnormLayer(block->bn2, buffer, res_bn2_shape[0]);
+
+    // post-bottleneck layers
+    const auto post_btl_conv_shape = netstruct[offset++];
+    const auto post_btl_bn_shape = netstruct[offset++];
+    FillConvolutionLayer(block->post_btl_conv,
+                         buffer,
+                         post_btl_conv_shape[0],
+                         post_btl_conv_shape[1],
+                         post_btl_conv_shape[2]);
+    FillBatchnormLayer(block->post_btl_bn, buffer, post_btl_bn_shape[0]);
+
+    const auto outer_channels = weights_->residual_channels;
+    const auto inner_channels = pre_btl_conv_shape[1];
+    const auto kernel = 3;
+    block->bottleneck_channels = inner_channels;
+    if (outer_channels != pre_btl_conv_shape[0] || outer_channels != post_btl_conv_shape[1] ||
+        outer_channels != post_btl_bn_shape[0]) {
+        throw std::runtime_error{"the outer channels of bottleneck block is wrong"};
+    }
+    if (inner_channels != pre_btl_bn_shape[0] || inner_channels != res_conv1_shape[0] ||
+        inner_channels != res_conv1_shape[1] || inner_channels != res_bn1_shape[0] ||
+        inner_channels != res_conv2_shape[0] || inner_channels != res_conv2_shape[1] ||
+        inner_channels != res_bn2_shape[0]) {
+        throw std::runtime_error{"the inner channels of bottleneck block is wrong"};
+    }
+    if (kernel != res_conv1_shape[2] || kernel != res_conv2_shape[2] ||
+        1 != pre_btl_conv_shape[2] || 1 != post_btl_conv_shape[2]) {
+        throw std::runtime_error{"the kernel of bottleneck block is wrong"};
+    }
+    return offset;
+}
+
+int DNNLoader::FillNestedBottleneckBlock(int offset,
+                                         NestedBottleneckBlock* block,
+                                         NetStruct& netstruct,
+                                         std::istream& buffer) const {
+    // nested bottleneck block
+    // 1).  Convolution layer with 1x1 kernel
+    // 2).  Batch normalize layer
+    // ---- 1st Residual Block ----
+    //     3).  Convolution layer with 3x3 kernel
+    //     4).  Batch normalize layer
+    //     5).  Convolution layer with 3x3 kernel
+    //     6).  Batch normalize layer
+    // ---- 2nd Residual Block ----
+    //     7).  Convolution layer with 3x3 kernel
+    //     8).  Batch normalize layer
+    //     9).  Convolution layer with 3x3 kernel
+    //     10). Batch normalize layer
+    // 11). Convolution layer with 1x1 kernel
+    // 12). Batch normalize layer
+
+    // pre-bottleneck layers
+    const auto pre_btl_conv_shape = netstruct[offset++];
+    const auto pre_btl_bn_shape = netstruct[offset++];
+    FillConvolutionLayer(block->pre_btl_conv,
+                         buffer,
+                         pre_btl_conv_shape[0],
+                         pre_btl_conv_shape[1],
+                         pre_btl_conv_shape[2]);
+    FillBatchnormLayer(block->pre_btl_bn, buffer, pre_btl_bn_shape[0]);
+
+    // 1st layers.
+    const auto res_conv1_shape = netstruct[offset++];
+    const auto res_bn1_shape = netstruct[offset++];
+    FillConvolutionLayer(
+        block->conv1, buffer, res_conv1_shape[0], res_conv1_shape[1], res_conv1_shape[2]);
+    FillBatchnormLayer(block->bn1, buffer, res_bn1_shape[0]);
+
+    // 2nd layers.
+    const auto res_conv2_shape = netstruct[offset++];
+    const auto res_bn2_shape = netstruct[offset++];
+    FillConvolutionLayer(
+        block->conv2, buffer, res_conv2_shape[0], res_conv2_shape[1], res_conv2_shape[2]);
+    FillBatchnormLayer(block->bn2, buffer, res_bn2_shape[0]);
+
+    // 3rd layers.
+    const auto res_conv3_shape = netstruct[offset++];
+    const auto res_bn3_shape = netstruct[offset++];
+    FillConvolutionLayer(
+        block->conv3, buffer, res_conv3_shape[0], res_conv3_shape[1], res_conv3_shape[2]);
+    FillBatchnormLayer(block->bn3, buffer, res_bn3_shape[0]);
+
+    // 4th layers.
+    const auto res_conv4_shape = netstruct[offset++];
+    const auto res_bn4_shape = netstruct[offset++];
+    FillConvolutionLayer(
+        block->conv4, buffer, res_conv4_shape[0], res_conv4_shape[1], res_conv4_shape[2]);
+    FillBatchnormLayer(block->bn4, buffer, res_bn4_shape[0]);
+
+    // post-bottleneck layers
+    const auto post_btl_conv_shape = netstruct[offset++];
+    const auto post_btl_bn_shape = netstruct[offset++];
+    FillConvolutionLayer(block->post_btl_conv,
+                         buffer,
+                         post_btl_conv_shape[0],
+                         post_btl_conv_shape[1],
+                         post_btl_conv_shape[2]);
+    FillBatchnormLayer(block->post_btl_bn, buffer, post_btl_bn_shape[0]);
+
+    const auto outer_channels = weights_->residual_channels;
+    const auto inner_channels = pre_btl_conv_shape[1];
+    const auto kernel = 3;
+    block->bottleneck_channels = inner_channels;
+    if (outer_channels != pre_btl_conv_shape[0] || outer_channels != post_btl_conv_shape[1] ||
+        outer_channels != post_btl_bn_shape[0]) {
+        throw std::runtime_error{"the outer channels of nested bottleneck block is wrong"};
+    }
+    if (inner_channels != pre_btl_bn_shape[0] || inner_channels != res_conv1_shape[0] ||
+        inner_channels != res_conv1_shape[1] || inner_channels != res_bn1_shape[0] ||
+        inner_channels != res_conv2_shape[0] || inner_channels != res_conv2_shape[1] ||
+        inner_channels != res_bn2_shape[0] || inner_channels != res_conv3_shape[0] ||
+        inner_channels != res_conv3_shape[1] || inner_channels != res_bn3_shape[0] ||
+        inner_channels != res_conv4_shape[0] || inner_channels != res_conv4_shape[1] ||
+        inner_channels != res_bn4_shape[0]) {
+        throw std::runtime_error{"the inner channels of nested bottleneck block is wrong"};
+    }
+    if (kernel != res_conv1_shape[2] || kernel != res_conv2_shape[2] ||
+        kernel != res_conv3_shape[2] || kernel != res_conv4_shape[2] ||
+        1 != pre_btl_conv_shape[2] || 1 != post_btl_conv_shape[2]) {
+        throw std::runtime_error{"the kernel of nested bottleneck block is wrong"};
+    }
+    return offset;
+}
+
+int DNNLoader::FillMixerBlock(int offset,
+                              MixerBlock* block,
+                              NetStruct& netstruct,
+                              std::istream& buffer) const {
+    // mixer block
+    // 1). Depthwise convolution layer with NxN kernel
+    // 2). Batch normalize layer
+    // 3). Convolution layer with 1x1 kernel
+    // 4). Batch normalize layer
+    // 5). Convolution layer with 1x1 kernel
+    // 6). Batch normalize layer
+
+    // depthwise conv layers
+    const auto dw_conv_shape = netstruct[offset++];
+    const auto dw_bn_shape = netstruct[offset++];
+    FillConvolutionLayer(
+        block->dw_conv, buffer, dw_conv_shape[0], dw_conv_shape[1], dw_conv_shape[2]);
+    FillBatchnormLayer(block->dw_bn, buffer, dw_bn_shape[0]);
+
+    // 1st feedforward layers.
+    const auto ffn_conv1_shape = netstruct[offset++];
+    const auto ffn_bn1_shape = netstruct[offset++];
+    FillConvolutionLayer(
+        block->conv1, buffer, ffn_conv1_shape[0], ffn_conv1_shape[1], ffn_conv1_shape[2]);
+    FillBatchnormLayer(block->bn1, buffer, ffn_bn1_shape[0]);
+
+    // 2nd feedforward layers.
+    const auto ffn_conv2_shape = netstruct[offset++];
+    const auto ffn_bn2_shape = netstruct[offset++];
+    FillConvolutionLayer(
+        block->conv2, buffer, ffn_conv2_shape[0], ffn_conv2_shape[1], ffn_conv2_shape[2]);
+    FillBatchnormLayer(block->bn2, buffer, ffn_bn2_shape[0]);
+
+    block->feedforward_channels = ffn_conv1_shape[1];
+    const auto channels = weights_->residual_channels;
+    const auto kernel = 1;
+    if (channels != dw_conv_shape[1] || channels != dw_bn_shape[0] ||
+        channels != ffn_conv1_shape[0] || channels != ffn_conv2_shape[1] ||
+        channels != ffn_bn2_shape[0]) {
+        throw std::runtime_error{"the channels of mixer block is wrong"};
+    }
+    if (kernel != ffn_conv1_shape[2] || kernel != ffn_conv2_shape[2]) {
+        throw std::runtime_error{"the kernel of mixer block is wrong"};
+    }
+    return offset;
+}
+
+int DNNLoader::FillTransformerBlock(int offset,
+                                    TransformerBlock* block,
+                                    NetStruct& netstruct,
+                                    std::istream& buffer) const {
+    // transformer block
+    // ---- Self-Attention Sublayer ----
+    //     1). Fully connect layer (query projection)
+    //     2). Fully connect layer (key projection)
+    //     3). Fully connect layer (value projection)
+    //     4). Fully connect layer (output projection)
+    //     5). RoPE layer
+    //     6). RMS normalize layer (pre-norm)
+    // ---- Feedforward Sublayer ----
+    //     7).  Fully connect layer
+    //     8).  Fully connect layer (gate)
+    //     9).  Fully connect layer
+    //     10). RMS normalize layer (pre-norm)
+    //
+    // Both normalize layers are applied before the sublayer they belong to,
+    // but they are the last collected layer of the sublayer.
+
+    // attention layers.
+    const auto q_proj_shape = netstruct[offset++];
+    const auto k_proj_shape = netstruct[offset++];
+    const auto v_proj_shape = netstruct[offset++];
+    const auto out_proj_shape = netstruct[offset++];
+    const auto rope_shape = netstruct[offset++];
+    const auto attn_norm_shape = netstruct[offset++];
+
+    FillFullyconnectLayer(block->q_proj, buffer, q_proj_shape[0], q_proj_shape[1]);
+    FillFullyconnectLayer(block->k_proj, buffer, k_proj_shape[0], k_proj_shape[1]);
+    FillFullyconnectLayer(block->v_proj, buffer, v_proj_shape[0], v_proj_shape[1]);
+    FillFullyconnectLayer(block->out_proj, buffer, out_proj_shape[0], out_proj_shape[1]);
+    FillRopeLayer(block->rope, buffer, rope_shape[0], rope_shape[1]);
+    FillRmsnormLayer(block->attn_norm, buffer, attn_norm_shape[0]);
+
+    // feedforward layers.
+    const auto ffn_fc1_shape = netstruct[offset++];
+    const auto ffn_gate_shape = netstruct[offset++];
+    const auto ffn_fc2_shape = netstruct[offset++];
+    const auto ffn_norm_shape = netstruct[offset++];
+
+    FillFullyconnectLayer(block->ffn_fc1, buffer, ffn_fc1_shape[0], ffn_fc1_shape[1]);
+    FillFullyconnectLayer(block->ffn_gate, buffer, ffn_gate_shape[0], ffn_gate_shape[1]);
+    FillFullyconnectLayer(block->ffn_fc2, buffer, ffn_fc2_shape[0], ffn_fc2_shape[1]);
+    FillRmsnormLayer(block->ffn_norm, buffer, ffn_norm_shape[0]);
+
+    block->head_dim = rope_shape[0];
+    block->num_heads = rope_shape[1];
+    block->feedforward_channels = ffn_fc1_shape[1];
+
+    const auto channels = weights_->residual_channels;
+    const auto head_dim = block->head_dim;
+    const auto num_heads = block->num_heads;
+    const auto attn_channels = num_heads * head_dim;
+    const auto ffn_channels = block->feedforward_channels;
+
+    if (channels != q_proj_shape[0] || channels != k_proj_shape[0] || channels != v_proj_shape[0] ||
+        channels != out_proj_shape[1] || channels != attn_norm_shape[0] ||
+        channels != ffn_fc1_shape[0] || channels != ffn_gate_shape[0] ||
+        channels != ffn_fc2_shape[1] || channels != ffn_norm_shape[0]) {
+        throw std::runtime_error{"the channels of transformer block is wrong"};
+    }
+    if (num_heads <= 0 || head_dim <= 0 || head_dim % 4 != 0) {
+        throw std::runtime_error{"the head size of transformer block is wrong"};
+    }
+    if (attn_channels != q_proj_shape[1] || attn_channels != k_proj_shape[1] ||
+        attn_channels != v_proj_shape[1] || attn_channels != out_proj_shape[0]) {
+        throw std::runtime_error{"the attention channels of transformer block is wrong"};
+    }
+    if (ffn_channels != ffn_gate_shape[1] || ffn_channels != ffn_fc2_shape[0]) {
+        throw std::runtime_error{"the feedforward channels of transformer block is wrong"};
     }
     return offset;
 }
@@ -892,23 +931,23 @@ void DNNLoader::ProcessWeights() const {
     ProcessConvBlock(weights_->input_conv, weights_->input_bn);
 
     // block tower
-    for (auto& block : weights_->tower) {
-        if (block->IsResidualBlock()) {
+    for (auto& tower_ptr : weights_->tower) {
+        if (auto* block = tower_ptr->Cast<ResidualBlock>()) {
             ProcessConvBlock(block->conv1, block->bn1);
             ProcessConvBlock(block->conv2, block->bn2);
-        } else if (block->IsBottleneckBlock()) {
+        } else if (auto* block = tower_ptr->Cast<BottleneckBlock>()) {
             ProcessConvBlock(block->pre_btl_conv, block->pre_btl_bn);
             ProcessConvBlock(block->conv1, block->bn1);
             ProcessConvBlock(block->conv2, block->bn2);
             ProcessConvBlock(block->post_btl_conv, block->post_btl_bn);
-        } else if (block->IsNestedBottleneckBlock()) {
+        } else if (auto* block = tower_ptr->Cast<NestedBottleneckBlock>()) {
             ProcessConvBlock(block->pre_btl_conv, block->pre_btl_bn);
             ProcessConvBlock(block->conv1, block->bn1);
             ProcessConvBlock(block->conv2, block->bn2);
             ProcessConvBlock(block->conv3, block->bn3);
             ProcessConvBlock(block->conv4, block->bn4);
             ProcessConvBlock(block->post_btl_conv, block->post_btl_bn);
-        } else if (block->IsMixerBlock()) {
+        } else if (auto* block = tower_ptr->Cast<MixerBlock>()) {
             ProcessConvBlock(block->dw_conv, block->dw_bn);
             ProcessConvBlock(block->conv1, block->bn1);
             ProcessConvBlock(block->conv2, block->bn2);

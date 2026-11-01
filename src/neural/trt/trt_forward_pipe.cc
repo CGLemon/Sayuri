@@ -500,16 +500,16 @@ bool TrtForwardPipe::TrtEngine::BuildNetwork(trt::InferPtr<nvinfer1::INetworkDef
 
     for (int i = 0; i < weights_->residual_blocks; ++i) {
         auto tower_ptr = weights_->tower[i].get();
-        if (tower_ptr->IsResidualBlock()) {
-            output_conv = BuildResidualBlock(network, output_conv, tower_ptr)->getOutput(0);
-        } else if (tower_ptr->IsBottleneckBlock()) {
-            output_conv = BuildBottleneckBlock(network, output_conv, tower_ptr)->getOutput(0);
-        } else if (tower_ptr->IsNestedBottleneckBlock()) {
-            output_conv = BuildNestedBottleneckBlock(network, output_conv, tower_ptr)->getOutput(0);
-        } else if (tower_ptr->IsMixerBlock()) {
-            output_conv = BuildMixerBlock(network, output_conv, tower_ptr)->getOutput(0);
-        } else if (tower_ptr->IsTransformerBlock()) {
-            output_conv = BuildTransformerBlock(network, output_conv, tower_ptr)->getOutput(0);
+        if (auto* block = tower_ptr->Cast<ResidualBlock>()) {
+            output_conv = BuildResidualBlock(network, output_conv, block)->getOutput(0);
+        } else if (auto* block = tower_ptr->Cast<BottleneckBlock>()) {
+            output_conv = BuildBottleneckBlock(network, output_conv, block)->getOutput(0);
+        } else if (auto* block = tower_ptr->Cast<NestedBottleneckBlock>()) {
+            output_conv = BuildNestedBottleneckBlock(network, output_conv, block)->getOutput(0);
+        } else if (auto* block = tower_ptr->Cast<MixerBlock>()) {
+            output_conv = BuildMixerBlock(network, output_conv, block)->getOutput(0);
+        } else if (auto* block = tower_ptr->Cast<TransformerBlock>()) {
+            output_conv = BuildTransformerBlock(network, output_conv, block)->getOutput(0);
         } else {
             throw std::runtime_error("Unknown block type for TensorRT backend.");
         }
@@ -525,29 +525,28 @@ bool TrtForwardPipe::TrtEngine::BuildNetwork(trt::InferPtr<nvinfer1::INetworkDef
 nvinfer1::ILayer*
 TrtForwardPipe::TrtEngine::BuildResidualBlock(trt::InferPtr<nvinfer1::INetworkDefinition>& network,
                                               nvinfer1::ITensor* input,
-                                              BlockBasic* tower_ptr) {
+                                              ResidualBlock* block) {
     auto first_conv_layer = BuildConvLayer(network,
                                            input,
-                                           tower_ptr->conv1.GetFilter(),
-                                           tower_ptr->conv1.GetInputs(),
-                                           tower_ptr->conv1.GetOutputs(),
-                                           tower_ptr->conv1.GetWeights(),
-                                           tower_ptr->conv1.GetBiases());
+                                           block->conv1.GetFilter(),
+                                           block->conv1.GetInputs(),
+                                           block->conv1.GetOutputs(),
+                                           block->conv1.GetWeights(),
+                                           block->conv1.GetBiases());
     auto first_activation_layer =
         BuildActivationLayer(network, first_conv_layer->getOutput(0), weights_->default_act);
 
     auto second_conv_layer = BuildConvLayer(network,
                                             first_activation_layer->getOutput(0),
-                                            tower_ptr->conv2.GetFilter(),
-                                            tower_ptr->conv2.GetInputs(),
-                                            tower_ptr->conv2.GetOutputs(),
-                                            tower_ptr->conv2.GetWeights(),
-                                            tower_ptr->conv2.GetBiases());
+                                            block->conv2.GetFilter(),
+                                            block->conv2.GetInputs(),
+                                            block->conv2.GetOutputs(),
+                                            block->conv2.GetWeights(),
+                                            block->conv2.GetBiases());
     auto second_mask_layer = BuildMaskLayer(network, second_conv_layer->getOutput(0));
 
-    if (tower_ptr->apply_se) {
-        return BuildSqueezeExcitationLayer(
-            network, input, second_mask_layer->getOutput(0), tower_ptr);
+    if (block->apply_se) {
+        return BuildSqueezeExcitationLayer(network, input, second_mask_layer->getOutput(0), block);
     }
 
     auto merge_layer = network->addElementWise(
@@ -558,49 +557,48 @@ TrtForwardPipe::TrtEngine::BuildResidualBlock(trt::InferPtr<nvinfer1::INetworkDe
 nvinfer1::ILayer* TrtForwardPipe::TrtEngine::BuildBottleneckBlock(
     trt::InferPtr<nvinfer1::INetworkDefinition>& network,
     nvinfer1::ITensor* input,
-    BlockBasic* tower_ptr) {
+    BottleneckBlock* block) {
     auto pre_conv_layer = BuildConvLayer(network,
                                          input,
-                                         tower_ptr->pre_btl_conv.GetFilter(),
-                                         tower_ptr->pre_btl_conv.GetInputs(),
-                                         tower_ptr->pre_btl_conv.GetOutputs(),
-                                         tower_ptr->pre_btl_conv.GetWeights(),
-                                         tower_ptr->pre_btl_conv.GetBiases());
+                                         block->pre_btl_conv.GetFilter(),
+                                         block->pre_btl_conv.GetInputs(),
+                                         block->pre_btl_conv.GetOutputs(),
+                                         block->pre_btl_conv.GetWeights(),
+                                         block->pre_btl_conv.GetBiases());
     auto pre_activation_layer =
         BuildActivationLayer(network, pre_conv_layer->getOutput(0), weights_->default_act);
 
     auto first_conv_layer = BuildConvLayer(network,
                                            pre_activation_layer->getOutput(0),
-                                           tower_ptr->conv1.GetFilter(),
-                                           tower_ptr->conv1.GetInputs(),
-                                           tower_ptr->conv1.GetOutputs(),
-                                           tower_ptr->conv1.GetWeights(),
-                                           tower_ptr->conv1.GetBiases());
+                                           block->conv1.GetFilter(),
+                                           block->conv1.GetInputs(),
+                                           block->conv1.GetOutputs(),
+                                           block->conv1.GetWeights(),
+                                           block->conv1.GetBiases());
     auto first_activation_layer =
         BuildActivationLayer(network, first_conv_layer->getOutput(0), weights_->default_act);
 
     auto second_conv_layer = BuildConvLayer(network,
                                             first_activation_layer->getOutput(0),
-                                            tower_ptr->conv2.GetFilter(),
-                                            tower_ptr->conv2.GetInputs(),
-                                            tower_ptr->conv2.GetOutputs(),
-                                            tower_ptr->conv2.GetWeights(),
-                                            tower_ptr->conv2.GetBiases());
+                                            block->conv2.GetFilter(),
+                                            block->conv2.GetInputs(),
+                                            block->conv2.GetOutputs(),
+                                            block->conv2.GetWeights(),
+                                            block->conv2.GetBiases());
     auto second_activation_layer =
         BuildActivationLayer(network, second_conv_layer->getOutput(0), weights_->default_act);
 
     auto post_conv_layer = BuildConvLayer(network,
                                           second_activation_layer->getOutput(0),
-                                          tower_ptr->post_btl_conv.GetFilter(),
-                                          tower_ptr->post_btl_conv.GetInputs(),
-                                          tower_ptr->post_btl_conv.GetOutputs(),
-                                          tower_ptr->post_btl_conv.GetWeights(),
-                                          tower_ptr->post_btl_conv.GetBiases());
+                                          block->post_btl_conv.GetFilter(),
+                                          block->post_btl_conv.GetInputs(),
+                                          block->post_btl_conv.GetOutputs(),
+                                          block->post_btl_conv.GetWeights(),
+                                          block->post_btl_conv.GetBiases());
     auto post_mask_layer = BuildMaskLayer(network, post_conv_layer->getOutput(0));
 
-    if (tower_ptr->apply_se) {
-        return BuildSqueezeExcitationLayer(
-            network, input, post_mask_layer->getOutput(0), tower_ptr);
+    if (block->apply_se) {
+        return BuildSqueezeExcitationLayer(network, input, post_mask_layer->getOutput(0), block);
     }
 
     auto merge_layer = network->addElementWise(
@@ -611,34 +609,34 @@ nvinfer1::ILayer* TrtForwardPipe::TrtEngine::BuildBottleneckBlock(
 nvinfer1::ILayer* TrtForwardPipe::TrtEngine::BuildNestedBottleneckBlock(
     trt::InferPtr<nvinfer1::INetworkDefinition>& network,
     nvinfer1::ITensor* input,
-    BlockBasic* tower_ptr) {
+    NestedBottleneckBlock* block) {
     auto pre_conv_layer = BuildConvLayer(network,
                                          input,
-                                         tower_ptr->pre_btl_conv.GetFilter(),
-                                         tower_ptr->pre_btl_conv.GetInputs(),
-                                         tower_ptr->pre_btl_conv.GetOutputs(),
-                                         tower_ptr->pre_btl_conv.GetWeights(),
-                                         tower_ptr->pre_btl_conv.GetBiases());
+                                         block->pre_btl_conv.GetFilter(),
+                                         block->pre_btl_conv.GetInputs(),
+                                         block->pre_btl_conv.GetOutputs(),
+                                         block->pre_btl_conv.GetWeights(),
+                                         block->pre_btl_conv.GetBiases());
     auto pre_activation_layer =
         BuildActivationLayer(network, pre_conv_layer->getOutput(0), weights_->default_act);
 
     auto first_conv_layer = BuildConvLayer(network,
                                            pre_activation_layer->getOutput(0),
-                                           tower_ptr->conv1.GetFilter(),
-                                           tower_ptr->conv1.GetInputs(),
-                                           tower_ptr->conv1.GetOutputs(),
-                                           tower_ptr->conv1.GetWeights(),
-                                           tower_ptr->conv1.GetBiases());
+                                           block->conv1.GetFilter(),
+                                           block->conv1.GetInputs(),
+                                           block->conv1.GetOutputs(),
+                                           block->conv1.GetWeights(),
+                                           block->conv1.GetBiases());
     auto first_activation_layer =
         BuildActivationLayer(network, first_conv_layer->getOutput(0), weights_->default_act);
 
     auto second_conv_layer = BuildConvLayer(network,
                                             first_activation_layer->getOutput(0),
-                                            tower_ptr->conv2.GetFilter(),
-                                            tower_ptr->conv2.GetInputs(),
-                                            tower_ptr->conv2.GetOutputs(),
-                                            tower_ptr->conv2.GetWeights(),
-                                            tower_ptr->conv2.GetBiases());
+                                            block->conv2.GetFilter(),
+                                            block->conv2.GetInputs(),
+                                            block->conv2.GetOutputs(),
+                                            block->conv2.GetWeights(),
+                                            block->conv2.GetBiases());
     auto second_mask_layer = BuildMaskLayer(network, second_conv_layer->getOutput(0));
     auto second_merge_layer = network->addElementWise(*second_mask_layer->getOutput(0),
                                                       *pre_activation_layer->getOutput(0),
@@ -648,21 +646,21 @@ nvinfer1::ILayer* TrtForwardPipe::TrtEngine::BuildNestedBottleneckBlock(
 
     auto third_conv_layer = BuildConvLayer(network,
                                            second_activation_layer->getOutput(0),
-                                           tower_ptr->conv3.GetFilter(),
-                                           tower_ptr->conv3.GetInputs(),
-                                           tower_ptr->conv3.GetOutputs(),
-                                           tower_ptr->conv3.GetWeights(),
-                                           tower_ptr->conv3.GetBiases());
+                                           block->conv3.GetFilter(),
+                                           block->conv3.GetInputs(),
+                                           block->conv3.GetOutputs(),
+                                           block->conv3.GetWeights(),
+                                           block->conv3.GetBiases());
     auto third_activation_layer =
         BuildActivationLayer(network, third_conv_layer->getOutput(0), weights_->default_act);
 
     auto fourth_conv_layer = BuildConvLayer(network,
                                             third_activation_layer->getOutput(0),
-                                            tower_ptr->conv4.GetFilter(),
-                                            tower_ptr->conv4.GetInputs(),
-                                            tower_ptr->conv4.GetOutputs(),
-                                            tower_ptr->conv4.GetWeights(),
-                                            tower_ptr->conv4.GetBiases());
+                                            block->conv4.GetFilter(),
+                                            block->conv4.GetInputs(),
+                                            block->conv4.GetOutputs(),
+                                            block->conv4.GetWeights(),
+                                            block->conv4.GetBiases());
     auto fourth_mask_layer = BuildMaskLayer(network, fourth_conv_layer->getOutput(0));
     auto fourth_merge_layer = network->addElementWise(*fourth_mask_layer->getOutput(0),
                                                       *second_activation_layer->getOutput(0),
@@ -672,16 +670,15 @@ nvinfer1::ILayer* TrtForwardPipe::TrtEngine::BuildNestedBottleneckBlock(
 
     auto post_conv_layer = BuildConvLayer(network,
                                           fourth_activation_layer->getOutput(0),
-                                          tower_ptr->post_btl_conv.GetFilter(),
-                                          tower_ptr->post_btl_conv.GetInputs(),
-                                          tower_ptr->post_btl_conv.GetOutputs(),
-                                          tower_ptr->post_btl_conv.GetWeights(),
-                                          tower_ptr->post_btl_conv.GetBiases());
+                                          block->post_btl_conv.GetFilter(),
+                                          block->post_btl_conv.GetInputs(),
+                                          block->post_btl_conv.GetOutputs(),
+                                          block->post_btl_conv.GetWeights(),
+                                          block->post_btl_conv.GetBiases());
     auto post_mask_layer = BuildMaskLayer(network, post_conv_layer->getOutput(0));
 
-    if (tower_ptr->apply_se) {
-        return BuildSqueezeExcitationLayer(
-            network, input, post_mask_layer->getOutput(0), tower_ptr);
+    if (block->apply_se) {
+        return BuildSqueezeExcitationLayer(network, input, post_mask_layer->getOutput(0), block);
     }
 
     auto merge_layer = network->addElementWise(
@@ -692,14 +689,14 @@ nvinfer1::ILayer* TrtForwardPipe::TrtEngine::BuildNestedBottleneckBlock(
 nvinfer1::ILayer*
 TrtForwardPipe::TrtEngine::BuildMixerBlock(trt::InferPtr<nvinfer1::INetworkDefinition>& network,
                                            nvinfer1::ITensor* input,
-                                           BlockBasic* tower_ptr) {
+                                           MixerBlock* block) {
     auto dw_conv_layer = BuildConvLayer(network,
                                         input,
-                                        tower_ptr->dw_conv.GetFilter(),
-                                        tower_ptr->dw_conv.GetInputs(),
-                                        tower_ptr->dw_conv.GetOutputs(),
-                                        tower_ptr->dw_conv.GetWeights(),
-                                        tower_ptr->dw_conv.GetBiases(),
+                                        block->dw_conv.GetFilter(),
+                                        block->dw_conv.GetInputs(),
+                                        block->dw_conv.GetOutputs(),
+                                        block->dw_conv.GetWeights(),
+                                        block->dw_conv.GetBiases(),
                                         true);
     auto dw_activation_layer =
         BuildActivationLayer(network, dw_conv_layer->getOutput(0), weights_->default_act);
@@ -708,26 +705,26 @@ TrtForwardPipe::TrtEngine::BuildMixerBlock(trt::InferPtr<nvinfer1::INetworkDefin
 
     auto first_conv_layer = BuildConvLayer(network,
                                            dw_merge_layer->getOutput(0),
-                                           tower_ptr->conv1.GetFilter(),
-                                           tower_ptr->conv1.GetInputs(),
-                                           tower_ptr->conv1.GetOutputs(),
-                                           tower_ptr->conv1.GetWeights(),
-                                           tower_ptr->conv1.GetBiases());
+                                           block->conv1.GetFilter(),
+                                           block->conv1.GetInputs(),
+                                           block->conv1.GetOutputs(),
+                                           block->conv1.GetWeights(),
+                                           block->conv1.GetBiases());
     auto first_activation_layer =
         BuildActivationLayer(network, first_conv_layer->getOutput(0), weights_->default_act);
 
     auto second_conv_layer = BuildConvLayer(network,
                                             first_activation_layer->getOutput(0),
-                                            tower_ptr->conv2.GetFilter(),
-                                            tower_ptr->conv2.GetInputs(),
-                                            tower_ptr->conv2.GetOutputs(),
-                                            tower_ptr->conv2.GetWeights(),
-                                            tower_ptr->conv2.GetBiases());
+                                            block->conv2.GetFilter(),
+                                            block->conv2.GetInputs(),
+                                            block->conv2.GetOutputs(),
+                                            block->conv2.GetWeights(),
+                                            block->conv2.GetBiases());
     auto second_mask_layer = BuildMaskLayer(network, second_conv_layer->getOutput(0));
 
-    if (tower_ptr->apply_se) {
+    if (block->apply_se) {
         return BuildSqueezeExcitationLayer(
-            network, dw_merge_layer->getOutput(0), second_mask_layer->getOutput(0), tower_ptr);
+            network, dw_merge_layer->getOutput(0), second_mask_layer->getOutput(0), block);
     }
 
     auto merge_layer = network->addElementWise(*dw_merge_layer->getOutput(0),
@@ -739,21 +736,21 @@ TrtForwardPipe::TrtEngine::BuildMixerBlock(trt::InferPtr<nvinfer1::INetworkDefin
 nvinfer1::ILayer* TrtForwardPipe::TrtEngine::BuildTransformerBlock(
     trt::InferPtr<nvinfer1::INetworkDefinition>& network,
     nvinfer1::ITensor* input,
-    BlockBasic* tower_ptr) {
-    const auto num_heads = tower_ptr->num_heads;
-    const auto head_dim = tower_ptr->head_dim;
+    TransformerBlock* block) {
+    const auto num_heads = block->num_heads;
+    const auto head_dim = block->head_dim;
     const auto attn_channels = num_heads * head_dim;
     const auto num_intersections = board_size_ * board_size_;
 
     // The self-attention sublayer. Every intersection is a token, so the
     // fullyconnect layers are the 1x1 convolution.
-    auto attn_norm_layer = BuildRMSNormLayer(network, input, tower_ptr->attn_norm.GetGammas());
+    auto attn_norm_layer = BuildRMSNormLayer(network, input, block->attn_norm.GetGammas());
 
     // Fold the attention scale into the query projection. The RoPE is linear,
     // so it is the same as scaling the scores.
     const auto scale = 1.0f / std::sqrt(static_cast<float>(head_dim));
-    auto q_weights = tower_ptr->q_proj.GetWeights();
-    auto q_biases = tower_ptr->q_proj.GetBiases();
+    auto q_weights = block->q_proj.GetWeights();
+    auto q_biases = block->q_proj.GetBiases();
     for (auto& w : q_weights) {
         w *= scale;
     }
@@ -764,27 +761,27 @@ nvinfer1::ILayer* TrtForwardPipe::TrtEngine::BuildTransformerBlock(
     auto q_proj_layer = BuildConvLayer(network,
                                        attn_norm_layer->getOutput(0),
                                        1,
-                                       tower_ptr->q_proj.GetInputs(),
-                                       tower_ptr->q_proj.GetOutputs(),
+                                       block->q_proj.GetInputs(),
+                                       block->q_proj.GetOutputs(),
                                        q_weights,
                                        q_biases);
     auto k_proj_layer = BuildConvLayer(network,
                                        attn_norm_layer->getOutput(0),
                                        1,
-                                       tower_ptr->k_proj.GetInputs(),
-                                       tower_ptr->k_proj.GetOutputs(),
-                                       tower_ptr->k_proj.GetWeights(),
-                                       tower_ptr->k_proj.GetBiases());
+                                       block->k_proj.GetInputs(),
+                                       block->k_proj.GetOutputs(),
+                                       block->k_proj.GetWeights(),
+                                       block->k_proj.GetBiases());
     auto v_proj_layer = BuildConvLayer(network,
                                        attn_norm_layer->getOutput(0),
                                        1,
-                                       tower_ptr->v_proj.GetInputs(),
-                                       tower_ptr->v_proj.GetOutputs(),
-                                       tower_ptr->v_proj.GetWeights(),
-                                       tower_ptr->v_proj.GetBiases());
+                                       block->v_proj.GetInputs(),
+                                       block->v_proj.GetOutputs(),
+                                       block->v_proj.GetWeights(),
+                                       block->v_proj.GetBiases());
 
     // The queries, keys and values are [N, heads, head_dim, S].
-    auto rotary_matrix_layer = BuildRotaryMatrixLayer(network, tower_ptr->rope.GetFrequencies());
+    auto rotary_matrix_layer = BuildRotaryMatrixLayer(network, block->rope.GetFrequencies());
     auto queries_layer = BuildRotaryEmbeddingLayer(network,
                                                    q_proj_layer->getOutput(0),
                                                    rotary_matrix_layer->getOutput(0),
@@ -822,34 +819,34 @@ nvinfer1::ILayer* TrtForwardPipe::TrtEngine::BuildTransformerBlock(
     auto out_proj_layer = BuildConvLayer(network,
                                          attention_merge_layer->getOutput(0),
                                          1,
-                                         tower_ptr->out_proj.GetInputs(),
-                                         tower_ptr->out_proj.GetOutputs(),
-                                         tower_ptr->out_proj.GetWeights(),
-                                         tower_ptr->out_proj.GetBiases());
+                                         block->out_proj.GetInputs(),
+                                         block->out_proj.GetOutputs(),
+                                         block->out_proj.GetWeights(),
+                                         block->out_proj.GetBiases());
     auto out_proj_mask_layer = BuildMaskLayer(network, out_proj_layer->getOutput(0));
     auto attn_merge_layer = network->addElementWise(
         *input, *out_proj_mask_layer->getOutput(0), nvinfer1::ElementWiseOperation::kSUM);
 
     // The gated feedforward sublayer.
     auto ffn_norm_layer =
-        BuildRMSNormLayer(network, attn_merge_layer->getOutput(0), tower_ptr->ffn_norm.GetGammas());
+        BuildRMSNormLayer(network, attn_merge_layer->getOutput(0), block->ffn_norm.GetGammas());
 
     auto ffn_fc1_layer = BuildConvLayer(network,
                                         ffn_norm_layer->getOutput(0),
                                         1,
-                                        tower_ptr->ffn_fc1.GetInputs(),
-                                        tower_ptr->ffn_fc1.GetOutputs(),
-                                        tower_ptr->ffn_fc1.GetWeights(),
-                                        tower_ptr->ffn_fc1.GetBiases());
+                                        block->ffn_fc1.GetInputs(),
+                                        block->ffn_fc1.GetOutputs(),
+                                        block->ffn_fc1.GetWeights(),
+                                        block->ffn_fc1.GetBiases());
     auto ffn_fc1_activation =
         BuildActivationLayer(network, ffn_fc1_layer->getOutput(0), weights_->default_act, false);
     auto ffn_gate_layer = BuildConvLayer(network,
                                          ffn_norm_layer->getOutput(0),
                                          1,
-                                         tower_ptr->ffn_gate.GetInputs(),
-                                         tower_ptr->ffn_gate.GetOutputs(),
-                                         tower_ptr->ffn_gate.GetWeights(),
-                                         tower_ptr->ffn_gate.GetBiases());
+                                         block->ffn_gate.GetInputs(),
+                                         block->ffn_gate.GetOutputs(),
+                                         block->ffn_gate.GetWeights(),
+                                         block->ffn_gate.GetBiases());
     auto ffn_glu_layer = network->addElementWise(*ffn_fc1_activation->getOutput(0),
                                                  *ffn_gate_layer->getOutput(0),
                                                  nvinfer1::ElementWiseOperation::kPROD);
@@ -857,10 +854,10 @@ nvinfer1::ILayer* TrtForwardPipe::TrtEngine::BuildTransformerBlock(
     auto ffn_fc2_layer = BuildConvLayer(network,
                                         ffn_glu_layer->getOutput(0),
                                         1,
-                                        tower_ptr->ffn_fc2.GetInputs(),
-                                        tower_ptr->ffn_fc2.GetOutputs(),
-                                        tower_ptr->ffn_fc2.GetWeights(),
-                                        tower_ptr->ffn_fc2.GetBiases());
+                                        block->ffn_fc2.GetInputs(),
+                                        block->ffn_fc2.GetOutputs(),
+                                        block->ffn_fc2.GetWeights(),
+                                        block->ffn_fc2.GetBiases());
     auto ffn_fc2_mask_layer = BuildMaskLayer(network, ffn_fc2_layer->getOutput(0));
     return network->addElementWise(*attn_merge_layer->getOutput(0),
                                    *ffn_fc2_mask_layer->getOutput(0),

@@ -52,32 +52,28 @@ void NNGraph::ConstructGraph(bool dump_gpu_info,
 
     // block tower
     const auto blocks = weights_->residual_blocks;
-    for (int i = 0; i < weights_->residual_blocks; ++i) {
-        graph_->tower.emplace_back(NNGraph::Block{});
-    }
-
     auto peaks = PeakSizes{};
     for (int i = 0; i < blocks; ++i) {
-        auto& block = graph_->tower[i];
         const auto tower_ptr = weights_->tower[i].get();
-        if (tower_ptr->IsResidualBlock()) {
-            ConstructResidualBlock(block, tower_ptr, peaks);
-        } else if (tower_ptr->IsBottleneckBlock()) {
-            ConstructBottleneckBlock(block, tower_ptr, peaks);
-        } else if (tower_ptr->IsNestedBottleneckBlock()) {
-            ConstructNestedBottleneckBlock(block, tower_ptr, peaks);
-        } else if (tower_ptr->IsMixerBlock()) {
-            ConstructMixerBlock(block, tower_ptr, peaks);
-        } else if (tower_ptr->IsTransformerBlock()) {
-            ConstructTransformerBlock(block, tower_ptr, peaks);
+        auto layers = std::unique_ptr<BlockLayers>{nullptr};
+        if (auto* block = tower_ptr->Cast<ResidualBlock>()) {
+            layers = ConstructResidualBlock(block, peaks);
+        } else if (auto* block = tower_ptr->Cast<BottleneckBlock>()) {
+            layers = ConstructBottleneckBlock(block, peaks);
+        } else if (auto* block = tower_ptr->Cast<NestedBottleneckBlock>()) {
+            layers = ConstructNestedBottleneckBlock(block, peaks);
+        } else if (auto* block = tower_ptr->Cast<MixerBlock>()) {
+            layers = ConstructMixerBlock(block, peaks);
+        } else if (auto* block = tower_ptr->Cast<TransformerBlock>()) {
+            layers = ConstructTransformerBlock(block, peaks);
         } else {
             throw std::runtime_error("Unknown block type for CUDA backend.");
         }
         if (tower_ptr->apply_se) {
-            ConstructSEUnit(block, tower_ptr);
+            ConstructSEUnit(*layers, tower_ptr);
         }
+        graph_->tower.emplace_back(std::move(layers));
     }
-
     // policy head
     const auto policy_head_channels = weights_->policy_head_channels;
     const auto probabilities_channels = weights_->probabilities_channels;
@@ -290,239 +286,245 @@ void NNGraph::ConstructGraph(bool dump_gpu_info,
     ReportCUDAErrors(cudaMallocHost(&host_output_val_, val_size));
 }
 
-void NNGraph::ConstructResidualBlock(Block& block, BlockBasic* tower_ptr, PeakSizes& peaks) {
+std::unique_ptr<NNGraph::ResidualLayers> NNGraph::ConstructResidualBlock(ResidualBlock* block,
+                                                                         PeakSizes& peaks) {
     const auto default_act = weights_->default_act;
     const bool winograd = weights_->winograd;
 
     const auto channels = weights_->residual_channels;
-    const auto last_act = tower_ptr->apply_se ? Activation::kIdentity : default_act;
+    const auto last_act = block->apply_se ? Activation::kIdentity : default_act;
 
-    block.convs.resize(2);
+    auto layers = std::make_unique<ResidualLayers>();
 
-    block.convs[0] = Convolution(&handles_,
-                                 max_batch_,  // max batch size
-                                 board_size_, // board size
-                                 3,           // kernel size
-                                 channels,    // input channels
-                                 channels,    // output channels
-                                 default_act  // activation
+    layers->conv1 = Convolution(&handles_,
+                                max_batch_,  // max batch size
+                                board_size_, // board size
+                                3,           // kernel size
+                                channels,    // input channels
+                                channels,    // output channels
+                                default_act  // activation
     );
-    block.convs[1] = Convolution(&handles_,
-                                 max_batch_,  // max batch size
-                                 board_size_, // board size
-                                 3,           // kernel size
-                                 channels,    // input channels
-                                 channels,    // output channels
-                                 last_act     // activation
+    layers->conv2 = Convolution(&handles_,
+                                max_batch_,  // max batch size
+                                board_size_, // board size
+                                3,           // kernel size
+                                channels,    // input channels
+                                channels,    // output channels
+                                last_act     // activation
     );
     peaks.channels = std::max(peaks.channels, channels);
 
-    block.convs[0].LoadWeights(
-        tower_ptr->conv1.GetWeights(), tower_ptr->conv1.GetBiases(), scratch_size_, winograd);
-    block.convs[1].LoadWeights(
-        tower_ptr->conv2.GetWeights(), tower_ptr->conv2.GetBiases(), scratch_size_, winograd);
+    layers->conv1.LoadWeights(
+        block->conv1.GetWeights(), block->conv1.GetBiases(), scratch_size_, winograd);
+    layers->conv2.LoadWeights(
+        block->conv2.GetWeights(), block->conv2.GetBiases(), scratch_size_, winograd);
+
+    return layers;
 }
 
-void NNGraph::ConstructBottleneckBlock(Block& block, BlockBasic* tower_ptr, PeakSizes& peaks) {
+std::unique_ptr<NNGraph::BottleneckLayers> NNGraph::ConstructBottleneckBlock(BottleneckBlock* block,
+                                                                             PeakSizes& peaks) {
     const auto default_act = weights_->default_act;
     const bool winograd = weights_->winograd;
 
     const auto outer_channels = weights_->residual_channels;
-    const auto inner_channels = tower_ptr->bottleneck_channels;
-    const auto last_act = tower_ptr->apply_se ? Activation::kIdentity : default_act;
+    const auto inner_channels = block->bottleneck_channels;
+    const auto last_act = block->apply_se ? Activation::kIdentity : default_act;
 
-    block.convs.resize(4);
+    auto layers = std::make_unique<BottleneckLayers>();
 
-    block.convs[0] = Convolution(&handles_,
-                                 max_batch_,     // max batch size
-                                 board_size_,    // board size
-                                 1,              // kernel size
-                                 outer_channels, // input channels
-                                 inner_channels, // output channels
-                                 default_act     // activation
+    layers->pre_btl_conv = Convolution(&handles_,
+                                       max_batch_,     // max batch size
+                                       board_size_,    // board size
+                                       1,              // kernel size
+                                       outer_channels, // input channels
+                                       inner_channels, // output channels
+                                       default_act     // activation
     );
-    block.convs[1] = Convolution(&handles_,
-                                 max_batch_,     // max batch size
-                                 board_size_,    // board size
-                                 3,              // kernel size
-                                 inner_channels, // input channels
-                                 inner_channels, // output channels
-                                 default_act     // activation
+    layers->conv1 = Convolution(&handles_,
+                                max_batch_,     // max batch size
+                                board_size_,    // board size
+                                3,              // kernel size
+                                inner_channels, // input channels
+                                inner_channels, // output channels
+                                default_act     // activation
     );
-    block.convs[2] = Convolution(&handles_,
-                                 max_batch_,     // max batch size
-                                 board_size_,    // board size
-                                 3,              // kernel size
-                                 inner_channels, // input channels
-                                 inner_channels, // output channels
-                                 default_act     // activation
+    layers->conv2 = Convolution(&handles_,
+                                max_batch_,     // max batch size
+                                board_size_,    // board size
+                                3,              // kernel size
+                                inner_channels, // input channels
+                                inner_channels, // output channels
+                                default_act     // activation
     );
-    block.convs[3] = Convolution(&handles_,
-                                 max_batch_,     // max batch size
-                                 board_size_,    // board size
-                                 1,              // kernel size
-                                 inner_channels, // input channels
-                                 outer_channels, // output channels
-                                 last_act        // activation
+    layers->post_btl_conv = Convolution(&handles_,
+                                        max_batch_,     // max batch size
+                                        board_size_,    // board size
+                                        1,              // kernel size
+                                        inner_channels, // input channels
+                                        outer_channels, // output channels
+                                        last_act        // activation
     );
     peaks.channels = std::max({peaks.channels, inner_channels, outer_channels});
 
-    block.convs[0].LoadWeights(tower_ptr->pre_btl_conv.GetWeights(),
-                               tower_ptr->pre_btl_conv.GetBiases(),
-                               scratch_size_,
-                               winograd);
-    block.convs[1].LoadWeights(
-        tower_ptr->conv1.GetWeights(), tower_ptr->conv1.GetBiases(), scratch_size_, winograd);
-    block.convs[2].LoadWeights(
-        tower_ptr->conv2.GetWeights(), tower_ptr->conv2.GetBiases(), scratch_size_, winograd);
-    block.convs[3].LoadWeights(tower_ptr->post_btl_conv.GetWeights(),
-                               tower_ptr->post_btl_conv.GetBiases(),
-                               scratch_size_,
-                               winograd);
+    layers->pre_btl_conv.LoadWeights(
+        block->pre_btl_conv.GetWeights(), block->pre_btl_conv.GetBiases(), scratch_size_, winograd);
+    layers->conv1.LoadWeights(
+        block->conv1.GetWeights(), block->conv1.GetBiases(), scratch_size_, winograd);
+    layers->conv2.LoadWeights(
+        block->conv2.GetWeights(), block->conv2.GetBiases(), scratch_size_, winograd);
+    layers->post_btl_conv.LoadWeights(block->post_btl_conv.GetWeights(),
+                                      block->post_btl_conv.GetBiases(),
+                                      scratch_size_,
+                                      winograd);
+
+    return layers;
 }
 
-void NNGraph::ConstructNestedBottleneckBlock(Block& block,
-                                             BlockBasic* tower_ptr,
-                                             PeakSizes& peaks) {
+std::unique_ptr<NNGraph::NestedBottleneckLayers>
+NNGraph::ConstructNestedBottleneckBlock(NestedBottleneckBlock* block, PeakSizes& peaks) {
     const auto default_act = weights_->default_act;
     const bool winograd = weights_->winograd;
 
     const auto outer_channels = weights_->residual_channels;
-    const auto inner_channels = tower_ptr->bottleneck_channels;
-    const auto last_act = tower_ptr->apply_se ? Activation::kIdentity : default_act;
+    const auto inner_channels = block->bottleneck_channels;
+    const auto last_act = block->apply_se ? Activation::kIdentity : default_act;
 
-    block.convs.resize(6);
+    auto layers = std::make_unique<NestedBottleneckLayers>();
 
-    block.convs[0] = Convolution(&handles_,
-                                 max_batch_,     // max batch size
-                                 board_size_,    // board size
-                                 1,              // kernel size
-                                 outer_channels, // input channels
-                                 inner_channels, // output channels
-                                 default_act     // activation
+    layers->pre_btl_conv = Convolution(&handles_,
+                                       max_batch_,     // max batch size
+                                       board_size_,    // board size
+                                       1,              // kernel size
+                                       outer_channels, // input channels
+                                       inner_channels, // output channels
+                                       default_act     // activation
     );
-    block.convs[1] = Convolution(&handles_,
-                                 max_batch_,     // max batch size
-                                 board_size_,    // board size
-                                 3,              // kernel size
-                                 inner_channels, // input channels
-                                 inner_channels, // output channels
-                                 default_act     // activation
+    layers->conv1 = Convolution(&handles_,
+                                max_batch_,     // max batch size
+                                board_size_,    // board size
+                                3,              // kernel size
+                                inner_channels, // input channels
+                                inner_channels, // output channels
+                                default_act     // activation
     );
-    block.convs[2] = Convolution(&handles_,
-                                 max_batch_,     // max batch size
-                                 board_size_,    // board size
-                                 3,              // kernel size
-                                 inner_channels, // input channels
-                                 inner_channels, // output channels
-                                 default_act     // activation
+    layers->conv2 = Convolution(&handles_,
+                                max_batch_,     // max batch size
+                                board_size_,    // board size
+                                3,              // kernel size
+                                inner_channels, // input channels
+                                inner_channels, // output channels
+                                default_act     // activation
     );
-    block.convs[3] = Convolution(&handles_,
-                                 max_batch_,     // max batch size
-                                 board_size_,    // board size
-                                 3,              // kernel size
-                                 inner_channels, // input channels
-                                 inner_channels, // output channels
-                                 default_act     // activation
+    layers->conv3 = Convolution(&handles_,
+                                max_batch_,     // max batch size
+                                board_size_,    // board size
+                                3,              // kernel size
+                                inner_channels, // input channels
+                                inner_channels, // output channels
+                                default_act     // activation
     );
-    block.convs[4] = Convolution(&handles_,
-                                 max_batch_,     // max batch size
-                                 board_size_,    // board size
-                                 3,              // kernel size
-                                 inner_channels, // input channels
-                                 inner_channels, // output channels
-                                 default_act     // activation
+    layers->conv4 = Convolution(&handles_,
+                                max_batch_,     // max batch size
+                                board_size_,    // board size
+                                3,              // kernel size
+                                inner_channels, // input channels
+                                inner_channels, // output channels
+                                default_act     // activation
     );
-    block.convs[5] = Convolution(&handles_,
-                                 max_batch_,     // max batch size
-                                 board_size_,    // board size
-                                 1,              // kernel size
-                                 inner_channels, // input channels
-                                 outer_channels, // output channels
-                                 last_act        // activation
+    layers->post_btl_conv = Convolution(&handles_,
+                                        max_batch_,     // max batch size
+                                        board_size_,    // board size
+                                        1,              // kernel size
+                                        inner_channels, // input channels
+                                        outer_channels, // output channels
+                                        last_act        // activation
     );
     peaks.channels = std::max({peaks.channels, inner_channels, outer_channels});
 
-    block.convs[0].LoadWeights(tower_ptr->pre_btl_conv.GetWeights(),
-                               tower_ptr->pre_btl_conv.GetBiases(),
-                               scratch_size_,
-                               winograd);
-    block.convs[1].LoadWeights(
-        tower_ptr->conv1.GetWeights(), tower_ptr->conv1.GetBiases(), scratch_size_, winograd);
-    block.convs[2].LoadWeights(
-        tower_ptr->conv2.GetWeights(), tower_ptr->conv2.GetBiases(), scratch_size_, winograd);
-    block.convs[3].LoadWeights(
-        tower_ptr->conv3.GetWeights(), tower_ptr->conv3.GetBiases(), scratch_size_, winograd);
-    block.convs[4].LoadWeights(
-        tower_ptr->conv4.GetWeights(), tower_ptr->conv4.GetBiases(), scratch_size_, winograd);
-    block.convs[5].LoadWeights(tower_ptr->post_btl_conv.GetWeights(),
-                               tower_ptr->post_btl_conv.GetBiases(),
-                               scratch_size_,
-                               winograd);
+    layers->pre_btl_conv.LoadWeights(
+        block->pre_btl_conv.GetWeights(), block->pre_btl_conv.GetBiases(), scratch_size_, winograd);
+    layers->conv1.LoadWeights(
+        block->conv1.GetWeights(), block->conv1.GetBiases(), scratch_size_, winograd);
+    layers->conv2.LoadWeights(
+        block->conv2.GetWeights(), block->conv2.GetBiases(), scratch_size_, winograd);
+    layers->conv3.LoadWeights(
+        block->conv3.GetWeights(), block->conv3.GetBiases(), scratch_size_, winograd);
+    layers->conv4.LoadWeights(
+        block->conv4.GetWeights(), block->conv4.GetBiases(), scratch_size_, winograd);
+    layers->post_btl_conv.LoadWeights(block->post_btl_conv.GetWeights(),
+                                      block->post_btl_conv.GetBiases(),
+                                      scratch_size_,
+                                      winograd);
+
+    return layers;
 }
 
-void NNGraph::ConstructMixerBlock(Block& block, BlockBasic* tower_ptr, PeakSizes& peaks) {
+std::unique_ptr<NNGraph::MixerLayers> NNGraph::ConstructMixerBlock(MixerBlock* block,
+                                                                   PeakSizes& peaks) {
     const auto default_act = weights_->default_act;
     const bool winograd = weights_->winograd;
 
     const auto channels = weights_->residual_channels;
-    const auto feedforwards = tower_ptr->feedforward_channels;
-    const auto filters = tower_ptr->dw_conv.GetFilter();
-    const auto last_act = tower_ptr->apply_se ? Activation::kIdentity : default_act;
+    const auto feedforwards = block->feedforward_channels;
+    const auto filters = block->dw_conv.GetFilter();
+    const auto last_act = block->apply_se ? Activation::kIdentity : default_act;
 
-    block.convs.resize(2);
-    block.dw_convs.resize(1);
+    auto layers = std::make_unique<MixerLayers>();
 
-    block.dw_convs[0] = DepthwiseConvolution(&handles_,
-                                             max_batch_,  // max batch size
-                                             board_size_, // board size
-                                             filters,     // kernel size
-                                             channels,    // input channels
-                                             default_act  // activation
+    layers->dw_conv = DepthwiseConvolution(&handles_,
+                                           max_batch_,  // max batch size
+                                           board_size_, // board size
+                                           filters,     // kernel size
+                                           channels,    // input channels
+                                           default_act  // activation
     );
-    block.convs[0] = Convolution(&handles_,
-                                 max_batch_,   // max batch size
-                                 board_size_,  // board size
-                                 1,            // kernel size
-                                 channels,     // input channels
-                                 feedforwards, // output channels
-                                 default_act   // activation
+    layers->conv1 = Convolution(&handles_,
+                                max_batch_,   // max batch size
+                                board_size_,  // board size
+                                1,            // kernel size
+                                channels,     // input channels
+                                feedforwards, // output channels
+                                default_act   // activation
     );
-    block.convs[1] = Convolution(&handles_,
-                                 max_batch_,   // max batch size
-                                 board_size_,  // board size
-                                 1,            // kernel size
-                                 feedforwards, // input channels
-                                 channels,     // output channels
-                                 last_act      // activation
+    layers->conv2 = Convolution(&handles_,
+                                max_batch_,   // max batch size
+                                board_size_,  // board size
+                                1,            // kernel size
+                                feedforwards, // input channels
+                                channels,     // output channels
+                                last_act      // activation
     );
     peaks.channels = std::max({peaks.channels, channels, feedforwards});
 
-    block.dw_convs[0].LoadWeights(tower_ptr->dw_conv.GetWeights(), tower_ptr->dw_conv.GetBiases());
-    block.convs[0].LoadWeights(
-        tower_ptr->conv1.GetWeights(), tower_ptr->conv1.GetBiases(), scratch_size_, winograd);
-    block.convs[1].LoadWeights(
-        tower_ptr->conv2.GetWeights(), tower_ptr->conv2.GetBiases(), scratch_size_, winograd);
+    layers->dw_conv.LoadWeights(block->dw_conv.GetWeights(), block->dw_conv.GetBiases());
+    layers->conv1.LoadWeights(
+        block->conv1.GetWeights(), block->conv1.GetBiases(), scratch_size_, winograd);
+    layers->conv2.LoadWeights(
+        block->conv2.GetWeights(), block->conv2.GetBiases(), scratch_size_, winograd);
+
+    return layers;
 }
 
-void NNGraph::ConstructTransformerBlock(Block& block, BlockBasic* tower_ptr, PeakSizes& peaks) {
+std::unique_ptr<NNGraph::TransformerLayers>
+NNGraph::ConstructTransformerBlock(TransformerBlock* block, PeakSizes& peaks) {
     const auto default_act = weights_->default_act;
     const bool winograd = weights_->winograd;
 
     const auto channels = weights_->residual_channels;
-    const auto num_heads = tower_ptr->num_heads;
-    const auto head_dim = tower_ptr->head_dim;
+    const auto num_heads = block->num_heads;
+    const auto head_dim = block->head_dim;
     const auto attn_channels = num_heads * head_dim;
-    const auto feedforwards = tower_ptr->feedforward_channels;
+    const auto feedforwards = block->feedforward_channels;
 
-    block.convs.resize(7);
+    auto layers = std::make_unique<TransformerLayers>();
 
-    block.attn_norm = RMSNorm(&handles_,
-                              max_batch_,  // max batch size
-                              board_size_, // board size
-                              channels     // channels
+    layers->attn_norm = RMSNorm(&handles_,
+                                max_batch_,  // max batch size
+                                board_size_, // board size
+                                channels     // channels
     );
-    block.convs[0] = Convolution(&handles_,
+    layers->q_proj = Convolution(&handles_,
                                  max_batch_,           // max batch size
                                  board_size_,          // board size
                                  1,                    // kernel size
@@ -530,7 +532,7 @@ void NNGraph::ConstructTransformerBlock(Block& block, BlockBasic* tower_ptr, Pea
                                  attn_channels,        // output channels
                                  Activation::kIdentity // activation
     );
-    block.convs[1] = Convolution(&handles_,
+    layers->k_proj = Convolution(&handles_,
                                  max_batch_,           // max batch size
                                  board_size_,          // board size
                                  1,                    // kernel size
@@ -538,7 +540,7 @@ void NNGraph::ConstructTransformerBlock(Block& block, BlockBasic* tower_ptr, Pea
                                  attn_channels,        // output channels
                                  Activation::kIdentity // activation
     );
-    block.convs[2] = Convolution(&handles_,
+    layers->v_proj = Convolution(&handles_,
                                  max_batch_,           // max batch size
                                  board_size_,          // board size
                                  1,                    // kernel size
@@ -546,90 +548,92 @@ void NNGraph::ConstructTransformerBlock(Block& block, BlockBasic* tower_ptr, Pea
                                  attn_channels,        // output channels
                                  Activation::kIdentity // activation
     );
-    block.attention = MultiHeadAttention(&handles_,
-                                         max_batch_,  // max batch size
-                                         board_size_, // board size
-                                         num_heads,   // number of heads
-                                         head_dim     // head size
+    layers->attention = MultiHeadAttention(&handles_,
+                                           max_batch_,  // max batch size
+                                           board_size_, // board size
+                                           num_heads,   // number of heads
+                                           head_dim     // head size
     );
-    block.convs[3] = Convolution(&handles_,
-                                 max_batch_,           // max batch size
-                                 board_size_,          // board size
-                                 1,                    // kernel size
-                                 attn_channels,        // input channels
-                                 channels,             // output channels
-                                 Activation::kIdentity // activation
+    layers->out_proj = Convolution(&handles_,
+                                   max_batch_,           // max batch size
+                                   board_size_,          // board size
+                                   1,                    // kernel size
+                                   attn_channels,        // input channels
+                                   channels,             // output channels
+                                   Activation::kIdentity // activation
     );
-    block.ffn_norm = RMSNorm(&handles_,
-                             max_batch_,  // max batch size
-                             board_size_, // board size
-                             channels     // channels
+    layers->ffn_norm = RMSNorm(&handles_,
+                               max_batch_,  // max batch size
+                               board_size_, // board size
+                               channels     // channels
     );
-    block.convs[4] = Convolution(&handles_,
-                                 max_batch_,   // max batch size
-                                 board_size_,  // board size
-                                 1,            // kernel size
-                                 channels,     // input channels
-                                 feedforwards, // output channels
-                                 default_act   // activation
+    layers->ffn_fc1 = Convolution(&handles_,
+                                  max_batch_,   // max batch size
+                                  board_size_,  // board size
+                                  1,            // kernel size
+                                  channels,     // input channels
+                                  feedforwards, // output channels
+                                  default_act   // activation
     );
-    block.convs[5] = Convolution(&handles_,
-                                 max_batch_,           // max batch size
-                                 board_size_,          // board size
-                                 1,                    // kernel size
-                                 channels,             // input channels
-                                 feedforwards,         // output channels
-                                 Activation::kIdentity // activation
+    layers->ffn_gate = Convolution(&handles_,
+                                   max_batch_,           // max batch size
+                                   board_size_,          // board size
+                                   1,                    // kernel size
+                                   channels,             // input channels
+                                   feedforwards,         // output channels
+                                   Activation::kIdentity // activation
     );
-    block.convs[6] = Convolution(&handles_,
-                                 max_batch_,           // max batch size
-                                 board_size_,          // board size
-                                 1,                    // kernel size
-                                 feedforwards,         // input channels
-                                 channels,             // output channels
-                                 Activation::kIdentity // activation
+    layers->ffn_fc2 = Convolution(&handles_,
+                                  max_batch_,           // max batch size
+                                  board_size_,          // board size
+                                  1,                    // kernel size
+                                  feedforwards,         // input channels
+                                  channels,             // output channels
+                                  Activation::kIdentity // activation
     );
     peaks.channels = std::max({peaks.channels, channels, attn_channels, feedforwards});
     peaks.attn_channels = std::max(peaks.attn_channels, attn_channels);
     peaks.attn_heads = std::max(peaks.attn_heads, num_heads);
 
-    block.attn_norm.LoadWeights(tower_ptr->attn_norm.GetGammas());
-    block.convs[0].LoadWeights(
-        tower_ptr->q_proj.GetWeights(), tower_ptr->q_proj.GetBiases(), scratch_size_, winograd);
-    block.convs[1].LoadWeights(
-        tower_ptr->k_proj.GetWeights(), tower_ptr->k_proj.GetBiases(), scratch_size_, winograd);
-    block.convs[2].LoadWeights(
-        tower_ptr->v_proj.GetWeights(), tower_ptr->v_proj.GetBiases(), scratch_size_, winograd);
-    block.attention.LoadWeights(tower_ptr->rope.GetFrequencies());
-    block.convs[3].LoadWeights(
-        tower_ptr->out_proj.GetWeights(), tower_ptr->out_proj.GetBiases(), scratch_size_, winograd);
-    block.ffn_norm.LoadWeights(tower_ptr->ffn_norm.GetGammas());
-    block.convs[4].LoadWeights(
-        tower_ptr->ffn_fc1.GetWeights(), tower_ptr->ffn_fc1.GetBiases(), scratch_size_, winograd);
-    block.convs[5].LoadWeights(
-        tower_ptr->ffn_gate.GetWeights(), tower_ptr->ffn_gate.GetBiases(), scratch_size_, winograd);
-    block.convs[6].LoadWeights(
-        tower_ptr->ffn_fc2.GetWeights(), tower_ptr->ffn_fc2.GetBiases(), scratch_size_, winograd);
+    layers->attn_norm.LoadWeights(block->attn_norm.GetGammas());
+    layers->q_proj.LoadWeights(
+        block->q_proj.GetWeights(), block->q_proj.GetBiases(), scratch_size_, winograd);
+    layers->k_proj.LoadWeights(
+        block->k_proj.GetWeights(), block->k_proj.GetBiases(), scratch_size_, winograd);
+    layers->v_proj.LoadWeights(
+        block->v_proj.GetWeights(), block->v_proj.GetBiases(), scratch_size_, winograd);
+    layers->attention.LoadWeights(block->rope.GetFrequencies());
+    layers->out_proj.LoadWeights(
+        block->out_proj.GetWeights(), block->out_proj.GetBiases(), scratch_size_, winograd);
+    layers->ffn_norm.LoadWeights(block->ffn_norm.GetGammas());
+    layers->ffn_fc1.LoadWeights(
+        block->ffn_fc1.GetWeights(), block->ffn_fc1.GetBiases(), scratch_size_, winograd);
+    layers->ffn_gate.LoadWeights(
+        block->ffn_gate.GetWeights(), block->ffn_gate.GetBiases(), scratch_size_, winograd);
+    layers->ffn_fc2.LoadWeights(
+        block->ffn_fc2.GetWeights(), block->ffn_fc2.GetBiases(), scratch_size_, winograd);
+
+    return layers;
 }
 
-void NNGraph::ConstructSEUnit(Block& block, BlockBasic* tower_ptr) {
+void NNGraph::ConstructSEUnit(BlockLayers& layers, BlockBasic* tower_ptr) {
     const auto default_act = weights_->default_act;
 
     const auto channels = weights_->residual_channels;
     const size_t se_size = tower_ptr->se_size;
 
-    block.se_module = SEUnit(&handles_,
-                             max_batch_,  // max batch size
-                             board_size_, // board size
-                             channels,    // channels
-                             se_size,     // SE size
-                             default_act  // activation
+    layers.se_module = SEUnit(&handles_,
+                              max_batch_,  // max batch size
+                              board_size_, // board size
+                              channels,    // channels
+                              se_size,     // SE size
+                              default_act  // activation
     );
 
-    block.se_module.LoadWeights(tower_ptr->squeeze.GetWeights(),
-                                tower_ptr->squeeze.GetBiases(),
-                                tower_ptr->excite.GetWeights(),
-                                tower_ptr->excite.GetBiases());
+    layers.se_module.LoadWeights(tower_ptr->squeeze.GetWeights(),
+                                 tower_ptr->squeeze.GetBiases(),
+                                 tower_ptr->excite.GetWeights(),
+                                 tower_ptr->excite.GetBiases());
 }
 
 void NNGraph::SetComputationMode(CudaHandles* handles) {
@@ -746,18 +750,23 @@ std::vector<OutputResult> NNGraph::BatchForward(const std::vector<InputData>& ba
         // cuda_conv_op_[1 ~ 2] are buffers.
         // cuda_conv_op_[3] is output before SE module.
 
-        auto& block = graph_->tower[i];
+        // The layers are built by the same dispatch in ConstructGraph().
+        auto& layers = *graph_->tower[i];
         const auto tower_ptr = weights_->tower[i].get();
-        if (tower_ptr->IsResidualBlock()) {
-            ResidualBlockForward(batch_size, block, tower_ptr, mask_buf[0]);
-        } else if (tower_ptr->IsBottleneckBlock()) {
-            BottleneckBlockForward(batch_size, block, tower_ptr, mask_buf[0]);
-        } else if (tower_ptr->IsNestedBottleneckBlock()) {
-            NestedBottleneckBlockForward(batch_size, block, tower_ptr, mask_buf[0]);
-        } else if (tower_ptr->IsMixerBlock()) {
-            MixerBlockForward(batch_size, block, tower_ptr, mask_buf[0]);
-        } else if (tower_ptr->IsTransformerBlock()) {
-            TransformerBlockForward(batch_size, block, tower_ptr, mask_buf[0]);
+        if (auto* block = tower_ptr->Cast<ResidualBlock>()) {
+            ResidualBlockForward(
+                batch_size, static_cast<ResidualLayers&>(layers), block, mask_buf[0]);
+        } else if (auto* block = tower_ptr->Cast<BottleneckBlock>()) {
+            BottleneckBlockForward(
+                batch_size, static_cast<BottleneckLayers&>(layers), block, mask_buf[0]);
+        } else if (auto* block = tower_ptr->Cast<NestedBottleneckBlock>()) {
+            NestedBottleneckBlockForward(
+                batch_size, static_cast<NestedBottleneckLayers&>(layers), block, mask_buf[0]);
+        } else if (auto* block = tower_ptr->Cast<MixerBlock>()) {
+            MixerBlockForward(batch_size, static_cast<MixerLayers&>(layers), block, mask_buf[0]);
+        } else if (auto* block = tower_ptr->Cast<TransformerBlock>()) {
+            TransformerBlockForward(
+                batch_size, static_cast<TransformerLayers&>(layers), block, mask_buf[0]);
         }
 
         bool module_skip = false;
@@ -766,7 +775,7 @@ std::vector<OutputResult> NNGraph::BatchForward(const std::vector<InputData>& ba
             void* se_skip = cuda_conv_op_[0];
             void* se_outs = cuda_conv_op_[0];
 
-            block.se_module.Forward(
+            layers.se_module.Forward(
                 batch_size, se_outs, cuda_conv_op_[3], se_skip, mask_buf[0], mask_buf[1]);
             module_skip = true;
         }
@@ -892,234 +901,233 @@ std::vector<OutputResult> NNGraph::BatchForward(const std::vector<InputData>& ba
 }
 
 void NNGraph::ResidualBlockForward(const int batch_size,
-                                   Block& block,
-                                   BlockBasic* tower_ptr,
+                                   ResidualLayers& layers,
+                                   ResidualBlock* block,
                                    void* mask) {
     // 1st conv layer
-    block.convs[0].Forward(batch_size,
-                           cuda_conv_op_[1],
-                           cuda_conv_op_[0],
-                           nullptr,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    layers.conv1.Forward(batch_size,
+                         cuda_conv_op_[1],
+                         cuda_conv_op_[0],
+                         nullptr,
+                         mask,
+                         cuda_scratch_op_[0],
+                         cuda_scratch_op_[1],
+                         scratch_size_);
 
     // 2nd conv layer
-    void* second_skip = tower_ptr->apply_se ? nullptr : cuda_conv_op_[0];
-    block.convs[1].Forward(batch_size,
-                           cuda_conv_op_[3],
-                           cuda_conv_op_[1],
-                           second_skip,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    void* second_skip = block->apply_se ? nullptr : cuda_conv_op_[0];
+    layers.conv2.Forward(batch_size,
+                         cuda_conv_op_[3],
+                         cuda_conv_op_[1],
+                         second_skip,
+                         mask,
+                         cuda_scratch_op_[0],
+                         cuda_scratch_op_[1],
+                         scratch_size_);
 }
 
 void NNGraph::BottleneckBlockForward(const int batch_size,
-                                     Block& block,
-                                     BlockBasic* tower_ptr,
+                                     BottleneckLayers& layers,
+                                     BottleneckBlock* block,
                                      void* mask) {
     // pre-bottleneck
-    block.convs[0].Forward(batch_size,
-                           cuda_conv_op_[1],
-                           cuda_conv_op_[0],
-                           nullptr,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    layers.pre_btl_conv.Forward(batch_size,
+                                cuda_conv_op_[1],
+                                cuda_conv_op_[0],
+                                nullptr,
+                                mask,
+                                cuda_scratch_op_[0],
+                                cuda_scratch_op_[1],
+                                scratch_size_);
 
     // 1st conv layer
-    block.convs[1].Forward(batch_size,
-                           cuda_conv_op_[2],
-                           cuda_conv_op_[1],
-                           nullptr,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    layers.conv1.Forward(batch_size,
+                         cuda_conv_op_[2],
+                         cuda_conv_op_[1],
+                         nullptr,
+                         mask,
+                         cuda_scratch_op_[0],
+                         cuda_scratch_op_[1],
+                         scratch_size_);
 
     // 2nd conv layer
-    block.convs[2].Forward(batch_size,
-                           cuda_conv_op_[1],
-                           cuda_conv_op_[2],
-                           nullptr,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    layers.conv2.Forward(batch_size,
+                         cuda_conv_op_[1],
+                         cuda_conv_op_[2],
+                         nullptr,
+                         mask,
+                         cuda_scratch_op_[0],
+                         cuda_scratch_op_[1],
+                         scratch_size_);
 
     // post-bottleneck
-    void* btl_skip = tower_ptr->apply_se ? nullptr : cuda_conv_op_[0];
-    block.convs[3].Forward(batch_size,
-                           cuda_conv_op_[3],
-                           cuda_conv_op_[1],
-                           btl_skip,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    void* btl_skip = block->apply_se ? nullptr : cuda_conv_op_[0];
+    layers.post_btl_conv.Forward(batch_size,
+                                 cuda_conv_op_[3],
+                                 cuda_conv_op_[1],
+                                 btl_skip,
+                                 mask,
+                                 cuda_scratch_op_[0],
+                                 cuda_scratch_op_[1],
+                                 scratch_size_);
 }
 
 void NNGraph::NestedBottleneckBlockForward(const int batch_size,
-                                           Block& block,
-                                           BlockBasic* tower_ptr,
+                                           NestedBottleneckLayers& layers,
+                                           NestedBottleneckBlock* block,
                                            void* mask) {
     // pre-bottleneck
-    block.convs[0].Forward(batch_size,
-                           cuda_conv_op_[1],
-                           cuda_conv_op_[0],
-                           nullptr,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    layers.pre_btl_conv.Forward(batch_size,
+                                cuda_conv_op_[1],
+                                cuda_conv_op_[0],
+                                nullptr,
+                                mask,
+                                cuda_scratch_op_[0],
+                                cuda_scratch_op_[1],
+                                scratch_size_);
 
     // 1st conv layer (1st block)
-    block.convs[1].Forward(batch_size,
-                           cuda_conv_op_[2],
-                           cuda_conv_op_[1],
-                           nullptr,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    layers.conv1.Forward(batch_size,
+                         cuda_conv_op_[2],
+                         cuda_conv_op_[1],
+                         nullptr,
+                         mask,
+                         cuda_scratch_op_[0],
+                         cuda_scratch_op_[1],
+                         scratch_size_);
 
     // 2nd conv layer (1st block)
     void* block1_skip = cuda_conv_op_[1];
-    block.convs[2].Forward(batch_size,
-                           cuda_conv_op_[3],
-                           cuda_conv_op_[2],
-                           block1_skip,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    layers.conv2.Forward(batch_size,
+                         cuda_conv_op_[3],
+                         cuda_conv_op_[2],
+                         block1_skip,
+                         mask,
+                         cuda_scratch_op_[0],
+                         cuda_scratch_op_[1],
+                         scratch_size_);
 
     std::swap(cuda_conv_op_[3], cuda_conv_op_[1]);
 
     // 3rd conv layer (2nd block)
-    block.convs[3].Forward(batch_size,
-                           cuda_conv_op_[2],
-                           cuda_conv_op_[1],
-                           nullptr,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    layers.conv3.Forward(batch_size,
+                         cuda_conv_op_[2],
+                         cuda_conv_op_[1],
+                         nullptr,
+                         mask,
+                         cuda_scratch_op_[0],
+                         cuda_scratch_op_[1],
+                         scratch_size_);
 
     // 4th conv layer (2nd block)
     void* block2_skip = cuda_conv_op_[1];
-    block.convs[4].Forward(batch_size,
-                           cuda_conv_op_[3],
-                           cuda_conv_op_[2],
-                           block2_skip,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    layers.conv4.Forward(batch_size,
+                         cuda_conv_op_[3],
+                         cuda_conv_op_[2],
+                         block2_skip,
+                         mask,
+                         cuda_scratch_op_[0],
+                         cuda_scratch_op_[1],
+                         scratch_size_);
 
     std::swap(cuda_conv_op_[3], cuda_conv_op_[1]);
 
     // post-bottleneck
-    void* btl_skip = tower_ptr->apply_se ? nullptr : cuda_conv_op_[0];
-    block.convs[5].Forward(batch_size,
-                           cuda_conv_op_[3],
-                           cuda_conv_op_[1],
-                           btl_skip,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    void* btl_skip = block->apply_se ? nullptr : cuda_conv_op_[0];
+    layers.post_btl_conv.Forward(batch_size,
+                                 cuda_conv_op_[3],
+                                 cuda_conv_op_[1],
+                                 btl_skip,
+                                 mask,
+                                 cuda_scratch_op_[0],
+                                 cuda_scratch_op_[1],
+                                 scratch_size_);
 }
 
 void NNGraph::MixerBlockForward(const int batch_size,
-                                Block& block,
-                                BlockBasic* tower_ptr,
+                                MixerLayers& layers,
+                                MixerBlock* block,
                                 void* mask) {
     // dw conv layer
-    block.dw_convs[0].Forward(
-        batch_size, cuda_conv_op_[3], cuda_conv_op_[0], cuda_conv_op_[0], mask);
+    layers.dw_conv.Forward(batch_size, cuda_conv_op_[3], cuda_conv_op_[0], cuda_conv_op_[0], mask);
 
     std::swap(cuda_conv_op_[3], cuda_conv_op_[0]);
 
     // 1st ffn conv layer
-    block.convs[0].Forward(batch_size,
-                           cuda_conv_op_[1],
-                           cuda_conv_op_[0],
-                           nullptr,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    layers.conv1.Forward(batch_size,
+                         cuda_conv_op_[1],
+                         cuda_conv_op_[0],
+                         nullptr,
+                         mask,
+                         cuda_scratch_op_[0],
+                         cuda_scratch_op_[1],
+                         scratch_size_);
 
     // 2nd ffn conv layer
-    void* ffn_skip = tower_ptr->apply_se ? nullptr : cuda_conv_op_[0];
-    block.convs[1].Forward(batch_size,
-                           cuda_conv_op_[3],
-                           cuda_conv_op_[1],
-                           ffn_skip,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    void* ffn_skip = block->apply_se ? nullptr : cuda_conv_op_[0];
+    layers.conv2.Forward(batch_size,
+                         cuda_conv_op_[3],
+                         cuda_conv_op_[1],
+                         ffn_skip,
+                         mask,
+                         cuda_scratch_op_[0],
+                         cuda_scratch_op_[1],
+                         scratch_size_);
 }
 
 void NNGraph::TransformerBlockForward(const int batch_size,
-                                      Block& block,
-                                      BlockBasic* tower_ptr,
+                                      TransformerLayers& layers,
+                                      TransformerBlock* block,
                                       void* mask) {
     const auto num_intersections = board_size_ * board_size_;
 
     // self-attention sublayer
-    block.attn_norm.Forward(batch_size, cuda_conv_op_[1], cuda_conv_op_[0]);
+    layers.attn_norm.Forward(batch_size, cuda_conv_op_[1], cuda_conv_op_[0]);
 
-    block.convs[0].Forward(batch_size,
-                           cuda_conv_op_[2],
-                           cuda_conv_op_[1],
-                           nullptr,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
-    block.convs[1].Forward(batch_size,
-                           cuda_conv_op_[3],
-                           cuda_conv_op_[1],
-                           nullptr,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
-    block.convs[2].Forward(batch_size,
-                           cuda_attn_op_[0],
-                           cuda_conv_op_[1],
-                           nullptr,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    layers.q_proj.Forward(batch_size,
+                          cuda_conv_op_[2],
+                          cuda_conv_op_[1],
+                          nullptr,
+                          mask,
+                          cuda_scratch_op_[0],
+                          cuda_scratch_op_[1],
+                          scratch_size_);
+    layers.k_proj.Forward(batch_size,
+                          cuda_conv_op_[3],
+                          cuda_conv_op_[1],
+                          nullptr,
+                          mask,
+                          cuda_scratch_op_[0],
+                          cuda_scratch_op_[1],
+                          scratch_size_);
+    layers.v_proj.Forward(batch_size,
+                          cuda_attn_op_[0],
+                          cuda_conv_op_[1],
+                          nullptr,
+                          mask,
+                          cuda_scratch_op_[0],
+                          cuda_scratch_op_[1],
+                          scratch_size_);
 
-    block.attention.Forward(
+    layers.attention.Forward(
         batch_size, cuda_conv_op_[2], cuda_conv_op_[3], cuda_attn_op_[0], cuda_attn_op_[1], mask);
 
-    block.convs[3].Forward(batch_size,
-                           cuda_conv_op_[3],
-                           cuda_conv_op_[2],
-                           cuda_conv_op_[0],
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    layers.out_proj.Forward(batch_size,
+                            cuda_conv_op_[3],
+                            cuda_conv_op_[2],
+                            cuda_conv_op_[0],
+                            mask,
+                            cuda_scratch_op_[0],
+                            cuda_scratch_op_[1],
+                            scratch_size_);
 
     std::swap(cuda_conv_op_[3], cuda_conv_op_[0]);
 
     // gated feedforward sublayer
-    const auto feedforwards = tower_ptr->feedforward_channels;
-    block.ffn_norm.Forward(batch_size, cuda_conv_op_[1], cuda_conv_op_[0]);
+    const auto feedforwards = block->feedforward_channels;
+    layers.ffn_norm.Forward(batch_size, cuda_conv_op_[1], cuda_conv_op_[0]);
 
-    block.convs[4].Forward(batch_size,
+    layers.ffn_fc1.Forward(batch_size,
                            cuda_conv_op_[2],
                            cuda_conv_op_[1],
                            nullptr,
@@ -1127,14 +1135,14 @@ void NNGraph::TransformerBlockForward(const int batch_size,
                            cuda_scratch_op_[0],
                            cuda_scratch_op_[1],
                            scratch_size_);
-    block.convs[5].Forward(batch_size,
-                           cuda_conv_op_[3],
-                           cuda_conv_op_[1],
-                           nullptr,
-                           mask,
-                           cuda_scratch_op_[0],
-                           cuda_scratch_op_[1],
-                           scratch_size_);
+    layers.ffn_gate.Forward(batch_size,
+                            cuda_conv_op_[3],
+                            cuda_conv_op_[1],
+                            nullptr,
+                            mask,
+                            cuda_scratch_op_[0],
+                            cuda_scratch_op_[1],
+                            scratch_size_);
     MulVectors(handles_.fp16,
                cuda_conv_op_[2],
                cuda_conv_op_[2],
@@ -1142,7 +1150,7 @@ void NNGraph::TransformerBlockForward(const int batch_size,
                batch_size * feedforwards * num_intersections,
                handles_.stream);
 
-    block.convs[6].Forward(batch_size,
+    layers.ffn_fc2.Forward(batch_size,
                            cuda_conv_op_[3],
                            cuda_conv_op_[2],
                            cuda_conv_op_[0],

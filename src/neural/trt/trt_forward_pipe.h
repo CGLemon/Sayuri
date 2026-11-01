@@ -69,21 +69,21 @@ private:
 
         nvinfer1::ILayer* BuildResidualBlock(trt::InferPtr<nvinfer1::INetworkDefinition>& network,
                                              nvinfer1::ITensor* input,
-                                             BlockBasic* tower_ptr);
+                                             ResidualBlock* block);
         nvinfer1::ILayer* BuildBottleneckBlock(trt::InferPtr<nvinfer1::INetworkDefinition>& network,
                                                nvinfer1::ITensor* input,
-                                               BlockBasic* tower_ptr);
+                                               BottleneckBlock* block);
         nvinfer1::ILayer*
         BuildNestedBottleneckBlock(trt::InferPtr<nvinfer1::INetworkDefinition>& network,
                                    nvinfer1::ITensor* input,
-                                   BlockBasic* tower_ptr);
+                                   NestedBottleneckBlock* block);
         nvinfer1::ILayer* BuildMixerBlock(trt::InferPtr<nvinfer1::INetworkDefinition>& network,
                                           nvinfer1::ITensor* input,
-                                          BlockBasic* tower_ptr);
+                                          MixerBlock* block);
         nvinfer1::ILayer*
         BuildTransformerBlock(trt::InferPtr<nvinfer1::INetworkDefinition>& network,
                               nvinfer1::ITensor* input,
-                              BlockBasic* tower_ptr);
+                              TransformerBlock* block);
         nvinfer1::ILayer*
         BuildSqueezeExcitationLayer(trt::InferPtr<nvinfer1::INetworkDefinition>& network,
                                     nvinfer1::ITensor* residual,

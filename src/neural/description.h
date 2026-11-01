@@ -3,6 +3,7 @@
 #include <cmath>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "neural/activation.h"
@@ -121,7 +122,7 @@ private:
 
 class BlockBasic {
 public:
-    enum Type {
+    enum class Type : int {
         kUnknown,
         kResidualBlock,
         kBottleneckBlock,
@@ -129,27 +130,96 @@ public:
         kMixerBlock,
         kTransformerBlock
     };
-    BlockBasic() = default;
 
-    bool IsResidualBlock() {
-        return type == Type::kResidualBlock;
-    }
-    bool IsBottleneckBlock() {
-        return type == Type::kBottleneckBlock;
-    }
-    bool IsNestedBottleneckBlock() {
-        return type == Type::kNestedBottleneckBlock;
-    }
-    bool IsMixerBlock() {
-        return type == Type::kMixerBlock;
-    }
-    bool IsTransformerBlock() {
-        return type == Type::kTransformerBlock;
+    virtual ~BlockBasic() = default;
+
+    Type GetType() const {
+        return type_;
     }
 
-    Type type{kUnknown};
+    template <typename BlockType> BlockType* Cast() {
+        static_assert(std::is_base_of<BlockBasic, BlockType>::value,
+                      "the cast target should be a block type");
+        if (type_ != BlockType::kBlockType) {
+            return nullptr;
+        }
+        return static_cast<BlockType*>(this);
+    }
 
-    // TODO: Use list to store all conv and bn
+    template <typename BlockType> const BlockType* Cast() const {
+        static_assert(std::is_base_of<BlockBasic, BlockType>::value,
+                      "the cast target should be a block type");
+        if (type_ != BlockType::kBlockType) {
+            return nullptr;
+        }
+        return static_cast<const BlockType*>(this);
+    }
+
+    bool IsResidualBlock() const {
+        return type_ == Type::kResidualBlock;
+    }
+    bool IsBottleneckBlock() const {
+        return type_ == Type::kBottleneckBlock;
+    }
+    bool IsNestedBottleneckBlock() const {
+        return type_ == Type::kNestedBottleneckBlock;
+    }
+    bool IsMixerBlock() const {
+        return type_ == Type::kMixerBlock;
+    }
+    bool IsTransformerBlock() const {
+        return type_ == Type::kTransformerBlock;
+    }
+
+    LinearLayer squeeze;
+    LinearLayer excite;
+    int se_size{0};
+    bool apply_se{false};
+
+protected:
+    explicit BlockBasic(Type type) : type_(type) {}
+
+private:
+    Type type_{Type::kUnknown};
+};
+
+class ResidualBlock : public BlockBasic {
+public:
+    static constexpr Type kBlockType = Type::kResidualBlock;
+
+    ResidualBlock() : BlockBasic(kBlockType) {}
+
+    ConvLayer conv1;
+    BatchNormLayer bn1;
+    ConvLayer conv2;
+    BatchNormLayer bn2;
+};
+
+class BottleneckBlock : public BlockBasic {
+public:
+    static constexpr Type kBlockType = Type::kBottleneckBlock;
+
+    BottleneckBlock() : BlockBasic(kBlockType) {}
+
+    ConvLayer pre_btl_conv;
+    BatchNormLayer pre_btl_bn;
+    ConvLayer conv1;
+    BatchNormLayer bn1;
+    ConvLayer conv2;
+    BatchNormLayer bn2;
+    ConvLayer post_btl_conv;
+    BatchNormLayer post_btl_bn;
+    int bottleneck_channels{0};
+};
+
+class NestedBottleneckBlock : public BlockBasic {
+public:
+    static constexpr Type kBlockType = Type::kNestedBottleneckBlock;
+
+    NestedBottleneckBlock() : BlockBasic(kBlockType) {}
+
+    ConvLayer pre_btl_conv;
+    BatchNormLayer pre_btl_bn;
     ConvLayer conv1;
     BatchNormLayer bn1;
     ConvLayer conv2;
@@ -158,16 +228,34 @@ public:
     BatchNormLayer bn3;
     ConvLayer conv4;
     BatchNormLayer bn4;
-
-    ConvLayer pre_btl_conv;
-    BatchNormLayer pre_btl_bn;
     ConvLayer post_btl_conv;
     BatchNormLayer post_btl_bn;
     int bottleneck_channels{0};
+};
 
+class MixerBlock : public BlockBasic {
+public:
+    static constexpr Type kBlockType = Type::kMixerBlock;
+
+    MixerBlock() : BlockBasic(kBlockType) {}
+
+    // The depthwise convolution (token mixing).
     ConvLayer dw_conv;
     BatchNormLayer dw_bn;
+
+    // The pointwise feedforward (channel mixing).
+    ConvLayer conv1;
+    BatchNormLayer bn1;
+    ConvLayer conv2;
+    BatchNormLayer bn2;
     int feedforward_channels{0};
+};
+
+class TransformerBlock : public BlockBasic {
+public:
+    static constexpr Type kBlockType = Type::kTransformerBlock;
+
+    TransformerBlock() : BlockBasic(kBlockType) {}
 
     // The self-attention sublayer.
     RMSNormLayer attn_norm;
@@ -184,46 +272,7 @@ public:
     LinearLayer ffn_fc1;
     LinearLayer ffn_gate;
     LinearLayer ffn_fc2;
-
-    LinearLayer squeeze;
-    LinearLayer excite;
-    int se_size{0};
-    bool apply_se{false};
-};
-
-class ResidualBlock : public BlockBasic {
-public:
-    ResidualBlock() {
-        type = Type::kResidualBlock;
-    }
-};
-
-class BottleneckBlock : public BlockBasic {
-public:
-    BottleneckBlock() {
-        type = Type::kBottleneckBlock;
-    }
-};
-
-class NestedBottleneckBlock : public BlockBasic {
-public:
-    NestedBottleneckBlock() {
-        type = Type::kNestedBottleneckBlock;
-    }
-};
-
-class MixerBlock : public BlockBasic {
-public:
-    MixerBlock() {
-        type = Type::kMixerBlock;
-    }
-};
-
-class TransformerBlock : public BlockBasic {
-public:
-    TransformerBlock() {
-        type = Type::kTransformerBlock;
-    }
+    int feedforward_channels{0};
 };
 
 enum class PolicyHeadType { kNormal, kRepLK };

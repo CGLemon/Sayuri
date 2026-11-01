@@ -33,7 +33,7 @@ private:
                              std::vector<float>& output);
 
     void ResidualBlockForward(const int board_size,
-                              BlockBasic* tower_ptr,
+                              ResidualBlock* block,
                               std::vector<float>& residual,
                               std::vector<float>& conv_in,
                               std::vector<float>& conv_out,
@@ -41,7 +41,7 @@ private:
                               std::vector<float>& workspace1);
 
     void BottleneckBlockForward(const int board_size,
-                                BlockBasic* tower_ptr,
+                                BottleneckBlock* block,
                                 std::vector<float>& residual,
                                 std::vector<float>& conv_in,
                                 std::vector<float>& conv_out,
@@ -49,7 +49,7 @@ private:
                                 std::vector<float>& workspace1);
 
     void NestedBottleneckBlockForward(const int board_size,
-                                      BlockBasic* tower_ptr,
+                                      NestedBottleneckBlock* block,
                                       std::vector<float>& residual0,
                                       std::vector<float>& residual1,
                                       std::vector<float>& conv_in,
@@ -58,13 +58,13 @@ private:
                                       std::vector<float>& workspace1);
 
     void MixerBlockForward(const int board_size,
-                           BlockBasic* tower_ptr,
+                           MixerBlock* block,
                            std::vector<float>& residual,
                            std::vector<float>& conv_in,
                            std::vector<float>& conv_out);
 
     void TransformerBlockForward(const int board_size,
-                                 BlockBasic* tower_ptr,
+                                 TransformerBlock* block,
                                  std::vector<float>& conv_in,
                                  std::vector<float>& conv_out);
 
