@@ -51,8 +51,8 @@ endif()
 
 # Custom board size
 if(SPECIFIC_BOARD_SIZE)
-    message(STATUS "Using the specific board size of ${BOARD_SIZE} x ${BOARD_SIZE}.")
-    add_definitions(-DMAX_BOARD_SIZE=${BOARD_SIZE})
+    message(STATUS "Using the specific board size of ${SPECIFIC_BOARD_SIZE} x ${SPECIFIC_BOARD_SIZE}.")
+    add_definitions(-DMAX_BOARD_SIZE=${SPECIFIC_BOARD_SIZE})
 endif()
 
 # FP16 support
