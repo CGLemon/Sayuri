@@ -1,6 +1,6 @@
 import io
 import numpy as np
-from network_core.symmetry import numpy_symmetry_planes, numpy_symmetry_plane, numpy_symmetry_prob
+from common.symmetry import numpy_symmetry_planes, numpy_symmetry_plane, numpy_symmetry_prob
 
 V2_DATA_LINES = 53
 

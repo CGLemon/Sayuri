@@ -1,56 +1,5 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import packaging
-import packaging.version
-import math
 import struct
-
-CRAZY_NEGATIVE_VALUE = -5000.0
-DEFAULT_ACTIVATION = "relu"
-
-def activation_func(activation, inplace=False):
-    if activation == "identity":
-        return nn.Identity()
-    if activation == "relu":
-        return nn.ReLU(inplace=inplace)
-    if activation == "elu":
-        return nn.ELU(inplace=inplace)
-    if activation == "selu":
-        return nn.SELU(inplace=inplace)
-    if activation == "gelu":
-        return nn.GELU(inplace=inplace)
-    if activation == "mish":
-        return nn.Mish(inplace=inplace)
-    if activation == "swish":
-        return nn.SiLU(inplace=inplace)
-    if activation == "hardswish":
-        if packaging.version.parse(torch.__version__) > packaging.version.parse("1.6.0"):
-            return nn.Hardswish(inplace=inplace)
-        else:
-            return nn.Hardswish()
-    raise Exception("The {} is invalid activation function.".format(activation))
-
-def compute_gain(activation):
-    if activation == "identity":
-        gain = 1.0
-    elif activation == "relu":
-        gain = math.sqrt(2.0)
-    elif activation == "elu":
-        gain = math.sqrt(1.55052)
-    elif activation == "selu":
-        gain = 3/4
-    elif activation == "gelu":
-        gain = math.sqrt(2.351718)
-    elif activation == "mish":
-        gain = math.sqrt(2.210277)
-    elif activation == "swish":
-        gain = math.sqrt(2.0) # TODO:
-    elif activation == "hardswish":
-        gain = math.sqrt(2.0)
-    else:
-        raise Exception("The {} is invalid activation function for computing gain.".format(activation))
-    return gain
 
 def dwconv_to_text(in_channels, out_channels, kernel_size):
     return "DepthwiseConvolution {iC} {oC} {KS}\n".format(
@@ -167,32 +116,3 @@ def network_info_to_text(network):
     info += "Policy Head Type: {polheadtype}\n".format(polheadtype=network.policy_head_type["Type"])
     info += "Default activation: {act}\n".format(act=network.activation)
     return info
-
-def make_soft_porb(prob, policy_mask, eps=1e-7, t=4):
-    soft_prob = (prob + eps) * policy_mask
-    soft_prob = torch.pow(soft_prob, 1/t)
-    soft_prob /= torch.sum(soft_prob, dim=1, keepdim=True)
-    return soft_prob
-
-def cross_entropy(pred, target, weight=1.):
-    loss_sum = -torch.sum(torch.mul(F.log_softmax(pred, dim=-1), target), dim=1)
-    return torch.mean(weight * loss_sum, dim=0)
-
-def huber_loss(x, y, delta, weight=1.):
-    absdiff = torch.abs(x - y)
-    loss = torch.where(absdiff > delta, (0.5 * delta*delta) + delta * (absdiff - delta), 0.5 * absdiff * absdiff)
-    loss_sum = torch.sum(loss, dim=1)
-    return torch.mean(weight * loss_sum, dim=0)
-
-def mse_loss(pred, target, weight=1.):
-    loss_sum = torch.mean(torch.square(pred - target), dim=1)
-    return torch.mean(weight * loss_sum, dim=0)
-
-def mse_loss_spat(pred, target, mask_sum_hw, weight=1.):
-    loss_sum = torch.sum(torch.square(pred - target), dim=1) / mask_sum_hw
-    return torch.mean(weight * loss_sum, dim=0)
-
-def square_huber_loss(pred, x, y, delta, eps, weight=1.):
-    sqerror = torch.square(x - y) + eps
-    loss = huber_loss(pred, sqerror, delta=delta, weight=weight)
-    return loss

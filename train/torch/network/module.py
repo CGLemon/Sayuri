@@ -3,11 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
-from .utils import (
-    CRAZY_NEGATIVE_VALUE,
+from .activation import (
     DEFAULT_ACTIVATION,
     activation_func,
     compute_gain,
+)
+from .export import (
     dwconv_to_text,
     conv_to_text,
     fullyconnect_to_text,
@@ -16,6 +17,8 @@ from .utils import (
     rope_to_text,
     tensor_to_text,
 )
+
+CRAZY_NEGATIVE_VALUE = -5000.0
 
 # It is imported from KataGo.
 class SoftPlusWithGradientFloorFunction(torch.autograd.Function):

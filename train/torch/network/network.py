@@ -3,11 +3,12 @@ import torch.nn as nn
 import numpy as np
 import sys
 
-from network_core.symmetry import torch_symmetry
-from network_core.utils import (
-    CRAZY_NEGATIVE_VALUE,
+from common.symmetry import torch_symmetry
+from .export import (
     write_network_to_file,
     network_info_to_text,
+)
+from .loss import (
     make_soft_porb,
     cross_entropy,
     huber_loss,
@@ -15,7 +16,8 @@ from network_core.utils import (
     mse_loss_spat,
     square_huber_loss,
 )
-from network_core.module import (
+from .module import (
+    CRAZY_NEGATIVE_VALUE,
     SoftPlusWithGradientFloorFunction,
     GlobalPool,
     FullyConnect,

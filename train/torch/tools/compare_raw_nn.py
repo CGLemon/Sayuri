@@ -2,16 +2,14 @@
 # Run the same positions on pysayuri (raw_nn, the .pt weights) and the C++
 # engines (sayuri-raw_nn 0, the .txt weights, fp32 without winograd by
 # default), then compare the network outputs.
+# Run it from train/torch as a module: python3 -m tools.compare_raw_nn
 import argparse
-import os
 import shlex
 import subprocess
 import sys
 
 import numpy as np
 
-TORCH_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PYSAYURI = os.path.join(TORCH_DIR, "pysayuri.py")
 ENGINE_ARGS = "--no-winograd --no-fp16 -t 1"
 
 # The smaller boards check the padding and mask path of the python network,
@@ -39,8 +37,9 @@ def read_grid(lines, idx, board_size):
     return np.array(grid), idx
 
 def run_python(pt, board_size, moves):
+    # The child inherits the cwd, train/torch, so -m finds pysayuri.
     proc = subprocess.run(
-        [sys.executable, PYSAYURI, "-c", pt],
+        [sys.executable, "-m", "pysayuri", "-c", pt],
         input=make_commands(board_size, moves, "raw_nn"),
         capture_output=True, text=True, timeout=600)
 

@@ -1,6 +1,6 @@
 from network import Network, CRAZY_NEGATIVE_VALUE
-from status_dict import StatusDict
-from config import Config
+from common.status_dict import StatusDict
+from common.config import Config
 from datetime import datetime
 
 import colorsys

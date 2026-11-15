@@ -2,19 +2,15 @@
 # Generate a randomly perturbed network from a setting json, then save it as
 #   - <out>.pt  : the StatusDict checkpoint for pysayuri (-c <out>.pt)
 #   - <out>.txt : the text weights for the C++ engine (-w <out>.txt)
+# Run it from train/torch as a module: python3 -m tools.gen_random_weights
 import argparse
 import json
-import os
-import sys
 
 import torch
 
-TORCH_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, TORCH_DIR)
-
-from config import Config
+from common.config import Config
 from network import Network
-from status_dict import StatusDict
+from common.status_dict import StatusDict
 
 # pysayuri always builds the network with this board size.
 PYSAYURI_BOARD_SIZE = 19

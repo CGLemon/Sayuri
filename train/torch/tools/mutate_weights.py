@@ -2,18 +2,14 @@
 # Mutate one parameter of a .pt checkpoint and export it as the .txt weights.
 # It is the negative control of compare_raw_nn.py: the mutated .txt must not
 # match the original .pt.
+# Run it from train/torch as a module: python3 -m tools.mutate_weights
 import argparse
-import os
-import sys
 
 import torch
 
-TORCH_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, TORCH_DIR)
-
-from config import Config
+from common.config import Config
 from network import Network
-from status_dict import StatusDict
+from common.status_dict import StatusDict
 
 def load_network(pt):
     status_dict = StatusDict()

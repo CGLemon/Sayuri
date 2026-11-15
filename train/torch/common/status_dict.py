@@ -2,6 +2,11 @@ import packaging
 import packaging.version
 import torch
 import os
+import sys
+
+# The old checkpoints pickled the whole StatusDict as "status_dict.StatusDict",
+# from when this file was the top-level status_dict.py, so keep that name loadable.
+sys.modules.setdefault("status_dict", sys.modules[__name__])
 
 class StatusDict(dict):
 
@@ -30,7 +35,8 @@ class StatusDict(dict):
             self.update(torch.load(filename, map_location=device))
 
     def save(self, filename):
-        torch.save(self, filename)
+        # Save a plain dict, so the checkpoint does not depend on where this class lives.
+        torch.save(dict(self), filename)
 
     def get_(self, key, default=None, process_fn=None):
         result = self.get(key, default)
