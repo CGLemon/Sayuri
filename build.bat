@@ -60,7 +60,9 @@ if /I "%COMPILER_CHOICE%"=="nvcc" (
 
         REM --- Step 2: Set CUDA Architectures based on version (logic from your CMake) ---
         set "ARCH_LIST="
-        if !CUDA_MAJOR! GEQ 12 (
+        if !CUDA_MAJOR! GEQ 13 (
+            set "ARCH_LIST=75 80 86 87 90 120"
+        ) else if !CUDA_MAJOR! EQU 12 (
             if !CUDA_MINOR! GEQ 8 (
                 set "ARCH_LIST=50 52 53 60 61 62 70 72 75 80 86 87 90 120"
             ) else (

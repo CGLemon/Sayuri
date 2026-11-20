@@ -8,8 +8,8 @@ Document for building the program from source.
 * GCC, Clang, must support C++17 or higher
 * CMake 3.15 or higher
 * Optional: Eigen or OpenBLAS library
-* Optional: CUDA 10.x - 12.x library
-* Optional: cuDNN 7.x or 8.x library
+* Optional: CUDA 10.x - 13.x library
+* Optional: cuDNN 7.x - 9.x library
 * Optional: TensorRT 8.5 or higher library
 * Optional: zlib library
 

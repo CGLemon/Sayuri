@@ -143,7 +143,11 @@ if(BLAS_BACKEND STREQUAL "CUDA"
     endif()
 
     # https://en.wikipedia.org/wiki/CUDA#GPUs_supported
-    if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8)
+    if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0)
+        # CUDA 13 no longer compiles for the architectures before 75.
+        set(CUDA_ARCHITECTURES 75 80 86 87 90 120)
+        set(CMAKE_CUDA_FLAGS "-Wno-deprecated-gpu-targets ${CMAKE_CUDA_FLAGS}")
+    elseif(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8)
         set(CUDA_ARCHITECTURES 50 52 53 60 61 62 70 72 75 80 86 87 90 120)
         set(CMAKE_CUDA_FLAGS "-Wno-deprecated-gpu-targets ${CMAKE_CUDA_FLAGS}")
     elseif(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.0)

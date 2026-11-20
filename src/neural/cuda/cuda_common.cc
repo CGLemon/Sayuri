@@ -150,7 +150,10 @@ std::string OutputSpec(const cudaDeviceProp& dev_prop) {
         << ", " << dev_prop.maxThreadsDim[2] << ")\n";
     out << "  Max grid size: (" << dev_prop.maxGridSize[0] << ", " << dev_prop.maxGridSize[1]
         << ", " << dev_prop.maxGridSize[2] << ")\n";
+#if CUDART_VERSION < 13000
+    // CUDA 13 removes clockRate from cudaDeviceProp.
     out << "  Clock: " << dev_prop.clockRate / 1000 << "(kHz)" << '\n';
+#endif
     out << "  Texture Alignment: " << dev_prop.textureAlignment << '\n';
 
     return out.str();
